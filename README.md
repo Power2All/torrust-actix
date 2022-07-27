@@ -1,5 +1,5 @@
 # Torrust-Axum Tracker
-![Test](https://github.com/Power2All/torrust-axum/actions/workflows/test_build_release.yml/badge.svg)
+![Test](https://github.com/Power2All/torrust-axum/actions/workflows/rust.yml/badge.svg)
 
 ## Project Description
 Torrust-Axum Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
