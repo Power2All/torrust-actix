@@ -9,7 +9,7 @@ use scc::ebr::Arc;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use sqlx::{Error, MySql, Pool, Postgres, Row, Sqlite, ConnectOptions};
 use sqlx::postgres::{PgPool, PgConnectOptions, PgPoolOptions};
-use sqlx::sqlite::SqlitePool;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 use serde::{Deserialize, Serialize};
 use crate::common::InfoHash;
 use crate::config::Configuration;
@@ -44,6 +44,20 @@ pub struct DatabaseConnector {
     engine: Option<DatabaseDrivers>
 }
 
+impl DatabaseConnectorSQLite {
+    pub async fn new(dsl: &String) -> Result<Pool<Sqlite>, Error>
+    {
+        let mut options = SqliteConnectOptions::from_str(&dsl)?;
+        options
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Wal)
+            .read_only(false)
+            .log_statements(log::LevelFilter::Debug)
+            .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
+        SqlitePool::connect(&dsl).await
+    }
+}
+
 impl DatabaseConnectorMySQL {
     pub async fn new(dsl: &String) -> Result<Pool<MySql>, Error>
     {
@@ -66,13 +80,6 @@ impl DatabaseConnectorPgSQL {
     }
 }
 
-impl DatabaseConnectorSQLite {
-    pub async fn new(dsl: &String) -> Result<Pool<Sqlite>, Error>
-    {
-        SqlitePool::connect(&dsl).await
-    }
-}
-
 impl DatabaseConnector {
     pub async fn new(config: Arc<Configuration>) -> DatabaseConnector
     {
@@ -88,12 +95,15 @@ impl DatabaseConnector {
                 let sqlite_connect = DatabaseConnectorSQLite::new(&config.db_path).await;
                 if sqlite_connect.is_err() {
                     error!("[SQLite] Unable to open the database {}", &config.db_path);
+                    error!("[SQLite] Message: {:#?}", sqlite_connect.unwrap_err().into_database_error());
                     exit(1);
                 }
                 structure.sqlite = Some(DatabaseConnectorSQLite {
-                    pool: sqlite_connect.unwrap()
+                    pool: sqlite_connect.unwrap().clone()
                 });
                 structure.engine = Some(DatabaseDrivers::SQLite3);
+                let pool = &structure.sqlite.clone().unwrap().pool;
+                sqlx::query("CREATE TABLE IF NOT EXISTS torrents (info_hash VARCHAR(20) NOT NULL UNIQUE, completed INTEGER DEFAULT 0 NOT NULL)").execute(pool);
             }
             DatabaseDrivers::MySQL => {
                 let mysql_connect = DatabaseConnectorMySQL::new(&config.db_path).await;
@@ -128,6 +138,25 @@ impl DatabaseConnector {
         let mut total = 0u64;
         if self.engine.is_some() {
             match self.engine.clone().unwrap() {
+                DatabaseDrivers::SQLite3 => {
+                    let pool = &self.sqlite.clone().unwrap().pool;
+                    let mut rows = sqlx::query("SELECT info_hash,completed FROM torrents").fetch(pool);
+                    while let Some(result) = rows.try_next().await? {
+                        if counter == 10000 {
+                            info!("[SQLite3] Loaded {} torrents...", total);
+                            counter = 0;
+                        }
+                        let infohash_data: &[u8] = result.get("info_hash");
+                        let completed_data: i64 = result.get("completed");
+                        let infohash = <[u8; 20]>::try_from(infohash_data[0 .. 20].as_ref()).unwrap();
+                        return_data.push((InfoHash(infohash), completed_data));
+                        counter += 1;
+                        total += 1;
+                    }
+                    info!("[SQLite3] Loaded {} torrents...", total);
+                    info!("[SQLite3] Loading completed !");
+                    return Ok(return_data);
+                }
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
                     let mut rows = sqlx::query("SELECT `info_hash`,`completed` FROM `torrents`").fetch(pool);
@@ -166,10 +195,6 @@ impl DatabaseConnector {
                     info!("[PgSQL] Loading completed !");
                     return Ok(return_data);
                 }
-                DatabaseDrivers::SQLite3 => {
-                    // let pool = &self.sqlite.clone().unwrap().pool;
-                    // let mut rows = sqlx::query!("")
-                }
             }
         }
 
@@ -180,6 +205,35 @@ impl DatabaseConnector {
     {
         if self.engine.is_some() {
             match self.engine.clone().unwrap() {
+                DatabaseDrivers::SQLite3 => {
+                    let pool = &self.sqlite.clone().unwrap().pool;
+                    let mut transaction = pool.begin().await?;
+                    let mut handled_entries = 0u64;
+                    let mut insert_entries = Vec::new();
+                    for (info_hash, completed) in torrents.iter() {
+                        handled_entries += 1;
+                        insert_entries.push(format!("(HEX({}),{})", info_hash.to_string(), completed.clone()).to_string());
+                        if insert_entries.len() == 10000 {
+                            let query = format!("INSERT OR REPLACE INTO torrents (info_hash,completed) VALUES {}", insert_entries.join(","));
+                            sqlx::query(&query).execute(&mut transaction).await?;
+                            info!("[SQLite3] Handled {} torrents", handled_entries);
+                            insert_entries = vec![];
+                        }
+                    }
+                    if !insert_entries.is_empty() {
+                        let query = format!("INSERT OR REPLACE INTO torrents (info_hash,completed) VALUES {}", insert_entries.join(","));
+                        sqlx::query(&query).execute(&mut transaction).await?;
+                        info!("[SQLite3] Handled {} torrents", handled_entries);
+                    }
+                    match transaction.commit().await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[SQLite3] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    };
+                    return Ok(());
+                }
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
                     let mut transaction = pool.begin().await?;
@@ -237,9 +291,6 @@ impl DatabaseConnector {
                         }
                     };
                     return Ok(());
-                }
-                DatabaseDrivers::SQLite3 => {
-
                 }
             }
         }
