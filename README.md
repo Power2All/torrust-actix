@@ -35,12 +35,12 @@ cargo build --release
 ```
 
 ### Usage
-* Running the code will create a `config.yaml` file when it doesn't exist yet. The configuration will be filled with default values, and will use SQLite3 in memory as default persistency. Persistency is turned OFF by default, so you need to activate that manually:
+* Running the code will create a `config.toml` file when it doesn't exist yet. The configuration will be filled with default values, and will use SQLite3 in memory as default persistency. Persistency is turned OFF by default, so you need to activate that manually:
 ```bash
 ./target/release/torrust-axum
 ```
 
-* Modify the newly created `config.yaml` file according to your liking. (ToDo: Create extended documentation)
+* Modify the newly created `config.toml` file according to your liking. (ToDo: Create extended documentation)
 ```toml
 log_level = "info"
 log_console_interval = 60
