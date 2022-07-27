@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::env;
 use std::process::exit;
 use std::str::FromStr;
 use std::time::Duration;
@@ -8,7 +7,7 @@ use log::{info, error};
 use scc::ebr::Arc;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use sqlx::{Error, MySql, Pool, Postgres, Row, Sqlite, ConnectOptions};
-use sqlx::postgres::{PgPool, PgConnectOptions, PgPoolOptions};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 use serde::{Deserialize, Serialize};
 use crate::common::InfoHash;
@@ -47,7 +46,7 @@ pub struct DatabaseConnector {
 impl DatabaseConnectorSQLite {
     pub async fn new(dsl: &String) -> Result<Pool<Sqlite>, Error>
     {
-        let mut options = SqliteConnectOptions::from_str(&dsl)?;
+        let options = SqliteConnectOptions::from_str(&dsl)?;
         options
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Wal)
@@ -103,7 +102,7 @@ impl DatabaseConnector {
                 });
                 structure.engine = Some(DatabaseDrivers::SQLite3);
                 let pool = &structure.sqlite.clone().unwrap().pool;
-                sqlx::query("CREATE TABLE IF NOT EXISTS torrents (info_hash VARCHAR(20) NOT NULL UNIQUE, completed INTEGER DEFAULT 0 NOT NULL)").execute(pool);
+                let _ = sqlx::query("CREATE TABLE IF NOT EXISTS torrents (info_hash VARCHAR(40) NOT NULL UNIQUE, completed INTEGER DEFAULT 0 NOT NULL)").execute(pool).await;
             }
             DatabaseDrivers::MySQL => {
                 let mysql_connect = DatabaseConnectorMySQL::new(&config.db_path).await;
@@ -146,9 +145,10 @@ impl DatabaseConnector {
                             info!("[SQLite3] Loaded {} torrents...", total);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get("info_hash");
+                        let infohash_data: &str = result.get("info_hash");
+                        let infohash_decoded = hex::decode(infohash_data).unwrap();
                         let completed_data: i64 = result.get("completed");
-                        let infohash = <[u8; 20]>::try_from(infohash_data[0 .. 20].as_ref()).unwrap();
+                        let infohash = <[u8; 20]>::try_from(infohash_decoded[0 .. 20].as_ref()).unwrap();
                         return_data.push((InfoHash(infohash), completed_data));
                         counter += 1;
                         total += 1;
@@ -212,7 +212,7 @@ impl DatabaseConnector {
                     let mut insert_entries = Vec::new();
                     for (info_hash, completed) in torrents.iter() {
                         handled_entries += 1;
-                        insert_entries.push(format!("(HEX({}),{})", info_hash.to_string(), completed.clone()).to_string());
+                        insert_entries.push(format!("('{}',{})", info_hash.to_string(), completed.clone()).to_string());
                         if insert_entries.len() == 10000 {
                             let query = format!("INSERT OR REPLACE INTO torrents (info_hash,completed) VALUES {}", insert_entries.join(","));
                             sqlx::query(&query).execute(&mut transaction).await?;

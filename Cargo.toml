@@ -26,6 +26,7 @@ chrono = "0.4.19"
 either = "1.7.0"
 fern = { version = "0.6.1", features = ["colored"] }
 futures = "0.3.21"
+hex = "0.4.3"
 hyper = { version = "0.14.20", features = ["full"] }
 log = "0.4.17"
 percent-encoding = "2.1.0"
