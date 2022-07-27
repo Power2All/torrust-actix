@@ -29,7 +29,6 @@ pub struct UdpTrackersConfig {
 pub struct HttpTrackersConfig {
     pub enabled: bool,
     pub bind_address: String,
-    pub threads: u64,
     pub ssl: bool,
     pub ssl_key: String,
     pub ssl_cert: String
@@ -61,14 +60,13 @@ impl Configuration {
         let udp_server = vec!(
             UdpTrackersConfig {
                 enabled: false,
-                bind_address: String::from("")
+                bind_address: String::from("0.0.0.0:6969")
             }
         );
         let http_server = vec!(
             HttpTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:6969"),
-                threads: 4u64,
                 ssl: false,
                 ssl_key: String::from(""),
                 ssl_cert: String::from("")
@@ -78,7 +76,6 @@ impl Configuration {
             HttpTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:8080"),
-                threads: 2u64,
                 ssl: false,
                 ssl_key: String::from(""),
                 ssl_cert: String::from("")
@@ -90,7 +87,7 @@ impl Configuration {
             statistics_enabled: true,
 
             db_driver: DatabaseDrivers::SQLite3,
-            db_path: String::from("data.db"),
+            db_path: String::from("sqlite://:memory:"),
             persistency: false,
             persistency_interval: Some(60),
 
