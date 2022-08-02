@@ -35,6 +35,16 @@ pub struct HttpTrackersConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ApiTrackersConfig {
+    pub enabled: bool,
+    pub bind_address: String,
+    pub key: String,
+    pub ssl: bool,
+    pub ssl_key: String,
+    pub ssl_cert: String
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub log_level: String,
     pub log_console_interval: Option<u64>,
@@ -53,7 +63,7 @@ pub struct Configuration {
 
     pub udp_server: Vec<UdpTrackersConfig>,
     pub http_server: Vec<HttpTrackersConfig>,
-    pub api_server: Vec<HttpTrackersConfig>
+    pub api_server: Vec<ApiTrackersConfig>
 }
 impl Configuration {
     pub fn default() -> Configuration {
@@ -73,9 +83,10 @@ impl Configuration {
             }
         );
         let api_server = vec!(
-            HttpTrackersConfig {
+            ApiTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:8080"),
+                key: String::from(""),
                 ssl: false,
                 ssl_key: String::from(""),
                 ssl_cert: String::from("")
