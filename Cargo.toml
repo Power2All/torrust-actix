@@ -15,10 +15,10 @@ codegen-units = 1 # Enable this to optimize filesize
 panic = "abort" # Enable this to optimize filesize
 
 [dependencies]
-async-trait = "0.1.56"
-axum = "0.5.13"
+async-trait = "0.1.57"
+axum = { version = "0.5.13", features = ["ws"] }
 axum-client-ip = "0.2.0"
-axum-server = { version = "0.4.0", features = ["tls-rustls"] }
+axum-server = { version = "0.4.1", features = ["tls-rustls"] }
 binascii = "0.1.4"
 bip_bencode = "0.4.4"
 byteorder = "1.4.3"
@@ -32,10 +32,10 @@ log = "0.4.17"
 percent-encoding = "2.1.0"
 rustls = "0.20.6"
 scc = "0.8.3"
-serde = { version = "1.0.140", features = ["derive"] }
+serde = { version = "1.0.141", features = ["derive"] }
 serde_json = "1.0.82"
 sqlx = { version = "0.6.0", features = ["mysql", "postgres", "sqlite", "runtime-tokio-rustls"] }
 thiserror = "1.0.31"
-tokio = { version = "1.20.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 toml = "0.5.9"
 tower = "0.4.13"
