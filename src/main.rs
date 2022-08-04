@@ -7,7 +7,7 @@ use log::{error, info};
 use scc::ebr::Arc;
 use torrust_axum::common::{tcp_check_host_and_port_used, udp_check_host_and_port_used};
 use torrust_axum::config;
-use torrust_axum::http_api::http_api;
+use torrust_axum::http_api::{http_api, https_api};
 use torrust_axum::http_service::{http_service, https_service};
 use torrust_axum::logging::setup_logging;
 use torrust_axum::tracker::{StatsEvent, TorrentTracker};
@@ -36,13 +36,18 @@ async fn main() -> std::io::Result<()>
     let handle = Handle::new();
 
     let mut api_futures = Vec::new();
+    let mut apis_futures = Vec::new();
     for api_server_object in &config.api_server {
         if api_server_object.enabled {
             tcp_check_host_and_port_used(api_server_object.bind_address.clone());
             let address: SocketAddr = api_server_object.bind_address.parse().unwrap();
             let handle = handle.clone();
             let tracker_clone = tracker.clone();
-            api_futures.push(http_api(handle.clone(), address.clone(), tracker_clone));
+            if api_server_object.ssl {
+                apis_futures.push(https_api(handle.clone(), address.clone(), tracker_clone, api_server_object.ssl_key.clone(), api_server_object.ssl_cert.clone()).await);
+            } else {
+                api_futures.push(http_api(handle.clone(), address.clone(), tracker_clone).await);
+            }
         }
     }
 
@@ -76,6 +81,12 @@ async fn main() -> std::io::Result<()>
     if api_futures.len() != 0 {
         tokio::spawn(async move {
             let _ = try_join_all(api_futures).await;
+        });
+    }
+
+    if apis_futures.len() != 0 {
+        tokio::spawn(async move {
+            let _ = try_join_all(apis_futures).await;
         });
     }
 
