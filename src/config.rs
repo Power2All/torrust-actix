@@ -38,7 +38,6 @@ pub struct HttpTrackersConfig {
 pub struct ApiTrackersConfig {
     pub enabled: bool,
     pub bind_address: String,
-    pub key: String,
     pub ssl: bool,
     pub ssl_key: String,
     pub ssl_cert: String
@@ -54,6 +53,12 @@ pub struct Configuration {
     pub db_path: String,
     pub persistency: bool,
     pub persistency_interval: Option<u64>,
+
+    pub api_key: String,
+
+    pub whitelist: bool,
+    pub whitelist_from_persistency: bool,
+    pub blacklist: bool,
 
     pub interval: Option<u64>,
     pub interval_minimum: Option<u64>,
@@ -86,7 +91,6 @@ impl Configuration {
             ApiTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:8080"),
-                key: String::from(""),
                 ssl: false,
                 ssl_key: String::from(""),
                 ssl_cert: String::from("")
@@ -101,6 +105,12 @@ impl Configuration {
             db_path: String::from("sqlite://:memory:"),
             persistency: false,
             persistency_interval: Some(60),
+
+            api_key: String::from("MyAccessToken"),
+
+            whitelist: false,
+            whitelist_from_persistency: false,
+            blacklist: false,
 
             interval: Some(1800),
             interval_minimum: Some(1800),

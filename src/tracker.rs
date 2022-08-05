@@ -6,6 +6,7 @@ use tokio::sync::RwLock;
 use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
 use crate::config::Configuration;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use crate::databases::DatabaseConnector;
 
 pub enum StatsEvent {
@@ -18,6 +19,8 @@ pub enum StatsEvent {
     Seeds,
     Peers,
     Completed,
+    Whitelist,
+    Blacklist,
     Tcp4ConnectionsHandled,
     Tcp4ApiHandled,
     Tcp4AnnouncesHandled,
@@ -46,6 +49,8 @@ pub struct Stats {
     pub seeds: i64,
     pub peers: i64,
     pub completed: i64,
+    pub whitelist: i64,
+    pub blacklist: i64,
     pub tcp4_connections_handled: i64,
     pub tcp4_api_handled: i64,
     pub tcp4_announces_handled: i64,
@@ -97,6 +102,23 @@ pub struct Torrents {
     pub blacklist: HashMap<InfoHash, i64>
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct GetTorrentsApi {
+    pub info_hash: String,
+    pub completed: i64,
+    pub seeders: i64,
+    pub leechers: i64
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct GetTorrentApi {
+    pub info_hash: String,
+    pub completed: i64,
+    pub seeders: i64,
+    pub leechers: i64,
+    pub peers: Vec<Value>
+}
+
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
     pub torrents: Arc<RwLock<Torrents>>,
@@ -123,6 +145,8 @@ impl TorrentTracker {
                     seeds: 0,
                     peers: 0,
                     completed: 0,
+                    whitelist: 0,
+                    blacklist: 0,
                     tcp4_connections_handled: 0,
                     tcp4_api_handled: 0,
                     tcp4_announces_handled: 0,
@@ -170,6 +194,8 @@ impl TorrentTracker {
             StatsEvent::Seeds => { stats.seeds += value; }
             StatsEvent::Peers => { stats.peers += value; }
             StatsEvent::Completed => { stats.completed += value; }
+            StatsEvent::Whitelist => { stats.whitelist += value; }
+            StatsEvent::Blacklist => { stats.blacklist += value; }
             StatsEvent::Tcp4ConnectionsHandled => { stats.tcp4_connections_handled += value; }
             StatsEvent::Tcp4ApiHandled => { stats.tcp4_api_handled += value; }
             StatsEvent::Tcp4AnnouncesHandled => { stats.tcp4_announces_handled += value; }
@@ -205,6 +231,8 @@ impl TorrentTracker {
             StatsEvent::Seeds => { stats.seeds = value; }
             StatsEvent::Peers => { stats.peers = value; }
             StatsEvent::Completed => { stats.completed = value; }
+            StatsEvent::Whitelist => { stats.whitelist = value; }
+            StatsEvent::Blacklist => { stats.blacklist = value; }
             StatsEvent::Tcp4ConnectionsHandled => { stats.tcp4_connections_handled = value; }
             StatsEvent::Tcp4ApiHandled => { stats.tcp4_api_handled = value; }
             StatsEvent::Tcp4AnnouncesHandled => { stats.tcp4_announces_handled = value; }
@@ -279,6 +307,37 @@ impl TorrentTracker {
         let torrent = torrents_lock.map.get(&info_hash).cloned();
         drop(torrents_lock);
         torrent
+    }
+
+    pub async fn get_torrents_api(&self) -> Vec<GetTorrentsApi>
+    {
+        let mut return_data: Vec<GetTorrentsApi> = vec![];
+
+        let torrents_arc = self.torrents.clone();
+        let torrents_lock = torrents_arc.write().await;
+
+        let mut torrent_index = vec![];
+        for (info_hash, _torrent_entry) in torrents_lock.map.iter() {
+            torrent_index.push(*info_hash);
+        }
+        drop(torrents_lock);
+
+        for info_hash in torrent_index.iter() {
+            let torrent_option = self.get_torrent(*info_hash).await.clone();
+            if torrent_option.is_some() {
+                let torrent = torrent_option.unwrap().clone();
+                return_data.push(GetTorrentsApi{
+                    info_hash: info_hash.to_string(),
+                    completed: torrent.completed,
+                    seeders: torrent.seeders,
+                    leechers: torrent.leechers
+                });
+            } else {
+                continue;
+            }
+        }
+
+        return_data
     }
 
     pub async fn remove_torrent(&self, info_hash: InfoHash, persistent: bool)
@@ -526,6 +585,17 @@ impl TorrentTracker {
         let mut torrents_lock = torrents_arc.write().await;
         torrents_lock.whitelist.insert(info_hash, 0i64);
         drop(torrents_lock);
+        self.update_stats(StatsEvent::Whitelist, 1).await;
+    }
+
+    pub async fn remove_whitelist(&self, info_hash: InfoHash)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        torrents_lock.whitelist.remove(&info_hash);
+        let whitelist_count = torrents_lock.whitelist.len();
+        drop(torrents_lock);
+        self.set_stats(StatsEvent::Whitelist, whitelist_count as i64).await;
     }
 
     pub async fn check_whitelist(&self, info_hash: InfoHash) -> bool
@@ -546,6 +616,7 @@ impl TorrentTracker {
         let mut torrents_lock = torrents_arc.write().await;
         torrents_lock.whitelist = HashMap::new();
         drop(torrents_lock);
+        self.set_stats(StatsEvent::Whitelist, 0).await;
     }
 
     /* === Blacklist === */
@@ -555,6 +626,17 @@ impl TorrentTracker {
         let mut torrents_lock = torrents_arc.write().await;
         torrents_lock.blacklist.insert(info_hash, 0i64);
         drop(torrents_lock);
+        self.update_stats(StatsEvent::Blacklist, 1).await;
+    }
+
+    pub async fn remove_blacklist(&self, info_hash: InfoHash)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        torrents_lock.blacklist.remove(&info_hash);
+        let blacklist_count = torrents_lock.blacklist.len();
+        drop(torrents_lock);
+        self.set_stats(StatsEvent::Blacklist, blacklist_count as i64).await;
     }
 
     pub async fn check_blacklist(&self, info_hash: InfoHash) -> bool
@@ -575,5 +657,6 @@ impl TorrentTracker {
         let mut torrents_lock = torrents_arc.write().await;
         torrents_lock.whitelist = HashMap::new();
         drop(torrents_lock);
+        self.set_stats(StatsEvent::Blacklist, 1).await;
     }
 }
