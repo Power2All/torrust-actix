@@ -622,6 +622,9 @@ pub enum ServerError {
     #[error("torrent not on whitelist")]
     TorrentNotWhitelisted,
 
+    #[error("torrent blacklist")]
+    TorrentBlacklisted,
+
     #[error("peer not authenticated")]
     PeerNotAuthenticated,
 

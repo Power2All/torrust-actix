@@ -78,6 +78,18 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
         }
     };
 
+    // Check if whitelist is enabled, and if so, check if the torrent hash is known, and if not, show error.
+    if state.config.whitelist && !state.check_whitelist(announce_unwrapped.info_hash).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown info_hash")}).encode();
+        return (StatusCode::OK, headers, return_string);
+    }
+
+    // Check if blacklist is enabled, and if so, check if the torrent hash is known, and if so, show error.
+    if state.config.blacklist && state.check_blacklist(announce_unwrapped.info_hash).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("forbidden info_hash")}).encode();
+        return (StatusCode::OK, headers, return_string);
+    }
+
     let (_torrent_peer, torrent_entry) = match handle_announce(state.clone(), announce_unwrapped.clone()).await {
         Ok(result) => { result }
         Err(e) => {

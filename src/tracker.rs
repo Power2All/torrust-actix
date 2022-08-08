@@ -267,6 +267,9 @@ impl TorrentTracker {
                     seeders: 0,
                     leechers: 0
                 }, false).await;
+                if self.config.whitelist && self.config.whitelist_from_persistency {
+                    self.add_whitelist(*info_hash).await;
+                }
                 torrent_count += 1;
                 completed_count += *completed;
             }
@@ -601,7 +604,7 @@ impl TorrentTracker {
     pub async fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let torrents_arc = self.torrents.clone();
-        let mut torrents_lock = torrents_arc.write().await;
+        let torrents_lock = torrents_arc.write().await;
         let whitelist = torrents_lock.whitelist.get(&info_hash).cloned();
         drop(torrents_lock);
         if whitelist.is_some() {
@@ -642,7 +645,7 @@ impl TorrentTracker {
     pub async fn check_blacklist(&self, info_hash: InfoHash) -> bool
     {
         let torrents_arc = self.torrents.clone();
-        let mut torrents_lock = torrents_arc.write().await;
+        let torrents_lock = torrents_arc.write().await;
         let blacklist = torrents_lock.blacklist.get(&info_hash).cloned();
         drop(torrents_lock);
         if blacklist.is_some() {

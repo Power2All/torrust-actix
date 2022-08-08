@@ -169,6 +169,16 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         Some(result) => { result }
     };
 
+    // Check if whitelist is enabled, and if so, check if the torrent hash is known, and if not, show error.
+    if tracker.config.whitelist && !tracker.check_whitelist(InfoHash(request.info_hash.0)).await {
+        return Err(ServerError::TorrentNotWhitelisted);
+    }
+
+    // Check if blacklist is enabled, and if so, check if the torrent hash is known, and if so, show error.
+    if tracker.config.blacklist && tracker.check_blacklist(InfoHash(request.info_hash.0)).await {
+        return Err(ServerError::TorrentBlacklisted);
+    }
+
     // Handle the request data.
     match handle_announce(tracker.clone(), AnnounceQueryRequest {
         info_hash: InfoHash(request.info_hash.0),
