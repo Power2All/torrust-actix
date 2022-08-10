@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::Write;
 use serde::{Deserialize, Serialize};
 use toml;
+use crate::common::CustomError;
 use crate::databases::DatabaseDrivers;
 
 #[derive(Debug)]
@@ -154,7 +155,7 @@ impl Configuration {
         }
     }
 
-    pub fn load_from_file() -> Result<Configuration, ()> {
+    pub fn load_from_file() -> Result<Configuration, CustomError> {
         let mut config = Configuration::default();
         match Configuration::load_file("config.toml") {
             Ok(c) => { config = c; }
@@ -167,12 +168,12 @@ impl Configuration {
                 return match save_file {
                     Ok(_) => {
                         eprintln!("Please edit the config.TOML in the root folder, exitting now...");
-                        Err(())
+                        Err(CustomError::new("create config.toml file"))
                     }
                     Err(e) => {
                         eprintln!("config.toml file could not be created, check permissions...");
                         eprintln!("{}", e);
-                        Err(())
+                        Err(CustomError::new("could not create config.toml file"))
                     }
                 }
             }

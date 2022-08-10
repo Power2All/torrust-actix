@@ -44,23 +44,23 @@ pub struct DatabaseConnector {
 }
 
 impl DatabaseConnectorSQLite {
-    pub async fn new(dsl: &String) -> Result<Pool<Sqlite>, Error>
+    pub async fn create(dsl: &str) -> Result<Pool<Sqlite>, Error>
     {
-        let options = SqliteConnectOptions::from_str(&dsl)?;
+        let options = SqliteConnectOptions::from_str(dsl)?;
         options
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Wal)
             .read_only(false)
             .log_statements(log::LevelFilter::Debug)
             .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
-        SqlitePool::connect(&dsl).await
+        SqlitePool::connect(dsl).await
     }
 }
 
 impl DatabaseConnectorMySQL {
-    pub async fn new(dsl: &String) -> Result<Pool<MySql>, Error>
+    pub async fn create(dsl: &str) -> Result<Pool<MySql>, Error>
     {
-        let mut options = MySqlConnectOptions::from_str(&dsl)?;
+        let mut options = MySqlConnectOptions::from_str(dsl)?;
         options
             .log_statements(log::LevelFilter::Debug)
             .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
@@ -69,9 +69,9 @@ impl DatabaseConnectorMySQL {
 }
 
 impl DatabaseConnectorPgSQL {
-    pub async fn new(dsl: &String) -> Result<Pool<Postgres>, Error>
+    pub async fn create(dsl: &str) -> Result<Pool<Postgres>, Error>
     {
-        let mut options = PgConnectOptions::from_str(&dsl)?;
+        let mut options = PgConnectOptions::from_str(dsl)?;
         options
             .log_statements(log::LevelFilter::Debug)
             .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
@@ -91,21 +91,21 @@ impl DatabaseConnector {
 
         match &config.db_driver {
             DatabaseDrivers::SQLite3 => {
-                let sqlite_connect = DatabaseConnectorSQLite::new(&config.db_path).await;
+                let sqlite_connect = DatabaseConnectorSQLite::create(&config.db_path).await;
                 if sqlite_connect.is_err() {
                     error!("[SQLite] Unable to open the database {}", &config.db_path);
                     error!("[SQLite] Message: {:#?}", sqlite_connect.unwrap_err().into_database_error());
                     exit(1);
                 }
                 structure.sqlite = Some(DatabaseConnectorSQLite {
-                    pool: sqlite_connect.unwrap().clone()
+                    pool: sqlite_connect.unwrap()
                 });
                 structure.engine = Some(DatabaseDrivers::SQLite3);
                 let pool = &structure.sqlite.clone().unwrap().pool;
                 let _ = sqlx::query("CREATE TABLE IF NOT EXISTS torrents (info_hash VARCHAR(40) NOT NULL UNIQUE, completed INTEGER DEFAULT 0 NOT NULL)").execute(pool).await;
             }
             DatabaseDrivers::MySQL => {
-                let mysql_connect = DatabaseConnectorMySQL::new(&config.db_path).await;
+                let mysql_connect = DatabaseConnectorMySQL::create(&config.db_path).await;
                 if mysql_connect.is_err() {
                     error!("[MySQL] Unable to connect to MySQL on DSL {}", &config.db_path);
                     exit(1);
@@ -116,7 +116,7 @@ impl DatabaseConnector {
                 structure.engine = Some(DatabaseDrivers::MySQL);
             }
             DatabaseDrivers::PgSQL => {
-                let pgsql_connect = DatabaseConnectorPgSQL::new(&config.db_path).await;
+                let pgsql_connect = DatabaseConnectorPgSQL::create(&config.db_path).await;
                 if pgsql_connect.is_err() {
                     error!("[PgSQL] Unable to connect to PostgreSQL on DSL {}", &config.db_path)
                 }
@@ -212,7 +212,7 @@ impl DatabaseConnector {
                     let mut insert_entries = Vec::new();
                     for (info_hash, completed) in torrents.iter() {
                         handled_entries += 1;
-                        insert_entries.push(format!("('{}',{})", info_hash.to_string(), completed.clone()).to_string());
+                        insert_entries.push(format!("('{}',{})", info_hash, completed.clone()).to_string());
                         if insert_entries.len() == 10000 {
                             let query = format!("INSERT OR REPLACE INTO torrents (info_hash,completed) VALUES {}", insert_entries.join(","));
                             sqlx::query(&query).execute(&mut transaction).await?;
@@ -241,7 +241,7 @@ impl DatabaseConnector {
                     let mut insert_entries = Vec::new();
                     for (info_hash, completed) in torrents.iter() {
                         handled_entries += 1;
-                        insert_entries.push(format!("(UNHEX(\"{}\"),{})", info_hash.to_string(), completed.clone()).to_string());
+                        insert_entries.push(format!("(UNHEX(\"{}\"),{})", info_hash, completed.clone()).to_string());
                         if insert_entries.len() == 10000 {
                             let query = format!("INSERT INTO torrents (`info_hash`,`completed`) VALUES {} ON DUPLICATE KEY UPDATE `completed`=VALUES(`completed`)", insert_entries.join(","));
                             sqlx::query(&query).execute(&mut transaction).await?;
@@ -270,7 +270,7 @@ impl DatabaseConnector {
                     let mut insert_entries = Vec::new();
                     for (info_hash, completed) in torrents.iter() {
                         handled_entries += 1;
-                        insert_entries.push(format!("(decode('{}', 'hex'),{})", info_hash.to_string(), completed.clone()).to_string());
+                        insert_entries.push(format!("(decode('{}', 'hex'),{})", info_hash, completed.clone()).to_string());
                         if insert_entries.len() == 10000 {
                             let query = format!("INSERT INTO torrents (info_hash,completed) VALUES {} ON CONFLICT (info_hash) DO UPDATE SET completed=excluded.completed", insert_entries.join(","));
                             sqlx::query(&query).execute(&mut transaction).await?;

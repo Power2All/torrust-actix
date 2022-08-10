@@ -280,10 +280,10 @@ pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest,
         tracker.update_stats(StatsEvent::Udp6ScrapesHandled, 1).await;
     }
 
-    return Ok(Response::from(ScrapeResponse {
+    Ok(Response::from(ScrapeResponse {
         transaction_id: request.transaction_id,
         torrent_stats
-    }));
+    }))
 }
 
 fn handle_udp_error(e: ServerError, transaction_id: TransactionId) -> Response {

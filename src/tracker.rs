@@ -281,7 +281,7 @@ impl TorrentTracker {
 
     pub async fn save_torrents(&self) -> bool
     {
-        let shadow = self.get_shadow().await.clone();
+        let shadow = self.get_shadow().await;
         if self.sqlx.save_torrents(shadow).await.is_ok() {
             return true;
         }

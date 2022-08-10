@@ -519,7 +519,7 @@ impl Response {
                 let stats = inner[position..]
                     .chunks_exact(12)
                     .map(|chunk| {
-                        let mut cursor: Cursor<&[u8]> = Cursor::new(&chunk[..]);
+                        let mut cursor: Cursor<&[u8]> = Cursor::new(chunk);
 
                         let seeders = cursor.read_i32::<NetworkEndian>().unwrap();
                         let downloads = cursor.read_i32::<NetworkEndian>().unwrap();
@@ -662,16 +662,14 @@ pub async fn convert_int_to_bytes(number: &u64) -> Vec<u8> {
             return return_data;
         }
     }
-    return return_data;
+    return_data
 }
 
 pub async fn convert_bytes_to_int(array: &Vec<u8>) -> u64 {
     let mut array_fixed: Vec<u8> = Vec::new();
     let size = 8 - array.len();
-    for _ in 0..size {
-        array_fixed.push(0);
-    }
+    array_fixed.resize(size, 0);
     array_fixed.extend(array);
     let mut rdr = Cursor::new(array_fixed);
-    return rdr.read_u64::<BigEndian>().unwrap();
+    rdr.read_u64::<BigEndian>().unwrap()
 }

@@ -44,9 +44,9 @@ async fn main() -> std::io::Result<()>
             let handle = handle.clone();
             let tracker_clone = tracker.clone();
             if api_server_object.ssl {
-                apis_futures.push(https_api(handle.clone(), address.clone(), tracker_clone, api_server_object.ssl_key.clone(), api_server_object.ssl_cert.clone()).await);
+                apis_futures.push(https_api(handle.clone(), address, tracker_clone, api_server_object.ssl_key.clone(), api_server_object.ssl_cert.clone()).await);
             } else {
-                api_futures.push(http_api(handle.clone(), address.clone(), tracker_clone).await);
+                api_futures.push(http_api(handle.clone(), address, tracker_clone).await);
             }
         }
     }
@@ -60,9 +60,9 @@ async fn main() -> std::io::Result<()>
             let handle = handle.clone();
             let tracker_clone = tracker.clone();
             if http_server_object.ssl {
-                https_futures.push(https_service(handle.clone(), address.clone(), tracker_clone, http_server_object.ssl_key.clone(), http_server_object.ssl_cert.clone()).await);
+                https_futures.push(https_service(handle.clone(), address, tracker_clone, http_server_object.ssl_key.clone(), http_server_object.ssl_cert.clone()).await);
             } else {
-                http_futures.push(http_service(handle.clone(), address.clone(), tracker_clone).await);
+                http_futures.push(http_service(handle.clone(), address, tracker_clone).await);
             }
         }
     }
@@ -74,35 +74,35 @@ async fn main() -> std::io::Result<()>
             udp_check_host_and_port_used(udp_server_object.bind_address.clone());
             let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
             let tracker_clone = tracker.clone();
-            udp_futures.push(udp_service(address.clone(), tracker_clone, udp_rx.clone()).await);
+            udp_futures.push(udp_service(address, tracker_clone, udp_rx.clone()).await);
         }
     }
 
-    if api_futures.len() != 0 {
+    if !api_futures.is_empty() {
         tokio::spawn(async move {
             let _ = try_join_all(api_futures).await;
         });
     }
 
-    if apis_futures.len() != 0 {
+    if !apis_futures.is_empty() {
         tokio::spawn(async move {
             let _ = try_join_all(apis_futures).await;
         });
     }
 
-    if http_futures.len() != 0 {
+    if !http_futures.is_empty() {
         tokio::spawn(async move {
             let _ = try_join_all(http_futures).await;
         });
     }
 
-    if https_futures.len() != 0 {
+    if !https_futures.is_empty() {
         tokio::spawn(async move {
             let _ = try_join_all(https_futures).await;
         });
     }
 
-    let interval_peer_cleanup = config.clone().interval_cleanup.clone().unwrap_or(900);
+    let interval_peer_cleanup = config.clone().interval_cleanup.unwrap_or(900);
     let tracker_clone = tracker.clone();
     tokio::spawn(async move {
         let interval = Duration::from_secs(interval_peer_cleanup);
@@ -117,7 +117,7 @@ async fn main() -> std::io::Result<()>
         }
     });
 
-    let interval_persistency = config.clone().persistency_interval.clone().unwrap_or(900);
+    let interval_persistency = config.clone().persistency_interval.unwrap_or(900);
     let tracker_clone = tracker.clone();
     tokio::spawn(async move {
         let interval = Duration::from_secs(interval_persistency);
@@ -141,7 +141,7 @@ async fn main() -> std::io::Result<()>
     });
 
     if config.statistics_enabled {
-        let console_log_interval = config.clone().log_console_interval.clone().unwrap();
+        let console_log_interval = config.clone().log_console_interval.unwrap();
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
             let interval = Duration::from_secs(console_log_interval);
@@ -179,7 +179,7 @@ async fn main() -> std::io::Result<()>
                 error!("[SAVING] An error occurred while saving data...");
             }
             info!("Server shutting down completed");
-            return Ok(());
+            Ok(())
         }
     }
 }
