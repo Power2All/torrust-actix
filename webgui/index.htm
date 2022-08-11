@@ -55,10 +55,70 @@
         </div>
     </div>
 </nav>
-<div id="content_dashboard" class="content container d-none">
-    Dashboard
+<div id="content_dashboard" class="content container mt-2 d-none">
+    <div class="m-1">
+        <button id="content_dashboard_button_reload" type="button" class="btn btn-primary"><i class="bi bi-arrow-clockwise" style="margin-right: 5px;"></i>Reload</button>
+    </div>
+    <div class="row">
+        <div class="col-lg-3 p-1">
+            <div class="card p-2" style="min-width: 10em; max-width: 100%; background-color: darkblue; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-layers mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_torrents_count" style="margin-top: 12px; margin-left: 16px; width: calc(100%-16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2" style="min-width: 10em; max-width: 100%; background-color: darkblue; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-check2-circle" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_completed_count" style="margin-top: 12px; margin-left: 16px; width: calc(100%-16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2" style="min-width: 10em; max-width: 100%; background-color: darkgreen; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-upload mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_seeders_count" style="margin-top: 12px; margin-left: 16px; width: calc(100%-16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2" style="min-width: 10em; max-width: 100%; background-color: darkred; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-download mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_leechers_count" style="margin-top: 12px; margin-left: 16px; width: calc(100%-16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-<div id="content_torrents" class="content container d-none">
+<div id="content_torrents" class="content container mt-2 d-none">
     <div class="m-1">
         <button id="content_torrents_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Torrents</button>
         <button id="content_torrents_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
@@ -75,10 +135,10 @@
         </thead>
     </table>
 </div>
-<div id="content_whitelist" class="content container d-none">
+<div id="content_whitelist" class="content container mt-2 d-none">
     Whitelist
 </div>
-<div id="content_blacklist" class="content container d-none">
+<div id="content_blacklist" class="content container mt-2 d-none">
     Blacklist
 </div>
 
@@ -137,7 +197,13 @@
             $("#content_blacklist").removeClass("d-none");
         });
 
-        // Buttons in Torrents page
+        // Buttons on Dashboard page
+        $("#content_dashboard_button_reload").on("click", function(event) {
+            event.preventDefault();
+            $("#content_dashboard_button_reload").prop('disabled', true);
+            loadStats();
+        });
+        // Buttons on Torrents page
         $("#content_torrents_button_load").on("click", function(event) {
             event.preventDefault();
             $("#content_torrents_button_load").prop('disabled', true);
@@ -152,9 +218,46 @@
         });
     });
 
+    async function loadStats() {
+        let access_token = $("#nav_input_access_token").val();
+        $("#content_dashboard_torrents_count").html("<div class=\"spinner-grow\" role=\"status\"></div>");
+
+        axios.get('http://localhost:8080/api/stats?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    let message = $("#message");
+                    message.find(".toast-body").html("Unable to load statistics: " + response.data.status);
+                    let toast = new bootstrap.Toast(message);
+                    toast.show();
+                    $("#content_dashboard_button_reload").prop('disabled', false);
+                    $("#content_dashboard_torrents_count").html("<i class=\"bi bi-question\"></i>");
+                    $("#content_dashboard_completed_count").html("<i class=\"bi bi-question\"></i>");
+                    $("#content_dashboard_seeders_count").html("<i class=\"bi bi-question\"></i>");
+                    $("#content_dashboard_leechers_count").html("<i class=\"bi bi-question\"></i>");
+                    return;
+                }
+                $("#content_dashboard_button_reload").prop('disabled', false);
+                $("#content_dashboard_torrents_count").html(response.data.torrents);
+                $("#content_dashboard_completed_count").html(response.data.completed);
+                $("#content_dashboard_seeders_count").html(response.data.seeds);
+                $("#content_dashboard_leechers_count").html(response.data.peers);
+            })
+            .catch(function (error) {
+                let message = $("#message");
+                message.find(".toast-body").html("Unable to load torrents: " + error.message);
+                let toast = new bootstrap.Toast(message);
+                toast.show();
+                $("#content_dashboard_button_reload").prop('disabled', false);
+                $("#content_dashboard_torrents_count").html("<i class=\"bi bi-question\"></i>");
+                $("#content_dashboard_completed_count").html("<i class=\"bi bi-question\"></i>");
+                $("#content_dashboard_seeders_count").html("<i class=\"bi bi-question\"></i>");
+                $("#content_dashboard_leechers_count").html("<i class=\"bi bi-question\"></i>");
+            });
+    }
+
     async function loadTorrents(table_element) {
         let access_token = $("#nav_input_access_token").val();
-        axios.get('/api/torrents?token=' + encodeURIComponent(access_token))
+        axios.get('http://localhost:8080/api/torrents?token=' + encodeURIComponent(access_token))
             .then(function (response) {
                 if (response.data.status !== undefined && response.data.status !== "ok") {
                     let message = $("#message");
@@ -179,13 +282,14 @@
                 table_element.draw(false);
 
                 $("#content_torrents_button_load").prop('disabled', false);
-            }).catch(function (error) {
-            let message = $("#message");
-            message.find(".toast-body").html("Unable to load torrents: " + error.message);
-            let toast = new bootstrap.Toast(message);
-            toast.show();
-            $("#content_torrents_button_load").prop('disabled', false);
-        });
+            })
+            .catch(function (error) {
+                let message = $("#message");
+                message.find(".toast-body").html("Unable to load torrents: " + error.message);
+                let toast = new bootstrap.Toast(message);
+                toast.show();
+                $("#content_torrents_button_load").prop('disabled', false);
+            });
     }
 </script>
 </body>

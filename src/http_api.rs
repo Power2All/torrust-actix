@@ -69,7 +69,7 @@ pub async fn http_api_stats_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(
 
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
-    headers.insert(HeaderName::from_static("Access-Control-Allow-Origin"), HeaderValue::from_static("null"));
+    headers.insert(HeaderName::from_static("access-control-allow-origin"), HeaderValue::from_static("null"));
 
     let query_map_result = parse_query(params);
     let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
