@@ -11,6 +11,12 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Full IPv4 and IPv6 support for both UDP and HTTP(S)
 * [X] Built-in API on a separate port in HTTP
 * [X] Persistency saving supported using SQLite3, MySQL or PostgreSQL database
+* [ ] Whitelist system, which can be used to make the tracker private
+* [ ] Blacklist system, to block and ban hashes
+* [ ] Web Interface (through API) to control the tracker software
+* [ ] Torrent key support, for private tracking support
+* [ ] Dockerfile to build a image for Docker
+* [ ] Websocket support for WebTorrent availability
 
 ### Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol

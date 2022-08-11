@@ -28,7 +28,9 @@ fern = { version = "0.6.1", features = ["colored"] }
 futures = "0.3.21"
 hex = "0.4.3"
 hyper = { version = "0.14.20", features = ["full"] }
+include_dir = "0.7.2"
 log = "0.4.17"
+mime_guess = "2.0.4"
 percent-encoding = "2.1.0"
 rustls = "0.20.6"
 scc = "0.8.3"

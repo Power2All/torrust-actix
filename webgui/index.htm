@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Torrust-Axum Admin Panel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Power2All">
+    <meta property="og:title" content="Torrust-Axum Admin Panel">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="http://localhost:8080/">
+    <meta property="og:description" content="The Torrust-Axum WebGUI Admin Interface">
+    <meta property="og:image" content="/webgui/img/logo.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="apple-touch-icon" sizes="180x180" href="/webgui/img/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/webgui/img/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/webgui/img/favicon-16x16.png">
+    <link rel="shortcut icon" href="/webgui/img/favicon.ico">
+    <link rel="icon" href="/webgui/img/favicon.ico">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="msapplication-config" content="/webgui/browserconfig.xml">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,900|Roboto+Slab:400,700" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx" crossorigin="anonymous">
+    <link id="datatables" href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css" rel="stylesheet" />
+</head>
+
+<body>
+<nav class="container navbar navbar-expand-lg bg-light">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">Torrust-Axum</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li id="nav_li_dashboard" class="nav-item">
+                    <a id="nav_button_dashboard" class="nav-link" href="#">Dashboard</a>
+                </li>
+                <li id="nav_li_torrents" class="nav-item">
+                    <a id="nav_button_torrents" class="nav-link" href="#">Torrents</a>
+                </li>
+                <li id="nav_li_whitelist" class="nav-item">
+                    <a id="nav_button_whitelist" class="nav-link" href="#">Whitelist</a>
+                </li>
+                <li id="nav_li_blacklist" class="nav-item">
+                    <a id="nav_button_blacklist" class="nav-link" href="#">Blacklist</a>
+                </li>
+            </ul>
+            <div class="d-flex">
+                <input id="nav_input_access_token" class="form-control me-2" type="password" placeholder="Access Token..." aria-label="Access Token"/>
+            </div>
+        </div>
+    </div>
+</nav>
+<div id="content_dashboard" class="content container d-none">
+    Dashboard
+</div>
+<div id="content_torrents" class="content container d-none">
+    <div class="m-1">
+        <button id="content_torrents_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Torrents</button>
+        <button id="content_torrents_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
+    </div>
+    <table id="torrents_table" class="table table-striped" style="width:100%">
+        <thead>
+        <tr>
+            <th>Hash (HEX)</th>
+            <th>Seeders</th>
+            <th>Leechers</th>
+            <th>Completed</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+    </table>
+</div>
+<div id="content_whitelist" class="content container d-none">
+    Whitelist
+</div>
+<div id="content_blacklist" class="content container d-none">
+    Blacklist
+</div>
+
+<div id="message" class="toast align-items-center text-bg-primary border-0 position-fixed bottom-0 end-0 p-3" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+        <div class="toast-body"></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.5/dist/umd/popper.min.js" integrity="sha384-Xe+8cL9oJa6tN/veChSP7q+mnSPaj5Bcu9mPX5F5xIGE0DVittaqT5lorf0EI7Vk" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.min.js" integrity="sha384-ODmDIVzN+pFdexxHEHFBQH3/9/vQ9uori45z4JjnFsRydbmQbmL5t1tQ0culUzyK" crossorigin="anonymous"></script>
+<script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.27.2/axios.min.js" integrity="sha512-odNmoc1XJy5x1TMVMdC7EMs3IVdItLPlCeL5vSUPN2llYKMJ2eByTTAIiiuqLg+GdNr9hF6z81p27DArRFKT7A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+    $(document).ready(function() {
+        console.log("Webpage Loaded");
+
+        // Init data tables
+        let torrents_table = $("#torrents_table").DataTable();
+
+        // Initial Work
+        $("#nav_li_dashboard").addClass("active");
+        $("#content_dashboard").removeClass("d-none");
+
+        $("#nav_button_dashboard").on("click", function(event) {
+            event.preventDefault();
+            $(".content").each(function() {
+                $(this).addClass("d-none");
+            });
+            $("#content_dashboard").removeClass("d-none");
+        });
+
+        $("#nav_button_torrents").on("click", function(event) {
+            event.preventDefault();
+            $(".content").each(function() {
+                $(this).addClass("d-none");
+            });
+            $("#content_torrents").removeClass("d-none");
+        });
+
+        $("#nav_button_whitelist").on("click", function(event) {
+            event.preventDefault();
+            $(".content").each(function() {
+                $(this).addClass("d-none");
+            });
+            $("#content_whitelist").removeClass("d-none");
+        });
+
+        $("#nav_button_blacklist").on("click", function(event) {
+            event.preventDefault();
+            $(".content").each(function() {
+                $(this).addClass("d-none");
+            });
+            $("#content_blacklist").removeClass("d-none");
+        });
+
+        // Buttons in Torrents page
+        $("#content_torrents_button_load").on("click", function(event) {
+            event.preventDefault();
+            $("#content_torrents_button_load").prop('disabled', true);
+            loadTorrents(torrents_table);
+        });
+
+        $("#content_torrents_button_clear").on("click", function(event) {
+            event.preventDefault();
+            $("#content_torrents_button_clear").prop('disabled', true);
+            torrents_table.clear().draw(false);
+            $("#content_torrents_button_clear").prop('disabled', false);
+        });
+    });
+
+    async function loadTorrents(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        axios.get('/api/torrents?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    let message = $("#message");
+                    message.find(".toast-body").html("Unable to load torrents: " + response.data.status);
+                    let toast = new bootstrap.Toast(message);
+                    toast.show();
+                    $("#content_torrents_button_load").prop('disabled', false);
+                    return;
+                }
+
+                table_element.clear().draw(false);
+                for (let value of response.data) {
+                    table_element.row.add([
+                        value.info_hash,
+                        value.seeders,
+                        value.leechers,
+                        value.completed,
+                        null
+                    ]);
+                    console.log(value);
+                }
+                table_element.draw(false);
+
+                $("#content_torrents_button_load").prop('disabled', false);
+            }).catch(function (error) {
+            let message = $("#message");
+            message.find(".toast-body").html("Unable to load torrents: " + error.message);
+            let toast = new bootstrap.Toast(message);
+            toast.show();
+            $("#content_torrents_button_load").prop('disabled', false);
+        });
+    }
+</script>
+</body>
