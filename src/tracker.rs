@@ -346,8 +346,8 @@ impl TorrentTracker {
     pub async fn remove_torrent(&self, info_hash: InfoHash, persistent: bool)
     {
         let mut removed_torrent = false;
-        let mut remove_seeders = 0u64;
-        let mut remove_leechers = 0u64;
+        let mut remove_seeders = 0i64;
+        let mut remove_leechers = 0i64;
 
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
@@ -355,8 +355,8 @@ impl TorrentTracker {
         if torrent_option.is_some() {
             let torrent = torrent_option.unwrap().clone();
             removed_torrent = true;
-            remove_seeders = torrent.seeders as u64;
-            remove_leechers = torrent.leechers as u64;
+            remove_seeders = torrent.seeders;
+            remove_leechers = torrent.leechers;
             torrents_lock.map.remove(&info_hash);
         }
         drop(torrents_lock);
@@ -366,8 +366,8 @@ impl TorrentTracker {
         }
 
         if removed_torrent { self.update_stats(StatsEvent::Torrents, -1).await; }
-        if remove_seeders > 0 { self.update_stats(StatsEvent::Seeds, (0 - remove_seeders) as i64).await; }
-        if remove_leechers > 0 { self.update_stats(StatsEvent::Peers, (0 - remove_leechers) as i64).await; }
+        if remove_seeders > 0 { self.update_stats(StatsEvent::Seeds, 0 - remove_seeders).await; }
+        if remove_leechers > 0 { self.update_stats(StatsEvent::Peers, 0 - remove_leechers).await; }
     }
 
     /* === Peers === */
@@ -589,6 +589,18 @@ impl TorrentTracker {
         torrents_lock.whitelist.insert(info_hash, 0i64);
         drop(torrents_lock);
         self.update_stats(StatsEvent::Whitelist, 1).await;
+    }
+
+    pub async fn get_whitelist(&self) -> Vec<InfoHash>
+    {
+        let torrents_arc = self.torrents.clone();
+        let torrents_lock = torrents_arc.write().await;
+        let mut return_list = vec![];
+        for (info_hash, _) in torrents_lock.whitelist.iter() {
+            return_list.push(*info_hash);
+        }
+        drop(torrents_lock);
+        return_list
     }
 
     pub async fn remove_whitelist(&self, info_hash: InfoHash)

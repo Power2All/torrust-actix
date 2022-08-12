@@ -25,6 +25,12 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx" crossorigin="anonymous">
     <link id="datatables" href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css" rel="stylesheet" />
+
+    <style>
+        table.dataTable tbody td {
+            vertical-align: middle;
+        }
+    </style>
 </head>
 
 <body>
@@ -68,7 +74,7 @@
                             <i class="bi bi-layers mx-2" style="font-size: 40px;"></i>
                         </div>
                         <div class="col-10">
-                            <div id="content_dashboard_torrents_count" style="margin-top: 12px; margin-left: 16px; width: calc(100%-16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                            <div id="content_dashboard_torrents_count" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
                         </div>
                     </div>
                 </div>
@@ -82,7 +88,7 @@
                             <i class="bi bi-check2-circle" style="font-size: 40px;"></i>
                         </div>
                         <div class="col-10">
-                            <div id="content_dashboard_completed_count" style="margin-top: 12px; margin-left: 16px; width: calc(100%-16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                            <div id="content_dashboard_completed_count" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
                         </div>
                     </div>
                 </div>
@@ -96,7 +102,7 @@
                             <i class="bi bi-upload mx-2" style="font-size: 40px;"></i>
                         </div>
                         <div class="col-10">
-                            <div id="content_dashboard_seeders_count" style="margin-top: 12px; margin-left: 16px; width: calc(100%-16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                            <div id="content_dashboard_seeders_count" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
                         </div>
                     </div>
                 </div>
@@ -110,7 +116,7 @@
                             <i class="bi bi-download mx-2" style="font-size: 40px;"></i>
                         </div>
                         <div class="col-10">
-                            <div id="content_dashboard_leechers_count" style="margin-top: 12px; margin-left: 16px; width: calc(100%-16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                            <div id="content_dashboard_leechers_count" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
                         </div>
                     </div>
                 </div>
@@ -118,6 +124,7 @@
         </div>
     </div>
 </div>
+
 <div id="content_torrents" class="content container mt-2 d-none">
     <div class="m-1">
         <button id="content_torrents_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Torrents</button>
@@ -127,17 +134,64 @@
         <thead>
         <tr>
             <th>Hash (HEX)</th>
-            <th>Seeders</th>
-            <th>Leechers</th>
-            <th>Completed</th>
-            <th>Actions</th>
+            <th><div style="width: 120px; font-size: 18px;" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Amount of Seeders"><strong><i class="bi bi-cloud-arrow-up"></i></strong></div></th>
+            <th><div style="width: 120px; font-size: 18px;" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Amount of Leechers"><strong><i class="bi bi-cloud-arrow-down"></i></strong></div></th>
+            <th><div style="width: 120px; font-size: 18px;" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Amount of Downloads"><strong><i class="bi bi-check2-circle"></i></strong></div></th>
+            <th></th>
         </tr>
         </thead>
     </table>
 </div>
-<div id="content_whitelist" class="content container mt-2 d-none">
-    Whitelist
+<div class="modal fade" id="whitelist_remove_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="whitelist_remove_backdrop" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Remove Whitelist Hash</h5>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to remove this hash from the whitelist?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>No</button>
+                <button id="whitelist_remove_button" torrent_id="" type="button" class="btn btn-primary"><i class="bi bi-check-circle me-2"></i>Yes</button>
+            </div>
+        </div>
+    </div>
 </div>
+
+<div id="content_whitelist" class="content container mt-2 d-none">
+    <div class="m-1">
+        <button id="content_whitelist_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Whitelist</button>
+        <button id="content_whitelist_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
+        <button id="content_whitelist_button_add" type="button" class="btn btn-primary"><i class="bi bi-plus-circle" style="margin-right: 5px;"></i>Add to Whitelist</button>
+    </div>
+    <table id="whitelist_table" class="table table-striped" style="width:100%">
+        <thead>
+        <tr>
+            <th>Hash (HEX)</th>
+            <th></th>
+        </tr>
+        </thead>
+    </table>
+</div>
+<div class="modal fade" id="torrents_remove_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="torrents_remove_backdrop" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="staticBackdropLabel">Remove Torrent</h5>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to remove this torrent?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>No</button>
+                <button id="torrents_remove_button" torrent_id="" type="button" class="btn btn-primary"><i class="bi bi-check-circle me-2"></i>Yes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 <div id="content_blacklist" class="content container mt-2 d-none">
     Blacklist
 </div>
@@ -155,11 +209,38 @@
 <script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.27.2/axios.min.js" integrity="sha512-odNmoc1XJy5x1TMVMdC7EMs3IVdItLPlCeL5vSUPN2llYKMJ2eByTTAIiiuqLg+GdNr9hF6z81p27DArRFKT7A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
+    let current_table_element = null;
+    let torrents_table_element = null;
+    let torrents_table = null;
     $(document).ready(function() {
         console.log("Webpage Loaded");
 
         // Init data tables
-        let torrents_table = $("#torrents_table").DataTable();
+        torrents_table_element = $("#torrents_table");
+        torrents_table = torrents_table_element.DataTable({
+            autoWidth: false,
+            pageLength: 100,
+            columns: [
+                { width: '100%', verticalAlign: 'middle', targets: 0 },
+                { width: '120px', targets: 1 },
+                { width: '120px', targets: 2 },
+                { width: '120px', targets: 3 },
+                { width: '32px', targets: 4 },
+            ]
+        });
+
+        torrents_table.columns.adjust();
+        let whitelist_table = $("#whitelist_table").DataTable({
+            autoWidth: false,
+            columns: [
+                { width: '100%', verticalAlign: 'middle', targets: 0 },
+                { width: '32px', targets: 1 },
+            ]
+        });
+
+        // Enable tooltips
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
 
         // Initial Work
         $("#nav_li_dashboard").addClass("active");
@@ -207,89 +288,183 @@
         $("#content_torrents_button_load").on("click", function(event) {
             event.preventDefault();
             $("#content_torrents_button_load").prop('disabled', true);
-            loadTorrents(torrents_table);
+            loadTorrents(torrents_table, torrents_table_element);
         });
 
         $("#content_torrents_button_clear").on("click", function(event) {
             event.preventDefault();
-            $("#content_torrents_button_clear").prop('disabled', true);
+            let content_torrents_button_clear = $("#content_torrents_button_clear");
+            content_torrents_button_clear.prop('disabled', true);
             torrents_table.clear().draw(false);
-            $("#content_torrents_button_clear").prop('disabled', false);
+            content_torrents_button_clear.prop('disabled', false);
+        });
+
+        $("#torrents_remove_button").on("click", function(event) {
+            event.preventDefault();
+            executeRemoveTorrent($("#torrents_remove_button").attr("torrent_id"));
+            $("#torrents_remove_backdrop").modal('hide');
+        });
+
+        // Buttons on Whitelist page
+        $("#content_whitelist_button_load").on("click", function(event) {
+            event.preventDefault();
+            $("#content_whitelist_button_load").prop('disabled', true);
+            loadWhitelist(whitelist_table);
+        });
+
+        $("#content_whitelist_button_clear").on("click", function(event) {
+            event.preventDefault();
+            let content_whitelist_button_clear = $("#content_whitelist_button_clear");
+            content_whitelist_button_clear.prop('disabled', true);
+            whitelist_table.clear().draw(false);
+            content_whitelist_button_clear.prop('disabled', false);
         });
     });
 
     async function loadStats() {
         let access_token = $("#nav_input_access_token").val();
-        $("#content_dashboard_torrents_count").html("<div class=\"spinner-grow\" role=\"status\"></div>");
 
-        axios.get('http://localhost:8080/api/stats?token=' + encodeURIComponent(access_token))
+        let content_dashboard_button_reload = $("#content_dashboard_button_reload");
+        let content_dashboard_torrents_count = $("#content_dashboard_torrents_count");
+        let content_dashboard_completed_count = $("#content_dashboard_completed_count");
+        let content_dashboard_seeders_count = $("#content_dashboard_seeders_count");
+        let content_dashboard_leechers_count = $("#content_dashboard_leechers_count");
+
+        content_dashboard_torrents_count.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_completed_count.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_seeders_count.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_leechers_count.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+
+        axios.get('/api/stats?token=' + encodeURIComponent(access_token))
             .then(function (response) {
                 if (response.data.status !== undefined && response.data.status !== "ok") {
-                    let message = $("#message");
-                    message.find(".toast-body").html("Unable to load statistics: " + response.data.status);
-                    let toast = new bootstrap.Toast(message);
-                    toast.show();
-                    $("#content_dashboard_button_reload").prop('disabled', false);
-                    $("#content_dashboard_torrents_count").html("<i class=\"bi bi-question\"></i>");
-                    $("#content_dashboard_completed_count").html("<i class=\"bi bi-question\"></i>");
-                    $("#content_dashboard_seeders_count").html("<i class=\"bi bi-question\"></i>");
-                    $("#content_dashboard_leechers_count").html("<i class=\"bi bi-question\"></i>");
+                    notificationOnScreen("Unable to load statistics: " + response.data.status);
+                    content_dashboard_button_reload.prop('disabled', false);
+                    content_dashboard_torrents_count.html("<i class=\"bi bi-question\"></i>");
+                    content_dashboard_completed_count.html("<i class=\"bi bi-question\"></i>");
+                    content_dashboard_seeders_count.html("<i class=\"bi bi-question\"></i>");
+                    content_dashboard_leechers_count.html("<i class=\"bi bi-question\"></i>");
                     return;
                 }
-                $("#content_dashboard_button_reload").prop('disabled', false);
-                $("#content_dashboard_torrents_count").html(response.data.torrents);
-                $("#content_dashboard_completed_count").html(response.data.completed);
-                $("#content_dashboard_seeders_count").html(response.data.seeds);
-                $("#content_dashboard_leechers_count").html(response.data.peers);
+                content_dashboard_button_reload.prop('disabled', false);
+                content_dashboard_torrents_count.html(response.data.torrents);
+                content_dashboard_completed_count.html(response.data.completed);
+                content_dashboard_seeders_count.html(response.data.seeds);
+                content_dashboard_leechers_count.html(response.data.peers);
             })
             .catch(function (error) {
                 let message = $("#message");
                 message.find(".toast-body").html("Unable to load torrents: " + error.message);
                 let toast = new bootstrap.Toast(message);
                 toast.show();
-                $("#content_dashboard_button_reload").prop('disabled', false);
-                $("#content_dashboard_torrents_count").html("<i class=\"bi bi-question\"></i>");
-                $("#content_dashboard_completed_count").html("<i class=\"bi bi-question\"></i>");
-                $("#content_dashboard_seeders_count").html("<i class=\"bi bi-question\"></i>");
-                $("#content_dashboard_leechers_count").html("<i class=\"bi bi-question\"></i>");
+                content_dashboard_button_reload.prop('disabled', false);
+                content_dashboard_torrents_count.html("<i class=\"bi bi-question\"></i>");
+                content_dashboard_completed_count.html("<i class=\"bi bi-question\"></i>");
+                content_dashboard_seeders_count.html("<i class=\"bi bi-question\"></i>");
+                content_dashboard_leechers_count.html("<i class=\"bi bi-question\"></i>");
             });
     }
 
-    async function loadTorrents(table_element) {
+    async function loadTorrents(table_datatable, table_element) {
         let access_token = $("#nav_input_access_token").val();
-        axios.get('http://localhost:8080/api/torrents?token=' + encodeURIComponent(access_token))
+        let content_torrents_button_load = $("#content_torrents_button_load");
+
+        axios.get('/api/torrents?token=' + encodeURIComponent(access_token))
             .then(function (response) {
                 if (response.data.status !== undefined && response.data.status !== "ok") {
-                    let message = $("#message");
-                    message.find(".toast-body").html("Unable to load torrents: " + response.data.status);
-                    let toast = new bootstrap.Toast(message);
-                    toast.show();
-                    $("#content_torrents_button_load").prop('disabled', false);
+                    notificationOnScreen("Unable to load torrents: " + response.data.status);
+                    content_torrents_button_load.prop('disabled', false);
+                    return;
+                }
+
+                table_datatable.clear().draw(false);
+                for (let value of response.data) {
+                    table_datatable.row.add([
+                        value.info_hash,
+                        value.seeders,
+                        value.leechers,
+                        value.completed,
+                        "<button class=\"btn btn-primary btn-sm torrent_remove_button\" torrent_id=\"" + value.info_hash + "\" style=\"padding-top: 2px; padding-bottom: 2px;\" data-bs-toggle=\"tooltip\" data-bs-placement=\"top\" data-bs-title=\"Remove this torrent hash from tracker\"><i class=\"bi bi-trash\"></i></button>"
+                    ]);
+                }
+                table_datatable.draw(false);
+                const tooltipTriggerList = table_element.find('[data-bs-toggle="tooltip"]');
+                const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+                initButtonsTorrents();
+
+                content_torrents_button_load.prop('disabled', false);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to load torrents: " + error.message);
+                content_torrents_button_load.prop('disabled', false);
+            });
+    }
+
+    async function loadWhitelist(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        let content_whitelist_button_load = $("#content_whitelist_button_load");
+
+        axios.get('/api/whitelist?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to load whitelist: " + response.data.status);
+                    content_whitelist_button_load.prop('disabled', false);
                     return;
                 }
 
                 table_element.clear().draw(false);
                 for (let value of response.data) {
                     table_element.row.add([
-                        value.info_hash,
-                        value.seeders,
-                        value.leechers,
-                        value.completed,
-                        null
+                        value,
+                        "<button class=\"btn btn-primary btn-sm\" style=\"padding-top: 2px; padding-bottom: 2px;\"><i class=\"bi bi-trash\"></i></button>"
                     ]);
                     console.log(value);
                 }
                 table_element.draw(false);
 
-                $("#content_torrents_button_load").prop('disabled', false);
+                content_whitelist_button_load.prop('disabled', false);
             })
             .catch(function (error) {
-                let message = $("#message");
-                message.find(".toast-body").html("Unable to load torrents: " + error.message);
-                let toast = new bootstrap.Toast(message);
-                toast.show();
-                $("#content_torrents_button_load").prop('disabled', false);
+                notificationOnScreen("Unable to load whitelist: " + error.message);
+                content_whitelist_button_load.prop('disabled', false);
             });
+    }
+
+    async function initButtonsTorrents() {
+        $(".torrent_remove_button").on("click", function(event) {
+            event.preventDefault();
+            current_table_element = $(this).parents('tr');
+            $("#torrents_remove_button").attr("torrent_id", $(this).attr("torrent_id"));
+            $("#torrents_remove_backdrop").modal('show');
+        });
+    }
+
+    async function executeRemoveTorrent(id) {
+        let access_token = $("#nav_input_access_token").val();
+
+        axios.delete('/api/torrent/' + encodeURIComponent(id) + '?token=' + encodeURIComponent(access_token), { data: {} })
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status === 'ok') {
+                    torrents_table.row(current_table_element).remove().draw();
+                    notificationOnScreen("Torrent ID " + id + " removed");
+                    return;
+                }
+                if (response.data.status !== undefined && response.data.status !== 'ok') {
+                    notificationOnScreen("Error while removing torrent ID " + id + ": " + response.data.status);
+                    return;
+                }
+                notificationOnScreen("Unknown return data while removing torrent ID " + id);
+            })
+            .catch(function () {
+                notificationOnScreen("Unable to remove torrent ID " + id);
+            });
+    }
+
+    async function notificationOnScreen(msg) {
+        let message = $("#message");
+        message.find(".toast-body").html(msg);
+        let toast = new bootstrap.Toast(message);
+        toast.show();
     }
 </script>
 </body>
