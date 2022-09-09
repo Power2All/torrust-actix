@@ -5,7 +5,7 @@ use scc::ebr::Arc;
 use scc::HashIndex;
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, CustomError, InfoHash, NumberOfBytes, PeerId, ScrapeQueryRequest, TorrentPeer};
 use crate::config::Configuration;
-use crate::tracker::{TorrentEntry, TorrentTracker};
+use crate::tracker::{TorrentEntry, TorrentEntryItem, TorrentTracker};
 
 pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
 {
@@ -169,9 +169,9 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
     let _ = match data.get_torrent(announce_query.info_hash).await {
         None => {
             if data.config.persistency {
-                data.add_torrent(announce_query.info_hash, TorrentEntry::new(), true).await;
+                data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), true).await;
             } else {
-                data.add_torrent(announce_query.info_hash, TorrentEntry::new(), false).await;
+                data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), false).await;
             }
             TorrentEntry::new()
         }

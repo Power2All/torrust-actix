@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
-use axum::{body, Extension, http, Router};
+use axum::{body, Extension, Router};
 use axum::body::{Empty, Full};
 use axum::extract::Path;
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
@@ -31,7 +31,6 @@ pub async fn http_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker
         .serve(Router::new()
             .route("/webgui/*path", get(http_api_static_path))
             .route("/api/stats", get(http_api_stats_get))
-            .route("/api/torrents", get(http_api_torrents_get))
             .route("/api/torrent/:info_hash", get(http_api_torrent_get).delete(http_api_torrent_delete))
             .route("/api/whitelist", get(http_api_whitelist_get_all))
             .route("/api/whitelist/:info_hash", get(http_api_whitelist_get).post(http_api_whitelist_post).delete(http_api_whitelist_delete))
@@ -60,7 +59,6 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
         .serve(Router::new()
             .route("/webgui/*path", get(http_api_static_path))
             .route("/api/stats", get(http_api_stats_get))
-            .route("/api/torrents", get(http_api_torrents_get))
             .route("/api/torrent/:info_hash", get(http_api_torrent_get).delete(http_api_torrent_delete))
             .route("/api/whitelist", get(http_api_whitelist_get_all))
             .route("/api/whitelist/:info_hash", get(http_api_whitelist_get).post(http_api_whitelist_post).delete(http_api_whitelist_delete))
@@ -103,35 +101,6 @@ pub async fn http_api_stats_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(
 
     let stats = state.get_stats().await;
     (StatusCode::OK, headers, serde_json::to_string(&stats).unwrap())
-}
-
-pub async fn http_api_torrents_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
-{
-    http_api_stats_log(ip, state.clone()).await;
-
-    let mut headers = HeaderMap::new();
-    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
-
-    let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
-    };
-
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-    }
-
-    let torrents = state.get_torrents_api().await;
-    (StatusCode::OK, headers, serde_json::to_string(&torrents).unwrap())
 }
 
 pub async fn http_api_torrent_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)

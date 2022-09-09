@@ -45,9 +45,6 @@
                 <li id="nav_li_dashboard" class="nav-item">
                     <a id="nav_button_dashboard" class="nav-link" href="#">Dashboard</a>
                 </li>
-                <li id="nav_li_torrents" class="nav-item">
-                    <a id="nav_button_torrents" class="nav-link" href="#">Torrents</a>
-                </li>
                 <li id="nav_li_whitelist" class="nav-item">
                     <a id="nav_button_whitelist" class="nav-link" href="#">Whitelist</a>
                 </li>
@@ -125,18 +122,16 @@
     </div>
 </div>
 
-<div id="content_torrents" class="content container mt-2 d-none">
+<div id="content_whitelist" class="content container mt-2 d-none">
     <div class="m-1">
-        <button id="content_torrents_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Torrents</button>
-        <button id="content_torrents_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
+        <button id="content_whitelist_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Whitelist</button>
+        <button id="content_whitelist_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
+        <button id="content_whitelist_button_add" type="button" class="btn btn-primary"><i class="bi bi-plus-circle" style="margin-right: 5px;"></i>Add to Whitelist</button>
     </div>
-    <table id="torrents_table" class="table table-striped" style="width:100%">
+    <table id="whitelist_table" class="table table-striped" style="width:100%">
         <thead>
         <tr>
             <th>Hash (HEX)</th>
-            <th><div style="width: 120px; font-size: 18px;" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Amount of Seeders"><strong><i class="bi bi-cloud-arrow-up"></i></strong></div></th>
-            <th><div style="width: 120px; font-size: 18px;" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Amount of Leechers"><strong><i class="bi bi-cloud-arrow-down"></i></strong></div></th>
-            <th><div style="width: 120px; font-size: 18px;" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Amount of Downloads"><strong><i class="bi bi-check2-circle"></i></strong></div></th>
             <th></th>
         </tr>
         </thead>
@@ -158,39 +153,6 @@
         </div>
     </div>
 </div>
-
-<div id="content_whitelist" class="content container mt-2 d-none">
-    <div class="m-1">
-        <button id="content_whitelist_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Whitelist</button>
-        <button id="content_whitelist_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
-        <button id="content_whitelist_button_add" type="button" class="btn btn-primary"><i class="bi bi-plus-circle" style="margin-right: 5px;"></i>Add to Whitelist</button>
-    </div>
-    <table id="whitelist_table" class="table table-striped" style="width:100%">
-        <thead>
-        <tr>
-            <th>Hash (HEX)</th>
-            <th></th>
-        </tr>
-        </thead>
-    </table>
-</div>
-<div class="modal fade" id="torrents_remove_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="torrents_remove_backdrop" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="staticBackdropLabel">Remove Torrent</h5>
-            </div>
-            <div class="modal-body">
-                Are you sure you want to remove this torrent?
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>No</button>
-                <button id="torrents_remove_button" torrent_id="" type="button" class="btn btn-primary"><i class="bi bi-check-circle me-2"></i>Yes</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 
 <div id="content_blacklist" class="content container mt-2 d-none">
     Blacklist
@@ -215,21 +177,6 @@
     $(document).ready(function() {
         console.log("Webpage Loaded");
 
-        // Init data tables
-        torrents_table_element = $("#torrents_table");
-        torrents_table = torrents_table_element.DataTable({
-            autoWidth: false,
-            pageLength: 100,
-            columns: [
-                { width: '100%', verticalAlign: 'middle', targets: 0 },
-                { width: '120px', targets: 1 },
-                { width: '120px', targets: 2 },
-                { width: '120px', targets: 3 },
-                { width: '32px', targets: 4 },
-            ]
-        });
-
-        torrents_table.columns.adjust();
         let whitelist_table = $("#whitelist_table").DataTable({
             autoWidth: false,
             columns: [
@@ -254,14 +201,6 @@
             $("#content_dashboard").removeClass("d-none");
         });
 
-        $("#nav_button_torrents").on("click", function(event) {
-            event.preventDefault();
-            $(".content").each(function() {
-                $(this).addClass("d-none");
-            });
-            $("#content_torrents").removeClass("d-none");
-        });
-
         $("#nav_button_whitelist").on("click", function(event) {
             event.preventDefault();
             $(".content").each(function() {
@@ -283,26 +222,6 @@
             event.preventDefault();
             $("#content_dashboard_button_reload").prop('disabled', true);
             loadStats();
-        });
-        // Buttons on Torrents page
-        $("#content_torrents_button_load").on("click", function(event) {
-            event.preventDefault();
-            $("#content_torrents_button_load").prop('disabled', true);
-            loadTorrents(torrents_table, torrents_table_element);
-        });
-
-        $("#content_torrents_button_clear").on("click", function(event) {
-            event.preventDefault();
-            let content_torrents_button_clear = $("#content_torrents_button_clear");
-            content_torrents_button_clear.prop('disabled', true);
-            torrents_table.clear().draw(false);
-            content_torrents_button_clear.prop('disabled', false);
-        });
-
-        $("#torrents_remove_button").on("click", function(event) {
-            event.preventDefault();
-            executeRemoveTorrent($("#torrents_remove_button").attr("torrent_id"));
-            $("#torrents_remove_backdrop").modal('hide');
         });
 
         // Buttons on Whitelist page
@@ -362,41 +281,6 @@
                 content_dashboard_completed_count.html("<i class=\"bi bi-question\"></i>");
                 content_dashboard_seeders_count.html("<i class=\"bi bi-question\"></i>");
                 content_dashboard_leechers_count.html("<i class=\"bi bi-question\"></i>");
-            });
-    }
-
-    async function loadTorrents(table_datatable, table_element) {
-        let access_token = $("#nav_input_access_token").val();
-        let content_torrents_button_load = $("#content_torrents_button_load");
-
-        axios.get('/api/torrents?token=' + encodeURIComponent(access_token))
-            .then(function (response) {
-                if (response.data.status !== undefined && response.data.status !== "ok") {
-                    notificationOnScreen("Unable to load torrents: " + response.data.status);
-                    content_torrents_button_load.prop('disabled', false);
-                    return;
-                }
-
-                table_datatable.clear().draw(false);
-                for (let value of response.data) {
-                    table_datatable.row.add([
-                        value.info_hash,
-                        value.seeders,
-                        value.leechers,
-                        value.completed,
-                        "<button class=\"btn btn-primary btn-sm torrent_remove_button\" torrent_id=\"" + value.info_hash + "\" style=\"padding-top: 2px; padding-bottom: 2px;\" data-bs-toggle=\"tooltip\" data-bs-placement=\"top\" data-bs-title=\"Remove this torrent hash from tracker\"><i class=\"bi bi-trash\"></i></button>"
-                    ]);
-                }
-                table_datatable.draw(false);
-                const tooltipTriggerList = table_element.find('[data-bs-toggle="tooltip"]');
-                const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
-                initButtonsTorrents();
-
-                content_torrents_button_load.prop('disabled', false);
-            })
-            .catch(function (error) {
-                notificationOnScreen("Unable to load torrents: " + error.message);
-                content_torrents_button_load.prop('disabled', false);
             });
     }
 

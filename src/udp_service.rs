@@ -8,7 +8,7 @@ use tokio::task::JoinHandle;
 use crate::udp_common;
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, PeerId};
 use crate::handlers::handle_announce;
-use crate::tracker::{StatsEvent, TorrentEntry, TorrentTracker};
+use crate::tracker::{StatsEvent, TorrentEntry, TorrentEntryItem, TorrentTracker};
 use crate::udp_common::{AnnounceInterval, AnnounceRequest, AnnounceResponse, ConnectRequest, ConnectResponse, ErrorResponse, get_connection_id, NumberOfDownloads, NumberOfPeers, Port, Request, Response, ResponsePeer, ScrapeRequest, ScrapeResponse, ServerError, TorrentScrapeStatistics, TransactionId};
 
 const MAX_SCRAPE_TORRENTS: u8 = 74;
@@ -160,9 +160,9 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
     let _ = match tracker.get_torrent(InfoHash(request.info_hash.0)).await {
         None => {
             if tracker.config.persistency {
-                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntry::new(), true).await;
+                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), true).await;
             } else {
-                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntry::new(), false).await;
+                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), false).await;
             }
             TorrentEntry::new()
         }
