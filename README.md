@@ -11,6 +11,7 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Full IPv4 and IPv6 support for both UDP and HTTP(S)
 * [X] Built-in API on a separate port in HTTP
 * [X] Persistency saving supported using SQLite3, MySQL or PostgreSQL database
+* [X] Customize table and database names in the configuration file for persistency
 * [ ] Whitelist system, which can be used to make the tracker private
 * [ ] Blacklist system, to block and ban hashes
 * [ ] Web Interface (through API) to control the tracker software
@@ -55,6 +56,10 @@ db_driver = "SQLite3"
 db_path = "sqlite://:memory:"
 persistency = false
 persistency_interval = 60
+api_key = "MyAccessToken"
+whitelist = false
+whitelist_from_persistency = false
+blacklist = false
 interval = 1800
 interval_minimum = 1800
 interval_cleanup = 900
@@ -78,6 +83,11 @@ bind_address = "127.0.0.1:8080"
 ssl = false
 ssl_key = ""
 ssl_cert = ""
+
+[db_structure]
+db_torrents = "torrents"
+table_info_hash = "info_hash"
+table_completed = "completed"
 ```
 
 * Run the torrust-axum again after finishing the configuration:
@@ -94,6 +104,7 @@ Your tracker announce URL will be the following, depending what blocks you have 
 ### Built-in API
 The following URL's are available if you have enabled the API block:
 * `http://127.0.0.1:8080/stats` - This will show statistics of the tracker in JSON format.
+* `https://127.0.0.1:8080/stats` - Same as above, but then with SSL enabled.
 
 ### Credits
 This Torrust-Tracker was a joint effort by [Nautilus Cyberneering GmbH](https://nautilus-cyberneering.de/), [Dutch Bits](https://dutchbits.nl) and [Power2All](https://power2all.com).
