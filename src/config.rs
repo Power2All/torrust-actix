@@ -45,6 +45,13 @@ pub struct ApiTrackersConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DatabaseStructureConfig {
+    pub db_torrents: String,
+    pub table_info_hash: String,
+    pub table_completed: String
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub log_level: String,
     pub log_console_interval: Option<u64>,
@@ -69,7 +76,9 @@ pub struct Configuration {
 
     pub udp_server: Vec<UdpTrackersConfig>,
     pub http_server: Vec<HttpTrackersConfig>,
-    pub api_server: Vec<ApiTrackersConfig>
+    pub api_server: Vec<ApiTrackersConfig>,
+
+    pub db_structure: DatabaseStructureConfig
 }
 impl Configuration {
     pub fn default() -> Configuration {
@@ -121,7 +130,13 @@ impl Configuration {
 
             udp_server,
             http_server,
-            api_server
+            api_server,
+
+            db_structure: DatabaseStructureConfig{
+                db_torrents: String::from("torrents"),
+                table_info_hash: String::from("info_hash"),
+                table_completed: String::from("completed")
+            }
         }
     }
 

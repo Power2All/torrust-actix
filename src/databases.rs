@@ -37,6 +37,7 @@ pub struct DatabaseConnectorPgSQL {
 
 #[derive(Clone)]
 pub struct DatabaseConnector {
+    config: Arc<Configuration>,
     mysql: Option<DatabaseConnectorMySQL>,
     sqlite: Option<DatabaseConnectorSQLite>,
     pgsql: Option<DatabaseConnectorPgSQL>,
@@ -82,7 +83,9 @@ impl DatabaseConnectorPgSQL {
 impl DatabaseConnector {
     pub async fn new(config: Arc<Configuration>) -> DatabaseConnector
     {
+
         let mut structure = DatabaseConnector{
+            config: config.clone(),
             mysql: None,
             sqlite: None,
             pgsql: None,
@@ -102,7 +105,14 @@ impl DatabaseConnector {
                 });
                 structure.engine = Some(DatabaseDrivers::SQLite3);
                 let pool = &structure.sqlite.clone().unwrap().pool;
-                let _ = sqlx::query("CREATE TABLE IF NOT EXISTS torrents (info_hash VARCHAR(40) NOT NULL UNIQUE, completed INTEGER DEFAULT 0 NOT NULL)").execute(pool).await;
+                let _ = sqlx::query(
+                    format!(
+                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) NOT NULL UNIQUE, {} INTEGER DEFAULT 0 NOT NULL)",
+                        config.db_structure.db_torrents,
+                        config.db_structure.table_info_hash,
+                        config.db_structure.table_completed
+                    ).as_str()
+                ).execute(pool).await;
             }
             DatabaseDrivers::MySQL => {
                 let mysql_connect = DatabaseConnectorMySQL::create(&config.db_path).await;
@@ -139,15 +149,24 @@ impl DatabaseConnector {
             match self.engine.clone().unwrap() {
                 DatabaseDrivers::SQLite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
-                    let mut rows = sqlx::query("SELECT info_hash,completed FROM torrents").fetch(pool);
+                    // let mut rows = sqlx::query("SELECT info_hash,completed FROM torrents").fetch(pool);
+                    let query = format!(
+                        "SELECT {},{} FROM {}",
+                        self.config.db_structure.table_info_hash,
+                        self.config.db_structure.table_completed,
+                        self.config.db_structure.db_torrents
+                    );
+                    let mut rows = sqlx::query(
+                        query.as_str()
+                    ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
                         if counter == 10000 {
                             info!("[SQLite3] Loaded {} torrents...", total);
                             counter = 0;
                         }
-                        let infohash_data: &str = result.get("info_hash");
+                        let infohash_data: &str = result.get(self.config.db_structure.table_info_hash.clone().as_str());
                         let infohash_decoded = hex::decode(infohash_data).unwrap();
-                        let completed_data: i64 = result.get("completed");
+                        let completed_data: i64 = result.get(self.config.db_structure.table_completed.clone().as_str());
                         let infohash = <[u8; 20]>::try_from(infohash_decoded[0 .. 20].as_ref()).unwrap();
                         return_data.push((InfoHash(infohash), completed_data));
                         counter += 1;
@@ -159,14 +178,23 @@ impl DatabaseConnector {
                 }
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
-                    let mut rows = sqlx::query("SELECT `info_hash`,`completed` FROM `torrents`").fetch(pool);
+                    // let mut rows = sqlx::query("SELECT `info_hash`,`completed` FROM `torrents`").fetch(pool);
+                    let query = format!(
+                        "SELECT `{}`,`{}` FROM `{}`",
+                        self.config.db_structure.table_info_hash,
+                        self.config.db_structure.table_completed,
+                        self.config.db_structure.db_torrents
+                    );
+                    let mut rows = sqlx::query(
+                        query.as_str()
+                    ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
                         if counter == 10000 {
                             info!("[MySQL] Loaded {} torrents...", total);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get("info_hash");
-                        let completed_data: i64 = result.get("completed");
+                        let infohash_data: &[u8] = result.get(self.config.db_structure.table_info_hash.clone().as_str());
+                        let completed_data: i64 = result.get(self.config.db_structure.table_completed.clone().as_str());
                         let infohash = <[u8; 20]>::try_from(infohash_data[0 .. 20].as_ref()).unwrap();
                         return_data.push((InfoHash(infohash), completed_data));
                         counter += 1;
@@ -178,14 +206,23 @@ impl DatabaseConnector {
                 }
                 DatabaseDrivers::PgSQL => {
                     let pool = &self.pgsql.clone().unwrap().pool;
-                    let mut rows = sqlx::query("SELECT info_hash, completed FROM torrents").fetch(pool);
+                    // let mut rows = sqlx::query("SELECT info_hash, completed FROM torrents").fetch(pool);
+                    let query = format!(
+                        "SELECT {},{} FROM {}",
+                        self.config.db_structure.table_info_hash,
+                        self.config.db_structure.table_completed,
+                        self.config.db_structure.db_torrents
+                    );
+                    let mut rows = sqlx::query(
+                        query.as_str()
+                    ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
                         if counter == 10000 {
                             info!("[PgSQL] Loaded {} torrents...", total);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get("info_hash");
-                        let completed_data: i64 = result.get("completed");
+                        let infohash_data: &[u8] = result.get(self.config.db_structure.table_info_hash.clone().as_str());
+                        let completed_data: i64 = result.get(self.config.db_structure.table_completed.clone().as_str());
                         let infohash = <[u8; 20]>::try_from(infohash_data[0 .. 20].as_ref()).unwrap();
                         return_data.push((InfoHash(infohash), completed_data));
                         counter += 1;
@@ -214,14 +251,34 @@ impl DatabaseConnector {
                         handled_entries += 1;
                         insert_entries.push(format!("('{}',{})", info_hash, completed.clone()).to_string());
                         if insert_entries.len() == 10000 {
-                            let query = format!("INSERT OR REPLACE INTO torrents (info_hash,completed) VALUES {}", insert_entries.join(","));
+                            let pre_query = format!(
+                                "INSERT OR REPLACE INTO {} ({},{}) VALUES",
+                                self.config.db_structure.db_torrents,
+                                self.config.db_structure.table_info_hash,
+                                self.config.db_structure.table_completed
+                            );
+                            let query = format!(
+                                "{} {}",
+                                pre_query,
+                                insert_entries.join(",")
+                            );
                             sqlx::query(&query).execute(&mut transaction).await?;
                             info!("[SQLite3] Handled {} torrents", handled_entries);
                             insert_entries = vec![];
                         }
                     }
                     if !insert_entries.is_empty() {
-                        let query = format!("INSERT OR REPLACE INTO torrents (info_hash,completed) VALUES {}", insert_entries.join(","));
+                        let pre_query = format!(
+                            "INSERT OR REPLACE INTO {} ({},{}) VALUES",
+                            self.config.db_structure.db_torrents,
+                            self.config.db_structure.table_info_hash,
+                            self.config.db_structure.table_completed
+                        );
+                        let query = format!(
+                            "{} {}",
+                            pre_query,
+                            insert_entries.join(",")
+                        );
                         sqlx::query(&query).execute(&mut transaction).await?;
                         info!("[SQLite3] Handled {} torrents", handled_entries);
                     }
@@ -243,14 +300,30 @@ impl DatabaseConnector {
                         handled_entries += 1;
                         insert_entries.push(format!("(UNHEX(\"{}\"),{})", info_hash, completed.clone()).to_string());
                         if insert_entries.len() == 10000 {
-                            let query = format!("INSERT INTO torrents (`info_hash`,`completed`) VALUES {} ON DUPLICATE KEY UPDATE `completed`=VALUES(`completed`)", insert_entries.join(","));
+                            let query = format!(
+                                "INSERT INTO {} (`{}`,`{}`) VALUES {} ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
+                                self.config.db_structure.db_torrents,
+                                self.config.db_structure.table_info_hash,
+                                self.config.db_structure.table_completed,
+                                insert_entries.join(","),
+                                self.config.db_structure.table_completed,
+                                self.config.db_structure.table_completed
+                            );
                             sqlx::query(&query).execute(&mut transaction).await?;
                             info!("[MySQL] Handled {} torrents", handled_entries);
                             insert_entries = vec![];
                         }
                     }
                     if !insert_entries.is_empty() {
-                        let query = format!("INSERT INTO torrents (`info_hash`,`completed`) VALUES {} ON DUPLICATE KEY UPDATE `completed`=VALUES(`completed`)", insert_entries.join(","));
+                        let query = format!(
+                            "INSERT INTO {} (`{}`,`{}`) VALUES {} ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
+                            self.config.db_structure.db_torrents,
+                            self.config.db_structure.table_info_hash,
+                            self.config.db_structure.table_completed,
+                            insert_entries.join(","),
+                            self.config.db_structure.table_completed,
+                            self.config.db_structure.table_completed
+                        );
                         sqlx::query(&query).execute(&mut transaction).await?;
                         info!("[MySQL] Handled {} torrents", handled_entries);
                     }
@@ -272,14 +345,32 @@ impl DatabaseConnector {
                         handled_entries += 1;
                         insert_entries.push(format!("(decode('{}', 'hex'),{})", info_hash, completed.clone()).to_string());
                         if insert_entries.len() == 10000 {
-                            let query = format!("INSERT INTO torrents (info_hash,completed) VALUES {} ON CONFLICT (info_hash) DO UPDATE SET completed=excluded.completed", insert_entries.join(","));
+                            let query = format!(
+                                "INSERT INTO {} ({},{}) VALUES {} ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                                self.config.db_structure.db_torrents,
+                                self.config.db_structure.table_info_hash,
+                                self.config.db_structure.table_completed,
+                                insert_entries.join(","),
+                                self.config.db_structure.table_info_hash,
+                                self.config.db_structure.table_completed,
+                                self.config.db_structure.table_completed
+                            );
                             sqlx::query(&query).execute(&mut transaction).await?;
                             info!("[PgSQL] Handled {} torrents", handled_entries);
                             insert_entries = vec![];
                         }
                     }
                     if !insert_entries.is_empty() {
-                        let query = format!("INSERT INTO torrents (info_hash,completed) VALUES {} ON CONFLICT (info_hash) DO UPDATE SET completed=excluded.completed", insert_entries.join(","));
+                        let query = format!(
+                            "INSERT INTO {} ({},{}) VALUES {} ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                            self.config.db_structure.db_torrents,
+                            self.config.db_structure.table_info_hash,
+                            self.config.db_structure.table_completed,
+                            insert_entries.join(","),
+                            self.config.db_structure.table_info_hash,
+                            self.config.db_structure.table_completed,
+                            self.config.db_structure.table_completed
+                        );
                         sqlx::query(&query).execute(&mut transaction).await?;
                         info!("[PgSQL] Handled {} torrents", handled_entries);
                     }
