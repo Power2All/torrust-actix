@@ -168,7 +168,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
 {
     let _ = match data.get_torrent(announce_query.info_hash).await {
         None => {
-            if data.config.persistency {
+            if data.config.persistence {
                 data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), true).await;
             } else {
                 data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), false).await;
@@ -192,7 +192,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         AnnounceEvent::Started => {
             torrent_peer.event = AnnounceEvent::Started;
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, false, data.config.persistency).await;
+            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, false, data.config.persistence).await;
             let mut peers_parsed = 0u64;
             let mut peer_list = BTreeMap::new();
             for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
@@ -218,7 +218,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         AnnounceEvent::Stopped => {
             torrent_peer.event = AnnounceEvent::Stopped;
             debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistency).await;
+            let torrent_entry = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await;
             Ok((torrent_peer, TorrentEntry{
                 peers: BTreeMap::new(),
                 completed: torrent_entry.completed,
@@ -229,7 +229,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         AnnounceEvent::Completed => {
             torrent_peer.event = AnnounceEvent::Completed;
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, true, data.config.persistency).await;
+            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, true, data.config.persistence).await;
             let mut peers_parsed = 0u64;
             let mut peer_list = BTreeMap::new();
             for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
@@ -254,7 +254,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         }
         AnnounceEvent::None => {
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, false, data.config.persistency).await;
+            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, false, data.config.persistence).await;
             let mut peers_parsed = 0u64;
             let mut peer_list = BTreeMap::new();
             for (peer_id, torrent_peer) in torrent_entry.peers.iter() {

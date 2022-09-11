@@ -159,7 +159,7 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
 
     let _ = match tracker.get_torrent(InfoHash(request.info_hash.0)).await {
         None => {
-            if tracker.config.persistency {
+            if tracker.config.persistence {
                 tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), true).await;
             } else {
                 tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), false).await;

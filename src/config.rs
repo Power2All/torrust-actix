@@ -59,13 +59,13 @@ pub struct Configuration {
 
     pub db_driver: DatabaseDrivers,
     pub db_path: String,
-    pub persistency: bool,
-    pub persistency_interval: Option<u64>,
+    pub persistence: bool,
+    pub persistence_interval: Option<u64>,
 
     pub api_key: String,
 
     pub whitelist: bool,
-    pub whitelist_from_persistency: bool,
+    pub whitelist_from_persistence: bool,
     pub blacklist: bool,
 
     pub interval: Option<u64>,
@@ -113,13 +113,13 @@ impl Configuration {
 
             db_driver: DatabaseDrivers::SQLite3,
             db_path: String::from("sqlite://:memory:"),
-            persistency: false,
-            persistency_interval: Some(60),
+            persistence: false,
+            persistence_interval: Some(60),
 
             api_key: String::from("MyAccessToken"),
 
             whitelist: false,
-            whitelist_from_persistency: false,
+            whitelist_from_persistence: false,
             blacklist: false,
 
             interval: Some(1800),

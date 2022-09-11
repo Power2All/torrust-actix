@@ -10,14 +10,13 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Multiple UDP server and HTTP(S) server blocks for socket binding possibilities
 * [X] Full IPv4 and IPv6 support for both UDP and HTTP(S)
 * [X] Built-in API on a separate port in HTTP
-* [X] Persistency saving supported using SQLite3, MySQL or PostgreSQL database
-* [X] Customize table and database names in the configuration file for persistency
+* [X] Persistence saving supported using SQLite3, MySQL or PostgreSQL database
+* [X] Customize table and database names in the configuration file for persistence
 * [ ] Whitelist system, which can be used to make the tracker private
 * [ ] Blacklist system, to block and ban hashes
 * [ ] Web Interface (through API) to control the tracker software
 * [ ] Torrent key support, for private tracking support
-* [ ] Dockerfile to build a image for Docker
-* [ ] Websocket support for WebTorrent availability
+* [ ] Dockerfile to build an image for Docker
 
 ### Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -42,7 +41,7 @@ cargo build --release
 ```
 
 ### Usage
-* Running the code will create a `config.toml` file when it doesn't exist yet. The configuration will be filled with default values, and will use SQLite3 in memory as default persistency. Persistency is turned OFF by default, so you need to activate that manually:
+* Running the code will create a `config.toml` file when it doesn't exist yet. The configuration will be filled with default values, and will use SQLite3 in memory as default persistence. Persistence is turned OFF by default, so you need to activate that manually:
 ```bash
 ./target/release/torrust-axum
 ```
@@ -54,8 +53,8 @@ log_console_interval = 60
 statistics_enabled = true
 db_driver = "SQLite3"
 db_path = "sqlite://:memory:"
-persistency = false
-persistency_interval = 60
+persistence = false
+persistence_interval = 60
 api_key = "MyAccessToken"
 whitelist = false
 whitelist_from_persistency = false
@@ -96,13 +95,13 @@ table_completed = "completed"
 ```
 
 ### Tracker URL
-Your tracker announce URL will be the following, depending what blocks you have enabled:
+Your tracker announce URL will be the following, depending on what blocks you have enabled:
 * `udp://127.0.0.1:6969/announce`
 * `http://127.0.0.1:6969/announce`
 * `https://127.0.0.1:6969/announce`
 
 ### Built-in API
-The following URL's are available if you have enabled the API block:
+The following URLs are available if you have enabled the API block:
 * `http://127.0.0.1:8080/stats` - This will show statistics of the tracker in JSON format.
 * `https://127.0.0.1:8080/stats` - Same as above, but then with SSL enabled.
 

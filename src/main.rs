@@ -29,7 +29,7 @@ async fn main() -> std::io::Result<()>
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
 
     // Load torrents
-    if config.persistency {
+    if config.persistence {
         tracker.clone().load_torrents().await;
     }
 
@@ -117,16 +117,16 @@ async fn main() -> std::io::Result<()>
         }
     });
 
-    let interval_persistency = config.clone().persistency_interval.unwrap_or(900);
+    let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
     let tracker_clone = tracker.clone();
     tokio::spawn(async move {
-        let interval = Duration::from_secs(interval_persistency);
+        let interval = Duration::from_secs(interval_persistence);
         let mut interval = tokio::time::interval(interval);
         interval.tick().await;
         loop {
-            tracker_clone.clone().set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.persistency_interval.unwrap() as i64).await;
+            tracker_clone.clone().set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.persistence_interval.unwrap() as i64).await;
             interval.tick().await;
-            info!("[SAVING] Starting persistency saving procedure.");
+            info!("[SAVING] Starting persistence saving procedure.");
             info!("[SAVING] Moving Updates to Shadow...");
             tracker_clone.clone().transfer_updates_to_shadow().await;
             info!("[SAVING] Saving data from Shadow to database...");
@@ -167,7 +167,7 @@ async fn main() -> std::io::Result<()>
             handle.shutdown();
             let _ = udp_tx.send(true);
             let _ = futures::future::join_all(udp_futures);
-            info!("[SAVING] Starting persistency saving procedure.");
+            info!("[SAVING] Starting persistence saving procedure.");
             info!("[SAVING] Moving Updates to Shadow...");
             tracker.clone().transfer_updates_to_shadow().await;
             info!("[SAVING] Saving data from Shadow to database...");

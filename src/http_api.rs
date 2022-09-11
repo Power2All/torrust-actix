@@ -224,7 +224,7 @@ pub async fn http_api_torrent_delete(ClientIp(ip): ClientIp, axum::extract::RawQ
         }
     };
 
-    state.remove_torrent(info_hash, state.config.persistency).await;
+    state.remove_torrent(info_hash, state.config.persistence).await;
 
     let return_data = json!({ "status": "ok"});
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())

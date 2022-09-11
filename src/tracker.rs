@@ -291,7 +291,7 @@ impl TorrentTracker {
                     seeders: 0,
                     leechers: 0
                 }, false).await;
-                if self.config.whitelist && self.config.whitelist_from_persistency {
+                if self.config.whitelist && self.config.whitelist_from_persistence {
                     self.add_whitelist(*info_hash).await;
                 }
                 torrent_count += 1;
@@ -527,7 +527,7 @@ impl TorrentTracker {
                 let torrent = torrent_option.unwrap().clone();
                 for (peer_id, torrent_peer) in torrent.peers.iter() {
                     if torrent_peer.updated.elapsed() > peer_timeout {
-                        let _ = self.remove_peer(*info_hash, *peer_id, self.config.clone().persistency).await;
+                        let _ = self.remove_peer(*info_hash, *peer_id, self.config.clone().persistence).await;
                     }
                 }
             } else {
