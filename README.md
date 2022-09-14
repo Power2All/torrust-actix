@@ -105,9 +105,10 @@ Your tracker announce URL will be the following, depending on what blocks you ha
 
 ### Built-in API
 The following URLs are available if you have enabled the API block.
+Also, the following URL is enabled for the Web Interface: `http(s)://127.0.0.1:8080/webgui/`
 Replace ``[TOKENID]`` with the token set in the configuration file.
 Replace ``[TORRENT_HASH]`` with a hex 40 character info_hash.
-Also depends if you have HTTP and/or HTTPS enabled.
+Also depends on if you have HTTP and/or HTTPS enabled.
 If a error occurred for whatever reason, the status key will not contain "ok", but the reason:
 
 ```json
