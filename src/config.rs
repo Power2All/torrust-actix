@@ -47,8 +47,12 @@ pub struct ApiTrackersConfig {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DatabaseStructureConfig {
     pub db_torrents: String,
-    pub table_info_hash: String,
-    pub table_completed: String
+    pub table_torrents_info_hash: String,
+    pub table_torrents_completed: String,
+    pub db_whitelist: String,
+    pub table_whitelist_info_hash: String,
+    pub db_blacklist: String,
+    pub table_blacklist_info_hash: String
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -65,7 +69,6 @@ pub struct Configuration {
     pub api_key: String,
 
     pub whitelist: bool,
-    pub whitelist_from_persistence: bool,
     pub blacklist: bool,
 
     pub interval: Option<u64>,
@@ -119,7 +122,6 @@ impl Configuration {
             api_key: String::from("MyAccessToken"),
 
             whitelist: false,
-            whitelist_from_persistence: false,
             blacklist: false,
 
             interval: Some(1800),
@@ -134,8 +136,12 @@ impl Configuration {
 
             db_structure: DatabaseStructureConfig{
                 db_torrents: String::from("torrents"),
-                table_info_hash: String::from("info_hash"),
-                table_completed: String::from("completed")
+                table_torrents_info_hash: String::from("info_hash"),
+                table_torrents_completed: String::from("completed"),
+                db_whitelist: String::from("whitelist"),
+                table_whitelist_info_hash: String::from("info_hash"),
+                db_blacklist: String::from("blacklist"),
+                table_blacklist_info_hash: String::from("info_hash")
             }
         }
     }

@@ -8,3 +8,14 @@ CREATE TABLE IF NOT EXISTS `torrents` (
     UNIQUE KEY `info_hash` (`info_hash`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+CREATE TABLE IF NOT EXISTS `whitelist` (
+    `info_hash` binary(20) NOT NULL
+    PRIMARY KEY (`info_hash`) USING BTREE,
+    UNIQUE KEY `info_hash` (`info_hash`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `blacklist` (
+    `info_hash` binary(20) NOT NULL
+    PRIMARY KEY (`info_hash`) USING BTREE,
+    UNIQUE KEY `info_hash` (`info_hash`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

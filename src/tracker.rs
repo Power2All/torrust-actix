@@ -49,7 +49,9 @@ pub struct Stats {
     pub seeds: i64,
     pub peers: i64,
     pub completed: i64,
+    pub whitelist_enabled: bool,
     pub whitelist: i64,
+    pub blacklist_enabled: bool,
     pub blacklist: i64,
     pub tcp4_connections_handled: i64,
     pub tcp4_api_handled: i64,
@@ -170,7 +172,9 @@ impl TorrentTracker {
                     seeds: 0,
                     peers: 0,
                     completed: 0,
+                    whitelist_enabled: config.whitelist,
                     whitelist: 0,
+                    blacklist_enabled: config.blacklist,
                     blacklist: 0,
                     tcp4_connections_handled: 0,
                     tcp4_api_handled: 0,
@@ -281,9 +285,11 @@ impl TorrentTracker {
     /* === Torrents === */
     pub async fn load_torrents(&self)
     {
-        if let Ok(torrents) = self.sqlx.load_torrents().await {
+        if let Ok((torrents, whitelists, blacklists)) = self.sqlx.load_torrents().await {
             let mut torrent_count = 0i64;
             let mut completed_count = 0i64;
+            let mut whitelist_count = 0i64;
+            let mut blacklist_count = 0i64;
 
             for (info_hash, completed) in torrents.iter() {
                 self.add_torrent(*info_hash, TorrentEntryItem {
@@ -291,14 +297,25 @@ impl TorrentTracker {
                     seeders: 0,
                     leechers: 0
                 }, false).await;
-                if self.config.whitelist && self.config.whitelist_from_persistence {
-                    self.add_whitelist(*info_hash).await;
-                }
                 torrent_count += 1;
                 completed_count += *completed;
             }
 
-            info!("Loaded {} torrents with {} completes.", torrent_count, completed_count);
+            if self.config.whitelist {
+                for info_hash in whitelists.iter() {
+                    self.add_whitelist(*info_hash).await;
+                    whitelist_count += 1;
+                }
+            }
+
+            if self.config.blacklist {
+                for info_hash in blacklists.iter() {
+                    self.add_blacklist(*info_hash).await;
+                    blacklist_count += 1;
+                }
+            }
+
+            info!("Loaded {} torrents with {} completes, {} whitelists and {} blacklists.", torrent_count, completed_count, whitelist_count, blacklist_count);
             self.update_stats(StatsEvent::Completed, completed_count as i64).await;
         }
     }
@@ -306,7 +323,9 @@ impl TorrentTracker {
     pub async fn save_torrents(&self) -> bool
     {
         let shadow = self.get_shadow().await;
-        if self.sqlx.save_torrents(shadow).await.is_ok() {
+        let whitelist = self.get_whitelist().await;
+        let blacklist = self.get_blacklist().await;
+        if self.sqlx.save_torrents(shadow, whitelist, blacklist).await.is_ok() {
             return true;
         }
         false
@@ -679,6 +698,18 @@ impl TorrentTracker {
         torrents_lock.blacklist.insert(info_hash, 0i64);
         drop(torrents_lock);
         self.update_stats(StatsEvent::Blacklist, 1).await;
+    }
+
+    pub async fn get_blacklist(&self) -> Vec<InfoHash>
+    {
+        let torrents_arc = self.torrents.clone();
+        let torrents_lock = torrents_arc.write().await;
+        let mut return_list = vec![];
+        for (info_hash, _) in torrents_lock.blacklist.iter() {
+            return_list.push(*info_hash);
+        }
+        drop(torrents_lock);
+        return_list
     }
 
     pub async fn remove_blacklist(&self, info_hash: InfoHash)

@@ -34,6 +34,7 @@ pub async fn http_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker
             .route("/api/torrent/:info_hash", get(http_api_torrent_get).delete(http_api_torrent_delete))
             .route("/api/whitelist", get(http_api_whitelist_get_all))
             .route("/api/whitelist/:info_hash", get(http_api_whitelist_get).post(http_api_whitelist_post).delete(http_api_whitelist_delete))
+            .route("/api/blacklist", get(http_api_blacklist_get_all))
             .route("/api/blacklist/:info_hash", get(http_api_blacklist_get).post(http_api_blacklist_post).delete(http_api_blacklist_delete))
             .route("/api/key/:seconds_valid", post(http_api_key_post).delete(http_api_key_delete))
             .layer(CorsLayer::new()
@@ -62,6 +63,7 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
             .route("/api/torrent/:info_hash", get(http_api_torrent_get).delete(http_api_torrent_delete))
             .route("/api/whitelist", get(http_api_whitelist_get_all))
             .route("/api/whitelist/:info_hash", get(http_api_whitelist_get).post(http_api_whitelist_post).delete(http_api_whitelist_delete))
+            .route("/api/blacklist", get(http_api_blacklist_get_all))
             .route("/api/blacklist/:info_hash", get(http_api_blacklist_get).post(http_api_blacklist_post).delete(http_api_blacklist_delete))
             .route("/api/key/:seconds_valid", post(http_api_key_post).delete(http_api_key_delete))
             .layer(CorsLayer::new()
@@ -407,7 +409,7 @@ pub async fn http_api_whitelist_delete(ClientIp(ip): ClientIp, axum::extract::Ra
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_get_all(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -432,11 +434,12 @@ pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQu
         return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
     }
 
-    let stats = state.get_stats().await;
-    (StatusCode::OK, headers, serde_json::to_string(&stats).unwrap())
+    let blacklist = state.get_blacklist().await;
+    (StatusCode::OK, headers, serde_json::to_string(&blacklist).unwrap())
 }
 
-pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+
+pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -461,11 +464,33 @@ pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQ
         return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
     }
 
-    let stats = state.get_stats().await;
-    (StatusCode::OK, headers, serde_json::to_string(&stats).unwrap())
+    let info_hash: InfoHash = match path_params.get("info_hash") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown info_hash");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            let infohash_decoded = hex::decode(result);
+            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+                let return_data = json!({ "status": "invalid info_hash" });
+                return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+            }
+            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(infohash)
+        }
+    };
+
+    if state.check_blacklist(info_hash).await {
+        let return_data = json!({ "status": "ok" });
+        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    }
+
+    let return_data = json!({ "status": "not found"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -490,8 +515,75 @@ pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::Ra
         return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
     }
 
-    let stats = state.get_stats().await;
-    (StatusCode::OK, headers, serde_json::to_string(&stats).unwrap())
+    let info_hash: InfoHash = match path_params.get("info_hash") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown info_hash");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            let infohash_decoded = hex::decode(result);
+            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+                let return_data = json!({ "status": "invalid info_hash" });
+                return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+            }
+            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(infohash)
+        }
+    };
+
+    state.add_blacklist(info_hash).await;
+
+    let return_data = json!({ "status": "ok"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
+}
+
+pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+{
+    http_api_stats_log(ip, state.clone()).await;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    let query_map_result = parse_query(params);
+    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
+        Ok(e) => {
+            e
+        }
+        Err(_) => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "invalid request");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+    };
+
+    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
+        let mut return_data: HashMap<&str, &str> = HashMap::new();
+        return_data.insert("status", "invalid token");
+        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    }
+
+    let info_hash: InfoHash = match path_params.get("info_hash") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown info_hash");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            let infohash_decoded = hex::decode(result);
+            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+                let return_data = json!({ "status": "invalid info_hash" });
+                return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+            }
+            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(infohash)
+        }
+    };
+
+    state.remove_blacklist(info_hash).await;
+
+    let return_data = json!({ "status": "ok"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
 pub async fn http_api_key_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
