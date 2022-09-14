@@ -4,6 +4,8 @@
 ## Project Description
 Torrust-Axum Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
 
+Currently, it's being actively used at https://www.gbitt.info/ which as of current writing has 100 million torrent hashes loaded and hitting 5 million peers.
+
 This project originated from Torrust Tracker code originally developed by Mick van Dijke, further developed by Power2All as alternative for OpenTracker and other tracker code available on GitHub.
 
 ### Features
