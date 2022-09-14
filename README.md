@@ -57,7 +57,6 @@ persistence = false
 persistence_interval = 60
 api_key = "MyAccessToken"
 whitelist = false
-whitelist_from_persistency = false
 blacklist = false
 interval = 1800
 interval_minimum = 1800
@@ -85,8 +84,12 @@ ssl_cert = ""
 
 [db_structure]
 db_torrents = "torrents"
-table_info_hash = "info_hash"
-table_completed = "completed"
+table_torrents_info_hash = "info_hash"
+table_torrents_completed = "completed"
+db_whitelist = "whitelist"
+table_whitelist_info_hash = "info_hash"
+db_blacklist = "blacklist"
+table_blacklist_info_hash = "info_hash"
 ```
 
 * Run the torrust-axum again after finishing the configuration:
