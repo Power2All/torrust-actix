@@ -12,9 +12,9 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Built-in API on a separate port in HTTP
 * [X] Persistence saving supported using SQLite3, MySQL or PostgreSQL database
 * [X] Customize table and database names in the configuration file for persistence
-* [ ] Whitelist system, which can be used to make the tracker private
-* [ ] Blacklist system, to block and ban hashes
-* [ ] Web Interface (through API) to control the tracker software
+* [X] Whitelist system, which can be used to make the tracker private
+* [X] Blacklist system, to block and ban hashes
+* [X] Web Interface (through API) to control the tracker software
 * [ ] Torrent key support, for private tracking support
 * [ ] Dockerfile to build an image for Docker
 
@@ -101,9 +101,164 @@ Your tracker announce URL will be the following, depending on what blocks you ha
 * `https://127.0.0.1:6969/announce`
 
 ### Built-in API
-The following URLs are available if you have enabled the API block:
-* `http://127.0.0.1:8080/stats` - This will show statistics of the tracker in JSON format.
-* `https://127.0.0.1:8080/stats` - Same as above, but then with SSL enabled.
+The following URLs are available if you have enabled the API block.
+Replace ``[TOKENID]`` with the token set in the configuration file.
+Replace ``[TORRENT_HASH]`` with a hex 40 character info_hash.
+Also depends if you have HTTP and/or HTTPS enabled.
+If a error occurred for whatever reason, the status key will not contain "ok", but the reason:
+
+```json
+{
+  "status":"FAILURE REASON"
+}
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/stats?token=[TOKENID]`
+This will show statistics of the tracker in JSON format.
+
+```json
+{
+  "started":1234567890,
+  "timestamp_run_save":1234567890,
+  "timestamp_run_timeout":1234567890,
+  "timestamp_run_console":1234567890,
+  "torrents":0,
+  "torrents_updates":0,
+  "torrents_shadow":0,
+  "seeds":0,
+  "peers":0,
+  "completed":0,
+  "whitelist_enabled":true,
+  "whitelist":0,
+  "blacklist_enabled":true,
+  "blacklist":0,
+  "tcp4_connections_handled":0,
+  "tcp4_api_handled":0,
+  "tcp4_announces_handled":0,
+  "tcp4_scrapes_handled":0,
+  "tcp6_connections_handled":0,
+  "tcp6_api_handled":0,
+  "tcp6_announces_handled":0,
+  "tcp6_scrapes_handled":0,
+  "udp4_connections_handled":0,
+  "udp4_announces_handled":0,
+  "udp4_scrapes_handled":0,
+  "udp6_connections_handled":0,
+  "udp6_announces_handled":0,
+  "udp6_scrapes_handled":0
+}
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/torrent/[TORRENT_HASH]?token=[TOKENID]`
+This will show the content of the torrent, including peers.
+
+```json
+{
+  "info_hash":"1234567890123456789012345678901234567890",
+  "completed":0,
+  "seeders":1,
+  "leechers":0,
+  "peers": [
+    [
+      {
+        "client":"",
+        "id":"1234567890123456789012345678901234567890"
+      },
+      {
+        "downloaded":0,
+        "event":"Started",
+        "ip":"127.0.0.1:1234",
+        "left":0,
+        "updated":0,
+        "uploaded":0
+      }
+    ]
+  ]
+}
+```
+
+#### DELETE `http(s)://127.0.0.1:8080/api/torrent/[TORRENT_HASH]?token=[TOKENID]`
+This will remove the torrent and it's peers from the memory.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/whitelist?token=[TOKENID]`
+This will get the whole whitelist in list format.
+
+```json
+[
+  "1234567890123456789012345678901234567890",
+  "0987654321098765432109876543210987654321"
+]
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/whitelist/[TORRENT_HASH]?token=[TOKENID]`
+This will check if an info_hash exists in the whitelist, and returns if true.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### POST `http(s)://127.0.0.1:8080/api/whitelist/[TORRENT_HASH]?token=[TOKENID]`
+This will insert an info_hash in the whitelist, and returns status if successful.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### DELETE `http(s)://127.0.0.1:8080/api/whitelist/[TORRENT_HASH]?token=[TOKENID]`
+This will remove an info_hash from the whitelist, and returns status if successful or failure reason.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/blacklist?token=[TOKENID]`
+This will get the whole blacklist in list format.
+
+```json
+[
+  "1234567890123456789012345678901234567890",
+  "0987654321098765432109876543210987654321"
+]
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/blacklist/[TORRENT_HASH]?token=[TOKENID]`
+This will check if an info_hash exists in the blacklist, and returns if true.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### POST `http(s)://127.0.0.1:8080/api/blacklist/[TORRENT_HASH]?token=[TOKENID]`
+This will insert an info_hash in the blacklist, and returns status if successful.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### DELETE `http(s)://127.0.0.1:8080/api/blacklist/[TORRENT_HASH]?token=[TOKENID]`
+This will remove an info_hash from the blacklist, and returns status if successful or failure reason.
+
+```json
+{
+  "status":"ok"
+}
+```
 
 ### Credits
 This Torrust-Tracker was a joint effort by [Nautilus Cyberneering GmbH](https://nautilus-cyberneering.de/), [Dutch Bits](https://dutchbits.nl) and [Power2All](https://power2all.com).
