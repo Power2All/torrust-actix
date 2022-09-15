@@ -12,6 +12,7 @@ echo "############################"
 
 cargo build --release
 
-echo "####################"
+echo "#####################################################"
 echo "Building completed !"
-echo "####################"
+echo "You can find the compiled binary at ./target/release/"
+echo "#####################################################"
