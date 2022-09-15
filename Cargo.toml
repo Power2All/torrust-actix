@@ -10,13 +10,19 @@ authors = [
 description = "A rich, fast and efficient Bittorrent Tracker."
 
 [profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
 lto = true
-codegen-units = 1 # Enable this to optimize filesize
-panic = "abort" # Enable this to optimize filesize
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
 
 [dependencies]
 async-trait = "0.1.57"
-axum = { version = "0.5.13", features = ["ws"] }
+axum = { version = "0.5.16" }
 axum-client-ip = "0.2.0"
 axum-server = { version = "0.4.1", features = ["tls-rustls"] }
 binascii = "0.1.4"
