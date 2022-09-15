@@ -285,11 +285,9 @@ impl TorrentTracker {
     /* === Torrents === */
     pub async fn load_torrents(&self)
     {
-        if let Ok((torrents, whitelists, blacklists)) = self.sqlx.load_torrents().await {
+        if let Ok(torrents) = self.sqlx.load_torrents().await {
             let mut torrent_count = 0i64;
             let mut completed_count = 0i64;
-            let mut whitelist_count = 0i64;
-            let mut blacklist_count = 0i64;
 
             for (info_hash, completed) in torrents.iter() {
                 self.add_torrent(*info_hash, TorrentEntryItem {
@@ -301,31 +299,65 @@ impl TorrentTracker {
                 completed_count += *completed;
             }
 
-            if self.config.whitelist {
+            info!("Loaded {} torrents with {} completes.", torrent_count, completed_count);
+            self.update_stats(StatsEvent::Completed, completed_count as i64).await;
+        }
+    }
+
+    pub async fn load_whitelists(&self)
+    {
+        if self.config.whitelist {
+            if let Ok(whitelists) = self.sqlx.load_whitelist().await {
+                let mut whitelist_count = 0i64;
+
                 for info_hash in whitelists.iter() {
                     self.add_whitelist(*info_hash).await;
                     whitelist_count += 1;
                 }
-            }
 
-            if self.config.blacklist {
+                info!("Loaded {} whitelists.", whitelist_count);
+            }
+        }
+    }
+
+    pub async fn load_blacklists(&self)
+    {
+        if self.config.blacklist {
+            if let Ok(blacklists) = self.sqlx.load_blacklist().await {
+                let mut blacklist_count = 0i64;
+
                 for info_hash in blacklists.iter() {
                     self.add_blacklist(*info_hash).await;
                     blacklist_count += 1;
                 }
-            }
 
-            info!("Loaded {} torrents with {} completes, {} whitelists and {} blacklists.", torrent_count, completed_count, whitelist_count, blacklist_count);
-            self.update_stats(StatsEvent::Completed, completed_count as i64).await;
+                info!("Loaded {} blacklists.", blacklist_count);
+            }
         }
     }
 
     pub async fn save_torrents(&self) -> bool
     {
         let shadow = self.get_shadow().await;
+        if self.sqlx.save_torrents(shadow).await.is_ok() {
+            return true;
+        }
+        false
+    }
+
+    pub async fn save_whitelists(&self) -> bool
+    {
         let whitelist = self.get_whitelist().await;
+        if self.sqlx.save_whitelist(whitelist).await.is_ok() {
+            return true;
+        }
+        false
+    }
+
+    pub async fn save_blacklists(&self) -> bool
+    {
         let blacklist = self.get_blacklist().await;
-        if self.sqlx.save_torrents(shadow, whitelist, blacklist).await.is_ok() {
+        if self.sqlx.save_blacklist(blacklist).await.is_ok() {
             return true;
         }
         false

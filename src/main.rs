@@ -31,6 +31,8 @@ async fn main() -> std::io::Result<()>
     // Load torrents
     if config.persistence {
         tracker.clone().load_torrents().await;
+        tracker.clone().load_whitelists().await;
+        tracker.clone().load_blacklists().await;
     }
 
     let handle = Handle::new();
@@ -137,6 +139,18 @@ async fn main() -> std::io::Result<()>
             } else {
                 error!("[SAVING] An error occurred while saving data...");
             }
+            info!("[SAVING] Saving data from Whitelist to database...");
+            if tracker_clone.clone().save_whitelists().await {
+                info!("[SAVING] Whitelists saved.");
+            } else {
+                error!("[SAVING] An error occurred while saving data...");
+            }
+            info!("[SAVING] Saving data from Blacklist to database...");
+            if tracker_clone.clone().save_blacklists().await {
+                info!("[SAVING] Blacklists saved.");
+            } else {
+                error!("[SAVING] An error occurred while saving data...");
+            }
         }
     });
 
@@ -175,6 +189,18 @@ async fn main() -> std::io::Result<()>
                 info!("[SAVING] Clearing shadow, saving procedure finishing...");
                 tracker.clone().clear_shadow().await;
                 info!("[SAVING] Torrents saved.");
+            } else {
+                error!("[SAVING] An error occurred while saving data...");
+            }
+            info!("[SAVING] Saving data from Whitelist to database...");
+            if tracker.clone().save_whitelists().await {
+                info!("[SAVING] Whitelists saved.");
+            } else {
+                error!("[SAVING] An error occurred while saving data...");
+            }
+            info!("[SAVING] Saving data from Blacklist to database...");
+            if tracker.clone().save_blacklists().await {
+                info!("[SAVING] Blacklists saved.");
             } else {
                 error!("[SAVING] An error occurred while saving data...");
             }
