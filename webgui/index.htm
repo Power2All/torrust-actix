@@ -8,7 +8,7 @@
     <meta name="author" content="Power2All">
     <meta property="og:title" content="Torrust-Axum Admin Panel">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="http://localhost:8080/">
+    <meta property="og:url" content="{TRACKER_URL}">
     <meta property="og:description" content="The Torrust-Axum WebGUI Admin Interface">
     <meta property="og:image" content="/webgui/img/logo.png">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -155,6 +155,7 @@
         <button id="content_whitelist_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Whitelist</button>
         <button id="content_whitelist_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
         <button id="content_whitelist_button_add" type="button" class="btn btn-primary"><i class="bi bi-plus-circle" style="margin-right: 5px;"></i>Add to Whitelist</button>
+        <button id="content_whitelist_button_reload" type="button" class="btn btn-primary"><i class="bi bi-arrow-clockwise" style="margin-right: 5px;"></i>Reload from Database</button>
     </div>
     <table id="whitelist_table" class="table table-striped" style="width:100%">
         <thead>
@@ -206,6 +207,7 @@
         <button id="content_blacklist_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Blacklist</button>
         <button id="content_blacklist_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
         <button id="content_blacklist_button_add" type="button" class="btn btn-primary"><i class="bi bi-plus-circle" style="margin-right: 5px;"></i>Add to Blacklist</button>
+        <button id="content_blacklist_button_reload" type="button" class="btn btn-primary"><i class="bi bi-arrow-clockwise" style="margin-right: 5px;"></i>Reload from Database</button>
     </div>
     <table id="blacklist_table" class="table table-striped" style="width:100%">
         <thead>
@@ -265,7 +267,7 @@
 <script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.27.2/axios.min.js" integrity="sha512-odNmoc1XJy5x1TMVMdC7EMs3IVdItLPlCeL5vSUPN2llYKMJ2eByTTAIiiuqLg+GdNr9hF6z81p27DArRFKT7A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
-    let root_url = "";
+    let root_url = "{TRACKER_URL}";
 
     let current_table_element = null;
     let torrents_table_element = null;
@@ -351,6 +353,12 @@
             content_whitelist_button_clear.prop('disabled', false);
         });
 
+        $("#content_whitelist_button_reload").on("click", function(event) {
+            event.preventDefault();
+            $("#content_whitelist_button_reload").prop('disabled', true);
+            reloadWhitelist(whitelist_table);
+        });
+
         $("#whitelist_add_button").on("click", function(event) {
             event.preventDefault();
             let whitelist_close_button = $("#whitelist_close_button");
@@ -386,6 +394,12 @@
             content_blacklist_button_clear.prop('disabled', true);
             blacklist_table.clear().draw(false);
             content_blacklist_button_clear.prop('disabled', false);
+        });
+
+        $("#content_blacklist_button_reload").on("click", function(event) {
+            event.preventDefault();
+            $("#content_blacklist_button_reload").prop('disabled', true);
+            reloadBlacklist(blacklist_table);
         });
 
         $("#blacklist_add_button").on("click", function(event) {
@@ -514,6 +528,28 @@
             });
     }
 
+    async function reloadWhitelist(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        let content_whitelist_button_reload = $("#content_whitelist_button_reload");
+
+        axios.get(root_url + '/api/whitelist/reload?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to reload whitelist from database: " + response.data.status);
+                    content_whitelist_button_reload.prop('disabled', false);
+                    return;
+                }
+
+                $("#content_whitelist_button_load").prop('disabled', true);
+                content_whitelist_button_reload.prop('disabled', false);
+                loadWhitelist(table_element);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to reload whitelist from database: " + error.message);
+                content_whitelist_button_reload.prop('disabled', false);
+            });
+    }
+
     async function executeAddWhitelist(id, whitelist_table) {
         let access_token = $("#nav_input_access_token").val();
 
@@ -584,6 +620,28 @@
             .catch(function (error) {
                 notificationOnScreen("Unable to load blacklist: " + error.message);
                 content_blacklist_button_load.prop('disabled', false);
+            });
+    }
+
+    async function reloadBlacklist(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        let content_blacklist_button_reload = $("#content_blacklist_button_reload");
+
+        axios.get(root_url + '/api/blacklist/reload?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to reload blacklist from database: " + response.data.status);
+                    content_blacklist_button_reload.prop('disabled', false);
+                    return;
+                }
+
+                $("#content_blacklist_button_load").prop('disabled', true);
+                content_blacklist_button_reload.prop('disabled', false);
+                loadBlacklist(table_element);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to reload blacklist from database: " + error.message);
+                content_blacklist_button_reload.prop('disabled', false);
             });
     }
 

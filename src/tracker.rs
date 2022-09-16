@@ -306,33 +306,29 @@ impl TorrentTracker {
 
     pub async fn load_whitelists(&self)
     {
-        if self.config.whitelist {
-            if let Ok(whitelists) = self.sqlx.load_whitelist().await {
-                let mut whitelist_count = 0i64;
+        if let Ok(whitelists) = self.sqlx.load_whitelist().await {
+            let mut whitelist_count = 0i64;
 
-                for info_hash in whitelists.iter() {
-                    self.add_whitelist(*info_hash).await;
-                    whitelist_count += 1;
-                }
-
-                info!("Loaded {} whitelists.", whitelist_count);
+            for info_hash in whitelists.iter() {
+                self.add_whitelist(*info_hash).await;
+                whitelist_count += 1;
             }
+
+            info!("Loaded {} whitelists.", whitelist_count);
         }
     }
 
     pub async fn load_blacklists(&self)
     {
-        if self.config.blacklist {
-            if let Ok(blacklists) = self.sqlx.load_blacklist().await {
-                let mut blacklist_count = 0i64;
+        if let Ok(blacklists) = self.sqlx.load_blacklist().await {
+            let mut blacklist_count = 0i64;
 
-                for info_hash in blacklists.iter() {
-                    self.add_blacklist(*info_hash).await;
-                    blacklist_count += 1;
-                }
-
-                info!("Loaded {} blacklists.", blacklist_count);
+            for info_hash in blacklists.iter() {
+                self.add_blacklist(*info_hash).await;
+                blacklist_count += 1;
             }
+
+            info!("Loaded {} blacklists.", blacklist_count);
         }
     }
 
