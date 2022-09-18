@@ -8,7 +8,7 @@ Currently, it's being actively used at https://www.gbitt.info/ which as of curre
 
 This project originated from Torrust Tracker code originally developed by Mick van Dijke, further developed by Power2All as alternative for OpenTracker and other tracker code available on GitHub.
 
-### Features
+## Features
 * [X] Multiple UDP server and HTTP(S) server blocks for socket binding possibilities
 * [X] Full IPv4 and IPv6 support for both UDP and HTTP(S)
 * [X] Built-in API on a separate port in HTTP
@@ -20,7 +20,7 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Torrent key support, for private tracking support
 * [ ] Dockerfile to build an image for Docker
 
-### Implemented BEPs
+## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
 * [BEP 7](https://www.bittorrent.org/beps/bep_0007.html): IPv6 Support
 * [BEP 15](http://www.bittorrent.org/beps/bep_0015.html): UDP Tracker Protocol for BitTorrent
@@ -104,7 +104,7 @@ table_keys_timeout = "timeout"
 ./target/release/torrust-axum
 ```
 
-### Tracker URL
+## Tracker URL
 Your tracker announce URL will be the following, depending on what blocks you have enabled:
 * `udp://127.0.0.1:6969/announce`
 * `http://127.0.0.1:6969/announce`
@@ -116,19 +116,21 @@ Your tracker announce URL will be the following, depending on what blocks you ha
 * `http://127.0.0.1:6969/announce/1234567890123456789012345678901234567890`
 * `https://127.0.0.1:6969/announce/1234567890123456789012345678901234567890`
 
-### Built-in API
+## Built-in API
 The following URLs are available if you have enabled the API block.
 Also, the following URL is enabled for the Web Interface: `http(s)://127.0.0.1:8080/webgui/`
 Replace ``[TOKENID]`` with the token set in the configuration file.
 Replace ``[TORRENT_HASH]`` with a hex 40 character info_hash.
 Also depends on if you have HTTP and/or HTTPS enabled.
-If a error occurred for whatever reason, the status key will not contain "ok", but the reason:
+If an error occurred for whatever reason, the status key will not contain "ok", but the reason:
 
 ```json
 {
   "status":"FAILURE REASON"
 }
 ```
+
+### Statistics
 
 #### GET `http(s)://127.0.0.1:8080/api/stats?token=[TOKENID]`
 This will show statistics of the tracker in JSON format.
@@ -168,6 +170,8 @@ This will show statistics of the tracker in JSON format.
 }
 ```
 
+### Torrents
+
 #### GET `http(s)://127.0.0.1:8080/api/torrent/[TORRENT_HASH]?token=[TOKENID]`
 This will show the content of the torrent, including peers.
 
@@ -204,6 +208,8 @@ This will remove the torrent and it's peers from the memory.
   "status":"ok"
 }
 ```
+
+### Whitelist
 
 #### GET `http(s)://127.0.0.1:8080/api/whitelist?token=[TOKENID]`
 This will get the whole whitelist in list format.
@@ -242,6 +248,8 @@ This will remove an info_hash from the whitelist, and returns status if successf
 }
 ```
 
+### Blacklist
+
 #### GET `http(s)://127.0.0.1:8080/api/blacklist?token=[TOKENID]`
 This will get the whole blacklist in list format.
 
@@ -278,6 +286,8 @@ This will remove an info_hash from the blacklist, and returns status if successf
   "status":"ok"
 }
 ```
+
+### Keys
 
 #### GET `http(s)://127.0.0.1:8080/api/keys?token=[TOKENID]`
 This will get the whole keys in list format. 1st value is the key itself, 2nd value is the timestamp in UNIX format (seconds).
