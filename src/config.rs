@@ -74,6 +74,7 @@ pub struct Configuration {
     pub whitelist: bool,
     pub blacklist: bool,
     pub keys: bool,
+    pub keys_cleanup_interval: Option<u64>,
 
     pub interval: Option<u64>,
     pub interval_minimum: Option<u64>,
@@ -128,6 +129,7 @@ impl Configuration {
             whitelist: false,
             blacklist: false,
             keys: false,
+            keys_cleanup_interval: Some(60),
 
             interval: Some(1800),
             interval_minimum: Some(1800),

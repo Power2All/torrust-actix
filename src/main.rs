@@ -120,6 +120,23 @@ async fn main() -> std::io::Result<()>
         }
     });
 
+    if config.clone().keys {
+        let interval_keys_cleanup = config.clone().keys_cleanup_interval.unwrap_or(60);
+        let tracker_clone = tracker.clone();
+        tokio::spawn(async move {
+            let interval = Duration::from_secs(interval_keys_cleanup);
+            let mut interval = tokio::time::interval(interval);
+            interval.tick().await;
+            loop {
+                tracker_clone.clone().set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.keys_cleanup_interval.unwrap() as i64).await;
+                interval.tick().await;
+                info!("[KEYS] Checking now for old keys, and remove them.");
+                tracker_clone.clone().clean_keys().await;
+                info!("[KEYS] Keys cleaned up.");
+            }
+        });
+    }
+
     let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
     let tracker_clone = tracker.clone();
     tokio::spawn(async move {

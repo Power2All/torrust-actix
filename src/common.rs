@@ -474,7 +474,7 @@ pub struct AnnounceQueryRequest {
     pub(crate) no_peer_id: bool,
     pub(crate) event: AnnounceEvent,
     pub(crate) remote_addr: IpAddr,
-    pub(crate) numwant: u64,
+    pub(crate) numwant: u64
 }
 
 #[derive(Deserialize, Clone, Debug)]

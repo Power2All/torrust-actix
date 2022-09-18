@@ -344,8 +344,6 @@
     let root_url = "{TRACKER_URL}";
 
     let current_table_element = null;
-    let torrents_table_element = null;
-    let torrents_table = null;
     $(document).ready(function() {
         console.log("Webpage Loaded");
 
@@ -369,7 +367,8 @@
             autoWidth: false,
             columns: [
                 { width: '100%', verticalAlign: 'middle', targets: 0 },
-                { width: '32px', targets: 1 },
+                { width: '180px', targets: 1 },
+                { width: '32px', targets: 2 },
             ]
         });
 
@@ -850,7 +849,7 @@
                     table_element.row.add([
                         value[0],
                         value[1],
-                        "<button class=\"btn btn-primary btn-sm btn-keys-remove\" key_id=\"" + value + "\" style=\"padding-top: 2px; padding-bottom: 2px;\"><i class=\"bi bi-trash\"></i></button>"
+                        "<button class=\"btn btn-primary btn-sm btn-keys-remove\" key_id=\"" + value[0] + "\" style=\"padding-top: 2px; padding-bottom: 2px;\"><i class=\"bi bi-trash\"></i></button>"
                     ]);
                 }
                 table_element.draw(false);
@@ -884,6 +883,25 @@
             })
             .catch(function (error) {
                 notificationOnScreen("Unable to add keys: " + error.message);
+                $("#content_keys_button_load").prop('disabled', false);
+            });
+    }
+
+    async function executeRemoveKeys(id, keys_table) {
+        let access_token = $("#nav_input_access_token").val();
+
+        axios.delete(root_url + '/api/keys/' + encodeURIComponent(id) + '?token=' + encodeURIComponent(access_token), { data: {} })
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== 'ok') {
+                    notificationOnScreen("Unable to remove key hash: " + response.data.status);
+                    $("#content_keys_button_load").prop('disabled', false);
+                    return;
+                }
+                notificationOnScreen("Key hash removed: " + id);
+                loadKeys(keys_table);
+            })
+            .catch(function () {
+                notificationOnScreen("Unable to remove key: " + error.message);
                 $("#content_keys_button_load").prop('disabled', false);
             });
     }

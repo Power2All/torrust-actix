@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::future::Future;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
@@ -15,7 +16,7 @@ use log::{debug, info};
 use scc::ebr::Arc;
 use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
 use scc::HashIndex;
-use crate::common::parse_query;
+use crate::common::{InfoHash, parse_query};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::{StatsEvent, TorrentTracker};
 
@@ -26,7 +27,9 @@ pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTra
         .handle(handle)
         .serve(Router::new()
             .route("/announce", get(http_service_announce))
+            .route("/announce/:key", get(http_service_announce))
             .route("/scrape", get(http_service_scrape))
+            .route("/scrape/:key", get(http_service_scrape))
             .fallback(http_service_404.into_service())
             .layer(Extension(data))
             .into_make_service_with_connect_info::<SocketAddr>()
@@ -45,14 +48,16 @@ pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTr
         .handle(handle)
         .serve(Router::new()
             .route("/announce", get(http_service_announce))
+            .route("/announce/:key", get(http_service_announce))
             .route("/scrape", get(http_service_scrape))
+            .route("/scrape/:key", get(http_service_scrape))
             .fallback(http_service_404.into_service())
             .layer(Extension(data))
             .into_make_service_with_connect_info::<SocketAddr>()
         )
 }
 
-pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
+pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
 {
     http_service_announce_log(ip, state.clone()).await;
     let mut headers = HeaderMap::new();
@@ -88,6 +93,36 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
     if state.config.blacklist && state.check_blacklist(announce_unwrapped.info_hash).await {
         let return_string = (ben_map! {"failure reason" => ben_bytes!("forbidden info_hash")}).encode();
         return (StatusCode::OK, headers, return_string);
+    }
+
+    // We check if the path is set, and retrieve the possible "key" to check.
+    if state.config.keys {
+        let key: InfoHash = match path_params.get("key") {
+            None => {
+                let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
+                return (StatusCode::OK, headers, return_string);
+            }
+            Some(result) => {
+                if result.len() != 40 {
+                    let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
+                    return (StatusCode::OK, headers, return_string);
+                }
+                match hex::decode(result) {
+                    Ok(result) => {
+                        let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
+                        InfoHash(key)
+                    }
+                    Err(_) => {
+                        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
+                        return (StatusCode::OK, headers, return_string);
+                    }
+                }
+            }
+        };
+        if !state.check_key(key).await {
+            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
+            return (StatusCode::OK, headers, return_string);
+        }
     }
 
     let (_torrent_peer, torrent_entry) = match handle_announce(state.clone(), announce_unwrapped.clone()).await {
@@ -186,7 +221,7 @@ pub async fn http_service_announce_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     }
 }
 
-pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
+pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
 {
     http_service_scrape_log(ip, state.clone()).await;
     let mut headers = HeaderMap::new();
@@ -202,6 +237,36 @@ pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery
             return (StatusCode::OK, headers, return_string);
         }
     };
+
+    // We check if the path is set, and retrieve the possible "key" to check.
+    if state.config.keys {
+        let key: InfoHash = match path_params.get("key") {
+            None => {
+                let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
+                return (StatusCode::OK, headers, return_string);
+            }
+            Some(result) => {
+                if result.len() != 40 {
+                    let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
+                    return (StatusCode::OK, headers, return_string);
+                }
+                match hex::decode(result) {
+                    Ok(result) => {
+                        let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
+                        InfoHash(key)
+                    }
+                    Err(_) => {
+                        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
+                        return (StatusCode::OK, headers, return_string);
+                    }
+                }
+            }
+        };
+        if !state.check_key(key).await {
+            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
+            return (StatusCode::OK, headers, return_string);
+        }
+    }
 
     let scrape = validate_scrape(state.clone().config.clone(), ip, query_map).await;
     return match scrape {

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use chrono::{TimeZone, Utc};
 use log::info;
 use scc::ebr::Arc;
 use tokio::sync::RwLock;
@@ -16,6 +17,7 @@ pub enum StatsEvent {
     TimestampSave,
     TimestampTimeout,
     TimestampConsole,
+    TimestampKeysTimeout,
     Seeds,
     Peers,
     Completed,
@@ -44,6 +46,7 @@ pub struct Stats {
     pub timestamp_run_save: i64,
     pub timestamp_run_timeout: i64,
     pub timestamp_run_console: i64,
+    pub timestamp_run_keys_timeout: i64,
     pub torrents: i64,
     pub torrents_updates: i64,
     pub torrents_shadow: i64,
@@ -170,6 +173,7 @@ impl TorrentTracker {
                     timestamp_run_save: 0,
                     timestamp_run_timeout: 0,
                     timestamp_run_console: 0,
+                    timestamp_run_keys_timeout: 0,
                     torrents: 0,
                     torrents_updates: 0,
                     torrents_shadow: 0,
@@ -227,6 +231,7 @@ impl TorrentTracker {
             StatsEvent::TimestampSave => { stats.timestamp_run_save += value; }
             StatsEvent::TimestampTimeout => { stats.timestamp_run_timeout += value; }
             StatsEvent::TimestampConsole => { stats.timestamp_run_console += value; }
+            StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout += value; }
             StatsEvent::Seeds => { stats.seeds += value; }
             StatsEvent::Peers => { stats.peers += value; }
             StatsEvent::Completed => { stats.completed += value; }
@@ -265,6 +270,7 @@ impl TorrentTracker {
             StatsEvent::TimestampSave => { stats.timestamp_run_save = value; }
             StatsEvent::TimestampTimeout => { stats.timestamp_run_timeout = value; }
             StatsEvent::TimestampConsole => { stats.timestamp_run_console = value; }
+            StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout = value; }
             StatsEvent::Seeds => { stats.seeds = value; }
             StatsEvent::Peers => { stats.peers = value; }
             StatsEvent::Completed => { stats.completed = value; }
@@ -347,7 +353,7 @@ impl TorrentTracker {
             let mut keys_count = 0i64;
 
             for (hash, timeout) in keys.iter() {
-                self.add_key(*hash, *timeout).await;
+                self.add_key_raw(*hash, *timeout).await;
                 keys_count += 1;
             }
 
@@ -815,6 +821,24 @@ impl TorrentTracker {
         self.update_stats(StatsEvent::Key, 1).await;
     }
 
+    pub async fn add_key_raw(&self, hash: InfoHash, timeout: i64)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        let time = SystemTime::from(Utc.timestamp(timeout, 0));
+        match time.duration_since(SystemTime::now()) {
+            Ok(_) => {
+                torrents_lock.keys.insert(hash, timeout as i64);
+            }
+            Err(_) => {
+                drop(torrents_lock);
+                return;
+            }
+        }
+        drop(torrents_lock);
+        self.update_stats(StatsEvent::Key, 1).await;
+    }
+
     pub async fn get_keys(&self) -> Vec<(InfoHash, i64)>
     {
         let torrents_arc = self.torrents.clone();
@@ -856,5 +880,29 @@ impl TorrentTracker {
         torrents_lock.keys = HashMap::new();
         drop(torrents_lock);
         self.set_stats(StatsEvent::Key, 0).await;
+    }
+
+    pub async fn clean_keys(&self)
+    {
+        let torrents_arc = self.torrents.clone();
+        let torrents_lock = torrents_arc.write().await;
+
+        let mut keys_index = vec![];
+        for (hash, timeout) in torrents_lock.keys.iter() {
+            keys_index.push((*hash, *timeout));
+        }
+        drop(torrents_lock);
+
+        for (hash, timeout) in keys_index.iter() {
+            if *timeout != 0 {
+                let time = SystemTime::from(Utc.timestamp(*timeout, 0));
+                match time.duration_since(SystemTime::now()) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        let _ = self.remove_key(*hash).await;
+                    }
+                }
+            }
+        }
     }
 }

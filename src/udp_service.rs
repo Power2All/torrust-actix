@@ -179,6 +179,25 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         return Err(ServerError::TorrentBlacklisted);
     }
 
+    // We check if the path is set, and retrieve the possible "key" to check.
+    if tracker.config.keys {
+        if request.path.len() < 50 {
+            return Err(ServerError::UnknownKey);
+        }
+        let key_path_extract = &request.path[10..50];
+        match hex::decode(key_path_extract) {
+            Ok(result) => {
+                let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
+                if !tracker.check_key(InfoHash::from(key)).await {
+                    return Err(ServerError::UnknownKey);
+                }
+            }
+            Err(_) => {
+                return Err(ServerError::UnknownKey);
+            }
+        }
+    }
+
     // Handle the request data.
     match handle_announce(tracker.clone(), AnnounceQueryRequest {
         info_hash: InfoHash(request.info_hash.0),
