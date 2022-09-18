@@ -255,15 +255,12 @@ impl Request {
                 let option_size = cursor.read_u8();
                 let mut path: &str = "";
                 let mut path_array = vec![];
-                if option_byte.is_ok() && option_size.is_ok() {
-                    if option_byte.unwrap() == 2 {
-                        let size = option_size.unwrap();
-                        path_array = vec![0; size as usize];
-                        let _ = cursor.read_exact(&mut path_array).map_err(|err| {
-                            RequestParseError::sendable_io(err, connection_id, transaction_id)
-                        });
-                        path = std::str::from_utf8(&path_array).unwrap();
-                    }
+                if option_byte.is_ok() && option_size.is_ok() && option_byte.unwrap() == 2 {
+                    path_array = vec![0; option_size.unwrap() as usize];
+                    let _ = cursor.read_exact(&mut path_array).map_err(|err| {
+                        RequestParseError::sendable_io(err, connection_id, transaction_id)
+                    });
+                    path = std::str::from_utf8(&path_array).unwrap();
                 }
                 let _ = path_array;
 
@@ -280,7 +277,7 @@ impl Request {
                     key: PeerKey(key),
                     peers_wanted: NumberOfPeers(peers_wanted),
                     port: Port(port),
-                    path: path.to_string(),
+                    path: path.clone().to_string(),
                 })
                     .into())
             }

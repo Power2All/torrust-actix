@@ -168,7 +168,7 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
     let mut peers_list = ben_list!();
     let peers_list_mut = peers_list.list_mut().unwrap();
     for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
-        let _ = match torrent_peer.peer_addr.ip() {
+        match torrent_peer.peer_addr.ip() {
             IpAddr::V4(_) => {
                 peers_list_mut.push(ben_map! {
                     "peer id" => ben_bytes!(peer_id.clone().to_string()),

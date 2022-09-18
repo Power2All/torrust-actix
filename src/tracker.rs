@@ -575,7 +575,7 @@ impl TorrentTracker {
                     }
                 }
                 torrents_lock.map_torrents.insert(info_hash, data_torrent.clone());
-                if peers.len() == 0 {
+                if peers.is_empty() {
                     torrents_lock.map_peers.remove(&info_hash);
                 } else {
                     torrents_lock.map_peers.insert(info_hash, peers.clone());
@@ -899,7 +899,7 @@ impl TorrentTracker {
                 match time.duration_since(SystemTime::now()) {
                     Ok(_) => {}
                     Err(_) => {
-                        let _ = self.remove_key(*hash).await;
+                        self.remove_key(*hash).await;
                     }
                 }
             }

@@ -188,7 +188,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         event: AnnounceEvent::None
     };
 
-    return match announce_query.event {
+    match announce_query.event {
         AnnounceEvent::Started => {
             torrent_peer.event = AnnounceEvent::Started;
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
@@ -277,14 +277,14 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 leechers: torrent_entry.leechers
             }))
         }
-    };
+    }
 }
 
 pub async fn validate_scrape(_config: Arc<Configuration>, _remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
 {
     // Validate info_hash
     let mut info_hash: Vec<InfoHash> = Vec::new();
-    return match query.read("info_hash", |_, v| v.clone()) {
+    match query.read("info_hash", |_, v| v.clone()) {
         None => {
             Err(CustomError::new("missing info_hash"))
         }
@@ -306,7 +306,7 @@ pub async fn validate_scrape(_config: Arc<Configuration>, _remote_addr: IpAddr, 
 
             Ok(scrape_data)
         }
-    };
+    }
 }
 
 pub async fn handle_scrape(data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, TorrentEntry>
