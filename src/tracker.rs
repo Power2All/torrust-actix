@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use log::info;
 use scc::ebr::Arc;
 use tokio::sync::RwLock;
@@ -21,6 +21,7 @@ pub enum StatsEvent {
     Completed,
     Whitelist,
     Blacklist,
+    Key,
     Tcp4ConnectionsHandled,
     Tcp4ApiHandled,
     Tcp4AnnouncesHandled,
@@ -53,6 +54,8 @@ pub struct Stats {
     pub whitelist: i64,
     pub blacklist_enabled: bool,
     pub blacklist: i64,
+    pub keys_enabled: bool,
+    pub keys: i64,
     pub tcp4_connections_handled: i64,
     pub tcp4_api_handled: i64,
     pub tcp4_announces_handled: i64,
@@ -125,7 +128,8 @@ pub struct Torrents {
     pub shadow: HashMap<InfoHash, i64>,
     pub stats: Stats,
     pub whitelist: HashMap<InfoHash, i64>,
-    pub blacklist: HashMap<InfoHash, i64>
+    pub blacklist: HashMap<InfoHash, i64>,
+    pub keys: HashMap<InfoHash, i64>
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -176,6 +180,8 @@ impl TorrentTracker {
                     whitelist: 0,
                     blacklist_enabled: config.blacklist,
                     blacklist: 0,
+                    keys_enabled: config.keys,
+                    keys: 0,
                     tcp4_connections_handled: 0,
                     tcp4_api_handled: 0,
                     tcp4_announces_handled: 0,
@@ -192,7 +198,8 @@ impl TorrentTracker {
                     udp6_scrapes_handled: 0
                 },
                 whitelist: HashMap::new(),
-                blacklist: HashMap::new()
+                blacklist: HashMap::new(),
+                keys: HashMap::new()
             })),
             sqlx: DatabaseConnector::new(config.clone()).await
         }
@@ -225,6 +232,7 @@ impl TorrentTracker {
             StatsEvent::Completed => { stats.completed += value; }
             StatsEvent::Whitelist => { stats.whitelist += value; }
             StatsEvent::Blacklist => { stats.blacklist += value; }
+            StatsEvent::Key => { stats.keys += value; }
             StatsEvent::Tcp4ConnectionsHandled => { stats.tcp4_connections_handled += value; }
             StatsEvent::Tcp4ApiHandled => { stats.tcp4_api_handled += value; }
             StatsEvent::Tcp4AnnouncesHandled => { stats.tcp4_announces_handled += value; }
@@ -262,6 +270,7 @@ impl TorrentTracker {
             StatsEvent::Completed => { stats.completed = value; }
             StatsEvent::Whitelist => { stats.whitelist = value; }
             StatsEvent::Blacklist => { stats.blacklist = value; }
+            StatsEvent::Key => { stats.keys = value; }
             StatsEvent::Tcp4ConnectionsHandled => { stats.tcp4_connections_handled = value; }
             StatsEvent::Tcp4ApiHandled => { stats.tcp4_api_handled = value; }
             StatsEvent::Tcp4AnnouncesHandled => { stats.tcp4_announces_handled = value; }
@@ -332,6 +341,20 @@ impl TorrentTracker {
         }
     }
 
+    pub async fn load_keys(&self)
+    {
+        if let Ok(keys) = self.sqlx.load_keys().await {
+            let mut keys_count = 0i64;
+
+            for (hash, timeout) in keys.iter() {
+                self.add_key(*hash, *timeout).await;
+                keys_count += 1;
+            }
+
+            info!("Loaded {} keys.", keys_count);
+        }
+    }
+
     pub async fn save_torrents(&self) -> bool
     {
         let shadow = self.get_shadow().await;
@@ -354,6 +377,15 @@ impl TorrentTracker {
     {
         let blacklist = self.get_blacklist().await;
         if self.sqlx.save_blacklist(blacklist).await.is_ok() {
+            return true;
+        }
+        false
+    }
+
+    pub async fn save_keys(&self) -> bool
+    {
+        let keys = self.get_keys().await;
+        if self.sqlx.save_keys(keys).await.is_ok() {
             return true;
         }
         false
@@ -768,6 +800,61 @@ impl TorrentTracker {
         let mut torrents_lock = torrents_arc.write().await;
         torrents_lock.whitelist = HashMap::new();
         drop(torrents_lock);
-        self.set_stats(StatsEvent::Blacklist, 1).await;
+        self.set_stats(StatsEvent::Blacklist, 0).await;
+    }
+
+    /* === Keys === */
+    pub async fn add_key(&self, hash: InfoHash, timeout: i64)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let timeout_unix = timestamp.as_secs() as i64 + timeout;
+        torrents_lock.keys.insert(hash, timeout_unix);
+        drop(torrents_lock);
+        self.update_stats(StatsEvent::Key, 1).await;
+    }
+
+    pub async fn get_keys(&self) -> Vec<(InfoHash, i64)>
+    {
+        let torrents_arc = self.torrents.clone();
+        let torrents_lock = torrents_arc.write().await;
+        let mut return_list = vec![];
+        for (hash, timeout) in torrents_lock.keys.iter() {
+            return_list.push((*hash, *timeout));
+        }
+        drop(torrents_lock);
+        return_list
+    }
+
+    pub async fn remove_key(&self, hash: InfoHash)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        torrents_lock.keys.remove(&hash);
+        let key_count = torrents_lock.keys.len();
+        drop(torrents_lock);
+        self.set_stats(StatsEvent::Key, key_count as i64).await;
+    }
+
+    pub async fn check_key(&self, hash: InfoHash) -> bool
+    {
+        let torrents_arc = self.torrents.clone();
+        let torrents_lock = torrents_arc.write().await;
+        let key = torrents_lock.keys.get(&hash).cloned();
+        drop(torrents_lock);
+        if key.is_some() {
+            return true;
+        }
+        false
+    }
+
+    pub async fn clear_keys(&self)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        torrents_lock.keys = HashMap::new();
+        drop(torrents_lock);
+        self.set_stats(StatsEvent::Key, 0).await;
     }
 }

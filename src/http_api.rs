@@ -38,9 +38,12 @@ pub async fn http_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker
             .route("/api/blacklist", get(http_api_blacklist_get_all))
             .route("/api/blacklist/reload", get(http_api_blacklist_reload))
             .route("/api/blacklist/:info_hash", get(http_api_blacklist_get).post(http_api_blacklist_post).delete(http_api_blacklist_delete))
-            .route("/api/key/:seconds_valid", post(http_api_key_post).delete(http_api_key_delete))
+            .route("/api/keys", get(http_api_keys_get_all))
+            .route("/api/keys/reload", get(http_api_keys_reload))
+            .route("/api/keys/:key", get(http_api_keys_get))
+            .route("/api/keys/:key/:seconds_valid", post(http_api_keys_post).patch(http_api_keys_patch))
             .layer(CorsLayer::new()
-                .allow_methods([Method::GET, Method::POST, Method::DELETE])
+                .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH])
                 .allow_origin(Any)
                 .allow_headers(vec![header::CONTENT_TYPE])
             )
@@ -69,9 +72,12 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
             .route("/api/blacklist", get(http_api_blacklist_get_all))
             .route("/api/blacklist/reload", get(http_api_blacklist_reload))
             .route("/api/blacklist/:info_hash", get(http_api_blacklist_get).post(http_api_blacklist_post).delete(http_api_blacklist_delete))
-            .route("/api/key/:seconds_valid", post(http_api_key_post).delete(http_api_key_delete))
+            .route("/api/keys", get(http_api_keys_get_all))
+            .route("/api/keys/reload", get(http_api_keys_reload))
+            .route("/api/keys/:key", get(http_api_keys_get))
+            .route("/api/keys/:key/:seconds_valid", post(http_api_keys_post).patch(http_api_keys_patch))
             .layer(CorsLayer::new()
-                .allow_methods([Method::GET, Method::POST, Method::DELETE])
+                .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH])
                 .allow_origin(Any)
                 .allow_headers(vec![header::CONTENT_TYPE])
             )
@@ -652,7 +658,7 @@ pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::Ra
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_key_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_get_all(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -677,11 +683,11 @@ pub async fn http_api_key_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(p
         return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
     }
 
-    let stats = state.get_stats().await;
-    (StatusCode::OK, headers, serde_json::to_string(&stats).unwrap())
+    let keys = state.get_keys().await;
+    (StatusCode::OK, headers, serde_json::to_string(&keys).unwrap())
 }
 
-pub async fn http_api_key_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_reload(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -706,8 +712,247 @@ pub async fn http_api_key_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery
         return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
     }
 
-    let stats = state.get_stats().await;
-    (StatusCode::OK, headers, serde_json::to_string(&stats).unwrap())
+    state.clear_keys().await;
+    state.load_keys().await;
+
+    let return_data = json!({ "status": "ok" });
+    return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+}
+
+pub async fn http_api_keys_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+{
+    http_api_stats_log(ip, state.clone()).await;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    let query_map_result = parse_query(params);
+    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
+        Ok(e) => {
+            e
+        }
+        Err(_) => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "invalid request");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+    };
+
+    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
+        let mut return_data: HashMap<&str, &str> = HashMap::new();
+        return_data.insert("status", "invalid token");
+        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    }
+
+    let key: InfoHash = match path_params.get("key") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown hash");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            let key_decoded = hex::decode(result);
+            if key_decoded.is_err() || key_decoded.clone().unwrap().len() != 20 {
+                let return_data = json!({ "status": "invalid key" });
+                return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+            }
+            let key = <[u8; 20]>::try_from(key_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(key)
+        }
+    };
+
+    if state.check_key(key).await {
+        let return_data = json!({ "status": "ok" });
+        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    }
+
+    let return_data = json!({ "status": "not found"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
+}
+
+pub async fn http_api_keys_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+{
+    http_api_stats_log(ip, state.clone()).await;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    let query_map_result = parse_query(params);
+    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
+        Ok(e) => {
+            e
+        }
+        Err(_) => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "invalid request");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+    };
+
+    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
+        let mut return_data: HashMap<&str, &str> = HashMap::new();
+        return_data.insert("status", "invalid token");
+        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    }
+
+    let key: InfoHash = match path_params.get("key") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown key");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            let key_decoded = hex::decode(result);
+            if key_decoded.is_err() || key_decoded.clone().unwrap().len() != 20 {
+                let return_data = json!({ "status": "invalid key" });
+                return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+            }
+            let key = <[u8; 20]>::try_from(key_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(key)
+        }
+    };
+
+    let seconds_valid: i64 = match path_params.get("seconds_valid") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown timeout");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            match result.parse::<i64>() {
+                Ok(result2) => {
+                    result2
+                }
+                Err(_) => {
+                    let mut return_data: HashMap<&str, &str> = HashMap::new();
+                    return_data.insert("status", "invalid timeout");
+                    return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+                }
+            }
+        }
+    };
+
+    state.add_key(key, seconds_valid).await;
+
+    let return_data = json!({ "status": "ok"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
+}
+
+pub async fn http_api_keys_patch(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+{
+    http_api_stats_log(ip, state.clone()).await;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    let query_map_result = parse_query(params);
+    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
+        Ok(e) => {
+            e
+        }
+        Err(_) => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "invalid request");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+    };
+
+    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
+        let mut return_data: HashMap<&str, &str> = HashMap::new();
+        return_data.insert("status", "invalid token");
+        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    }
+
+    let key: InfoHash = match path_params.get("key") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown key");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            let key_decoded = hex::decode(result);
+            if key_decoded.is_err() || key_decoded.clone().unwrap().len() != 20 {
+                let return_data = json!({ "status": "invalid key" });
+                return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+            }
+            let key = <[u8; 20]>::try_from(key_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(key)
+        }
+    };
+
+    let seconds_valid: i64 = match path_params.get("seconds_valid") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown timeout");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            match result.parse::<i64>() {
+                Ok(result2) => {
+                    result2
+                }
+                Err(_) => {
+                    let mut return_data: HashMap<&str, &str> = HashMap::new();
+                    return_data.insert("status", "invalid timeout");
+                    return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+                }
+            }
+        }
+    };
+
+    state.remove_key(key).await;
+    state.add_key(key, seconds_valid).await;
+
+    let return_data = json!({ "status": "ok"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
+}
+
+pub async fn http_api_keys_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+{
+    http_api_stats_log(ip, state.clone()).await;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    let query_map_result = parse_query(params);
+    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
+        Ok(e) => {
+            e
+        }
+        Err(_) => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "invalid request");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+    };
+
+    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
+        let mut return_data: HashMap<&str, &str> = HashMap::new();
+        return_data.insert("status", "invalid token");
+        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    }
+
+    let key: InfoHash = match path_params.get("key") {
+        None => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "unknown key");
+            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+        }
+        Some(result) => {
+            let key_decoded = hex::decode(result);
+            if key_decoded.is_err() || key_decoded.clone().unwrap().len() != 20 {
+                let return_data = json!({ "status": "invalid key" });
+                return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+            }
+            let key = <[u8; 20]>::try_from(key_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(key)
+        }
+    };
+
+    state.remove_key(key).await;
+
+    let return_data = json!({ "status": "ok"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
 pub async fn http_api_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)

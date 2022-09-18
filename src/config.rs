@@ -52,7 +52,10 @@ pub struct DatabaseStructureConfig {
     pub db_whitelist: String,
     pub table_whitelist_info_hash: String,
     pub db_blacklist: String,
-    pub table_blacklist_info_hash: String
+    pub table_blacklist_info_hash: String,
+    pub db_keys: String,
+    pub table_keys_hash: String,
+    pub table_keys_timeout: String
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -70,6 +73,7 @@ pub struct Configuration {
 
     pub whitelist: bool,
     pub blacklist: bool,
+    pub keys: bool,
 
     pub interval: Option<u64>,
     pub interval_minimum: Option<u64>,
@@ -123,6 +127,7 @@ impl Configuration {
 
             whitelist: false,
             blacklist: false,
+            keys: false,
 
             interval: Some(1800),
             interval_minimum: Some(1800),
@@ -141,7 +146,10 @@ impl Configuration {
                 db_whitelist: String::from("whitelist"),
                 table_whitelist_info_hash: String::from("info_hash"),
                 db_blacklist: String::from("blacklist"),
-                table_blacklist_info_hash: String::from("info_hash")
+                table_blacklist_info_hash: String::from("info_hash"),
+                db_keys: String::from("keys"),
+                table_keys_hash: String::from("hash"),
+                table_keys_timeout: String::from("timeout")
             }
         }
     }

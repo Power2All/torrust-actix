@@ -127,6 +127,14 @@ impl DatabaseConnector {
                         config.db_structure.table_blacklist_info_hash
                     ).as_str()
                 ).execute(pool).await;
+                let _ = sqlx::query(
+                    format!(
+                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) NOT NULL UNIQUE, {} INTEGER DEFAULT 0 NOT NULL)",
+                        config.db_structure.db_keys,
+                        config.db_structure.table_keys_hash,
+                        config.db_structure.table_keys_timeout
+                    ).as_str()
+                ).execute(pool).await;
             }
             DatabaseDrivers::MySQL => {
                 let mysql_connect = DatabaseConnectorMySQL::create(&config.db_path).await;
@@ -333,6 +341,105 @@ impl DatabaseConnector {
 
                     info!("[PgSQL] Loaded {} blacklists...", total_blacklist);
                     return Ok(return_data_blacklist);
+                }
+            }
+        }
+
+        Err(Error::RowNotFound)
+    }
+
+    pub async fn load_keys(&self) -> Result<Vec<(InfoHash, i64)>, Error>
+    {
+        let mut return_data_keys = vec![];
+        let mut counter = 0u64;
+        let mut total_keys = 0u64;
+
+        if self.engine.is_some() {
+            match self.engine.clone().unwrap() {
+                DatabaseDrivers::SQLite3 => {
+                    let pool = &self.sqlite.clone().unwrap().pool;
+
+                    let query = format!(
+                        "SELECT {},{} FROM {}",
+                        self.config.db_structure.table_keys_hash,
+                        self.config.db_structure.table_keys_timeout,
+                        self.config.db_structure.db_keys
+                    );
+                    let mut rows = sqlx::query(
+                        query.as_str()
+                    ).fetch(pool);
+                    while let Some(result) = rows.try_next().await? {
+                        if counter == 10000 {
+                            info!("[SQLite3] Loaded {} keys...", total_keys);
+                            counter = 0;
+                        }
+                        let hash_data: &str = result.get(self.config.db_structure.table_keys_hash.clone().as_str());
+                        let hash_decoded = hex::decode(hash_data).unwrap();
+                        let timeout_data: i64 = result.get(self.config.db_structure.table_keys_timeout.clone().as_str());
+                        let hash = <[u8; 20]>::try_from(hash_decoded[0 .. 20].as_ref()).unwrap();
+                        return_data_keys.push((InfoHash(hash), timeout_data));
+                        counter += 1;
+                        total_keys += 1;
+                    }
+
+                    info!("[SQLite3] Loaded {} keys...", total_keys);
+                    return Ok(return_data_keys);
+                }
+                DatabaseDrivers::MySQL => {
+                    let pool = &self.mysql.clone().unwrap().pool;
+
+                    let query = format!(
+                        "SELECT `{}`,`{}` FROM `{}`",
+                        self.config.db_structure.table_keys_hash,
+                        self.config.db_structure.table_keys_timeout,
+                        self.config.db_structure.db_keys
+                    );
+                    let mut rows = sqlx::query(
+                        query.as_str()
+                    ).fetch(pool);
+                    while let Some(result) = rows.try_next().await? {
+                        if counter == 10000 {
+                            info!("[MySQL] Loaded {} keys...", total_keys);
+                            counter = 0;
+                        }
+                        let hash_data: &[u8] = result.get(self.config.db_structure.table_keys_hash.clone().as_str());
+                        let timeout_data: i64 = result.get(self.config.db_structure.table_keys_timeout.clone().as_str());
+                        let hash = <[u8; 20]>::try_from(hash_data[0 .. 20].as_ref()).unwrap();
+                        return_data_keys.push((InfoHash(hash), timeout_data));
+                        counter += 1;
+                        total_keys += 1;
+                    }
+
+                    info!("[MySQL] Loaded {} keys...", total_keys);
+                    return Ok(return_data_keys);
+                }
+                DatabaseDrivers::PgSQL => {
+                    let pool = &self.pgsql.clone().unwrap().pool;
+
+                    let query = format!(
+                        "SELECT {},{} FROM {}",
+                        self.config.db_structure.table_keys_hash,
+                        self.config.db_structure.table_keys_timeout,
+                        self.config.db_structure.db_keys
+                    );
+                    let mut rows = sqlx::query(
+                        query.as_str()
+                    ).fetch(pool);
+                    while let Some(result) = rows.try_next().await? {
+                        if counter == 10000 {
+                            info!("[PgSQL] Loaded {} keys...", total_keys);
+                            counter = 0;
+                        }
+                        let hash_data: &[u8] = result.get(self.config.db_structure.table_keys_hash.clone().as_str());
+                        let timeout_data: i64 = result.get(self.config.db_structure.table_keys_timeout.clone().as_str());
+                        let hash = <[u8; 20]>::try_from(hash_data[0 .. 20].as_ref()).unwrap();
+                        return_data_keys.push((InfoHash(hash), timeout_data));
+                        counter += 1;
+                        total_keys += 1;
+                    }
+
+                    info!("[PgSQL] Loaded {} keys...", total_keys);
+                    return Ok(return_data_keys);
                 }
             }
         }
@@ -718,6 +825,159 @@ impl DatabaseConnector {
                         info!("[PgSQL] Handled {} blacklists", blacklists_handled_entries);
                     }
                     match blacklists_transaction.commit().await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[PgSQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    };
+
+                    Ok(())
+                }
+            }
+        }
+
+        Err(Error::RowNotFound)
+    }
+
+    pub async fn save_keys(&self, keys: Vec<(InfoHash, i64)>) -> Result<(), Error>
+    {
+        if self.engine.is_some() {
+            return match self.engine.clone().unwrap() {
+                DatabaseDrivers::SQLite3 => {
+                    let pool = &self.sqlite.clone().unwrap().pool;
+
+                    let mut keys_transaction = pool.begin().await?;
+                    let mut keys_handled_entries = 0u64;
+                    let mut keys_insert_entries = Vec::new();
+                    let query = format!("DELETE FROM {}", self.config.db_structure.db_keys);
+                    sqlx::query(&query).execute(&mut keys_transaction).await?;
+                    for (hash, timeout) in keys.iter() {
+                        keys_handled_entries += 1;
+                        keys_insert_entries.push(format!("('{}',{})", hash, timeout).to_string());
+                        if keys_insert_entries.len() == 10000 {
+                            let pre_query = format!(
+                                "INSERT INTO {} ({},{}) VALUES",
+                                self.config.db_structure.db_keys,
+                                self.config.db_structure.table_keys_hash,
+                                self.config.db_structure.table_keys_timeout
+                            );
+                            let query = format!(
+                                "{} {}",
+                                pre_query,
+                                keys_insert_entries.join(",")
+                            );
+                            sqlx::query(&query).execute(&mut keys_transaction).await?;
+                            info!("[SQLite3] Handled {} keys", keys_handled_entries);
+                            keys_insert_entries = vec![];
+                        }
+                    }
+                    if !keys_insert_entries.is_empty() {
+                        let pre_query = format!(
+                            "INSERT INTO {} ({},{}) VALUES",
+                            self.config.db_structure.db_keys,
+                            self.config.db_structure.table_keys_hash,
+                            self.config.db_structure.table_keys_timeout
+                        );
+                        let query = format!(
+                            "{} {}",
+                            pre_query,
+                            keys_insert_entries.join(",")
+                        );
+                        sqlx::query(&query).execute(&mut keys_transaction).await?;
+                        info!("[SQLite3] Handled {} keys", keys_handled_entries);
+                    }
+                    match keys_transaction.commit().await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[SQLite3] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    };
+
+                    Ok(())
+                }
+                DatabaseDrivers::MySQL => {
+                    let pool = &self.mysql.clone().unwrap().pool;
+
+                    let mut keys_transaction = pool.begin().await?;
+                    let mut keys_handled_entries = 0u64;
+                    let mut keys_insert_entries = Vec::new();
+                    let query = format!("TRUNCATE TABLE {}", self.config.db_structure.db_keys);
+                    sqlx::query(&query).execute(&mut keys_transaction).await?;
+                    for (hash, timeout) in keys.iter() {
+                        keys_handled_entries += 1;
+                        keys_insert_entries.push(format!("(UNHEX(\"{}\"),{})", hash, timeout).to_string());
+                        if keys_insert_entries.len() == 10000 {
+                            let query = format!(
+                                "INSERT INTO {} (`{}`,{}) VALUES {}",
+                                self.config.db_structure.db_keys,
+                                self.config.db_structure.table_keys_hash,
+                                self.config.db_structure.table_keys_timeout,
+                                keys_insert_entries.join(",")
+                            );
+                            sqlx::query(&query).execute(&mut keys_transaction).await?;
+                            info!("[MySQL] Handled {} keys", keys_handled_entries);
+                            keys_insert_entries = vec![];
+                        }
+                    }
+                    if !keys_insert_entries.is_empty() {
+                        let query = format!(
+                            "INSERT INTO {} (`{}`,{}) VALUES {}",
+                            self.config.db_structure.db_keys,
+                            self.config.db_structure.table_keys_hash,
+                            self.config.db_structure.table_keys_timeout,
+                            keys_insert_entries.join(",")
+                        );
+                        sqlx::query(&query).execute(&mut keys_transaction).await?;
+                        info!("[MySQL] Handled {} keys", keys_handled_entries);
+                    }
+                    match keys_transaction.commit().await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[MySQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    };
+
+                    Ok(())
+                }
+                DatabaseDrivers::PgSQL => {
+                    let pool = &self.pgsql.clone().unwrap().pool;
+
+                    let mut keys_transaction = pool.begin().await?;
+                    let mut keys_handled_entries = 0u64;
+                    let mut keys_insert_entries = Vec::new();
+                    let query = format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_keys);
+                    sqlx::query(&query).execute(&mut keys_transaction).await?;
+                    for (hash, timeout) in keys.iter() {
+                        keys_handled_entries += 1;
+                        keys_insert_entries.push(format!("(decode('{}', 'hex'),{})", hash, timeout).to_string());
+                        if keys_insert_entries.len() == 10000 {
+                            let query = format!(
+                                "INSERT INTO {} ({},{}) VALUES {}",
+                                self.config.db_structure.db_keys,
+                                self.config.db_structure.table_keys_hash,
+                                self.config.db_structure.table_keys_timeout,
+                                keys_insert_entries.join(",")
+                            );
+                            sqlx::query(&query).execute(&mut keys_transaction).await?;
+                            info!("[PgSQL] Handled {} keys", keys_handled_entries);
+                            keys_insert_entries = vec![];
+                        }
+                    }
+                    if !keys_insert_entries.is_empty() {
+                        let query = format!(
+                            "INSERT INTO {} ({},{}) VALUES {}",
+                            self.config.db_structure.db_keys,
+                            self.config.db_structure.table_keys_hash,
+                            self.config.db_structure.table_keys_timeout,
+                            keys_insert_entries.join(",")
+                        );
+                        sqlx::query(&query).execute(&mut keys_transaction).await?;
+                        info!("[PgSQL] Handled {} blacklists", keys_handled_entries);
+                    }
+                    match keys_transaction.commit().await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("[PgSQL] Error: {}", e.to_string());

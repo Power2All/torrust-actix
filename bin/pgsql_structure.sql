@@ -40,3 +40,15 @@ CREATE TABLE IF NOT EXISTS public.blacklist
 
 ALTER TABLE IF EXISTS public.blacklist
     OWNER to postgres;
+
+CREATE TABLE IF NOT EXISTS public.keys
+(
+    hash bytea NOT NULL,
+    timeout bigint NOT NULL DEFAULT 0,
+    CONSTRAINT keys_pkey PRIMARY KEY (hash)
+    )
+
+    TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.keys
+    OWNER to postgres;

@@ -33,6 +33,7 @@ async fn main() -> std::io::Result<()>
         tracker.clone().load_torrents().await;
         tracker.clone().load_whitelists().await;
         tracker.clone().load_blacklists().await;
+        tracker.clone().load_keys().await;
     }
 
     let handle = Handle::new();
@@ -151,6 +152,12 @@ async fn main() -> std::io::Result<()>
             } else {
                 error!("[SAVING] An error occurred while saving data...");
             }
+            info!("[SAVING] Saving data from Keys to database...");
+            if tracker_clone.clone().save_keys().await {
+                info!("[SAVING] Keys saved.");
+            } else {
+                error!("[SAVING] An error occurred while saving data...");
+            }
         }
     });
 
@@ -165,7 +172,7 @@ async fn main() -> std::io::Result<()>
                 interval.tick().await;
                 let stats = tracker_clone.clone().get_stats().await;
                 info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
-                info!("[STATS] Whitelists: {} - Blacklists: {}", stats.whitelist, stats.blacklist);
+                info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
                 info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
                 info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
                 info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
@@ -201,6 +208,12 @@ async fn main() -> std::io::Result<()>
             info!("[SAVING] Saving data from Blacklist to database...");
             if tracker.clone().save_blacklists().await {
                 info!("[SAVING] Blacklists saved.");
+            } else {
+                error!("[SAVING] An error occurred while saving data...");
+            }
+            info!("[SAVING] Saving data from Keys to database...");
+            if tracker.clone().save_keys().await {
+                info!("[SAVING] Keys saved.");
             } else {
                 error!("[SAVING] An error occurred while saving data...");
             }
