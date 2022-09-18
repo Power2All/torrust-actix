@@ -17,7 +17,7 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Whitelist system, which can be used to make the tracker private
 * [X] Blacklist system, to block and ban hashes
 * [X] Web Interface (through API) to control the tracker software
-* [ ] Torrent key support, for private tracking support
+* [X] Torrent key support, for private tracking support
 * [ ] Dockerfile to build an image for Docker
 
 ### Implemented BEPs
@@ -60,6 +60,8 @@ persistence_interval = 60
 api_key = "MyAccessToken"
 whitelist = false
 blacklist = false
+keys = true
+keys_cleanup_interval = 10
 interval = 1800
 interval_minimum = 1800
 interval_cleanup = 900
@@ -92,6 +94,9 @@ db_whitelist = "whitelist"
 table_whitelist_info_hash = "info_hash"
 db_blacklist = "blacklist"
 table_blacklist_info_hash = "info_hash"
+db_keys = "keys"
+table_keys_hash = "hash"
+table_keys_timeout = "timeout"
 ```
 
 * Run the torrust-axum again after finishing the configuration:
@@ -104,6 +109,12 @@ Your tracker announce URL will be the following, depending on what blocks you ha
 * `udp://127.0.0.1:6969/announce`
 * `http://127.0.0.1:6969/announce`
 * `https://127.0.0.1:6969/announce`
+
+#### When Keys system is enabled, following announce URLs should be used:
+
+* `udp://127.0.0.1:6969/announce/1234567890123456789012345678901234567890`
+* `http://127.0.0.1:6969/announce/1234567890123456789012345678901234567890`
+* `https://127.0.0.1:6969/announce/1234567890123456789012345678901234567890`
 
 ### Built-in API
 The following URLs are available if you have enabled the API block.
@@ -138,6 +149,8 @@ This will show statistics of the tracker in JSON format.
   "whitelist":0,
   "blacklist_enabled":true,
   "blacklist":0,
+  "keys_enabled":true,
+  "keys":0,
   "tcp4_connections_handled":0,
   "tcp4_api_handled":0,
   "tcp4_announces_handled":0,
@@ -259,6 +272,45 @@ This will insert an info_hash in the blacklist, and returns status if successful
 
 #### DELETE `http(s)://127.0.0.1:8080/api/blacklist/[TORRENT_HASH]?token=[TOKENID]`
 This will remove an info_hash from the blacklist, and returns status if successful or failure reason.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/keys?token=[TOKENID]`
+This will get the whole keys in list format. 1st value is the key itself, 2nd value is the timestamp in UNIX format (seconds).
+
+```json
+[
+  [
+    "1234567890123456789012345678901234567890",
+    "1234567890"
+  ]
+]
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/keys/[KEY]?token=[TOKENID]`
+This will check if a key exists in the keys list, and returns if true.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### POST `http(s)://127.0.0.1:8080/api/keys/[KEY]/[TIMEOUT]?token=[TOKENID]`
+This will insert or update a key in the keys list, and returns status if successful. The `[TIMEOUT]` is a number in seconds. Make this 0 to keep the key permanent.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### DELETE `http(s)://127.0.0.1:8080/api/keys/[KEY]?token=[TOKENID]`
+This will remove a key from the keys list, and returns status if successful or failure reason.
 
 ```json
 {
