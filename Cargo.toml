@@ -1,6 +1,6 @@
 [package]
 name = "torrust-axum"
-version = "3.0.1"
+version = "3.1.0"
 edition = "2021"
 license = "AGPL-3.0"
 authors = [
@@ -10,15 +10,21 @@ authors = [
 description = "A rich, fast and efficient Bittorrent Tracker."
 
 [profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
 lto = true
-codegen-units = 1 # Enable this to optimize filesize
-panic = "abort" # Enable this to optimize filesize
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
 
 [dependencies]
-async-trait = "0.1.56"
-axum = "0.5.13"
+async-trait = "0.1.57"
+axum = { version = "0.5.16" }
 axum-client-ip = "0.2.0"
-axum-server = { version = "0.4.0", features = ["tls-rustls"] }
+axum-server = { version = "0.4.1", features = ["tls-rustls"] }
 binascii = "0.1.4"
 bip_bencode = "0.4.4"
 byteorder = "1.4.3"
@@ -28,14 +34,17 @@ fern = { version = "0.6.1", features = ["colored"] }
 futures = "0.3.21"
 hex = "0.4.3"
 hyper = { version = "0.14.20", features = ["full"] }
+include_dir = "0.7.2"
 log = "0.4.17"
+mime_guess = "2.0.4"
 percent-encoding = "2.1.0"
 rustls = "0.20.6"
 scc = "0.8.3"
-serde = { version = "1.0.140", features = ["derive"] }
+serde = { version = "1.0.141", features = ["derive"] }
 serde_json = "1.0.82"
 sqlx = { version = "0.6.0", features = ["mysql", "postgres", "sqlite", "runtime-tokio-rustls"] }
 thiserror = "1.0.31"
-tokio = { version = "1.20.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 toml = "0.5.9"
 tower = "0.4.13"
+tower-http = { version = "0.3.4", features = ["cors"] }

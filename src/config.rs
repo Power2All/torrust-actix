@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::Write;
 use serde::{Deserialize, Serialize};
 use toml;
+use crate::common::CustomError;
 use crate::databases::DatabaseDrivers;
 
 #[derive(Debug)]
@@ -35,6 +36,29 @@ pub struct HttpTrackersConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ApiTrackersConfig {
+    pub enabled: bool,
+    pub bind_address: String,
+    pub ssl: bool,
+    pub ssl_key: String,
+    pub ssl_cert: String
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DatabaseStructureConfig {
+    pub db_torrents: String,
+    pub table_torrents_info_hash: String,
+    pub table_torrents_completed: String,
+    pub db_whitelist: String,
+    pub table_whitelist_info_hash: String,
+    pub db_blacklist: String,
+    pub table_blacklist_info_hash: String,
+    pub db_keys: String,
+    pub table_keys_hash: String,
+    pub table_keys_timeout: String
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub log_level: String,
     pub log_console_interval: Option<u64>,
@@ -42,8 +66,15 @@ pub struct Configuration {
 
     pub db_driver: DatabaseDrivers,
     pub db_path: String,
-    pub persistency: bool,
-    pub persistency_interval: Option<u64>,
+    pub persistence: bool,
+    pub persistence_interval: Option<u64>,
+
+    pub api_key: String,
+
+    pub whitelist: bool,
+    pub blacklist: bool,
+    pub keys: bool,
+    pub keys_cleanup_interval: Option<u64>,
 
     pub interval: Option<u64>,
     pub interval_minimum: Option<u64>,
@@ -53,7 +84,9 @@ pub struct Configuration {
 
     pub udp_server: Vec<UdpTrackersConfig>,
     pub http_server: Vec<HttpTrackersConfig>,
-    pub api_server: Vec<HttpTrackersConfig>
+    pub api_server: Vec<ApiTrackersConfig>,
+
+    pub db_structure: DatabaseStructureConfig
 }
 impl Configuration {
     pub fn default() -> Configuration {
@@ -73,7 +106,7 @@ impl Configuration {
             }
         );
         let api_server = vec!(
-            HttpTrackersConfig {
+            ApiTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:8080"),
                 ssl: false,
@@ -88,8 +121,15 @@ impl Configuration {
 
             db_driver: DatabaseDrivers::SQLite3,
             db_path: String::from("sqlite://:memory:"),
-            persistency: false,
-            persistency_interval: Some(60),
+            persistence: false,
+            persistence_interval: Some(60),
+
+            api_key: String::from("MyAccessToken"),
+
+            whitelist: false,
+            blacklist: false,
+            keys: false,
+            keys_cleanup_interval: Some(60),
 
             interval: Some(1800),
             interval_minimum: Some(1800),
@@ -99,7 +139,20 @@ impl Configuration {
 
             udp_server,
             http_server,
-            api_server
+            api_server,
+
+            db_structure: DatabaseStructureConfig{
+                db_torrents: String::from("torrents"),
+                table_torrents_info_hash: String::from("info_hash"),
+                table_torrents_completed: String::from("completed"),
+                db_whitelist: String::from("whitelist"),
+                table_whitelist_info_hash: String::from("info_hash"),
+                db_blacklist: String::from("blacklist"),
+                table_blacklist_info_hash: String::from("info_hash"),
+                db_keys: String::from("keys"),
+                table_keys_hash: String::from("hash"),
+                table_keys_timeout: String::from("timeout")
+            }
         }
     }
 
@@ -133,7 +186,7 @@ impl Configuration {
         }
     }
 
-    pub fn load_from_file() -> Result<Configuration, ()> {
+    pub fn load_from_file() -> Result<Configuration, CustomError> {
         let mut config = Configuration::default();
         match Configuration::load_file("config.toml") {
             Ok(c) => { config = c; }
@@ -146,12 +199,12 @@ impl Configuration {
                 return match save_file {
                     Ok(_) => {
                         eprintln!("Please edit the config.TOML in the root folder, exitting now...");
-                        Err(())
+                        Err(CustomError::new("create config.toml file"))
                     }
                     Err(e) => {
                         eprintln!("config.toml file could not be created, check permissions...");
                         eprintln!("{}", e);
-                        Err(())
+                        Err(CustomError::new("could not create config.toml file"))
                     }
                 }
             }

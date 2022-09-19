@@ -8,7 +8,7 @@ use tokio::task::JoinHandle;
 use crate::udp_common;
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, PeerId};
 use crate::handlers::handle_announce;
-use crate::tracker::{StatsEvent, TorrentEntry, TorrentTracker};
+use crate::tracker::{StatsEvent, TorrentEntry, TorrentEntryItem, TorrentTracker};
 use crate::udp_common::{AnnounceInterval, AnnounceRequest, AnnounceResponse, ConnectRequest, ConnectResponse, ErrorResponse, get_connection_id, NumberOfDownloads, NumberOfPeers, Port, Request, Response, ResponsePeer, ScrapeRequest, ScrapeResponse, ServerError, TorrentScrapeStatistics, TransactionId};
 
 const MAX_SCRAPE_TORRENTS: u8 = 74;
@@ -159,15 +159,44 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
 
     let _ = match tracker.get_torrent(InfoHash(request.info_hash.0)).await {
         None => {
-            if tracker.config.persistency {
-                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntry::new(), true).await;
+            if tracker.config.persistence {
+                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), true).await;
             } else {
-                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntry::new(), false).await;
+                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), false).await;
             }
             TorrentEntry::new()
         }
         Some(result) => { result }
     };
+
+    // Check if whitelist is enabled, and if so, check if the torrent hash is known, and if not, show error.
+    if tracker.config.whitelist && !tracker.check_whitelist(InfoHash(request.info_hash.0)).await {
+        return Err(ServerError::TorrentNotWhitelisted);
+    }
+
+    // Check if blacklist is enabled, and if so, check if the torrent hash is known, and if so, show error.
+    if tracker.config.blacklist && tracker.check_blacklist(InfoHash(request.info_hash.0)).await {
+        return Err(ServerError::TorrentBlacklisted);
+    }
+
+    // We check if the path is set, and retrieve the possible "key" to check.
+    if tracker.config.keys {
+        if request.path.len() < 50 {
+            return Err(ServerError::UnknownKey);
+        }
+        let key_path_extract = &request.path[10..50];
+        match hex::decode(key_path_extract) {
+            Ok(result) => {
+                let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
+                if !tracker.check_key(InfoHash::from(key)).await {
+                    return Err(ServerError::UnknownKey);
+                }
+            }
+            Err(_) => {
+                return Err(ServerError::UnknownKey);
+            }
+        }
+    }
 
     // Handle the request data.
     match handle_announce(tracker.clone(), AnnounceQueryRequest {
@@ -270,10 +299,10 @@ pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest,
         tracker.update_stats(StatsEvent::Udp6ScrapesHandled, 1).await;
     }
 
-    return Ok(Response::from(ScrapeResponse {
+    Ok(Response::from(ScrapeResponse {
         transaction_id: request.transaction_id,
         torrent_stats
-    }));
+    }))
 }
 
 fn handle_udp_error(e: ServerError, transaction_id: TransactionId) -> Response {

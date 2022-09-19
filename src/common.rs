@@ -158,16 +158,8 @@ pub struct NumberOfBytes(pub i64);
 #[serde(remote = "NumberOfBytes")]
 pub struct NumberOfBytesDef(pub i64);
 
-#[derive(PartialEq, Eq, Ord, Hash, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
 pub struct InfoHash(pub [u8; 20]);
-
-impl InfoHash {
-    pub fn to_string(&self) -> String {
-        let mut buffer = [0u8; 40];
-        let bytes_out = binascii::bin2hex(&self.0, &mut buffer).ok().unwrap();
-        String::from(std::str::from_utf8(bytes_out).unwrap())
-    }
-}
 
 impl fmt::Display for InfoHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -190,12 +182,6 @@ impl std::str::FromStr for InfoHash {
     }
 }
 
-impl PartialOrd<InfoHash> for InfoHash {
-    fn partial_cmp(&self, other: &InfoHash) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
-    }
-}
-
 impl From<&[u8]> for InfoHash {
     fn from(data: &[u8]) -> InfoHash {
         assert_eq!(data.len(), 20);
@@ -205,9 +191,9 @@ impl From<&[u8]> for InfoHash {
     }
 }
 
-impl Into<InfoHash> for [u8; 20] {
-    fn into(self) -> InfoHash {
-        InfoHash(self)
+impl From<[u8; 20]> for InfoHash {
+    fn from(data: [u8; 20]) -> Self {
+        InfoHash(data)
     }
 }
 
@@ -263,11 +249,11 @@ fn ser_instant<S: serde::Serializer>(inst: &std::time::Instant, ser: S) -> Resul
     ser.serialize_u64(inst.elapsed().as_millis() as u64)
 }
 
-impl PeerId {
-    pub fn to_string(&self) -> String {
-        let mut buffer = [0u8; 40];
-        let bytes_out = binascii::bin2hex(&self.0, &mut buffer).ok().unwrap();
-        String::from(std::str::from_utf8(bytes_out).unwrap())
+impl fmt::Display for PeerId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut chars = [0u8; 40];
+        binascii::bin2hex(&self.0, &mut chars).expect("failed to hexlify");
+        write!(f, "{}", std::str::from_utf8(&chars).unwrap())
     }
 }
 
@@ -488,7 +474,7 @@ pub struct AnnounceQueryRequest {
     pub(crate) no_peer_id: bool,
     pub(crate) event: AnnounceEvent,
     pub(crate) remote_addr: IpAddr,
-    pub(crate) numwant: u64,
+    pub(crate) numwant: u64
 }
 
 #[derive(Deserialize, Clone, Debug)]

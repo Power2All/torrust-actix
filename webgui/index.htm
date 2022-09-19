@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Torrust-Axum Admin Panel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Power2All">
+    <meta property="og:title" content="Torrust-Axum Admin Panel">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{TRACKER_URL}">
+    <meta property="og:description" content="The Torrust-Axum WebGUI Admin Interface">
+    <meta property="og:image" content="/webgui/img/logo.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="apple-touch-icon" sizes="180x180" href="/webgui/img/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/webgui/img/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/webgui/img/favicon-16x16.png">
+    <link rel="shortcut icon" href="/webgui/img/favicon.ico">
+    <link rel="icon" href="/webgui/img/favicon.ico">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="msapplication-config" content="/webgui/browserconfig.xml">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,900|Roboto+Slab:400,700" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx" crossorigin="anonymous">
+    <link id="datatables" href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css" rel="stylesheet" />
+
+    <style>
+        table.dataTable tbody td {
+            vertical-align: middle;
+        }
+    </style>
+</head>
+
+<body>
+<nav class="container navbar navbar-expand-lg bg-light">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">Torrust-Axum</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li id="nav_li_dashboard" class="nav-item">
+                    <a id="nav_button_dashboard" class="nav-link" href="#">Dashboard</a>
+                </li>
+                <li id="nav_li_whitelist" class="nav-item">
+                    <a id="nav_button_whitelist" class="nav-link" href="#">Whitelist</a>
+                </li>
+                <li id="nav_li_blacklist" class="nav-item">
+                    <a id="nav_button_blacklist" class="nav-link" href="#">Blacklist</a>
+                </li>
+                <li id="nav_li_keys" class="nav-item">
+                    <a id="nav_button_keys" class="nav-link" href="#">Keys</a>
+                </li>
+            </ul>
+            <div class="d-flex">
+                <input id="nav_input_access_token" class="form-control me-2" type="password" placeholder="Access Token..." aria-label="Access Token"/>
+            </div>
+        </div>
+    </div>
+</nav>
+<div id="content_dashboard" class="content container mt-2 d-none">
+    <div class="m-1">
+        <button id="content_dashboard_button_reload" type="button" class="btn btn-primary"><i class="bi bi-arrow-clockwise" style="margin-right: 5px;"></i>Reload</button>
+    </div>
+    <div class="row">
+        <div class="col-lg-3 p-1">
+            <div class="card p-2" style="min-width: 10em; max-width: 100%; background-color: darkblue; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-layers mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_torrents_count" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2" style="min-width: 10em; max-width: 100%; background-color: darkblue; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-check2-circle" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_completed_count" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2" style="min-width: 10em; max-width: 100%; background-color: darkgreen; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-upload mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_seeders_count" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2" style="min-width: 10em; max-width: 100%; background-color: darkred; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-download mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_leechers_count" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2 content_dashboard_whitelist_card" style="min-width: 10em; max-width: 100%; background-color: darkgray; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-check-circle-fill mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_whitelist_state" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2 content_dashboard_blacklist_card" style="min-width: 10em; max-width: 100%; background-color: darkgray; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-x-octagon-fill mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_blacklist_state" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 p-1">
+            <div class="card p-2 content_dashboard_keys_card" style="min-width: 10em; max-width: 100%; background-color: darkgray; color: white;">
+                <div class="container">
+                    <div class="row" style="height: 60px;">
+                        <div class="col-2">
+                            <i class="bi bi-key-fill mx-2" style="font-size: 40px;"></i>
+                        </div>
+                        <div class="col-10">
+                            <div id="content_dashboard_keys_state" style="margin-top: 12px; margin-left: 16px; width: calc(100% - 16px); text-align: right; font-size: 24px;"><i class="bi bi-question"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="content_whitelist" class="content container mt-2 d-none">
+    <div class="m-1">
+        <button id="content_whitelist_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Whitelist</button>
+        <button id="content_whitelist_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
+        <button id="content_whitelist_button_add" type="button" class="btn btn-primary"><i class="bi bi-plus-circle" style="margin-right: 5px;"></i>Add to Whitelist</button>
+        <button id="content_whitelist_button_reload" type="button" class="btn btn-primary"><i class="bi bi-arrow-clockwise" style="margin-right: 5px;"></i>Reload from Database</button>
+    </div>
+    <table id="whitelist_table" class="table table-striped" style="width:100%">
+        <thead>
+        <tr>
+            <th>Hash (HEX)</th>
+            <th></th>
+        </tr>
+        </thead>
+    </table>
+</div>
+<div class="modal fade" id="whitelist_add_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="whitelist_add_backdrop" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Whitelist Hash</h5>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text" id="whitelist_add_hash_label">Hash:</span>
+                    <input id="whitelist_hash_field" type="text" class="form-control" placeholder="Hash" aria-label="Hash" aria-describedby="whitelist_add_hash_label">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="whitelist_close_button" type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>Close</button>
+                <button id="whitelist_add_button" type="button" class="btn btn-primary" data-bs-dismiss="modal"><i class="bi bi-plus-circle me-2"></i>Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="whitelist_remove_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="whitelist_remove_backdrop" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Remove Whitelist Hash</h5>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to remove this hash from the whitelist?
+            </div>
+            <div class="modal-footer">
+                <button id="whitelist_remove_no_button" type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>No</button>
+                <button id="whitelist_remove_yes_button" torrent_id="" type="button" class="btn btn-primary" data-bs-dismiss="modal"><i class="bi bi-check-circle me-2"></i>Yes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="content_blacklist" class="content container mt-2 d-none">
+    <div class="m-1">
+        <button id="content_blacklist_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Blacklist</button>
+        <button id="content_blacklist_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
+        <button id="content_blacklist_button_add" type="button" class="btn btn-primary"><i class="bi bi-plus-circle" style="margin-right: 5px;"></i>Add to Blacklist</button>
+        <button id="content_blacklist_button_reload" type="button" class="btn btn-primary"><i class="bi bi-arrow-clockwise" style="margin-right: 5px;"></i>Reload from Database</button>
+    </div>
+    <table id="blacklist_table" class="table table-striped" style="width:100%">
+        <thead>
+        <tr>
+            <th>Hash (HEX)</th>
+            <th></th>
+        </tr>
+        </thead>
+    </table>
+</div>
+<div class="modal fade" id="blacklist_add_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="blacklist_add_backdrop" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Blacklist Hash</h5>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text" id="blacklist_add_hash_label">Hash:</span>
+                    <input id="blacklist_hash_field" type="text" class="form-control" placeholder="Hash" aria-label="Hash" aria-describedby="blacklist_add_hash_label">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="blacklist_close_button" type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>Close</button>
+                <button id="blacklist_add_button" type="button" class="btn btn-primary" data-bs-dismiss="modal"><i class="bi bi-plus-circle me-2"></i>Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="blacklist_remove_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="blacklist_remove_backdrop" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Remove Blacklist Hash</h5>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to remove this hash from the blacklist?
+            </div>
+            <div class="modal-footer">
+                <button id="blacklist_remove_no_button" type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>No</button>
+                <button id="blacklist_remove_yes_button" torrent_id="" type="button" class="btn btn-primary" data-bs-dismiss="modal"><i class="bi bi-check-circle me-2"></i>Yes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="content_keys" class="content container mt-2 d-none">
+    <div class="m-1">
+        <button id="content_keys_button_load" type="button" class="btn btn-primary"><i class="bi bi-download" style="margin-right: 5px;"></i>Load Keys</button>
+        <button id="content_keys_button_clear" type="button" class="btn btn-primary"><i class="bi bi-eraser" style="margin-right: 5px;"></i>Clear Table</button>
+        <button id="content_keys_button_add" type="button" class="btn btn-primary"><i class="bi bi-plus-circle" style="margin-right: 5px;"></i>Add to Keys</button>
+        <button id="content_keys_button_reload" type="button" class="btn btn-primary"><i class="bi bi-arrow-clockwise" style="margin-right: 5px;"></i>Reload from Database</button>
+    </div>
+    <table id="keys_table" class="table table-striped" style="width:100%">
+        <thead>
+        <tr>
+            <th>Key (HEX 40 characters)</th>
+            <th><div style="width: 180px;">Timeout (In Seconds)</div></th>
+            <th></th>
+        </tr>
+        </thead>
+    </table>
+</div>
+<div class="modal fade" id="keys_add_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="keys_add_backdrop" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Key</h5>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text" id="keys_add_label">Hash:</span>
+                    <input id="keys_key_field" type="text" class="form-control" placeholder="Key" aria-label="Key" aria-describedby="keys_add_label">
+                </div>
+                <div class="input-group mb-3">
+                    <span class="input-group-text" id="keys_timeout_add_label">Hash:</span>
+                    <input id="keys_timeout_field" type="number" class="form-control" placeholder="Timeout (in Seconds)" aria-label="Timeout" aria-describedby="keys_timeout_add_label">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="keys_close_button" type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>Close</button>
+                <button id="keys_add_button" type="button" class="btn btn-primary" data-bs-dismiss="modal"><i class="bi bi-plus-circle me-2"></i>Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="keys_remove_backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="keys_remove_backdrop" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Remove Key</h5>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to remove this key from the keys?
+            </div>
+            <div class="modal-footer">
+                <button id="keys_remove_no_button" type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>No</button>
+                <button id="keys_remove_yes_button" key_id="" type="button" class="btn btn-primary" data-bs-dismiss="modal"><i class="bi bi-check-circle me-2"></i>Yes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="message" class="toast align-items-center text-bg-primary border-0 position-fixed bottom-0 end-0 p-3" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+        <div class="toast-body"></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.5/dist/umd/popper.min.js" integrity="sha384-Xe+8cL9oJa6tN/veChSP7q+mnSPaj5Bcu9mPX5F5xIGE0DVittaqT5lorf0EI7Vk" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.min.js" integrity="sha384-ODmDIVzN+pFdexxHEHFBQH3/9/vQ9uori45z4JjnFsRydbmQbmL5t1tQ0culUzyK" crossorigin="anonymous"></script>
+<script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.27.2/axios.min.js" integrity="sha512-odNmoc1XJy5x1TMVMdC7EMs3IVdItLPlCeL5vSUPN2llYKMJ2eByTTAIiiuqLg+GdNr9hF6z81p27DArRFKT7A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+    let root_url = "{TRACKER_URL}";
+
+    let current_table_element = null;
+    $(document).ready(function() {
+        console.log("Webpage Loaded");
+
+        let whitelist_table = $("#whitelist_table").DataTable({
+            autoWidth: false,
+            columns: [
+                { width: '100%', verticalAlign: 'middle', targets: 0 },
+                { width: '32px', targets: 1 },
+            ]
+        });
+
+        let blacklist_table = $("#blacklist_table").DataTable({
+            autoWidth: false,
+            columns: [
+                { width: '100%', verticalAlign: 'middle', targets: 0 },
+                { width: '32px', targets: 1 },
+            ]
+        });
+
+        let keys_table = $("#keys_table").DataTable({
+            autoWidth: false,
+            columns: [
+                { width: '100%', verticalAlign: 'middle', targets: 0 },
+                { width: '180px', targets: 1 },
+                { width: '32px', targets: 2 },
+            ]
+        });
+
+        // Enable tooltips
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+
+        // Initial Work
+        $("#nav_li_dashboard").addClass("active");
+        $("#content_dashboard").removeClass("d-none");
+
+        $("#nav_button_dashboard").on("click", function(event) {
+            event.preventDefault();
+            $(".content").each(function() {
+                $(this).addClass("d-none");
+            });
+            $("#content_dashboard").removeClass("d-none");
+        });
+
+        $("#nav_button_whitelist").on("click", function(event) {
+            event.preventDefault();
+            $(".content").each(function() {
+                $(this).addClass("d-none");
+            });
+            $("#content_whitelist").removeClass("d-none");
+        });
+        $("#content_whitelist_button_add").on("click", function(event) {
+            event.preventDefault();
+            $("#whitelist_add_backdrop").modal('show');
+        });
+
+        $("#nav_button_blacklist").on("click", function(event) {
+            event.preventDefault();
+            $(".content").each(function() {
+                $(this).addClass("d-none");
+            });
+            $("#content_blacklist").removeClass("d-none");
+        });
+        $("#content_blacklist_button_add").on("click", function(event) {
+            event.preventDefault();
+            $("#blacklist_add_backdrop").modal('show');
+        });
+
+        $("#nav_button_keys").on("click", function(event) {
+            event.preventDefault();
+            $(".content").each(function() {
+                $(this).addClass("d-none");
+            });
+            $("#content_keys").removeClass("d-none");
+        });
+        $("#content_keys_button_add").on("click", function(event) {
+            event.preventDefault();
+            $("#keys_add_backdrop").modal('show');
+        });
+
+        // Buttons on Dashboard page
+        $("#content_dashboard_button_reload").on("click", function(event) {
+            event.preventDefault();
+            $("#content_dashboard_button_reload").prop('disabled', true);
+            loadStats();
+        });
+
+        // Buttons on Whitelist page
+        $("#content_whitelist_button_load").on("click", function(event) {
+            event.preventDefault();
+            $("#content_whitelist_button_load").prop('disabled', true);
+            loadWhitelist(whitelist_table);
+        });
+
+        $("#content_whitelist_button_clear").on("click", function(event) {
+            event.preventDefault();
+            let content_whitelist_button_clear = $("#content_whitelist_button_clear");
+            content_whitelist_button_clear.prop('disabled', true);
+            whitelist_table.clear().draw(false);
+            content_whitelist_button_clear.prop('disabled', false);
+        });
+
+        $("#content_whitelist_button_reload").on("click", function(event) {
+            event.preventDefault();
+            $("#content_whitelist_button_reload").prop('disabled', true);
+            reloadWhitelist(whitelist_table);
+        });
+
+        $("#whitelist_add_button").on("click", function(event) {
+            event.preventDefault();
+            let whitelist_close_button = $("#whitelist_close_button");
+            let whitelist_add_button = $("#whitelist_add_button");
+            whitelist_close_button.prop('disabled', true);
+            whitelist_add_button.prop('disabled', true);
+            executeAddWhitelist($("#whitelist_hash_field").val(), whitelist_table);
+            whitelist_close_button.prop('disabled', false);
+            whitelist_add_button.prop('disabled', false);
+        });
+
+        $("#whitelist_remove_yes_button").on("click", function(event) {
+            event.preventDefault();
+            let whitelist_remove_no_button = $("#whitelist_remove_no_button");
+            let whitelist_remove_yes_button = $("#whitelist_remove_yes_button");
+            whitelist_remove_no_button.prop('disabled', true);
+            whitelist_remove_yes_button.prop('disabled', true);
+            executeRemoveWhitelist($(this).attr('torrent_id'), whitelist_table);
+            whitelist_remove_no_button.prop('disabled', false);
+            whitelist_remove_yes_button.prop('disabled', false);
+        });
+
+        // Buttons on Blacklist page
+        $("#content_blacklist_button_load").on("click", function(event) {
+            event.preventDefault();
+            $("#content_blacklist_button_load").prop('disabled', true);
+            loadBlacklist(blacklist_table);
+        });
+
+        $("#content_blacklist_button_clear").on("click", function(event) {
+            event.preventDefault();
+            let content_blacklist_button_clear = $("#content_blacklist_button_clear");
+            content_blacklist_button_clear.prop('disabled', true);
+            blacklist_table.clear().draw(false);
+            content_blacklist_button_clear.prop('disabled', false);
+        });
+
+        $("#content_blacklist_button_reload").on("click", function(event) {
+            event.preventDefault();
+            $("#content_blacklist_button_reload").prop('disabled', true);
+            reloadBlacklist(blacklist_table);
+        });
+
+        $("#blacklist_add_button").on("click", function(event) {
+            event.preventDefault();
+            let blacklist_close_button = $("#blacklist_close_button");
+            let blacklist_add_button = $("#blacklist_add_button");
+            blacklist_close_button.prop('disabled', true);
+            blacklist_add_button.prop('disabled', true);
+            executeAddBlacklist($("#blacklist_hash_field").val(), blacklist_table);
+            blacklist_close_button.prop('disabled', false);
+            blacklist_add_button.prop('disabled', false);
+        });
+
+        $("#blacklist_remove_yes_button").on("click", function(event) {
+            event.preventDefault();
+            let blacklist_remove_no_button = $("#blacklist_remove_no_button");
+            let blacklist_remove_yes_button = $("#blacklist_remove_yes_button");
+            blacklist_remove_no_button.prop('disabled', true);
+            blacklist_remove_yes_button.prop('disabled', true);
+            executeRemoveBlacklist($(this).attr('torrent_id'), blacklist_table);
+            blacklist_remove_no_button.prop('disabled', false);
+            blacklist_remove_yes_button.prop('disabled', false);
+        });
+
+        // Buttons on Keys page
+        $("#content_keys_button_load").on("click", function(event) {
+            event.preventDefault();
+            $("#content_keys_button_load").prop('disabled', true);
+            loadKeys(keys_table);
+        });
+
+        $("#content_keys_button_clear").on("click", function(event) {
+            event.preventDefault();
+            let content_keys_button_clear = $("#content_keys_button_clear");
+            content_keys_button_clear.prop('disabled', true);
+            keys_table.clear().draw(false);
+            content_keys_button_clear.prop('disabled', false);
+        });
+
+        $("#content_keys_button_reload").on("click", function(event) {
+            event.preventDefault();
+            $("#content_keys_button_reload").prop('disabled', true);
+            reloadKeys(keys_table);
+        });
+
+        $("#keys_add_button").on("click", function(event) {
+            event.preventDefault();
+            let keys_close_button = $("#keys_close_button");
+            let keys_add_button = $("#keys_add_button");
+            keys_close_button.prop('disabled', true);
+            keys_add_button.prop('disabled', true);
+            executeAddKeys($("#keys_key_field").val(), $("#keys_timeout_field").val(), keys_table);
+            keys_close_button.prop('disabled', false);
+            keys_add_button.prop('disabled', false);
+        });
+
+        $("#keys_remove_yes_button").on("click", function(event) {
+            event.preventDefault();
+            let keys_remove_no_button = $("#keys_remove_no_button");
+            let keys_remove_yes_button = $("#keys_remove_yes_button");
+            keys_remove_no_button.prop('disabled', true);
+            keys_remove_yes_button.prop('disabled', true);
+            executeRemoveKeys($(this).attr('key_id'), keys_table);
+            keys_remove_no_button.prop('disabled', false);
+            keys_remove_yes_button.prop('disabled', false);
+        });
+    });
+
+    async function loadStats() {
+        let access_token = $("#nav_input_access_token").val();
+
+        let content_dashboard_button_reload = $("#content_dashboard_button_reload");
+        let content_dashboard_torrents_count = $("#content_dashboard_torrents_count");
+        let content_dashboard_completed_count = $("#content_dashboard_completed_count");
+        let content_dashboard_seeders_count = $("#content_dashboard_seeders_count");
+        let content_dashboard_leechers_count = $("#content_dashboard_leechers_count");
+        let content_dashboard_whitelist_state = $("#content_dashboard_whitelist_state");
+        let content_dashboard_blacklist_state = $("#content_dashboard_blacklist_state");
+        let content_dashboard_keys_state = $("#content_dashboard_keys_state");
+
+        content_dashboard_torrents_count.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_completed_count.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_seeders_count.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_leechers_count.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_whitelist_state.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_blacklist_state.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+        content_dashboard_keys_state.html("<div class=\"spinner-grow\" role=\"status\"></div>");
+
+        axios.get(root_url + '/api/stats?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to load statistics: " + response.data.status);
+                    content_dashboard_button_reload.prop('disabled', false);
+                    content_dashboard_torrents_count.html("<i class=\"bi bi-question\"></i>");
+                    content_dashboard_completed_count.html("<i class=\"bi bi-question\"></i>");
+                    content_dashboard_seeders_count.html("<i class=\"bi bi-question\"></i>");
+                    content_dashboard_leechers_count.html("<i class=\"bi bi-question\"></i>");
+                    content_dashboard_whitelist_state.html("<i class=\"bi bi-question\"></i>");
+                    $(".content_dashboard_whitelist_card").css('background-color', 'darkgray');
+                    content_dashboard_blacklist_state.html("<i class=\"bi bi-question\"></i>");
+                    $(".content_dashboard_blacklist_card").css('background-color', 'darkgray');
+                    content_dashboard_keys_state.html("<i class=\"bi bi-question\"></i>");
+                    $(".content_dashboard_keys_card").css('background-color', 'darkgray');
+                    return;
+                }
+                content_dashboard_button_reload.prop('disabled', false);
+                content_dashboard_torrents_count.html(response.data.torrents);
+                content_dashboard_completed_count.html(response.data.completed);
+                content_dashboard_seeders_count.html(response.data.seeds);
+                content_dashboard_leechers_count.html(response.data.peers);
+                content_dashboard_whitelist_state.html(response.data.whitelist);
+                if (response.data.whitelist_enabled === true) {
+                    $(".content_dashboard_whitelist_card").css('background-color', 'darkgreen');
+                } else {
+                    $(".content_dashboard_whitelist_card").css('background-color', 'darkgray');
+                }
+                content_dashboard_blacklist_state.html(response.data.blacklist);
+                if (response.data.blacklist_enabled === true) {
+                    $(".content_dashboard_blacklist_card").css('background-color', 'darkgreen');
+                } else {
+                    $(".content_dashboard_blacklist_card").css('background-color', 'darkgray');
+                }
+                content_dashboard_keys_state.html(response.data.keys);
+                if (response.data.keys_enabled === true) {
+                    $(".content_dashboard_keys_card").css('background-color', 'darkgreen');
+                } else {
+                    $(".content_dashboard_keys_card").css('background-color', 'darkgray');
+                }
+            })
+            .catch(function (error) {
+                let message = $("#message");
+                message.find(".toast-body").html("Unable to load torrents: " + error.message);
+                let toast = new bootstrap.Toast(message);
+                toast.show();
+                content_dashboard_button_reload.prop('disabled', false);
+                content_dashboard_torrents_count.html("<i class=\"bi bi-question\"></i>");
+                content_dashboard_completed_count.html("<i class=\"bi bi-question\"></i>");
+                content_dashboard_seeders_count.html("<i class=\"bi bi-question\"></i>");
+                content_dashboard_leechers_count.html("<i class=\"bi bi-question\"></i>");
+                content_dashboard_whitelist_state.html("<i class=\"bi bi-question\"></i>");
+                $(".content_dashboard_whitelist_card").css('background-color', 'darkgray');
+                content_dashboard_blacklist_state.html("<i class=\"bi bi-question\"></i>");
+                $(".content_dashboard_blacklist_card").css('background-color', 'darkgray');
+                content_dashboard_keys_state.html("<i class=\"bi bi-question\"></i>");
+                $(".content_dashboard_keys_card").css('background-color', 'darkgray');
+            });
+    }
+
+    async function loadWhitelist(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        let content_whitelist_button_load = $("#content_whitelist_button_load");
+
+        axios.get(root_url + '/api/whitelist?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to load whitelist: " + response.data.status);
+                    content_whitelist_button_load.prop('disabled', false);
+                    return;
+                }
+
+                table_element.clear().draw(false);
+                for (let value of response.data) {
+                    table_element.row.add([
+                        value,
+                        "<button class=\"btn btn-primary btn-sm btn-whitelist-remove\" torrent_id=\"" + value + "\" style=\"padding-top: 2px; padding-bottom: 2px;\"><i class=\"bi bi-trash\"></i></button>"
+                    ]);
+                    console.log(value);
+                }
+                table_element.draw(false);
+                $(".btn-whitelist-remove").on("click", function(event) {
+                    event.preventDefault();
+                    $("#whitelist_remove_yes_button").attr('torrent_id', $(this).attr('torrent_id'));
+                    $("#whitelist_remove_backdrop").modal('show');
+                });
+
+                content_whitelist_button_load.prop('disabled', false);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to load whitelist: " + error.message);
+                content_whitelist_button_load.prop('disabled', false);
+            });
+    }
+
+    async function reloadWhitelist(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        let content_whitelist_button_reload = $("#content_whitelist_button_reload");
+
+        axios.get(root_url + '/api/whitelist/reload?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to reload whitelist from database: " + response.data.status);
+                    content_whitelist_button_reload.prop('disabled', false);
+                    return;
+                }
+
+                $("#content_whitelist_button_load").prop('disabled', true);
+                content_whitelist_button_reload.prop('disabled', false);
+                loadWhitelist(table_element);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to reload whitelist from database: " + error.message);
+                content_whitelist_button_reload.prop('disabled', false);
+            });
+    }
+
+    async function executeAddWhitelist(id, whitelist_table) {
+        let access_token = $("#nav_input_access_token").val();
+
+        axios.post(root_url + '/api/whitelist/' + encodeURIComponent(id) + '?token=' + encodeURIComponent(access_token), { data: {} })
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to add whitelist hash: " + response.data.status);
+                    $("#content_whitelist_button_load").prop('disabled', false);
+                    return;
+                }
+
+                notificationOnScreen("Whitelist added hash: " + id);
+                loadWhitelist(whitelist_table);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to add whitelist: " + error.message);
+                $("#content_whitelist_button_load").prop('disabled', false);
+            });
+    }
+
+    async function executeRemoveWhitelist(id, whitelist_table) {
+        let access_token = $("#nav_input_access_token").val();
+
+        axios.delete(root_url + '/api/whitelist/' + encodeURIComponent(id) + '?token=' + encodeURIComponent(access_token), { data: {} })
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== 'ok') {
+                    notificationOnScreen("Unable to remove whitelist hash: " + response.data.status);
+                    $("#content_whitelist_button_load").prop('disabled', false);
+                    return;
+                }
+                notificationOnScreen("Whitelist hash removed: " + id);
+                loadWhitelist(whitelist_table);
+            })
+            .catch(function () {
+                notificationOnScreen("Unable to remove whitelist: " + error.message);
+                $("#content_whitelist_button_load").prop('disabled', false);
+            });
+    }
+
+    async function loadBlacklist(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        let content_blacklist_button_load = $("#content_blacklist_button_load");
+
+        axios.get(root_url + '/api/blacklist?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to load blacklist: " + response.data.status);
+                    content_blacklist_button_load.prop('disabled', false);
+                    return;
+                }
+
+                table_element.clear().draw(false);
+                for (let value of response.data) {
+                    table_element.row.add([
+                        value,
+                        "<button class=\"btn btn-primary btn-sm btn-blacklist-remove\" torrent_id=\"" + value + "\" style=\"padding-top: 2px; padding-bottom: 2px;\"><i class=\"bi bi-trash\"></i></button>"
+                    ]);
+                }
+                table_element.draw(false);
+                $(".btn-blacklist-remove").on("click", function(event) {
+                    event.preventDefault();
+                    $("#blacklist_remove_yes_button").attr('torrent_id', $(this).attr('torrent_id'));
+                    $("#blacklist_remove_backdrop").modal('show');
+                });
+
+                content_blacklist_button_load.prop('disabled', false);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to load blacklist: " + error.message);
+                content_blacklist_button_load.prop('disabled', false);
+            });
+    }
+
+    async function reloadBlacklist(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        let content_blacklist_button_reload = $("#content_blacklist_button_reload");
+
+        axios.get(root_url + '/api/blacklist/reload?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to reload blacklist from database: " + response.data.status);
+                    content_blacklist_button_reload.prop('disabled', false);
+                    return;
+                }
+
+                $("#content_blacklist_button_load").prop('disabled', true);
+                content_blacklist_button_reload.prop('disabled', false);
+                loadBlacklist(table_element);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to reload blacklist from database: " + error.message);
+                content_blacklist_button_reload.prop('disabled', false);
+            });
+    }
+
+    async function executeAddBlacklist(id, blacklist_table) {
+        let access_token = $("#nav_input_access_token").val();
+
+        axios.post(root_url + '/api/blacklist/' + encodeURIComponent(id) + '?token=' + encodeURIComponent(access_token), { data: {} })
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to add blacklist hash: " + response.data.status);
+                    $("#content_blacklist_button_load").prop('disabled', false);
+                    return;
+                }
+
+                notificationOnScreen("Blacklist added hash: " + id);
+                loadBlacklist(blacklist_table);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to add blacklist: " + error.message);
+                $("#content_blacklist_button_load").prop('disabled', false);
+            });
+    }
+
+    async function executeRemoveBlacklist(id, blacklist_table) {
+        let access_token = $("#nav_input_access_token").val();
+
+        axios.delete(root_url + '/api/blacklist/' + encodeURIComponent(id) + '?token=' + encodeURIComponent(access_token), { data: {} })
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== 'ok') {
+                    notificationOnScreen("Unable to remove blacklist hash: " + response.data.status);
+                    $("#content_blacklist_button_load").prop('disabled', false);
+                    return;
+                }
+                notificationOnScreen("Blacklist hash removed: " + id);
+                loadBlacklist(blacklist_table);
+            })
+            .catch(function () {
+                notificationOnScreen("Unable to remove blacklist: " + error.message);
+                $("#content_blacklist_button_load").prop('disabled', false);
+            });
+    }
+
+    async function loadKeys(table_element) {
+        let access_token = $("#nav_input_access_token").val();
+        let content_keys_button_load = $("#content_keys_button_load");
+
+        axios.get(root_url + '/api/keys?token=' + encodeURIComponent(access_token))
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to load keys: " + response.data.status);
+                    content_keys_button_load.prop('disabled', false);
+                    return;
+                }
+
+                table_element.clear().draw(false);
+                for (let value of response.data) {
+                    table_element.row.add([
+                        value[0],
+                        value[1],
+                        "<button class=\"btn btn-primary btn-sm btn-keys-remove\" key_id=\"" + value[0] + "\" style=\"padding-top: 2px; padding-bottom: 2px;\"><i class=\"bi bi-trash\"></i></button>"
+                    ]);
+                }
+                table_element.draw(false);
+                $(".btn-keys-remove").on("click", function(event) {
+                    event.preventDefault();
+                    $("#keys_remove_yes_button").attr('key_id', $(this).attr('key_id'));
+                    $("#keys_remove_backdrop").modal('show');
+                });
+
+                content_keys_button_load.prop('disabled', false);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to load keys: " + error.message);
+                content_keys_button_load.prop('disabled', false);
+            });
+    }
+
+    async function executeAddKeys(id, timeout, keys_table) {
+        let access_token = $("#nav_input_access_token").val();
+
+        axios.post(root_url + '/api/keys/' + encodeURIComponent(id) + '/' + encodeURIComponent(timeout) + '?token=' + encodeURIComponent(access_token), { data: {} })
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== "ok") {
+                    notificationOnScreen("Unable to add keys hash: " + response.data.status);
+                    $("#content_keys_button_load").prop('disabled', false);
+                    return;
+                }
+
+                notificationOnScreen("Keys added hash: " + id + " with timeout " + timeout);
+                loadKeys(keys_table);
+            })
+            .catch(function (error) {
+                notificationOnScreen("Unable to add keys: " + error.message);
+                $("#content_keys_button_load").prop('disabled', false);
+            });
+    }
+
+    async function executeRemoveKeys(id, keys_table) {
+        let access_token = $("#nav_input_access_token").val();
+
+        axios.delete(root_url + '/api/keys/' + encodeURIComponent(id) + '?token=' + encodeURIComponent(access_token), { data: {} })
+            .then(function (response) {
+                if (response.data.status !== undefined && response.data.status !== 'ok') {
+                    notificationOnScreen("Unable to remove key hash: " + response.data.status);
+                    $("#content_keys_button_load").prop('disabled', false);
+                    return;
+                }
+                notificationOnScreen("Key hash removed: " + id);
+                loadKeys(keys_table);
+            })
+            .catch(function () {
+                notificationOnScreen("Unable to remove key: " + error.message);
+                $("#content_keys_button_load").prop('disabled', false);
+            });
+    }
+
+    async function initButtonsTorrents() {
+        $(".torrent_remove_button").on("click", function(event) {
+            event.preventDefault();
+            current_table_element = $(this).parents('tr');
+            $("#torrents_remove_button").attr("torrent_id", $(this).attr("torrent_id"));
+            $("#torrents_remove_backdrop").modal('show');
+        });
+    }
+
+    async function notificationOnScreen(msg) {
+        let message = $("#message");
+        message.find(".toast-body").html(msg);
+        let toast = new bootstrap.Toast(message);
+        toast.show();
+    }
+</script>
+</body>

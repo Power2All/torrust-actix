@@ -5,7 +5,7 @@ use scc::ebr::Arc;
 use scc::HashIndex;
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, CustomError, InfoHash, NumberOfBytes, PeerId, ScrapeQueryRequest, TorrentPeer};
 use crate::config::Configuration;
-use crate::tracker::{TorrentEntry, TorrentTracker};
+use crate::tracker::{TorrentEntry, TorrentEntryItem, TorrentTracker};
 
 pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
 {
@@ -168,10 +168,10 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
 {
     let _ = match data.get_torrent(announce_query.info_hash).await {
         None => {
-            if data.config.persistency {
-                data.add_torrent(announce_query.info_hash, TorrentEntry::new(), true).await;
+            if data.config.persistence {
+                data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), true).await;
             } else {
-                data.add_torrent(announce_query.info_hash, TorrentEntry::new(), false).await;
+                data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), false).await;
             }
             TorrentEntry::new()
         }
@@ -188,11 +188,11 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         event: AnnounceEvent::None
     };
 
-    return match announce_query.event {
+    match announce_query.event {
         AnnounceEvent::Started => {
             torrent_peer.event = AnnounceEvent::Started;
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, false, data.config.persistency).await;
+            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, false, data.config.persistence).await;
             let mut peers_parsed = 0u64;
             let mut peer_list = BTreeMap::new();
             for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
@@ -218,7 +218,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         AnnounceEvent::Stopped => {
             torrent_peer.event = AnnounceEvent::Stopped;
             debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistency).await;
+            let torrent_entry = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await;
             Ok((torrent_peer, TorrentEntry{
                 peers: BTreeMap::new(),
                 completed: torrent_entry.completed,
@@ -229,7 +229,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         AnnounceEvent::Completed => {
             torrent_peer.event = AnnounceEvent::Completed;
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, true, data.config.persistency).await;
+            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, true, data.config.persistence).await;
             let mut peers_parsed = 0u64;
             let mut peer_list = BTreeMap::new();
             for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
@@ -254,7 +254,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         }
         AnnounceEvent::None => {
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, false, data.config.persistency).await;
+            let torrent_entry = data.add_peer(announce_query.info_hash, announce_query.peer_id, torrent_peer, false, data.config.persistence).await;
             let mut peers_parsed = 0u64;
             let mut peer_list = BTreeMap::new();
             for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
@@ -277,14 +277,14 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 leechers: torrent_entry.leechers
             }))
         }
-    };
+    }
 }
 
 pub async fn validate_scrape(_config: Arc<Configuration>, _remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
 {
     // Validate info_hash
     let mut info_hash: Vec<InfoHash> = Vec::new();
-    return match query.read("info_hash", |_, v| v.clone()) {
+    match query.read("info_hash", |_, v| v.clone()) {
         None => {
             Err(CustomError::new("missing info_hash"))
         }
@@ -306,7 +306,7 @@ pub async fn validate_scrape(_config: Arc<Configuration>, _remote_addr: IpAddr, 
 
             Ok(scrape_data)
         }
-    };
+    }
 }
 
 pub async fn handle_scrape(data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, TorrentEntry>
