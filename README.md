@@ -1,5 +1,6 @@
 # Torrust-Axum Tracker
 ![Test](https://github.com/Power2All/torrust-axum/actions/workflows/rust.yml/badge.svg)
+[<img src="https://img.shields.io/badge/DockerHub-link-blue.svg">](<https://hub.docker.com/r/power2all/torrust-axum>)
 
 ## Project Description
 Torrust-Axum Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
@@ -18,14 +19,15 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Blacklist system, to block and ban hashes
 * [X] Web Interface (through API) to control the tracker software
 * [X] Torrent key support, for private tracking support
-* [ ] Dockerfile to build an image for Docker
+* [X] Dockerfile to build an image for Docker, and pushed to Docker Hub
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
 * [BEP 7](https://www.bittorrent.org/beps/bep_0007.html): IPv6 Support
-* [BEP 15](http://www.bittorrent.org/beps/bep_0015.html): UDP Tracker Protocol for BitTorrent
-* [BEP 23](http://bittorrent.org/beps/bep_0023.html): Tracker Returns Compact Peer Lists
-* [BEP 48](http://bittorrent.org/beps/bep_0048.html): Tracker Protocol Extension: Scrape
+* [BEP 15](https://www.bittorrent.org/beps/bep_0015.html): UDP Tracker Protocol for BitTorrent
+* [BEP 23](https://www.bittorrent.org/beps/bep_0023.html): Tracker Returns Compact Peer Lists
+* [BEP 41](https://www.bittorrent.org/beps/bep_0041.html): UDP Tracker Protocol Extensions
+* [BEP 48](https://www.bittorrent.org/beps/bep_0048.html): Tracker Protocol Extension: Scrape
 
 ## Getting Started
 You can get the latest binaries from [releases](https://github.com/Power2All/torrust-axum/releases) or follow the install from scratch instructions below.
