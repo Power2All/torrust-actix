@@ -255,11 +255,8 @@ impl Request {
                 let option_size = cursor.read_u8();
                 let mut path: &str = "";
                 let mut path_array = vec![];
-                if option_byte.is_ok() && option_size.is_ok() && option_byte.unwrap() == 2 {
-                    if *option_size.as_ref().unwrap() != 0 {
-                        let option_size_unwrap = *option_size.as_ref().unwrap();
-                        path_array.resize(option_size_unwrap as usize, 0u8);
-                    }
+                if option_byte.is_ok() && option_byte.unwrap() == 2 && option_size.is_ok() && option_size.as_ref().unwrap().clone() != 0 {
+                    path_array.resize(option_size.as_ref().unwrap().clone() as usize, 0u8);
                     cursor.read_exact(&mut path_array).map_err(|err| {
                         RequestParseError::sendable_io(err, connection_id, transaction_id)
                     })?;
