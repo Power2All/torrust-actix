@@ -910,7 +910,7 @@ impl DatabaseConnector {
                         keys_insert_entries.push(format!("(UNHEX(\"{}\"),{})", hash, timeout).to_string());
                         if keys_insert_entries.len() == 10000 {
                             let query = format!(
-                                "INSERT INTO {} (`{}`,{}) VALUES {}",
+                                "INSERT INTO {} (`{}`,`{}`) VALUES {}",
                                 self.config.db_structure.db_keys,
                                 self.config.db_structure.table_keys_hash,
                                 self.config.db_structure.table_keys_timeout,
@@ -923,7 +923,7 @@ impl DatabaseConnector {
                     }
                     if !keys_insert_entries.is_empty() {
                         let query = format!(
-                            "INSERT INTO {} (`{}`,{}) VALUES {}",
+                            "INSERT INTO {} (`{}`,`{}`) VALUES {}",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,

@@ -259,7 +259,7 @@ impl Request {
                     path_array = vec![0; option_size.unwrap() as usize];
                     let _ = cursor.read_exact(&mut path_array).map_err(|err| {
                         RequestParseError::sendable_io(err, connection_id, transaction_id)
-                    });
+                    })?;
                     path = std::str::from_utf8(&path_array).unwrap();
                 }
                 let _ = path_array;
