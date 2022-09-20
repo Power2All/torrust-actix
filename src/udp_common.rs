@@ -266,7 +266,6 @@ impl Request {
                     };
                 }
 
-
                 Ok((AnnounceRequest {
                     connection_id: ConnectionId(connection_id),
                     transaction_id: TransactionId(transaction_id),

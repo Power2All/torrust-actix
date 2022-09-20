@@ -31,9 +31,15 @@ async fn main() -> std::io::Result<()>
     // Load torrents
     if config.persistence {
         tracker.clone().load_torrents().await;
-        tracker.clone().load_whitelists().await;
-        tracker.clone().load_blacklists().await;
-        tracker.clone().load_keys().await;
+        if config.whitelist {
+            tracker.clone().load_whitelists().await;
+        }
+        if config.blacklist {
+            tracker.clone().load_blacklists().await;
+        }
+        if config.keys {
+            tracker.clone().load_keys().await;
+        }
     }
 
     let handle = Handle::new();
@@ -200,7 +206,6 @@ async fn main() -> std::io::Result<()>
                 info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
                 info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
                 info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
-                drop(stats);
             }
         });
     }
