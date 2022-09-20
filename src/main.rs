@@ -200,6 +200,7 @@ async fn main() -> std::io::Result<()>
                 info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
                 info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
                 info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
+                drop(stats);
             }
         });
     }
@@ -210,39 +211,41 @@ async fn main() -> std::io::Result<()>
             handle.shutdown();
             let _ = udp_tx.send(true);
             let _ = futures::future::join_all(udp_futures);
-            info!("[SAVING] Starting persistence saving procedure.");
-            info!("[SAVING] Moving Updates to Shadow...");
-            tracker.clone().transfer_updates_to_shadow().await;
-            info!("[SAVING] Saving data from Shadow to database...");
-            if tracker.clone().save_torrents().await {
-                info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                tracker.clone().clear_shadow().await;
-                info!("[SAVING] Torrents saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
-            }
-            if config.whitelist {
-                info!("[SAVING] Saving data from Whitelist to database...");
-                if tracker.clone().save_whitelists().await {
-                    info!("[SAVING] Whitelists saved.");
+            if tracker.clone().config.persistence {
+                info!("[SAVING] Starting persistence saving procedure.");
+                info!("[SAVING] Moving Updates to Shadow...");
+                tracker.clone().transfer_updates_to_shadow().await;
+                info!("[SAVING] Saving data from Shadow to database...");
+                if tracker.clone().save_torrents().await {
+                    info!("[SAVING] Clearing shadow, saving procedure finishing...");
+                    tracker.clone().clear_shadow().await;
+                    info!("[SAVING] Torrents saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
                 }
-            }
-            if config.blacklist {
-                info!("[SAVING] Saving data from Blacklist to database...");
-                if tracker.clone().save_blacklists().await {
-                    info!("[SAVING] Blacklists saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
+                if config.whitelist {
+                    info!("[SAVING] Saving data from Whitelist to database...");
+                    if tracker.clone().save_whitelists().await {
+                        info!("[SAVING] Whitelists saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
                 }
-            }
-            if config.keys {
-                info!("[SAVING] Saving data from Keys to database...");
-                if tracker.clone().save_keys().await {
-                    info!("[SAVING] Keys saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
+                if config.blacklist {
+                    info!("[SAVING] Saving data from Blacklist to database...");
+                    if tracker.clone().save_blacklists().await {
+                        info!("[SAVING] Blacklists saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
+                }
+                if config.keys {
+                    info!("[SAVING] Saving data from Keys to database...");
+                    if tracker.clone().save_keys().await {
+                        info!("[SAVING] Keys saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
                 }
             }
             info!("Server shutting down completed");
