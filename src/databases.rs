@@ -1004,7 +1004,7 @@ impl DatabaseConnector {
                     let mut torrents_handled_entries = 0u64;
                     let mut torrents_insert_entries = Vec::new();
                     for (info_hash, completed) in torrents.iter() {
-                        info!("SAVING...");
+                        info!("SAVING... {}", torrents_handled_entries);
                         torrents_handled_entries += 1;
                         torrents_insert_entries.push(format!("('{}',{})", info_hash, completed.clone()).to_string());
                         if torrents_insert_entries.len() == 10000 {
