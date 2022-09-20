@@ -256,7 +256,10 @@ impl Request {
                 let mut path: &str = "";
                 let mut path_array = vec![];
                 if option_byte.is_ok() && option_size.is_ok() && option_byte.unwrap() == 2 {
-                    path_array = vec![0; option_size.unwrap() as usize];
+                    if option_size.as_ref().unwrap().clone() != 0 {
+                        let option_size_unwrap = option_size.as_ref().unwrap().clone();
+                        path_array = vec![0; option_size_unwrap as usize];
+                    }
                     let _ = cursor.read_exact(&mut path_array).map_err(|err| {
                         RequestParseError::sendable_io(err, connection_id, transaction_id)
                     })?;
@@ -265,7 +268,6 @@ impl Request {
                         Err(_) => { "/" }
                     };
                 }
-                let _ = path_array;
 
                 Ok((AnnounceRequest {
                     connection_id: ConnectionId(connection_id),
