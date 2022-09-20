@@ -120,7 +120,7 @@ async fn main() -> std::io::Result<()>
         }
     });
 
-    if config.clone().keys {
+    if config.keys {
         let interval_keys_cleanup = config.clone().keys_cleanup_interval.unwrap_or(60);
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
@@ -157,23 +157,29 @@ async fn main() -> std::io::Result<()>
             } else {
                 error!("[SAVING] An error occurred while saving data...");
             }
-            info!("[SAVING] Saving data from Whitelist to database...");
-            if tracker_clone.clone().save_whitelists().await {
-                info!("[SAVING] Whitelists saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if tracker_clone.clone().config.whitelist {
+                info!("[SAVING] Saving data from Whitelist to database...");
+                if tracker_clone.clone().save_whitelists().await {
+                    info!("[SAVING] Whitelists saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
-            info!("[SAVING] Saving data from Blacklist to database...");
-            if tracker_clone.clone().save_blacklists().await {
-                info!("[SAVING] Blacklists saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if tracker_clone.clone().config.blacklist {
+                info!("[SAVING] Saving data from Blacklist to database...");
+                if tracker_clone.clone().save_blacklists().await {
+                    info!("[SAVING] Blacklists saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
-            info!("[SAVING] Saving data from Keys to database...");
-            if tracker_clone.clone().save_keys().await {
-                info!("[SAVING] Keys saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if tracker_clone.clone().config.keys {
+                info!("[SAVING] Saving data from Keys to database...");
+                if tracker_clone.clone().save_keys().await {
+                    info!("[SAVING] Keys saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
         }
     });
@@ -215,23 +221,29 @@ async fn main() -> std::io::Result<()>
             } else {
                 error!("[SAVING] An error occurred while saving data...");
             }
-            info!("[SAVING] Saving data from Whitelist to database...");
-            if tracker.clone().save_whitelists().await {
-                info!("[SAVING] Whitelists saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if config.whitelist {
+                info!("[SAVING] Saving data from Whitelist to database...");
+                if tracker.clone().save_whitelists().await {
+                    info!("[SAVING] Whitelists saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
-            info!("[SAVING] Saving data from Blacklist to database...");
-            if tracker.clone().save_blacklists().await {
-                info!("[SAVING] Blacklists saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if config.blacklist {
+                info!("[SAVING] Saving data from Blacklist to database...");
+                if tracker.clone().save_blacklists().await {
+                    info!("[SAVING] Blacklists saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
-            info!("[SAVING] Saving data from Keys to database...");
-            if tracker.clone().save_keys().await {
-                info!("[SAVING] Keys saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if config.keys {
+                info!("[SAVING] Saving data from Keys to database...");
+                if tracker.clone().save_keys().await {
+                    info!("[SAVING] Keys saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
             info!("Server shutting down completed");
             Ok(())
