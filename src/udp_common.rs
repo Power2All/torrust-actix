@@ -277,7 +277,7 @@ impl Request {
                     key: PeerKey(key),
                     peers_wanted: NumberOfPeers(peers_wanted),
                     port: Port(port),
-                    path: path.clone().to_string(),
+                    path: path.to_string(),
                 })
                     .into())
             }

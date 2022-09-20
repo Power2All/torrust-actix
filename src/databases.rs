@@ -182,7 +182,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[SQLite3] Loaded {} whitelists...", total_whitelist);
                             counter = 0;
                         }
@@ -209,7 +209,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[MySQL] Loaded {} whitelists...", total_whitelist);
                             counter = 0;
                         }
@@ -235,7 +235,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[PgSQL] Loaded {} whitelists...", total_whitelist);
                             counter = 0;
                         }
@@ -275,7 +275,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[SQLite3] Loaded {} blacklists...", total_blacklist);
                             counter = 0;
                         }
@@ -302,7 +302,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[MySQL] Loaded {} blacklists...", total_blacklist);
                             counter = 0;
                         }
@@ -328,7 +328,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[PgSQL] Loaded {} blacklists...", total_blacklist);
                             counter = 0;
                         }
@@ -369,7 +369,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[SQLite3] Loaded {} keys...", total_keys);
                             counter = 0;
                         }
@@ -398,7 +398,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[MySQL] Loaded {} keys...", total_keys);
                             counter = 0;
                         }
@@ -426,7 +426,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[PgSQL] Loaded {} keys...", total_keys);
                             counter = 0;
                         }
@@ -468,7 +468,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[SQLite3] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
@@ -497,7 +497,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[MySQL] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
@@ -525,7 +525,7 @@ impl DatabaseConnector {
                         query.as_str()
                     ).fetch(pool);
                     while let Some(result) = rows.try_next().await? {
-                        if counter == 10000 {
+                        if counter == 100000 {
                             info!("[PgSQL] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
@@ -561,7 +561,7 @@ impl DatabaseConnector {
                     for info_hash in whitelists.iter() {
                         whitelists_handled_entries += 1;
                         whitelists_insert_entries.push(format!("('{}')", info_hash).to_string());
-                        if whitelists_insert_entries.len() == 10000 {
+                        if whitelists_insert_entries.len() == 100000 {
                             let pre_query = format!(
                                 "INSERT OR REPLACE INTO {} ({}) VALUES",
                                 self.config.db_structure.db_whitelist,
@@ -612,7 +612,7 @@ impl DatabaseConnector {
                     for info_hash in whitelists.iter() {
                         whitelists_handled_entries += 1;
                         whitelists_insert_entries.push(format!("(UNHEX(\"{}\"))", info_hash).to_string());
-                        if whitelists_insert_entries.len() == 10000 {
+                        if whitelists_insert_entries.len() == 100000 {
                             let query = format!(
                                 "INSERT INTO {} (`{}`) VALUES {}",
                                 self.config.db_structure.db_whitelist,
@@ -655,7 +655,7 @@ impl DatabaseConnector {
                     for info_hash in whitelists.iter() {
                         whitelists_handled_entries += 1;
                         whitelists_insert_entries.push(format!("(decode('{}', 'hex'))", info_hash).to_string());
-                        if whitelists_insert_entries.len() == 10000 {
+                        if whitelists_insert_entries.len() == 100000 {
                             let query = format!(
                                 "INSERT INTO {} ({}) VALUES {}",
                                 self.config.db_structure.db_whitelist,
@@ -708,7 +708,7 @@ impl DatabaseConnector {
                     for info_hash in blacklists.iter() {
                         blacklists_handled_entries += 1;
                         blacklists_insert_entries.push(format!("('{}')", info_hash).to_string());
-                        if blacklists_insert_entries.len() == 10000 {
+                        if blacklists_insert_entries.len() == 100000 {
                             let pre_query = format!(
                                 "INSERT OR REPLACE INTO {} ({}) VALUES",
                                 self.config.db_structure.db_blacklist,
@@ -759,7 +759,7 @@ impl DatabaseConnector {
                     for info_hash in blacklists.iter() {
                         blacklists_handled_entries += 1;
                         blacklists_insert_entries.push(format!("(UNHEX(\"{}\"))", info_hash).to_string());
-                        if blacklists_insert_entries.len() == 10000 {
+                        if blacklists_insert_entries.len() == 100000 {
                             let query = format!(
                                 "INSERT INTO {} (`{}`) VALUES {}",
                                 self.config.db_structure.db_blacklist,
@@ -802,7 +802,7 @@ impl DatabaseConnector {
                     for info_hash in blacklists.iter() {
                         blacklists_handled_entries += 1;
                         blacklists_insert_entries.push(format!("(decode('{}', 'hex'))", info_hash).to_string());
-                        if blacklists_insert_entries.len() == 10000 {
+                        if blacklists_insert_entries.len() == 100000 {
                             let query = format!(
                                 "INSERT INTO {} ({}) VALUES {}",
                                 self.config.db_structure.db_blacklist,
@@ -855,7 +855,7 @@ impl DatabaseConnector {
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
                         keys_insert_entries.push(format!("('{}',{})", hash, timeout).to_string());
-                        if keys_insert_entries.len() == 10000 {
+                        if keys_insert_entries.len() == 100000 {
                             let pre_query = format!(
                                 "INSERT INTO {} ({},{}) VALUES",
                                 self.config.db_structure.db_keys,
@@ -908,7 +908,7 @@ impl DatabaseConnector {
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
                         keys_insert_entries.push(format!("(UNHEX(\"{}\"),{})", hash, timeout).to_string());
-                        if keys_insert_entries.len() == 10000 {
+                        if keys_insert_entries.len() == 100000 {
                             let query = format!(
                                 "INSERT INTO {} (`{}`,`{}`) VALUES {}",
                                 self.config.db_structure.db_keys,
@@ -953,7 +953,7 @@ impl DatabaseConnector {
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
                         keys_insert_entries.push(format!("(decode('{}', 'hex'),{})", hash, timeout).to_string());
-                        if keys_insert_entries.len() == 10000 {
+                        if keys_insert_entries.len() == 100000 {
                             let query = format!(
                                 "INSERT INTO {} ({},{}) VALUES {}",
                                 self.config.db_structure.db_keys,
@@ -1006,7 +1006,7 @@ impl DatabaseConnector {
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
                         torrents_insert_entries.push(format!("('{}',{})", info_hash, completed.clone()).to_string());
-                        if torrents_insert_entries.len() == 10000 {
+                        if torrents_insert_entries.len() == 100000 {
                             let pre_query = format!(
                                 "INSERT OR REPLACE INTO {} ({},{}) VALUES",
                                 self.config.db_structure.db_torrents,
@@ -1057,7 +1057,7 @@ impl DatabaseConnector {
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
                         torrents_insert_entries.push(format!("(UNHEX(\"{}\"),{})", info_hash, completed.clone()).to_string());
-                        if torrents_insert_entries.len() == 10000 {
+                        if torrents_insert_entries.len() == 100000 {
                             let query = format!(
                                 "INSERT INTO {} (`{}`,`{}`) VALUES {} ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
                                 self.config.db_structure.db_torrents,
@@ -1104,7 +1104,7 @@ impl DatabaseConnector {
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
                         torrents_insert_entries.push(format!("(decode('{}', 'hex'),{})", info_hash, completed.clone()).to_string());
-                        if torrents_insert_entries.len() == 10000 {
+                        if torrents_insert_entries.len() == 100000 {
                             let query = format!(
                                 "INSERT INTO {} ({},{}) VALUES {} ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                                 self.config.db_structure.db_torrents,
