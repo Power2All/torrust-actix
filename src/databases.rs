@@ -150,7 +150,7 @@ impl DatabaseConnector {
             DatabaseDrivers::PgSQL => {
                 let pgsql_connect = DatabaseConnectorPgSQL::create(&config.db_path).await;
                 if pgsql_connect.is_err() {
-                    error!("[PgSQL] Unable to connect to PostgreSQL on DSL {}", &config.db_path)
+                    error!("[PgSQL] Unable to connect to PostgresSQL on DSL {}", &config.db_path)
                 }
                 structure.pgsql = Some(DatabaseConnectorPgSQL {
                     pool: pgsql_connect.unwrap()
@@ -169,7 +169,7 @@ impl DatabaseConnector {
         let mut total_whitelist = 0u64;
 
         if self.engine.is_some() {
-            match self.engine.clone().unwrap() {
+            return match self.engine.clone().unwrap() {
                 DatabaseDrivers::SQLite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
@@ -186,16 +186,16 @@ impl DatabaseConnector {
                             info!("[SQLite3] Loaded {} whitelists...", total_whitelist);
                             counter = 0;
                         }
-                        let infohash_data: &str = result.get(self.config.db_structure.table_whitelist_info_hash.clone().as_str());
-                        let infohash_decoded = hex::decode(infohash_data).unwrap();
-                        let infohash = <[u8; 20]>::try_from(infohash_decoded[0 .. 20].as_ref()).unwrap();
-                        return_data_whitelist.push(InfoHash(infohash));
+                        let info_hash_data: &str = result.get(self.config.db_structure.table_whitelist_info_hash.clone().as_str());
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
+                        return_data_whitelist.push(InfoHash(info_hash));
                         counter += 1;
                         total_whitelist += 1;
                     }
 
                     info!("[SQLite3] Loaded {} whitelists...", total_whitelist);
-                    return Ok(return_data_whitelist);
+                    Ok(return_data_whitelist)
                 }
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
@@ -213,15 +213,15 @@ impl DatabaseConnector {
                             info!("[MySQL] Loaded {} whitelists...", total_whitelist);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get(self.config.db_structure.table_whitelist_info_hash.clone().as_str());
-                        let infohash = <[u8; 20]>::try_from(infohash_data[0 .. 20].as_ref()).unwrap();
-                        return_data_whitelist.push(InfoHash(infohash));
+                        let info_hash_data: &[u8] = result.get(self.config.db_structure.table_whitelist_info_hash.clone().as_str());
+                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        return_data_whitelist.push(InfoHash(info_hash));
                         counter += 1;
                         total_whitelist += 1;
                     }
 
                     info!("[MySQL] Loaded {} whitelists...", total_whitelist);
-                    return Ok(return_data_whitelist);
+                    Ok(return_data_whitelist)
                 }
                 DatabaseDrivers::PgSQL => {
                     let pool = &self.pgsql.clone().unwrap().pool;
@@ -239,15 +239,15 @@ impl DatabaseConnector {
                             info!("[PgSQL] Loaded {} whitelists...", total_whitelist);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get(self.config.db_structure.table_whitelist_info_hash.clone().as_str());
-                        let infohash = <[u8; 20]>::try_from(infohash_data[0 .. 20].as_ref()).unwrap();
-                        return_data_whitelist.push(InfoHash(infohash));
+                        let info_hash_data: &[u8] = result.get(self.config.db_structure.table_whitelist_info_hash.clone().as_str());
+                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        return_data_whitelist.push(InfoHash(info_hash));
                         counter += 1;
                         total_whitelist += 1;
                     }
 
                     info!("[PgSQL] Loaded {} whitelists...", total_whitelist);
-                    return Ok(return_data_whitelist);
+                    Ok(return_data_whitelist)
                 }
             }
         }
@@ -262,7 +262,7 @@ impl DatabaseConnector {
         let mut total_blacklist = 0u64;
 
         if self.engine.is_some() {
-            match self.engine.clone().unwrap() {
+            return match self.engine.clone().unwrap() {
                 DatabaseDrivers::SQLite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
@@ -279,16 +279,16 @@ impl DatabaseConnector {
                             info!("[SQLite3] Loaded {} blacklists...", total_blacklist);
                             counter = 0;
                         }
-                        let infohash_data: &str = result.get(self.config.db_structure.table_blacklist_info_hash.clone().as_str());
-                        let infohash_decoded = hex::decode(infohash_data).unwrap();
-                        let infohash = <[u8; 20]>::try_from(infohash_decoded[0..20].as_ref()).unwrap();
-                        return_data_blacklist.push(InfoHash(infohash));
+                        let info_hash_data: &str = result.get(self.config.db_structure.table_blacklist_info_hash.clone().as_str());
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
+                        return_data_blacklist.push(InfoHash(info_hash));
                         counter += 1;
                         total_blacklist += 1;
                     }
 
                     info!("[SQLite3] Loaded {} blacklists...", total_blacklist);
-                    return Ok(return_data_blacklist);
+                    Ok(return_data_blacklist)
                 }
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
@@ -306,15 +306,15 @@ impl DatabaseConnector {
                             info!("[MySQL] Loaded {} blacklists...", total_blacklist);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get(self.config.db_structure.table_blacklist_info_hash.clone().as_str());
-                        let infohash = <[u8; 20]>::try_from(infohash_data[0..20].as_ref()).unwrap();
-                        return_data_blacklist.push(InfoHash(infohash));
+                        let info_hash_data: &[u8] = result.get(self.config.db_structure.table_blacklist_info_hash.clone().as_str());
+                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        return_data_blacklist.push(InfoHash(info_hash));
                         counter += 1;
                         total_blacklist += 1;
                     }
 
                     info!("[MySQL] Loaded {} blacklists...", total_blacklist);
-                    return Ok(return_data_blacklist);
+                    Ok(return_data_blacklist)
                 }
                 DatabaseDrivers::PgSQL => {
                     let pool = &self.pgsql.clone().unwrap().pool;
@@ -332,15 +332,15 @@ impl DatabaseConnector {
                             info!("[PgSQL] Loaded {} blacklists...", total_blacklist);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get(self.config.db_structure.table_blacklist_info_hash.clone().as_str());
-                        let infohash = <[u8; 20]>::try_from(infohash_data[0..20].as_ref()).unwrap();
-                        return_data_blacklist.push(InfoHash(infohash));
+                        let info_hash_data: &[u8] = result.get(self.config.db_structure.table_blacklist_info_hash.clone().as_str());
+                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        return_data_blacklist.push(InfoHash(info_hash));
                         counter += 1;
                         total_blacklist += 1;
                     }
 
                     info!("[PgSQL] Loaded {} blacklists...", total_blacklist);
-                    return Ok(return_data_blacklist);
+                    Ok(return_data_blacklist)
                 }
             }
         }
@@ -355,7 +355,7 @@ impl DatabaseConnector {
         let mut total_keys = 0u64;
 
         if self.engine.is_some() {
-            match self.engine.clone().unwrap() {
+            return match self.engine.clone().unwrap() {
                 DatabaseDrivers::SQLite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
@@ -376,14 +376,14 @@ impl DatabaseConnector {
                         let hash_data: &str = result.get(self.config.db_structure.table_keys_hash.clone().as_str());
                         let hash_decoded = hex::decode(hash_data).unwrap();
                         let timeout_data: i64 = result.get(self.config.db_structure.table_keys_timeout.clone().as_str());
-                        let hash = <[u8; 20]>::try_from(hash_decoded[0 .. 20].as_ref()).unwrap();
+                        let hash = <[u8; 20]>::try_from(hash_decoded[0..20].as_ref()).unwrap();
                         return_data_keys.push((InfoHash(hash), timeout_data));
                         counter += 1;
                         total_keys += 1;
                     }
 
                     info!("[SQLite3] Loaded {} keys...", total_keys);
-                    return Ok(return_data_keys);
+                    Ok(return_data_keys)
                 }
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
@@ -404,14 +404,14 @@ impl DatabaseConnector {
                         }
                         let hash_data: &[u8] = result.get(self.config.db_structure.table_keys_hash.clone().as_str());
                         let timeout_data: i64 = result.get(self.config.db_structure.table_keys_timeout.clone().as_str());
-                        let hash = <[u8; 20]>::try_from(hash_data[0 .. 20].as_ref()).unwrap();
+                        let hash = <[u8; 20]>::try_from(hash_data[0..20].as_ref()).unwrap();
                         return_data_keys.push((InfoHash(hash), timeout_data));
                         counter += 1;
                         total_keys += 1;
                     }
 
                     info!("[MySQL] Loaded {} keys...", total_keys);
-                    return Ok(return_data_keys);
+                    Ok(return_data_keys)
                 }
                 DatabaseDrivers::PgSQL => {
                     let pool = &self.pgsql.clone().unwrap().pool;
@@ -432,14 +432,14 @@ impl DatabaseConnector {
                         }
                         let hash_data: &[u8] = result.get(self.config.db_structure.table_keys_hash.clone().as_str());
                         let timeout_data: i64 = result.get(self.config.db_structure.table_keys_timeout.clone().as_str());
-                        let hash = <[u8; 20]>::try_from(hash_data[0 .. 20].as_ref()).unwrap();
+                        let hash = <[u8; 20]>::try_from(hash_data[0..20].as_ref()).unwrap();
                         return_data_keys.push((InfoHash(hash), timeout_data));
                         counter += 1;
                         total_keys += 1;
                     }
 
                     info!("[PgSQL] Loaded {} keys...", total_keys);
-                    return Ok(return_data_keys);
+                    Ok(return_data_keys)
                 }
             }
         }
@@ -454,7 +454,7 @@ impl DatabaseConnector {
         let mut total_torrents = 0u64;
 
         if self.engine.is_some() {
-            match self.engine.clone().unwrap() {
+            return match self.engine.clone().unwrap() {
                 DatabaseDrivers::SQLite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
@@ -472,17 +472,17 @@ impl DatabaseConnector {
                             info!("[SQLite3] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
-                        let infohash_data: &str = result.get(self.config.db_structure.table_torrents_info_hash.clone().as_str());
-                        let infohash_decoded = hex::decode(infohash_data).unwrap();
+                        let info_hash_data: &str = result.get(self.config.db_structure.table_torrents_info_hash.clone().as_str());
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
-                        let infohash = <[u8; 20]>::try_from(infohash_decoded[0 .. 20].as_ref()).unwrap();
-                        return_data_torrents.push((InfoHash(infohash), completed_data));
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
+                        return_data_torrents.push((InfoHash(info_hash), completed_data));
                         counter += 1;
                         total_torrents += 1;
                     }
 
                     info!("[SQLite3] Loaded {} torrents...", total_torrents);
-                    return Ok(return_data_torrents);
+                    Ok(return_data_torrents)
                 }
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
@@ -501,16 +501,16 @@ impl DatabaseConnector {
                             info!("[MySQL] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get(self.config.db_structure.table_torrents_info_hash.clone().as_str());
+                        let info_hash_data: &[u8] = result.get(self.config.db_structure.table_torrents_info_hash.clone().as_str());
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
-                        let infohash = <[u8; 20]>::try_from(infohash_data[0 .. 20].as_ref()).unwrap();
-                        return_data_torrents.push((InfoHash(infohash), completed_data));
+                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        return_data_torrents.push((InfoHash(info_hash), completed_data));
                         counter += 1;
                         total_torrents += 1;
                     }
 
                     info!("[MySQL] Loaded {} torrents...", total_torrents);
-                    return Ok(return_data_torrents);
+                    Ok(return_data_torrents)
                 }
                 DatabaseDrivers::PgSQL => {
                     let pool = &self.pgsql.clone().unwrap().pool;
@@ -529,16 +529,16 @@ impl DatabaseConnector {
                             info!("[PgSQL] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
-                        let infohash_data: &[u8] = result.get(self.config.db_structure.table_torrents_info_hash.clone().as_str());
+                        let info_hash_data: &[u8] = result.get(self.config.db_structure.table_torrents_info_hash.clone().as_str());
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
-                        let infohash = <[u8; 20]>::try_from(infohash_data[0 .. 20].as_ref()).unwrap();
-                        return_data_torrents.push((InfoHash(infohash), completed_data));
+                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        return_data_torrents.push((InfoHash(info_hash), completed_data));
                         counter += 1;
                         total_torrents += 1;
                     }
 
                     info!("[PgSQL] Loaded {} torrents...", total_torrents);
-                    return Ok(return_data_torrents);
+                    Ok(return_data_torrents)
                 }
             }
         }

@@ -16,7 +16,7 @@ use log::{debug, info};
 use scc::ebr::Arc;
 use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
 use scc::HashIndex;
-use crate::common::{InfoHash, parse_query};
+use crate::common::{CustomError, InfoHash, parse_query};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::{StatsEvent, TorrentTracker};
 
@@ -64,14 +64,9 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(e) => {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
-            return (StatusCode::OK, headers, return_string);
-        }
+    let query_map = match http_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
     let announce = validate_announce(state.clone().config.clone(), ip, query_map).await;
@@ -228,14 +223,9 @@ pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(e) => {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
-            return (StatusCode::OK, headers, return_string);
-        }
+    let query_map = match http_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
     // We check if the path is set, and retrieve the possible "key" to check.
@@ -323,5 +313,18 @@ pub async fn http_service_404_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     } else {
         tracker.clone().update_stats(StatsEvent::Tcp6ConnectionsHandled, 1).await;
     }
+}
+
+pub fn http_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>>, CustomError>, headers: HeaderMap) -> Result<HashIndex<String, Vec<Vec<u8>>>, (StatusCode, HeaderMap, Vec<u8>)>
+{
+    return match query_map_result {
+        Ok(e) => {
+            Ok(e)
+        }
+        Err(e) => {
+            let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
+            Err((StatusCode::OK, headers, return_string))
+        }
+    };
 }
 

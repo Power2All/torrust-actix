@@ -17,7 +17,7 @@ use scc::ebr::Arc;
 use scc::HashIndex;
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
-use crate::common::{AnnounceEvent, InfoHash, parse_query};
+use crate::common::{AnnounceEvent, CustomError, InfoHash, parse_query};
 use crate::config::Configuration;
 use crate::tracker::{GetTorrentApi, StatsEvent, TorrentTracker};
 
@@ -94,28 +94,21 @@ pub async fn http_api_stats_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let stats = state.get_stats().await;
     (StatusCode::OK, headers, serde_json::to_string(&stats).unwrap())
 }
 
-pub async fn http_api_torrent_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_torrent_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -123,21 +116,14 @@ pub async fn http_api_torrent_get(ClientIp(ip): ClientIp, axum::extract::RawQuer
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map.clone()).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let info_hash: InfoHash = match path_params.get("info_hash") {
@@ -147,9 +133,9 @@ pub async fn http_api_torrent_get(ClientIp(ip): ClientIp, axum::extract::RawQuer
             return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
         }
         Some(result) => {
-            let infohash_decoded = hex::decode(result).unwrap();
-            let infohash = <[u8; 20]>::try_from(infohash_decoded[0 .. 20].as_ref()).unwrap();
-            InfoHash(infohash)
+            let info_hash_decoded = hex::decode(result).unwrap();
+            let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0 .. 20].as_ref()).unwrap();
+            InfoHash(info_hash)
         }
     };
 
@@ -194,7 +180,7 @@ pub async fn http_api_torrent_get(ClientIp(ip): ClientIp, axum::extract::RawQuer
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_torrent_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_torrent_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -202,21 +188,14 @@ pub async fn http_api_torrent_delete(ClientIp(ip): ClientIp, axum::extract::RawQ
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let info_hash: InfoHash = match path_params.get("info_hash") {
@@ -226,13 +205,13 @@ pub async fn http_api_torrent_delete(ClientIp(ip): ClientIp, axum::extract::RawQ
             return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
         }
         Some(result) => {
-            let infohash_decoded = hex::decode(result);
-            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+            let info_hash_decoded = hex::decode(result);
+            if info_hash_decoded.is_err() || info_hash_decoded.clone().unwrap().len() != 20 {
                 let return_data = json!({ "status": "invalid info_hash" });
                 return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
             }
-            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
-            InfoHash(infohash)
+            let info_hash = <[u8; 20]>::try_from(info_hash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(info_hash)
         }
     };
 
@@ -250,21 +229,14 @@ pub async fn http_api_whitelist_get_all(ClientIp(ip): ClientIp, axum::extract::R
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let whitelist = state.get_whitelist().await;
@@ -279,21 +251,14 @@ pub async fn http_api_whitelist_reload(ClientIp(ip): ClientIp, axum::extract::Ra
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    match check_api_token(state.clone().config.clone(), ip, query_map, headers.clone()).await {
+        None => {}
+        Some(result) => { return result; }
     }
 
     state.clear_whitelist().await;
@@ -303,7 +268,7 @@ pub async fn http_api_whitelist_reload(ClientIp(ip): ClientIp, axum::extract::Ra
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_whitelist_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_whitelist_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -311,21 +276,14 @@ pub async fn http_api_whitelist_get(ClientIp(ip): ClientIp, axum::extract::RawQu
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let info_hash: InfoHash = match path_params.get("info_hash") {
@@ -335,13 +293,13 @@ pub async fn http_api_whitelist_get(ClientIp(ip): ClientIp, axum::extract::RawQu
             return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
         }
         Some(result) => {
-            let infohash_decoded = hex::decode(result);
-            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+            let info_hash_decoded = hex::decode(result);
+            if info_hash_decoded.is_err() || info_hash_decoded.clone().unwrap().len() != 20 {
                 let return_data = json!({ "status": "invalid info_hash" });
                 return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
             }
-            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
-            InfoHash(infohash)
+            let info_hash = <[u8; 20]>::try_from(info_hash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(info_hash)
         }
     };
 
@@ -354,7 +312,7 @@ pub async fn http_api_whitelist_get(ClientIp(ip): ClientIp, axum::extract::RawQu
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_whitelist_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_whitelist_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -362,21 +320,14 @@ pub async fn http_api_whitelist_post(ClientIp(ip): ClientIp, axum::extract::RawQ
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let info_hash: InfoHash = match path_params.get("info_hash") {
@@ -386,13 +337,13 @@ pub async fn http_api_whitelist_post(ClientIp(ip): ClientIp, axum::extract::RawQ
             return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
         }
         Some(result) => {
-            let infohash_decoded = hex::decode(result);
-            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+            let info_hash_decoded = hex::decode(result);
+            if info_hash_decoded.is_err() || info_hash_decoded.clone().unwrap().len() != 20 {
                 let return_data = json!({ "status": "invalid info_hash" });
                 return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
             }
-            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
-            InfoHash(infohash)
+            let info_hash = <[u8; 20]>::try_from(info_hash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(info_hash)
         }
     };
 
@@ -402,7 +353,7 @@ pub async fn http_api_whitelist_post(ClientIp(ip): ClientIp, axum::extract::RawQ
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_whitelist_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_whitelist_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -410,21 +361,14 @@ pub async fn http_api_whitelist_delete(ClientIp(ip): ClientIp, axum::extract::Ra
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let info_hash: InfoHash = match path_params.get("info_hash") {
@@ -434,13 +378,13 @@ pub async fn http_api_whitelist_delete(ClientIp(ip): ClientIp, axum::extract::Ra
             return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
         }
         Some(result) => {
-            let infohash_decoded = hex::decode(result);
-            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+            let info_hash_decoded = hex::decode(result);
+            if info_hash_decoded.is_err() || info_hash_decoded.clone().unwrap().len() != 20 {
                 let return_data = json!({ "status": "invalid info_hash" });
                 return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
             }
-            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
-            InfoHash(infohash)
+            let info_hash = <[u8; 20]>::try_from(info_hash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(info_hash)
         }
     };
 
@@ -458,21 +402,14 @@ pub async fn http_api_blacklist_get_all(ClientIp(ip): ClientIp, axum::extract::R
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let blacklist = state.get_blacklist().await;
@@ -487,21 +424,14 @@ pub async fn http_api_blacklist_reload(ClientIp(ip): ClientIp, axum::extract::Ra
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     state.clear_blacklist().await;
@@ -511,7 +441,7 @@ pub async fn http_api_blacklist_reload(ClientIp(ip): ClientIp, axum::extract::Ra
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -519,21 +449,14 @@ pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQu
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let info_hash: InfoHash = match path_params.get("info_hash") {
@@ -543,13 +466,13 @@ pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQu
             return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
         }
         Some(result) => {
-            let infohash_decoded = hex::decode(result);
-            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+            let info_hash_decoded = hex::decode(result);
+            if info_hash_decoded.is_err() || info_hash_decoded.clone().unwrap().len() != 20 {
                 let return_data = json!({ "status": "invalid info_hash" });
                 return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
             }
-            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
-            InfoHash(infohash)
+            let info_hash = <[u8; 20]>::try_from(info_hash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(info_hash)
         }
     };
 
@@ -562,7 +485,7 @@ pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQu
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -570,21 +493,14 @@ pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQ
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let info_hash: InfoHash = match path_params.get("info_hash") {
@@ -594,13 +510,13 @@ pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQ
             return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
         }
         Some(result) => {
-            let infohash_decoded = hex::decode(result);
-            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+            let info_hash_decoded = hex::decode(result);
+            if info_hash_decoded.is_err() || info_hash_decoded.clone().unwrap().len() != 20 {
                 let return_data = json!({ "status": "invalid info_hash" });
                 return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
             }
-            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
-            InfoHash(infohash)
+            let info_hash = <[u8; 20]>::try_from(info_hash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(info_hash)
         }
     };
 
@@ -610,7 +526,7 @@ pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQ
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -618,21 +534,14 @@ pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::Ra
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let info_hash: InfoHash = match path_params.get("info_hash") {
@@ -642,13 +551,13 @@ pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::Ra
             return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
         }
         Some(result) => {
-            let infohash_decoded = hex::decode(result);
-            if infohash_decoded.is_err() || infohash_decoded.clone().unwrap().len() != 20 {
+            let info_hash_decoded = hex::decode(result);
+            if info_hash_decoded.is_err() || info_hash_decoded.clone().unwrap().len() != 20 {
                 let return_data = json!({ "status": "invalid info_hash" });
                 return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
             }
-            let infohash = <[u8; 20]>::try_from(infohash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
-            InfoHash(infohash)
+            let info_hash = <[u8; 20]>::try_from(info_hash_decoded.unwrap()[0 .. 20].as_ref()).unwrap();
+            InfoHash(info_hash)
         }
     };
 
@@ -666,21 +575,14 @@ pub async fn http_api_keys_get_all(ClientIp(ip): ClientIp, axum::extract::RawQue
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let keys = state.get_keys().await;
@@ -695,21 +597,14 @@ pub async fn http_api_keys_reload(ClientIp(ip): ClientIp, axum::extract::RawQuer
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     state.clear_keys().await;
@@ -719,7 +614,7 @@ pub async fn http_api_keys_reload(ClientIp(ip): ClientIp, axum::extract::RawQuer
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -727,21 +622,14 @@ pub async fn http_api_keys_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(p
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let key: InfoHash = match path_params.get("key") {
@@ -770,7 +658,7 @@ pub async fn http_api_keys_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(p
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -778,21 +666,14 @@ pub async fn http_api_keys_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let key: InfoHash = match path_params.get("key") {
@@ -838,7 +719,7 @@ pub async fn http_api_keys_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_patch(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_patch(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -846,21 +727,14 @@ pub async fn http_api_keys_patch(ClientIp(ip): ClientIp, axum::extract::RawQuery
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let key: InfoHash = match path_params.get("key") {
@@ -907,7 +781,7 @@ pub async fn http_api_keys_patch(ClientIp(ip): ClientIp, axum::extract::RawQuery
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -915,21 +789,14 @@ pub async fn http_api_keys_delete(ClientIp(ip): ClientIp, axum::extract::RawQuer
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
     let query_map_result = parse_query(params);
-    let query_map: HashIndex<String, Vec<Vec<u8>>> = match query_map_result {
-        Ok(e) => {
-            e
-        }
-        Err(_) => {
-            let mut return_data: HashMap<&str, &str> = HashMap::new();
-            return_data.insert("status", "invalid request");
-            return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
-        }
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
     };
 
-    if !validate_api_token(state.clone().config.clone(), ip, query_map).await {
-        let mut return_data: HashMap<&str, &str> = HashMap::new();
-        return_data.insert("status", "invalid token");
-        return (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap());
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
     }
 
     let key: InfoHash = match path_params.get("key") {
@@ -1004,4 +871,28 @@ async fn http_api_static_path(Path(path): Path<String>) -> impl IntoResponse {
             .body(body::boxed(Full::from(file.contents())))
             .unwrap(),
     }
+}
+
+pub fn api_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>>, CustomError>, headers: HeaderMap) -> Result<HashIndex<String, Vec<Vec<u8>>>, (StatusCode, HeaderMap, String)>
+{
+    return match query_map_result {
+        Ok(e) => {
+            Ok(e)
+        }
+        Err(_) => {
+            let mut return_data: HashMap<&str, &str> = HashMap::new();
+            return_data.insert("status", "invalid request");
+            Err((StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap()))
+        }
+    };
+}
+
+pub async fn check_api_token(config: Arc<Configuration>, ip: IpAddr, query_map: HashIndex<String, Vec<Vec<u8>>>, headers: HeaderMap) -> Option<(StatusCode, HeaderMap, String)>
+{
+    if !validate_api_token(config, ip, query_map).await {
+        let mut return_data: HashMap<&str, &str> = HashMap::new();
+        return_data.insert("status", "invalid token");
+        Some((StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap()));
+    }
+    None
 }

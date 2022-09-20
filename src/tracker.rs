@@ -169,7 +169,7 @@ impl TorrentTracker {
                 updates: HashMap::new(),
                 shadow: HashMap::new(),
                 stats: Stats {
-                    started: chrono::Utc::now().timestamp() as i64,
+                    started: Utc::now().timestamp() as i64,
                     timestamp_run_save: 0,
                     timestamp_run_timeout: 0,
                     timestamp_run_console: 0,
