@@ -260,7 +260,10 @@ impl Request {
                     let _ = cursor.read_exact(&mut path_array).map_err(|err| {
                         RequestParseError::sendable_io(err, connection_id, transaction_id)
                     })?;
-                    path = std::str::from_utf8(&path_array).unwrap();
+                    path = match std::str::from_utf8(&path_array) {
+                        Ok(result) => { result }
+                        Err(_) => { "/" }
+                    };
                 }
                 let _ = path_array;
 
