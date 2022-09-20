@@ -255,15 +255,20 @@ impl Request {
                 let option_size = cursor.read_u8();
                 let mut path: &str = "";
                 let mut path_array = vec![];
-                if option_byte.is_ok() && option_byte.unwrap() == 2 && option_size.is_ok() && option_size.as_ref().unwrap().clone() != 0 {
-                    path_array.resize(option_size.as_ref().unwrap().clone() as usize, 0u8);
-                    cursor.read_exact(&mut path_array).map_err(|err| {
-                        RequestParseError::sendable_io(err, connection_id, transaction_id)
-                    })?;
-                    path = match std::str::from_utf8(&path_array) {
-                        Ok(result) => { result }
-                        Err(_) => { "/" }
-                    };
+
+                if option_byte.is_ok() && option_size.is_ok() {
+                    let option_byte_value = option_byte.unwrap();
+                    let option_size_value = option_size.unwrap();
+                    if option_byte_value == 2 {
+                        path_array.resize(option_size_value as usize, 0u8);
+                        cursor.read_exact(&mut path_array).map_err(|err| {
+                            RequestParseError::sendable_io(err, connection_id, transaction_id)
+                        })?;
+                        path = match std::str::from_utf8(&path_array) {
+                            Ok(result) => { result }
+                            Err(_) => { "/" }
+                        };
+                    }
                 }
 
                 Ok((AnnounceRequest {
