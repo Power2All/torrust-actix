@@ -317,7 +317,7 @@ pub async fn http_service_404_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
 
 pub fn http_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>>, CustomError>, headers: HeaderMap) -> Result<HashIndex<String, Vec<Vec<u8>>>, (StatusCode, HeaderMap, Vec<u8>)>
 {
-    return match query_map_result {
+    match query_map_result {
         Ok(e) => {
             Ok(e)
         }
@@ -325,6 +325,6 @@ pub fn http_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>
             let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
             Err((StatusCode::OK, headers, return_string))
         }
-    };
+    }
 }
 

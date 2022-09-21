@@ -202,8 +202,8 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
-                announce_query.remote_addr.clone(),
-                torrent_peer.peer_addr.clone()
+                announce_query.remote_addr,
+                torrent_peer.peer_addr
             );
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
@@ -236,8 +236,8 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
-                announce_query.remote_addr.clone(),
-                torrent_peer.peer_addr.clone()
+                announce_query.remote_addr,
+                torrent_peer.peer_addr
             );
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
@@ -258,8 +258,8 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
-                announce_query.remote_addr.clone(),
-                torrent_peer.peer_addr.clone()
+                announce_query.remote_addr,
+                torrent_peer.peer_addr
             );
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,

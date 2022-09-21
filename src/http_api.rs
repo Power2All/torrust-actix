@@ -875,7 +875,7 @@ async fn http_api_static_path(Path(path): Path<String>) -> impl IntoResponse {
 
 pub fn api_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>>, CustomError>, headers: HeaderMap) -> Result<HashIndex<String, Vec<Vec<u8>>>, (StatusCode, HeaderMap, String)>
 {
-    return match query_map_result {
+    match query_map_result {
         Ok(e) => {
             Ok(e)
         }
@@ -884,7 +884,7 @@ pub fn api_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>
             return_data.insert("status", "invalid request");
             Err((StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap()))
         }
-    };
+    }
 }
 
 pub async fn check_api_token(config: Arc<Configuration>, ip: IpAddr, query_map: HashIndex<String, Vec<Vec<u8>>>, headers: HeaderMap) -> Option<(StatusCode, HeaderMap, String)>
@@ -892,7 +892,7 @@ pub async fn check_api_token(config: Arc<Configuration>, ip: IpAddr, query_map: 
     if !validate_api_token(config, ip, query_map).await {
         let mut return_data: HashMap<&str, &str> = HashMap::new();
         return_data.insert("status", "invalid token");
-        Some((StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap()));
+        return Some((StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap()));
     }
     None
 }

@@ -8,7 +8,7 @@ use scc::ebr::Arc;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use sqlx::{Error, MySql, Pool, Postgres, Row, Sqlite, ConnectOptions};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use serde::{Deserialize, Serialize};
 use crate::common::InfoHash;
 use crate::config::Configuration;
@@ -47,14 +47,11 @@ pub struct DatabaseConnector {
 impl DatabaseConnectorSQLite {
     pub async fn create(dsl: &str) -> Result<Pool<Sqlite>, Error>
     {
-        let options = SqliteConnectOptions::from_str(dsl)?;
+        let mut options = SqliteConnectOptions::from_str(dsl)?;
         options
-            .create_if_missing(true)
-            .journal_mode(SqliteJournalMode::Wal)
-            .read_only(false)
             .log_statements(log::LevelFilter::Debug)
             .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
-        SqlitePool::connect(dsl).await
+        SqlitePoolOptions::new().connect_with(options).await
     }
 }
 
@@ -105,9 +102,12 @@ impl DatabaseConnector {
                 });
                 structure.engine = Some(DatabaseDrivers::SQLite3);
                 let pool = &structure.sqlite.clone().unwrap().pool;
+                let _ = sqlx::query("PRAGMA temp_store = memory;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA mmap_size = 30000000000;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA page_size = 4096;").execute(pool).await;
                 let _ = sqlx::query(
                     format!(
-                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) NOT NULL UNIQUE, {} INTEGER DEFAULT 0 NOT NULL)",
+                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY, {} INTEGER DEFAULT 0 NOT NULL)",
                         config.db_structure.db_torrents,
                         config.db_structure.table_torrents_info_hash,
                         config.db_structure.table_torrents_completed
@@ -115,24 +115,24 @@ impl DatabaseConnector {
                 ).execute(pool).await;
                 let _ = sqlx::query(
                     format!(
-                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) NOT NULL UNIQUE)",
+                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY)",
                         config.db_structure.db_whitelist,
                         config.db_structure.table_whitelist_info_hash
                     ).as_str()
                 ).execute(pool).await;
                 let _ = sqlx::query(
                     format!(
-                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) NOT NULL UNIQUE)",
+                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY)",
                         config.db_structure.db_blacklist,
-                        config.db_structure.table_blacklist_info_hash
+                        config.db_structure.table_blacklist_info_hash,
                     ).as_str()
                 ).execute(pool).await;
                 let _ = sqlx::query(
                     format!(
-                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) NOT NULL UNIQUE, {} INTEGER DEFAULT 0 NOT NULL)",
+                        "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY, {} INTEGER DEFAULT 0 NOT NULL)",
                         config.db_structure.db_keys,
                         config.db_structure.table_keys_hash,
-                        config.db_structure.table_keys_timeout
+                        config.db_structure.table_keys_timeout,
                     ).as_str()
                 ).execute(pool).await;
             }
@@ -553,45 +553,30 @@ impl DatabaseConnector {
                 DatabaseDrivers::SQLite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
-                    let mut whitelists_transaction = pool.begin().await?;
-                    let mut whitelists_handled_entries = 0u64;
-                    let mut whitelists_insert_entries = Vec::new();
-                    let query = format!("DELETE FROM {}", self.config.db_structure.db_whitelist);
-                    sqlx::query(&query).execute(&mut whitelists_transaction).await?;
+                    let mut whitelist_transaction = pool.begin().await?;
+                    let mut whitelist_handled_entries = 0u64;
                     for info_hash in whitelists.iter() {
-                        whitelists_handled_entries += 1;
-                        whitelists_insert_entries.push(format!("('{}')", info_hash).to_string());
-                        if whitelists_insert_entries.len() == 10000 {
-                            let pre_query = format!(
-                                "INSERT OR REPLACE INTO {} ({}) VALUES",
-                                self.config.db_structure.db_whitelist,
-                                self.config.db_structure.table_whitelist_info_hash
-                            );
-                            let query = format!(
-                                "{} {}",
-                                pre_query,
-                                whitelists_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut whitelists_transaction).await?;
-                            info!("[SQLite3] Handled {} whitelists", whitelists_handled_entries);
-                            whitelists_insert_entries = vec![];
+                        whitelist_handled_entries += 1;
+                        match sqlx::query(&*format!(
+                            "INSERT OR REPLACE INTO {} ({}) VALUES ('{}')",
+                            self.config.db_structure.db_whitelist,
+                            self.config.db_structure.table_whitelist_info_hash,
+                            info_hash.to_string()
+                        ))
+                            .execute(&mut whitelist_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[SQLite3] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
+                            info!("[SQLite3] Handled {} whitelists", whitelist_handled_entries);
                         }
                     }
-                    if !whitelists_insert_entries.is_empty() {
-                        let pre_query = format!(
-                            "INSERT OR REPLACE INTO {} ({}) VALUES",
-                            self.config.db_structure.db_whitelist,
-                            self.config.db_structure.table_whitelist_info_hash
-                        );
-                        let query = format!(
-                            "{} {}",
-                            pre_query,
-                            whitelists_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut whitelists_transaction).await?;
-                        info!("[SQLite3] Handled {} whitelists", whitelists_handled_entries);
-                    }
-                    match whitelists_transaction.commit().await {
+                    match whitelist_transaction.commit().await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("[SQLite3] Error: {}", e.to_string());
@@ -604,37 +589,31 @@ impl DatabaseConnector {
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
-                    let mut whitelists_transaction = pool.begin().await?;
-                    let mut whitelists_handled_entries = 0u64;
-                    let mut whitelists_insert_entries = Vec::new();
-                    let query = format!("TRUNCATE TABLE {}", self.config.db_structure.db_whitelist);
-                    sqlx::query(&query).execute(&mut whitelists_transaction).await?;
+                    let mut whitelist_transaction = pool.begin().await?;
+                    let mut whitelist_handled_entries = 0u64;
+                    let _ = sqlx::query(&*format!("TRUNCATE TABLE {}", self.config.db_structure.db_whitelist)).execute(&mut whitelist_transaction).await?;
                     for info_hash in whitelists.iter() {
-                        whitelists_handled_entries += 1;
-                        whitelists_insert_entries.push(format!("(UNHEX(\"{}\"))", info_hash).to_string());
-                        if whitelists_insert_entries.len() == 10000 {
-                            let query = format!(
-                                "INSERT INTO {} (`{}`) VALUES {}",
-                                self.config.db_structure.db_whitelist,
-                                self.config.db_structure.table_whitelist_info_hash,
-                                whitelists_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut whitelists_transaction).await?;
-                            info!("[MySQL] Handled {} whitelists", whitelists_handled_entries);
-                            whitelists_insert_entries = vec![];
-                        }
-                    }
-                    if !whitelists_insert_entries.is_empty() {
-                        let query = format!(
-                            "INSERT INTO {} (`{}`) VALUES {}",
+                        whitelist_handled_entries += 1;
+                        match sqlx::query(&*format!(
+                            "INSERT INTO {} ({}) VALUES (UNHEX('{}'))",
                             self.config.db_structure.db_whitelist,
                             self.config.db_structure.table_whitelist_info_hash,
-                            whitelists_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut whitelists_transaction).await?;
-                        info!("[MySQL] Handled {} whitelists", whitelists_handled_entries);
+                            info_hash.to_string()
+                        ))
+                            .execute(&mut whitelist_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[MySQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
+                            info!("[MySQL] Handled {} whitelists", whitelist_handled_entries);
+                        }
                     }
-                    match whitelists_transaction.commit().await {
+                    match whitelist_transaction.commit().await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("[MySQL] Error: {}", e.to_string());
@@ -647,37 +626,37 @@ impl DatabaseConnector {
                 DatabaseDrivers::PgSQL => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
-                    let mut whitelists_transaction = pool.begin().await?;
-                    let mut whitelists_handled_entries = 0u64;
-                    let mut whitelists_insert_entries = Vec::new();
-                    let query = format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_whitelist);
-                    sqlx::query(&query).execute(&mut whitelists_transaction).await?;
-                    for info_hash in whitelists.iter() {
-                        whitelists_handled_entries += 1;
-                        whitelists_insert_entries.push(format!("(decode('{}', 'hex'))", info_hash).to_string());
-                        if whitelists_insert_entries.len() == 10000 {
-                            let query = format!(
-                                "INSERT INTO {} ({}) VALUES {}",
-                                self.config.db_structure.db_whitelist,
-                                self.config.db_structure.table_whitelist_info_hash,
-                                whitelists_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut whitelists_transaction).await?;
-                            info!("[PgSQL] Handled {} whitelists", whitelists_handled_entries);
-                            whitelists_insert_entries = vec![];
+                    let mut whitelist_transaction = pool.begin().await?;
+                    let mut whitelist_handled_entries = 0u64;
+                    match sqlx::query(&*format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_whitelist)).execute(&mut whitelist_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[PgSQL] Error: {}", e.to_string());
+                            return Err(e);
                         }
                     }
-                    if !whitelists_insert_entries.is_empty() {
-                        let query = format!(
-                            "INSERT INTO {} ({}) VALUES {}",
+                    for info_hash in whitelists.iter() {
+                        whitelist_handled_entries += 1;
+                        match sqlx::query(&*format!(
+                            "INSERT INTO {} ({}) VALUES (decode('{}','hex'))",
                             self.config.db_structure.db_whitelist,
                             self.config.db_structure.table_whitelist_info_hash,
-                            whitelists_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut whitelists_transaction).await?;
-                        info!("[PgSQL] Handled {} whitelists", whitelists_handled_entries);
+                            info_hash.to_string()
+                        ))
+                            .execute(&mut whitelist_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[PgSQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
+                            info!("[PgSQL] Handled {} whitelists", whitelist_handled_entries);
+                        }
                     }
-                    match whitelists_transaction.commit().await {
+                    match whitelist_transaction.commit().await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("[PgSQL] Error: {}", e.to_string());
@@ -700,45 +679,30 @@ impl DatabaseConnector {
                 DatabaseDrivers::SQLite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
-                    let mut blacklists_transaction = pool.begin().await?;
-                    let mut blacklists_handled_entries = 0u64;
-                    let mut blacklists_insert_entries = Vec::new();
-                    let query = format!("DELETE FROM {}", self.config.db_structure.db_blacklist);
-                    sqlx::query(&query).execute(&mut blacklists_transaction).await?;
+                    let mut blacklist_transaction = pool.begin().await?;
+                    let mut blacklist_handled_entries = 0u64;
                     for info_hash in blacklists.iter() {
-                        blacklists_handled_entries += 1;
-                        blacklists_insert_entries.push(format!("('{}')", info_hash).to_string());
-                        if blacklists_insert_entries.len() == 10000 {
-                            let pre_query = format!(
-                                "INSERT OR REPLACE INTO {} ({}) VALUES",
-                                self.config.db_structure.db_blacklist,
-                                self.config.db_structure.table_blacklist_info_hash
-                            );
-                            let query = format!(
-                                "{} {}",
-                                pre_query,
-                                blacklists_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut blacklists_transaction).await?;
-                            info!("[SQLite3] Handled {} blacklists", blacklists_handled_entries);
-                            blacklists_insert_entries = vec![];
+                        blacklist_handled_entries += 1;
+                        match sqlx::query(&*format!(
+                            "INSERT OR REPLACE INTO {} ({}) VALUES ('{}')",
+                            self.config.db_structure.db_blacklist,
+                            self.config.db_structure.table_blacklist_info_hash,
+                            info_hash.to_string()
+                        ))
+                            .execute(&mut blacklist_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[SQLite3] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 || blacklists.len() as u64 == blacklist_handled_entries {
+                            info!("[SQLite3] Handled {} whitelists", blacklist_handled_entries);
                         }
                     }
-                    if !blacklists_insert_entries.is_empty() {
-                        let pre_query = format!(
-                            "INSERT OR REPLACE INTO {} ({}) VALUES",
-                            self.config.db_structure.db_blacklist,
-                            self.config.db_structure.table_blacklist_info_hash
-                        );
-                        let query = format!(
-                            "{} {}",
-                            pre_query,
-                            blacklists_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut blacklists_transaction).await?;
-                        info!("[SQLite3] Handled {} whitelists", blacklists_handled_entries);
-                    }
-                    match blacklists_transaction.commit().await {
+                    match blacklist_transaction.commit().await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("[SQLite3] Error: {}", e.to_string());
@@ -751,37 +715,31 @@ impl DatabaseConnector {
                 DatabaseDrivers::MySQL => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
-                    let mut blacklists_transaction = pool.begin().await?;
-                    let mut blacklists_handled_entries = 0u64;
-                    let mut blacklists_insert_entries = Vec::new();
-                    let query = format!("TRUNCATE TABLE {}", self.config.db_structure.db_blacklist);
-                    sqlx::query(&query).execute(&mut blacklists_transaction).await?;
+                    let mut blacklist_transaction = pool.begin().await?;
+                    let mut blacklist_handled_entries = 0u64;
+                    let _ = sqlx::query(&*format!("TRUNCATE TABLE {}", self.config.db_structure.db_blacklist)).execute(&mut blacklist_transaction).await?;
                     for info_hash in blacklists.iter() {
-                        blacklists_handled_entries += 1;
-                        blacklists_insert_entries.push(format!("(UNHEX(\"{}\"))", info_hash).to_string());
-                        if blacklists_insert_entries.len() == 10000 {
-                            let query = format!(
-                                "INSERT INTO {} (`{}`) VALUES {}",
-                                self.config.db_structure.db_blacklist,
-                                self.config.db_structure.table_blacklist_info_hash,
-                                blacklists_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut blacklists_transaction).await?;
-                            info!("[MySQL] Handled {} blacklists", blacklists_handled_entries);
-                            blacklists_insert_entries = vec![];
-                        }
-                    }
-                    if !blacklists_insert_entries.is_empty() {
-                        let query = format!(
-                            "INSERT INTO {} (`{}`) VALUES {}",
+                        blacklist_handled_entries += 1;
+                        match sqlx::query(&*format!(
+                            "INSERT INTO {} ({}) VALUES (UNHEX('{}'))",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
-                            blacklists_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut blacklists_transaction).await?;
-                        info!("[MySQL] Handled {} blacklists", blacklists_handled_entries);
+                            info_hash.to_string()
+                        ))
+                            .execute(&mut blacklist_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[MySQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 || blacklists.len() as u64 == blacklist_handled_entries {
+                            info!("[MySQL] Handled {} blacklists", blacklist_handled_entries);
+                        }
                     }
-                    match blacklists_transaction.commit().await {
+                    match blacklist_transaction.commit().await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("[MySQL] Error: {}", e.to_string());
@@ -794,37 +752,31 @@ impl DatabaseConnector {
                 DatabaseDrivers::PgSQL => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
-                    let mut blacklists_transaction = pool.begin().await?;
-                    let mut blacklists_handled_entries = 0u64;
-                    let mut blacklists_insert_entries = Vec::new();
-                    let query = format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_blacklist);
-                    sqlx::query(&query).execute(&mut blacklists_transaction).await?;
+                    let mut blacklist_transaction = pool.begin().await?;
+                    let mut blacklist_handled_entries = 0u64;
+                    let _ = sqlx::query(&*format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_blacklist)).execute(&mut blacklist_transaction).await?;
                     for info_hash in blacklists.iter() {
-                        blacklists_handled_entries += 1;
-                        blacklists_insert_entries.push(format!("(decode('{}', 'hex'))", info_hash).to_string());
-                        if blacklists_insert_entries.len() == 10000 {
-                            let query = format!(
-                                "INSERT INTO {} ({}) VALUES {}",
-                                self.config.db_structure.db_blacklist,
-                                self.config.db_structure.table_blacklist_info_hash,
-                                blacklists_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut blacklists_transaction).await?;
-                            info!("[PgSQL] Handled {} blacklists", blacklists_handled_entries);
-                            blacklists_insert_entries = vec![];
-                        }
-                    }
-                    if !blacklists_insert_entries.is_empty() {
-                        let query = format!(
-                            "INSERT INTO {} ({}) VALUES {}",
+                        blacklist_handled_entries += 1;
+                        match sqlx::query(&*format!(
+                            "INSERT INTO {} ({}) VALUES (decode('{}','hex'))",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
-                            blacklists_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut blacklists_transaction).await?;
-                        info!("[PgSQL] Handled {} blacklists", blacklists_handled_entries);
+                            info_hash.to_string()
+                        ))
+                            .execute(&mut blacklist_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[PgSQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 || blacklists.len() as u64 == blacklist_handled_entries {
+                            info!("[PgSQL] Handled {} blacklists", blacklist_handled_entries);
+                        }
                     }
-                    match blacklists_transaction.commit().await {
+                    match blacklist_transaction.commit().await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("[PgSQL] Error: {}", e.to_string());
@@ -849,43 +801,28 @@ impl DatabaseConnector {
 
                     let mut keys_transaction = pool.begin().await?;
                     let mut keys_handled_entries = 0u64;
-                    let mut keys_insert_entries = Vec::new();
-                    let query = format!("DELETE FROM {}", self.config.db_structure.db_keys);
-                    sqlx::query(&query).execute(&mut keys_transaction).await?;
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
-                        keys_insert_entries.push(format!("('{}',{})", hash, timeout).to_string());
-                        if keys_insert_entries.len() == 10000 {
-                            let pre_query = format!(
-                                "INSERT INTO {} ({},{}) VALUES",
-                                self.config.db_structure.db_keys,
-                                self.config.db_structure.table_keys_hash,
-                                self.config.db_structure.table_keys_timeout
-                            );
-                            let query = format!(
-                                "{} {}",
-                                pre_query,
-                                keys_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut keys_transaction).await?;
-                            info!("[SQLite3] Handled {} keys", keys_handled_entries);
-                            keys_insert_entries = vec![];
-                        }
-                    }
-                    if !keys_insert_entries.is_empty() {
-                        let pre_query = format!(
-                            "INSERT INTO {} ({},{}) VALUES",
+                        match sqlx::query(&*format!(
+                            "INSERT OR REPLACE INTO {} ({},{}) VALUES ('{}',{})",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
-                            self.config.db_structure.table_keys_timeout
-                        );
-                        let query = format!(
-                            "{} {}",
-                            pre_query,
-                            keys_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut keys_transaction).await?;
-                        info!("[SQLite3] Handled {} keys", keys_handled_entries);
+                            self.config.db_structure.table_keys_timeout,
+                            hash.to_string(),
+                            timeout.clone()
+                        ))
+                            .execute(&mut keys_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[SQLite3] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 || keys.len() as u64 == keys_handled_entries {
+                            info!("[SQLite3] Handled {} keys", keys_handled_entries);
+                        }
                     }
                     match keys_transaction.commit().await {
                         Ok(_) => {}
@@ -902,35 +839,30 @@ impl DatabaseConnector {
 
                     let mut keys_transaction = pool.begin().await?;
                     let mut keys_handled_entries = 0u64;
-                    let mut keys_insert_entries = Vec::new();
-                    let query = format!("TRUNCATE TABLE {}", self.config.db_structure.db_keys);
-                    sqlx::query(&query).execute(&mut keys_transaction).await?;
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
-                        keys_insert_entries.push(format!("(UNHEX(\"{}\"),{})", hash, timeout).to_string());
-                        if keys_insert_entries.len() == 10000 {
-                            let query = format!(
-                                "INSERT INTO {} (`{}`,`{}`) VALUES {}",
-                                self.config.db_structure.db_keys,
-                                self.config.db_structure.table_keys_hash,
-                                self.config.db_structure.table_keys_timeout,
-                                keys_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut keys_transaction).await?;
-                            info!("[MySQL] Handled {} keys", keys_handled_entries);
-                            keys_insert_entries = vec![];
-                        }
-                    }
-                    if !keys_insert_entries.is_empty() {
-                        let query = format!(
-                            "INSERT INTO {} (`{}`,`{}`) VALUES {}",
+                        match sqlx::query(&*format!(
+                            "INSERT INTO {} (`{}`,`{}`) VALUES (UNHEX('{}'),{}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,
-                            keys_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut keys_transaction).await?;
-                        info!("[MySQL] Handled {} keys", keys_handled_entries);
+                            hash.to_string(),
+                            timeout.clone(),
+                            self.config.db_structure.table_keys_timeout,
+                            self.config.db_structure.table_keys_timeout
+                        ))
+                            .execute(&mut keys_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[MySQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 || keys.len() as u64 == keys_handled_entries {
+                            info!("[MySQL] Handled {} keys", keys_handled_entries);
+                        }
                     }
                     match keys_transaction.commit().await {
                         Ok(_) => {}
@@ -947,35 +879,31 @@ impl DatabaseConnector {
 
                     let mut keys_transaction = pool.begin().await?;
                     let mut keys_handled_entries = 0u64;
-                    let mut keys_insert_entries = Vec::new();
-                    let query = format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_keys);
-                    sqlx::query(&query).execute(&mut keys_transaction).await?;
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
-                        keys_insert_entries.push(format!("(decode('{}', 'hex'),{})", hash, timeout).to_string());
-                        if keys_insert_entries.len() == 10000 {
-                            let query = format!(
-                                "INSERT INTO {} ({},{}) VALUES {}",
-                                self.config.db_structure.db_keys,
-                                self.config.db_structure.table_keys_hash,
-                                self.config.db_structure.table_keys_timeout,
-                                keys_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut keys_transaction).await?;
-                            info!("[PgSQL] Handled {} keys", keys_handled_entries);
-                            keys_insert_entries = vec![];
-                        }
-                    }
-                    if !keys_insert_entries.is_empty() {
-                        let query = format!(
-                            "INSERT INTO {} ({},{}) VALUES {}",
+                        match sqlx::query(&*format!(
+                            "INSERT INTO {} ({},{}) VALUES (decode('{}','hex'),{}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,
-                            keys_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut keys_transaction).await?;
-                        info!("[PgSQL] Handled {} blacklists", keys_handled_entries);
+                            hash.to_string(),
+                            timeout.clone(),
+                            self.config.db_structure.table_keys_hash,
+                            self.config.db_structure.table_keys_timeout,
+                            self.config.db_structure.table_keys_timeout
+                        ))
+                            .execute(&mut keys_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[PgSQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 || keys.len() as u64 == keys_handled_entries {
+                            info!("[PgSQL] Handled {} keys", keys_handled_entries);
+                        }
                     }
                     match keys_transaction.commit().await {
                         Ok(_) => {}
@@ -1002,41 +930,28 @@ impl DatabaseConnector {
 
                     let mut torrents_transaction = pool.begin().await?;
                     let mut torrents_handled_entries = 0u64;
-                    let mut torrents_insert_entries = Vec::new();
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
-                        torrents_insert_entries.push(format!("('{}',{})", info_hash, completed.clone()).to_string());
-                        if torrents_insert_entries.len() == 10000 {
-                            let pre_query = format!(
-                                "INSERT OR REPLACE INTO {} ({},{}) VALUES",
-                                self.config.db_structure.db_torrents,
-                                self.config.db_structure.table_torrents_info_hash,
-                                self.config.db_structure.table_torrents_completed
-                            );
-                            let query = format!(
-                                "{} {}",
-                                pre_query,
-                                torrents_insert_entries.join(",")
-                            );
-                            sqlx::query(&query).execute(&mut torrents_transaction).await?;
-                            info!("[SQLite3] Handled {} torrents", torrents_handled_entries);
-                            torrents_insert_entries = vec![];
-                        }
-                    }
-                    if !torrents_insert_entries.is_empty() {
-                        let pre_query = format!(
-                            "INSERT OR REPLACE INTO {} ({},{}) VALUES",
+                        match sqlx::query(&*format!(
+                            "INSERT OR REPLACE INTO {} ({},{}) VALUES ('{}',{})",
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
-                            self.config.db_structure.table_torrents_completed
-                        );
-                        let query = format!(
-                            "{} {}",
-                            pre_query,
-                            torrents_insert_entries.join(",")
-                        );
-                        sqlx::query(&query).execute(&mut torrents_transaction).await?;
-                        info!("[SQLite3] Handled {} torrents", torrents_handled_entries);
+                            self.config.db_structure.table_torrents_completed,
+                            info_hash.to_string(),
+                            completed.clone()
+                        ))
+                            .execute(&mut torrents_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[SQLite3] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
+                            info!("[SQLite3] Handled {} torrents", torrents_handled_entries);
+                        }
                     }
                     match torrents_transaction.commit().await {
                         Ok(_) => {}
@@ -1053,37 +968,30 @@ impl DatabaseConnector {
 
                     let mut torrents_transaction = pool.begin().await?;
                     let mut torrents_handled_entries = 0u64;
-                    let mut torrents_insert_entries = Vec::new();
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
-                        torrents_insert_entries.push(format!("(UNHEX(\"{}\"),{})", info_hash, completed.clone()).to_string());
-                        if torrents_insert_entries.len() == 10000 {
-                            let query = format!(
-                                "INSERT INTO {} (`{}`,`{}`) VALUES {} ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
-                                self.config.db_structure.db_torrents,
-                                self.config.db_structure.table_torrents_info_hash,
-                                self.config.db_structure.table_torrents_completed,
-                                torrents_insert_entries.join(","),
-                                self.config.db_structure.table_torrents_completed,
-                                self.config.db_structure.table_torrents_completed
-                            );
-                            sqlx::query(&query).execute(&mut torrents_transaction).await?;
-                            info!("[MySQL] Handled {} torrents", torrents_handled_entries);
-                            torrents_insert_entries = vec![];
-                        }
-                    }
-                    if !torrents_insert_entries.is_empty() {
-                        let query = format!(
-                            "INSERT INTO {} (`{}`,`{}`) VALUES {} ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
+                        match sqlx::query(&*format!(
+                            "INSERT INTO {} (`{}`,`{}`) VALUES (UNHEX('{}'),{}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,
-                            torrents_insert_entries.join(","),
+                            info_hash.to_string(),
+                            completed.clone(),
                             self.config.db_structure.table_torrents_completed,
                             self.config.db_structure.table_torrents_completed
-                        );
-                        sqlx::query(&query).execute(&mut torrents_transaction).await?;
-                        info!("[MySQL] Handled {} torrents", torrents_handled_entries);
+                        ))
+                            .execute(&mut torrents_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[MySQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
+                            info!("[MySQL] Handled {} torrents", torrents_handled_entries);
+                        }
                     }
                     match torrents_transaction.commit().await {
                         Ok(_) => {}
@@ -1100,39 +1008,31 @@ impl DatabaseConnector {
 
                     let mut torrents_transaction = pool.begin().await?;
                     let mut torrents_handled_entries = 0u64;
-                    let mut torrents_insert_entries = Vec::new();
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
-                        torrents_insert_entries.push(format!("(decode('{}', 'hex'),{})", info_hash, completed.clone()).to_string());
-                        if torrents_insert_entries.len() == 10000 {
-                            let query = format!(
-                                "INSERT INTO {} ({},{}) VALUES {} ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
-                                self.config.db_structure.db_torrents,
-                                self.config.db_structure.table_torrents_info_hash,
-                                self.config.db_structure.table_torrents_completed,
-                                torrents_insert_entries.join(","),
-                                self.config.db_structure.table_torrents_info_hash,
-                                self.config.db_structure.table_torrents_completed,
-                                self.config.db_structure.table_torrents_completed
-                            );
-                            sqlx::query(&query).execute(&mut torrents_transaction).await?;
-                            info!("[PgSQL] Handled {} torrents", torrents_handled_entries);
-                            torrents_insert_entries = vec![];
-                        }
-                    }
-                    if !torrents_insert_entries.is_empty() {
-                        let query = format!(
-                            "INSERT INTO {} ({},{}) VALUES {} ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                        match sqlx::query(&*format!(
+                            "INSERT INTO {} ({},{}) VALUES (decode('{}','hex'),{}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,
-                            torrents_insert_entries.join(","),
+                            info_hash.to_string(),
+                            completed.clone(),
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,
                             self.config.db_structure.table_torrents_completed
-                        );
-                        sqlx::query(&query).execute(&mut torrents_transaction).await?;
-                        info!("[PgSQL] Handled {} torrents", torrents_handled_entries);
+                        ))
+                            .execute(&mut torrents_transaction)
+                            .await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[PgSQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+
+                        if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
+                            info!("[PgSQL] Handled {} torrents", torrents_handled_entries);
+                        }
                     }
                     match torrents_transaction.commit().await {
                         Ok(_) => {}

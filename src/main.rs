@@ -220,7 +220,7 @@ async fn main() -> std::io::Result<()>
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");
                 tracker.clone().transfer_updates_to_shadow().await;
-                info!("[SAVING] Saving data from Shadow to database...");
+                    info!("[SAVING] Saving data from Torrents to database...");
                 if tracker.clone().save_torrents().await {
                     info!("[SAVING] Clearing shadow, saving procedure finishing...");
                     tracker.clone().clear_shadow().await;
