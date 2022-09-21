@@ -198,7 +198,7 @@ impl Configuration {
                 let save_file = Configuration::save_file("config.toml", config_toml);
                 return match save_file {
                     Ok(_) => {
-                        eprintln!("Please edit the config.TOML in the root folder, exitting now...");
+                        eprintln!("Please edit the config.TOML in the root folder, exiting now...");
                         Err(CustomError::new("create config.toml file"))
                     }
                     Err(e) => {

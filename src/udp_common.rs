@@ -255,14 +255,21 @@ impl Request {
                 let option_size = cursor.read_u8();
                 let mut path: &str = "";
                 let mut path_array = vec![];
-                if option_byte.is_ok() && option_size.is_ok() && option_byte.unwrap() == 2 {
-                    path_array = vec![0; option_size.unwrap() as usize];
-                    let _ = cursor.read_exact(&mut path_array).map_err(|err| {
-                        RequestParseError::sendable_io(err, connection_id, transaction_id)
-                    });
-                    path = std::str::from_utf8(&path_array).unwrap();
+
+                if option_byte.is_ok() && option_size.is_ok() {
+                    let option_byte_value = option_byte.unwrap();
+                    let option_size_value = option_size.unwrap();
+                    if option_byte_value == 2 {
+                        path_array.resize(option_size_value as usize, 0u8);
+                        cursor.read_exact(&mut path_array).map_err(|err| {
+                            RequestParseError::sendable_io(err, connection_id, transaction_id)
+                        })?;
+                        path = match std::str::from_utf8(&path_array) {
+                            Ok(result) => { result }
+                            Err(_) => { "" }
+                        };
+                    }
                 }
-                let _ = path_array;
 
                 Ok((AnnounceRequest {
                     connection_id: ConnectionId(connection_id),
@@ -277,7 +284,7 @@ impl Request {
                     key: PeerKey(key),
                     peers_wanted: NumberOfPeers(peers_wanted),
                     port: Port(port),
-                    path: path.clone().to_string(),
+                    path: path.to_string(),
                 })
                     .into())
             }
@@ -657,7 +664,7 @@ pub enum ServerError {
 }
 
 pub fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
-    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+    match SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
         Ok(duration) => ConnectionId(((duration.as_secs() / 3600) | ((remote_address.port() as u64) << 36)) as i64),
         Err(_) => ConnectionId(0x7FFFFFFFFFFFFFFF),
     }

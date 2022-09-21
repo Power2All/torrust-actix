@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt;
+use std::fmt::Formatter;
 use std::net::{IpAddr, SocketAddr};
 use scc::HashIndex;
 use serde::{Deserialize, Serialize};
@@ -79,7 +80,7 @@ impl CustomError {
 }
 
 impl fmt::Display for CustomError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.message)
     }
 }
@@ -95,7 +96,7 @@ pub fn tcp_check_host_and_port_used(bind_address: String) {
         match std::net::TcpListener::bind(&bind_address) {
             Ok(e) => e,
             Err(_) => {
-                panic!("Unable to bind to {} ! Exitting...", &bind_address);
+                panic!("Unable to bind to {} ! Exiting...", &bind_address);
             }
         };
     }
@@ -106,7 +107,7 @@ pub fn udp_check_host_and_port_used(bind_address: String) {
         match std::net::UdpSocket::bind(&bind_address) {
             Ok(e) => e,
             Err(_) => {
-                panic!("Unable to bind to {} ! Exitting...", &bind_address);
+                panic!("Unable to bind to {} ! Exiting...", &bind_address);
             }
         };
     }
@@ -118,28 +119,6 @@ pub enum AnnounceEvent {
     Stopped = 3,
     Completed = 1,
     None = 0,
-}
-
-impl AnnounceEvent {
-    #[inline]
-    pub fn from_i32(i: i32) -> Self {
-        match i {
-            1 => Self::Completed,
-            2 => Self::Started,
-            3 => Self::Stopped,
-            _ => Self::None,
-        }
-    }
-
-    #[inline]
-    pub fn to_i32(&self) -> i32 {
-        match self {
-            AnnounceEvent::None => 0,
-            AnnounceEvent::Completed => 1,
-            AnnounceEvent::Started => 2,
-            AnnounceEvent::Stopped => 3,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -162,10 +141,8 @@ pub struct NumberOfBytesDef(pub i64);
 pub struct InfoHash(pub [u8; 20]);
 
 impl fmt::Display for InfoHash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut chars = [0u8; 40];
-        binascii::bin2hex(&self.0, &mut chars).expect("failed to hexlify");
-        write!(f, "{}", std::str::from_utf8(&chars).unwrap())
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        bin2hex(&self.0, f)
     }
 }
 
@@ -217,7 +194,7 @@ struct InfoHashVisitor;
 impl<'v> serde::de::Visitor<'v> for InfoHashVisitor {
     type Value = InfoHash;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
         write!(formatter, "a 40 character long hash")
     }
 
@@ -250,10 +227,8 @@ fn ser_instant<S: serde::Serializer>(inst: &std::time::Instant, ser: S) -> Resul
 }
 
 impl fmt::Display for PeerId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut chars = [0u8; 40];
-        binascii::bin2hex(&self.0, &mut chars).expect("failed to hexlify");
-        write!(f, "{}", std::str::from_utf8(&chars).unwrap())
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        bin2hex(&self.0, f)
     }
 }
 
@@ -393,7 +368,7 @@ struct PeerIdVisitor;
 impl<'v> serde::de::Visitor<'v> for PeerIdVisitor {
     type Value = PeerId;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
         write!(formatter, "a 40 character long hash")
     }
 
@@ -481,4 +456,10 @@ pub struct AnnounceQueryRequest {
 #[allow(dead_code)]
 pub struct ScrapeQueryRequest {
     pub(crate) info_hash: Vec<InfoHash>
+}
+
+fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
+    let mut chars = [0u8; 40];
+    binascii::bin2hex(data, &mut chars).expect("failed to hexlify");
+    write!(f, "{}", std::str::from_utf8(&chars).unwrap())
 }

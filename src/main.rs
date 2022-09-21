@@ -31,9 +31,15 @@ async fn main() -> std::io::Result<()>
     // Load torrents
     if config.persistence {
         tracker.clone().load_torrents().await;
-        tracker.clone().load_whitelists().await;
-        tracker.clone().load_blacklists().await;
-        tracker.clone().load_keys().await;
+        if config.whitelist {
+            tracker.clone().load_whitelists().await;
+        }
+        if config.blacklist {
+            tracker.clone().load_blacklists().await;
+        }
+        if config.keys {
+            tracker.clone().load_keys().await;
+        }
     }
 
     let handle = Handle::new();
@@ -120,7 +126,7 @@ async fn main() -> std::io::Result<()>
         }
     });
 
-    if config.clone().keys {
+    if config.keys {
         let interval_keys_cleanup = config.clone().keys_cleanup_interval.unwrap_or(60);
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
@@ -157,23 +163,29 @@ async fn main() -> std::io::Result<()>
             } else {
                 error!("[SAVING] An error occurred while saving data...");
             }
-            info!("[SAVING] Saving data from Whitelist to database...");
-            if tracker_clone.clone().save_whitelists().await {
-                info!("[SAVING] Whitelists saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if tracker_clone.clone().config.whitelist {
+                info!("[SAVING] Saving data from Whitelist to database...");
+                if tracker_clone.clone().save_whitelists().await {
+                    info!("[SAVING] Whitelists saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
-            info!("[SAVING] Saving data from Blacklist to database...");
-            if tracker_clone.clone().save_blacklists().await {
-                info!("[SAVING] Blacklists saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if tracker_clone.clone().config.blacklist {
+                info!("[SAVING] Saving data from Blacklist to database...");
+                if tracker_clone.clone().save_blacklists().await {
+                    info!("[SAVING] Blacklists saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
-            info!("[SAVING] Saving data from Keys to database...");
-            if tracker_clone.clone().save_keys().await {
-                info!("[SAVING] Keys saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if tracker_clone.clone().config.keys {
+                info!("[SAVING] Saving data from Keys to database...");
+                if tracker_clone.clone().save_keys().await {
+                    info!("[SAVING] Keys saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
             }
         }
     });
@@ -204,34 +216,42 @@ async fn main() -> std::io::Result<()>
             handle.shutdown();
             let _ = udp_tx.send(true);
             let _ = futures::future::join_all(udp_futures);
-            info!("[SAVING] Starting persistence saving procedure.");
-            info!("[SAVING] Moving Updates to Shadow...");
-            tracker.clone().transfer_updates_to_shadow().await;
-            info!("[SAVING] Saving data from Shadow to database...");
-            if tracker.clone().save_torrents().await {
-                info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                tracker.clone().clear_shadow().await;
-                info!("[SAVING] Torrents saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
-            }
-            info!("[SAVING] Saving data from Whitelist to database...");
-            if tracker.clone().save_whitelists().await {
-                info!("[SAVING] Whitelists saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
-            }
-            info!("[SAVING] Saving data from Blacklist to database...");
-            if tracker.clone().save_blacklists().await {
-                info!("[SAVING] Blacklists saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
-            }
-            info!("[SAVING] Saving data from Keys to database...");
-            if tracker.clone().save_keys().await {
-                info!("[SAVING] Keys saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
+            if tracker.clone().config.persistence {
+                info!("[SAVING] Starting persistence saving procedure.");
+                info!("[SAVING] Moving Updates to Shadow...");
+                tracker.clone().transfer_updates_to_shadow().await;
+                    info!("[SAVING] Saving data from Torrents to database...");
+                if tracker.clone().save_torrents().await {
+                    info!("[SAVING] Clearing shadow, saving procedure finishing...");
+                    tracker.clone().clear_shadow().await;
+                    info!("[SAVING] Torrents saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
+                if config.whitelist {
+                    info!("[SAVING] Saving data from Whitelist to database...");
+                    if tracker.clone().save_whitelists().await {
+                        info!("[SAVING] Whitelists saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
+                }
+                if config.blacklist {
+                    info!("[SAVING] Saving data from Blacklist to database...");
+                    if tracker.clone().save_blacklists().await {
+                        info!("[SAVING] Blacklists saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
+                }
+                if config.keys {
+                    info!("[SAVING] Saving data from Keys to database...");
+                    if tracker.clone().save_keys().await {
+                        info!("[SAVING] Keys saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
+                }
             }
             info!("Server shutting down completed");
             Ok(())
