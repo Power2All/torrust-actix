@@ -40,6 +40,12 @@ cd torrust-axum
 ```
 
 2. Build the source code using Rust (make sure you have installed rustup with stable branch)
+#### Using build script
+```bash
+chmod +x build.sh && ./build.sh
+```
+
+#### Manual Building (`/webgui/index.htm` needs to be modified)
 ```bash
 cargo build --release
 ```
