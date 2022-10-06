@@ -76,6 +76,7 @@ pub struct Configuration {
     pub keys: bool,
     pub keys_cleanup_interval: Option<u64>,
 
+    pub interval_torrents_defrag: Option<u64>,
     pub interval: Option<u64>,
     pub interval_minimum: Option<u64>,
     pub interval_cleanup: Option<u64>,
@@ -131,6 +132,7 @@ impl Configuration {
             keys: false,
             keys_cleanup_interval: Some(60),
 
+            interval_torrents_defrag: Some(3600),
             interval: Some(1800),
             interval_minimum: Some(1800),
             interval_cleanup: Some(900),

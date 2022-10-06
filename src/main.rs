@@ -190,6 +190,21 @@ async fn main() -> std::io::Result<()>
         }
     });
 
+    let interval_torrents_defrag = config.clone().interval_torrents_defrag.unwrap_or(3600);
+    let tracker_clone = tracker.clone();
+    tokio::spawn(async move {
+        let interval = Duration::from_secs(interval_torrents_defrag);
+        let mut interval = tokio::time::interval(interval);
+        interval.tick().await;
+        loop {
+            tracker_clone.clone().set_stats(StatsEvent::TimestampTorrentsDefrag, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.interval_torrents_defrag.unwrap() as i64).await;
+            interval.tick().await;
+            info!("[DEFRAG] Defragmenting the torrents blocks.");
+            tracker_clone.clone().defrag_torrent_blocks().await;
+            info!("[DEFRAG] Defragmentation completed.");
+        }
+    });
+
     if config.statistics_enabled {
         let console_log_interval = config.clone().log_console_interval.unwrap();
         let tracker_clone = tracker.clone();
