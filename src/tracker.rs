@@ -20,6 +20,7 @@ pub enum StatsEvent {
     TimestampConsole,
     TimestampKeysTimeout,
     TimestampTorrentsDefrag,
+    MaintenanceMode,
     Seeds,
     Peers,
     Completed,
@@ -53,6 +54,7 @@ pub struct Stats {
     pub torrents: i64,
     pub torrents_updates: i64,
     pub torrents_shadow: i64,
+    pub maintenance_mode: i64,
     pub seeds: i64,
     pub peers: i64,
     pub completed: i64,
@@ -184,6 +186,7 @@ impl TorrentTracker {
                     torrents: 0,
                     torrents_updates: 0,
                     torrents_shadow: 0,
+                    maintenance_mode: 0,
                     seeds: 0,
                     peers: 0,
                     completed: 0,
@@ -240,6 +243,7 @@ impl TorrentTracker {
             StatsEvent::TimestampConsole => { stats.timestamp_run_console += value; }
             StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout += value; }
             StatsEvent::TimestampTorrentsDefrag => { stats.timestamp_run_torrents_defrag += value; }
+            StatsEvent::MaintenanceMode => { stats.maintenance_mode += value; }
             StatsEvent::Seeds => { stats.seeds += value; }
             StatsEvent::Peers => { stats.peers += value; }
             StatsEvent::Completed => { stats.completed += value; }
@@ -280,6 +284,7 @@ impl TorrentTracker {
             StatsEvent::TimestampConsole => { stats.timestamp_run_console = value; }
             StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout = value; }
             StatsEvent::TimestampTorrentsDefrag => { stats.timestamp_run_torrents_defrag = value; }
+            StatsEvent::MaintenanceMode => { stats.maintenance_mode = value; }
             StatsEvent::Seeds => { stats.seeds = value; }
             StatsEvent::Peers => { stats.peers = value; }
             StatsEvent::Completed => { stats.completed = value; }
@@ -927,9 +932,11 @@ impl TorrentTracker {
         drop(torrents_lock);
 
         for key in torrent_blocks_index {
+            self.set_stats(StatsEvent::MaintenanceMode, 1).await;
             let mut torrents_lock = torrents_arc.write().await;
             torrents_lock.map_torrents_blocks.defrag(&key).await;
             drop(torrents_lock);
+            self.set_stats(StatsEvent::MaintenanceMode, 0).await;
         }
     }
 }

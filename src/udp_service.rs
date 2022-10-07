@@ -6,7 +6,7 @@ use scc::ebr::Arc;
 use tokio::net::UdpSocket;
 use tokio::task::JoinHandle;
 use crate::udp_common;
-use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, PeerId};
+use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, maintenance_mode, PeerId};
 use crate::handlers::handle_announce;
 use crate::tracker::{StatsEvent, TorrentEntry, TorrentEntryItem, TorrentTracker};
 use crate::udp_common::{AnnounceInterval, AnnounceRequest, AnnounceResponse, ConnectRequest, ConnectResponse, ErrorResponse, get_connection_id, NumberOfDownloads, NumberOfPeers, Port, Request, Response, ResponsePeer, ScrapeRequest, ScrapeResponse, ServerError, TorrentScrapeStatistics, TransactionId};
@@ -149,13 +149,16 @@ pub async fn handle_udp_connect(remote_addr: SocketAddr, request: &ConnectReques
 }
 
 pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
-    // let peer = TorrentPeer::from_udp_announce_request(&request.clone(), remote_addr.ip());
     let event = match request.event {
         udp_common::AnnounceEvent::Started => { AnnounceEvent::Started }
         udp_common::AnnounceEvent::Stopped => { AnnounceEvent::Stopped }
         udp_common::AnnounceEvent::Completed => { AnnounceEvent::Completed }
         udp_common::AnnounceEvent::None => { AnnounceEvent::None }
     };
+
+    if maintenance_mode(tracker.clone()).await == true {
+        return Err(ServerError::MaintenanceMode);
+    }
 
     let _ = match tracker.get_torrent(InfoHash(request.info_hash.0)).await {
         None => {
@@ -270,6 +273,10 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
 }
 
 pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+    if maintenance_mode(tracker.clone()).await == true {
+        return Err(ServerError::MaintenanceMode);
+    }
+
     let mut torrent_stats: Vec<TorrentScrapeStatistics> = Vec::new();
     for info_hash in request.info_hashes.iter() {
         let info_hash = InfoHash(info_hash.0);

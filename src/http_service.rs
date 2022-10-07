@@ -16,7 +16,7 @@ use log::{debug, info};
 use scc::ebr::Arc;
 use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
 use scc::HashIndex;
-use crate::common::{CustomError, InfoHash, parse_query};
+use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::{StatsEvent, TorrentTracker};
 
@@ -62,6 +62,11 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
     http_service_announce_log(ip, state.clone()).await;
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    if maintenance_mode(state.clone()).await == true {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
+        return (StatusCode::OK, headers, return_string);
+    }
 
     let query_map_result = parse_query(params);
     let query_map = match http_query_hashing(query_map_result, headers.clone()) {
@@ -222,6 +227,11 @@ pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
+    if maintenance_mode(state.clone()).await == true {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
+        return (StatusCode::OK, headers, return_string);
+    }
+
     let query_map_result = parse_query(params);
     let query_map = match http_query_hashing(query_map_result, headers.clone()) {
         Ok(result) => { result }
@@ -327,4 +337,3 @@ pub fn http_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>
         }
     }
 }
-

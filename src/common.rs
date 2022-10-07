@@ -2,8 +2,10 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
 use std::net::{IpAddr, SocketAddr};
+use scc::ebr::Arc;
 use scc::HashIndex;
 use serde::{Deserialize, Serialize};
+use crate::tracker::TorrentTracker;
 use crate::udp_common;
 use crate::udp_common::AnnounceRequest;
 
@@ -462,4 +464,13 @@ fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     let mut chars = [0u8; 40];
     binascii::bin2hex(data, &mut chars).expect("failed to hexlify");
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
+}
+
+pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> bool
+{
+    let stats = tracker.clone().get_stats().await;
+    if stats.maintenance_mode != 0 {
+        return true;
+    }
+    return false;
 }
