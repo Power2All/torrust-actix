@@ -932,11 +932,15 @@ impl TorrentTracker {
         drop(torrents_lock);
 
         for key in torrent_blocks_index {
-            self.set_stats(StatsEvent::MaintenanceMode, 1).await;
+            if self.config.maintenance_mode_enabled {
+                self.set_stats(StatsEvent::MaintenanceMode, 1).await;
+            }
             let mut torrents_lock = torrents_arc.write().await;
             torrents_lock.map_torrents_blocks.defrag(&key).await;
             drop(torrents_lock);
-            self.set_stats(StatsEvent::MaintenanceMode, 0).await;
+            if self.config.maintenance_mode_enabled {
+                self.set_stats(StatsEvent::MaintenanceMode, 0).await;
+            }
         }
     }
 }
