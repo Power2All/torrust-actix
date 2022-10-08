@@ -472,5 +472,5 @@ pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> bool
     if stats.maintenance_mode != 0 {
         return true;
     }
-    return false;
+    false
 }

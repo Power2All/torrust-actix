@@ -156,7 +156,7 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         udp_common::AnnounceEvent::None => { AnnounceEvent::None }
     };
 
-    if maintenance_mode(tracker.clone()).await == true {
+    if maintenance_mode(tracker.clone()).await {
         return Err(ServerError::MaintenanceMode);
     }
 
@@ -273,7 +273,7 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
 }
 
 pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
-    if maintenance_mode(tracker.clone()).await == true {
+    if maintenance_mode(tracker.clone()).await {
         return Err(ServerError::MaintenanceMode);
     }
 

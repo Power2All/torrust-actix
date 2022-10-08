@@ -63,7 +63,7 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
-    if maintenance_mode(state.clone()).await == true {
+    if maintenance_mode(state.clone()).await {
         let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
         return (StatusCode::OK, headers, return_string);
     }
@@ -227,7 +227,7 @@ pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
-    if maintenance_mode(state.clone()).await == true {
+    if maintenance_mode(state.clone()).await {
         let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
         return (StatusCode::OK, headers, return_string);
     }
