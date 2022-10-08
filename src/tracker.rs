@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashMap};
-use std::collections::btree_map::Entry;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use chrono::{TimeZone, Utc};
 use log::info;
@@ -19,7 +18,6 @@ pub enum StatsEvent {
     TimestampTimeout,
     TimestampConsole,
     TimestampKeysTimeout,
-    TimestampTorrentsDefrag,
     MaintenanceMode,
     Seeds,
     Peers,
@@ -50,7 +48,6 @@ pub struct Stats {
     pub timestamp_run_timeout: i64,
     pub timestamp_run_console: i64,
     pub timestamp_run_keys_timeout: i64,
-    pub timestamp_run_torrents_defrag: i64,
     pub torrents: i64,
     pub torrents_updates: i64,
     pub torrents_shadow: i64,
@@ -130,7 +127,7 @@ impl Default for TorrentEntry {
 }
 
 pub struct Torrents {
-    pub map_torrents_blocks: BTreeMapTorrents,
+    pub map_torrents: BTreeMap<InfoHash, TorrentEntryItem>,
     pub map_peers: BTreeMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>,
     pub updates: HashMap<InfoHash, i64>,
     pub shadow: HashMap<InfoHash, i64>,
@@ -172,7 +169,7 @@ impl TorrentTracker {
         TorrentTracker {
             config: config.clone(),
             torrents: Arc::new(RwLock::new(Torrents{
-                map_torrents_blocks: BTreeMapTorrents::new().await,
+                map_torrents: BTreeMap::new(),
                 map_peers: BTreeMap::new(),
                 updates: HashMap::new(),
                 shadow: HashMap::new(),
@@ -182,7 +179,6 @@ impl TorrentTracker {
                     timestamp_run_timeout: 0,
                     timestamp_run_console: 0,
                     timestamp_run_keys_timeout: 0,
-                    timestamp_run_torrents_defrag: 0,
                     torrents: 0,
                     torrents_updates: 0,
                     torrents_shadow: 0,
@@ -242,7 +238,6 @@ impl TorrentTracker {
             StatsEvent::TimestampTimeout => { stats.timestamp_run_timeout += value; }
             StatsEvent::TimestampConsole => { stats.timestamp_run_console += value; }
             StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout += value; }
-            StatsEvent::TimestampTorrentsDefrag => { stats.timestamp_run_torrents_defrag += value; }
             StatsEvent::MaintenanceMode => { stats.maintenance_mode += value; }
             StatsEvent::Seeds => { stats.seeds += value; }
             StatsEvent::Peers => { stats.peers += value; }
@@ -283,7 +278,6 @@ impl TorrentTracker {
             StatsEvent::TimestampTimeout => { stats.timestamp_run_timeout = value; }
             StatsEvent::TimestampConsole => { stats.timestamp_run_console = value; }
             StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout = value; }
-            StatsEvent::TimestampTorrentsDefrag => { stats.timestamp_run_torrents_defrag = value; }
             StatsEvent::MaintenanceMode => { stats.maintenance_mode = value; }
             StatsEvent::Seeds => { stats.seeds = value; }
             StatsEvent::Peers => { stats.peers = value; }
@@ -415,7 +409,7 @@ impl TorrentTracker {
     {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        let _ = torrents_lock.map_torrents_blocks.add(info_hash, torrent_entry.clone()).await;
+        let _ = torrents_lock.map_torrents.insert(info_hash, torrent_entry.clone());
         drop(torrents_lock);
 
         if persistent {
@@ -431,8 +425,8 @@ impl TorrentTracker {
     pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         let torrents_arc = self.torrents.clone();
-        let mut torrents_lock = torrents_arc.write().await;
-        let torrent = match torrents_lock.map_torrents_blocks.get(info_hash).await {
+        let torrents_lock = torrents_arc.write().await;
+        let torrent = match torrents_lock.map_torrents.get(&info_hash).cloned() {
             None => { None }
             Some(data) => {
                 let peers = match torrents_lock.map_peers.get(&info_hash).cloned() {
@@ -460,14 +454,14 @@ impl TorrentTracker {
 
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        let torrent_option = torrents_lock.map_torrents_blocks.get(info_hash).await;
+        let torrent_option = torrents_lock.map_torrents.get(&info_hash);
         match torrent_option {
             None => {}
             Some(data) => {
                 removed_torrent = true;
                 remove_seeders = data.seeders;
                 remove_leechers = data.leechers;
-                torrents_lock.map_torrents_blocks.remove(info_hash).await;
+                torrents_lock.map_torrents.remove(&info_hash);
                 torrents_lock.map_peers.remove(&info_hash);
             }
         }
@@ -494,7 +488,7 @@ impl TorrentTracker {
 
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        let torrent = match torrents_lock.map_torrents_blocks.get(info_hash).await {
+        let torrent = match torrents_lock.map_torrents.get(&info_hash).cloned() {
             None => { TorrentEntry::new() }
             Some(mut data_torrent) => {
                 let mut peers = match torrents_lock.map_peers.get(&info_hash).cloned() {
@@ -535,7 +529,7 @@ impl TorrentTracker {
                         let _ = peers.insert(peer_id, peer_entry);
                     }
                 };
-                torrents_lock.map_torrents_blocks.add(info_hash, data_torrent.clone()).await;
+                torrents_lock.map_torrents.insert(info_hash, data_torrent.clone());
                 torrents_lock.map_peers.insert(info_hash, peers.clone());
                 TorrentEntry{
                     peers,
@@ -568,7 +562,7 @@ impl TorrentTracker {
 
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        let torrent = match torrents_lock.map_torrents_blocks.get(info_hash).await {
+        let torrent = match torrents_lock.map_torrents.get(&info_hash).cloned() {
             None => { TorrentEntry::new() }
             Some(mut data_torrent) => {
                 let mut peers = match torrents_lock.map_peers.get(&info_hash).cloned() {
@@ -588,7 +582,7 @@ impl TorrentTracker {
                         removed_leecher = true;
                     }
                 }
-                torrents_lock.map_torrents_blocks.add(info_hash, data_torrent.clone()).await;
+                torrents_lock.map_torrents.insert(info_hash, data_torrent.clone());
                 if peers.is_empty() {
                     torrents_lock.map_peers.remove(&info_hash);
                 } else {
@@ -918,106 +912,5 @@ impl TorrentTracker {
                 }
             }
         }
-    }
-
-    pub async fn defrag_torrent_blocks(&self)
-    {
-        let torrents_arc = self.torrents.clone();
-        let torrents_lock = torrents_arc.write().await;
-
-        let mut torrent_blocks_index = vec![];
-        for (key, _) in torrents_lock.map_torrents_blocks.data.iter() {
-            torrent_blocks_index.push(key.clone());
-        }
-        drop(torrents_lock);
-
-        for key in torrent_blocks_index {
-            if self.config.maintenance_mode_enabled {
-                self.set_stats(StatsEvent::MaintenanceMode, 1).await;
-            }
-            let mut torrents_lock = torrents_arc.write().await;
-            torrents_lock.map_torrents_blocks.defrag(&key).await;
-            drop(torrents_lock);
-            if self.config.maintenance_mode_enabled {
-                self.set_stats(StatsEvent::MaintenanceMode, 0).await;
-            }
-        }
-    }
-}
-
-pub struct BTreeMapTorrents {
-    data: BTreeMap<String, BTreeMap<InfoHash, TorrentEntryItem>>
-}
-
-impl BTreeMapTorrents {
-    pub async fn new() -> BTreeMapTorrents
-    {
-        // Build a mapping of 2 characters of hashes, to split it up in small chunks for easier defragmentating without halting the system too much.
-        let mut torrent_blocks = BTreeMapTorrents{
-            data: BTreeMap::new()
-        };
-        let mut counter1 = 0;
-        let mut counter2 = 0;
-        while counter1 < 256 && counter2 < 256 {
-            while counter2 < 256 {
-                torrent_blocks.data.insert(format!("{:x}{:x}", counter1, counter2), BTreeMap::new());
-                counter2 = counter2 + 1;
-            }
-            counter2 = 0;
-            counter1 = counter1 + 1;
-            if counter1 == 256 {
-                counter2 = 256;
-            }
-        }
-        torrent_blocks
-    }
-
-    pub async fn add(&mut self, info_hash: InfoHash, torrent_entry_item: TorrentEntryItem)
-    {
-        let hash = info_hash.to_string();
-        let torrent_block = match self.data.entry(hash[0..4].to_string().to_lowercase()) {
-            Entry::Vacant(entry) => { entry.insert(BTreeMap::new()) }
-            Entry::Occupied(entry) => { entry.into_mut() }
-        };
-
-        torrent_block.remove(&info_hash);
-        torrent_block.insert(info_hash, torrent_entry_item);
-    }
-
-    pub async fn get(&mut self, info_hash: InfoHash) -> Option<TorrentEntryItem>
-    {
-        let hash = info_hash.to_string();
-        let torrent_block = match self.data.entry(hash[0..4].to_string().to_lowercase()) {
-            Entry::Vacant(entry) => { entry.insert(BTreeMap::new()) }
-            Entry::Occupied(entry) => { entry.into_mut() }
-        };
-
-        return torrent_block.get(&info_hash).cloned();
-    }
-
-    pub async fn remove(&mut self, info_hash: InfoHash)
-    {
-        let hash = info_hash.to_string();
-        let torrent_block = match self.data.entry(hash[0..4].to_string().to_lowercase()) {
-            Entry::Vacant(entry) => { entry.insert(BTreeMap::new()) }
-            Entry::Occupied(entry) => { entry.into_mut() }
-        };
-
-        torrent_block.remove(&info_hash);
-    }
-
-    pub async fn defrag(&mut self, block: &str)
-    {
-        match self.data.get(block) {
-            None => { }
-            Some(block_block) => {
-                let mut new_block = BTreeMap::new();
-                for (info_hash, torrent_entry_item) in block_block.iter() {
-                    new_block.insert(*info_hash, torrent_entry_item.clone());
-                }
-                self.data.remove(block);
-                self.data.insert(block.parse().unwrap(), new_block);
-            }
-        };
     }
 }
