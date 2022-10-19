@@ -70,6 +70,7 @@ whitelist = false
 blacklist = false
 keys = true
 keys_cleanup_interval = 10
+maintenance_mode_enabled = false
 interval = 1800
 interval_minimum = 1800
 interval_cleanup = 900
@@ -152,6 +153,7 @@ This will show statistics of the tracker in JSON format.
   "torrents":0,
   "torrents_updates":0,
   "torrents_shadow":0,
+  "maintenance_mode":false,
   "seeds":0,
   "peers":0,
   "completed":0,
