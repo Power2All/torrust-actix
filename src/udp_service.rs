@@ -48,10 +48,8 @@ impl UdpServer {
                     debug!("Received {} bytes from {}", payload.len(), remote_addr);
                     debug!("{:?}", payload);
 
-                    tokio::spawn(async move {
-                        let response = handle_packet(remote_addr, payload, tracker).await;
-                        UdpServer::send_response(socket, remote_addr, response).await;
-                    });
+                    let response = handle_packet(remote_addr, payload, tracker).await;
+                    UdpServer::send_response(socket, remote_addr, response).await;
                 }
             }
         }
