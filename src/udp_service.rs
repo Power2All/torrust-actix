@@ -31,15 +31,16 @@ impl UdpServer {
 
     pub async fn start(&self, rx: tokio::sync::watch::Receiver<bool>)
     {
-        loop {
-            let mut rx = rx.clone();
-            let mut data = [0; 65507];
-            let socket = self.socket.clone();
-            let tracker = self.tracker.clone();
+        let mut rx = rx.clone();
+        let mut data = [0; 65507];
+        let tracker = self.tracker.clone();
 
+        loop {
+            let socket = self.socket.clone();
+            let udp_sock = socket.local_addr().unwrap();
             tokio::select! {
                 _ = rx.changed() => {
-                    info!("Stopping UDP server: {}...", socket.local_addr().unwrap());
+                    info!("Stopping UDP server: {}...", udp_sock);
                     break;
                 }
                 Ok((valid_bytes, remote_addr)) = socket.recv_from(&mut data) => {
@@ -48,7 +49,7 @@ impl UdpServer {
                     debug!("Received {} bytes from {}", payload.len(), remote_addr);
                     debug!("{:?}", payload);
 
-                    let response = handle_packet(remote_addr, payload, tracker).await;
+                    let response = handle_packet(remote_addr, payload, tracker.clone()).await;
                     UdpServer::send_response(socket, remote_addr, response).await;
                 }
             }
