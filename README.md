@@ -341,7 +341,7 @@ This will remove a key from the keys list, and returns status if successful or f
 
 ### ChangeLog
 
-#### v3.2.0
+#### v3.1.2
 * Bumped library versions.
 * Added a Code of Conduct file, as some open source projects need this.
 * Added a Maintenance toggle function to API and WebGUI.

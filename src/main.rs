@@ -31,7 +31,6 @@ async fn main() -> std::io::Result<()>
     setup_logging(&config);
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-    info!("!! This is software in development, there may be bugs !!");
 
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
 
