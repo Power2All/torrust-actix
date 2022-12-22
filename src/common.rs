@@ -10,7 +10,7 @@ use crate::udp_common;
 use crate::udp_common::AnnounceRequest;
 
 pub fn parse_query(query: Option<String>) -> Result<HashIndex<String, Vec<Vec<u8>>>, CustomError> {
-    let queries: HashIndex<String, Vec<Vec<u8>>> = HashIndex::new(0, Default::default());
+    let queries: HashIndex<String, Vec<Vec<u8>>> = HashIndex::new();
     match query {
         None => {}
         Some(result) => {

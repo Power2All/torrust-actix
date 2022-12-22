@@ -164,8 +164,6 @@ impl TorrentTracker {
     pub async fn new(config: Arc<Configuration>) -> TorrentTracker
     {
 
-        // let info_hash_decoded = hex::decode("0000000000000000000000000000000000000000").unwrap();
-        // let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0 .. 20].as_ref()).unwrap();
         TorrentTracker {
             config: config.clone(),
             torrents: Arc::new(RwLock::new(Torrents{
@@ -833,7 +831,7 @@ impl TorrentTracker {
     {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        let time = SystemTime::from(Utc.timestamp(timeout, 0));
+        let time = SystemTime::from(Utc.timestamp_opt(timeout, 0).unwrap());
         match time.duration_since(SystemTime::now()) {
             Ok(_) => {
                 torrents_lock.keys.insert(hash, timeout as i64);
@@ -903,7 +901,7 @@ impl TorrentTracker {
 
         for (hash, timeout) in keys_index.iter() {
             if *timeout != 0 {
-                let time = SystemTime::from(Utc.timestamp(*timeout, 0));
+                let time = SystemTime::from(Utc.timestamp_opt(*timeout, 0).unwrap());
                 match time.duration_since(SystemTime::now()) {
                     Ok(_) => {}
                     Err(_) => {

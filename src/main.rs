@@ -1,3 +1,4 @@
+use std::env;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
@@ -16,7 +17,13 @@ use torrust_axum::udp_service::udp_service;
 #[tokio::main]
 async fn main() -> std::io::Result<()>
 {
-    let config = match config::Configuration::load_from_file() {
+    let args: Vec<String> = env::args().collect();
+    let mut config_create: bool = false;
+    if args.iter().any(|i| i=="--create-config") {
+        config_create = true;
+    }
+
+    let config = match config::Configuration::load_from_file(config_create) {
         Ok(config) => Arc::new(config),
         Err(_) => exit(101)
     };

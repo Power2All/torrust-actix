@@ -4,7 +4,6 @@ use std::future::Future;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use axum::{Extension, Router};
-use axum::handler::Handler;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::http::header::HeaderName;
 use axum::response::IntoResponse;
@@ -30,7 +29,7 @@ pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTra
             .route("/announce/:key", get(http_service_announce))
             .route("/scrape", get(http_service_scrape))
             .route("/scrape/:key", get(http_service_scrape))
-            .fallback(http_service_404.into_service())
+            .fallback(http_service_404)
             .layer(Extension(data))
             .into_make_service_with_connect_info::<SocketAddr>()
         )
@@ -51,7 +50,7 @@ pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTr
             .route("/announce/:key", get(http_service_announce))
             .route("/scrape", get(http_service_scrape))
             .route("/scrape/:key", get(http_service_scrape))
-            .fallback(http_service_404.into_service())
+            .fallback(http_service_404)
             .layer(Extension(data))
             .into_make_service_with_connect_info::<SocketAddr>()
         )
