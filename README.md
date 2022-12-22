@@ -13,7 +13,8 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Multiple UDP server and HTTP(S) server blocks for socket binding possibilities
 * [X] Full IPv4 and IPv6 support for both UDP and HTTP(S)
 * [X] Built-in API on a separate port in HTTP
-* [X] Persistence saving supported using SQLite3, MySQL or PostgreSQL database
+* [X] Toggle maintenance mode through API and WebGUI
+* [X] Persistence saving supported using SQLite3, MySQL or PostgresSQL database
 * [X] Customize table and database names in the configuration file for persistence
 * [X] Whitelist system, which can be used to make the tracker private
 * [X] Blacklist system, to block and ban hashes
@@ -337,6 +338,39 @@ This will remove a key from the keys list, and returns status if successful or f
   "status":"ok"
 }
 ```
+
+### ChangeLog
+
+#### v3.2.0
+* Bumped library versions.
+* Added a Code of Conduct file, as some open source projects need this.
+* Added a Maintenance toggle function to API and WebGUI.
+* Configuration file is not generated when it doesn't exist, or has invalid data, unless forced with a '--create-config' argument.
+* Fixed various small bugs.
+
+#### v3.1.1
+* Bumped library versions.
+* Database for SQLite3, MySQL and PostgreSQL now works properly with all the tables, and will be used if enabled.
+* UDP had a problem in IPv4, fixed the code for correctly parsing byte array.
+* Cleanup and refactoring of some redundant code.
+* Added some small checks where needed to prevent errors.
+
+#### v3.1.0
+* Whitelist System: You can enable this to only allow torrent hashes to be used you specify in the database, or add them through the API.
+* Blacklist System: You can enable this to disallow torrent hashes to be used you specify in the database, or add them through the API.
+* Keys System: You can enable this to only allow tracking when an activated "key" hash (same as an info_hash, 20 bytes or 40 characters hex) is given. Keys with a timeout of zero "0" will be permanent and won't be purged by the cleanup.
+* WebGUI: The API has an available web interface, which can be accessed through https://your.api:8080/webgui/ and giving the correct API Key, which you configure in the configuration file.
+* Customizable database structure can be given in the configuration file.
+* The system is also now available through Docker Hub at https://hub.docker.com/r/power2all/torrust-axum
+
+#### v3.0.1
+* Bugfixes
+* SQLite3 support added
+* MySQL support added
+* PostgresSQL support added
+
+#### v3.0.0
+Initial version of Torrust-Axum.
 
 ### Credits
 This Torrust-Tracker was a joint effort by [Nautilus Cyberneering GmbH](https://nautilus-cyberneering.de/), [Dutch Bits](https://dutchbits.nl) and [Power2All](https://power2all.com).
