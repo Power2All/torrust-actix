@@ -18,6 +18,7 @@ pub enum StatsEvent {
     TimestampTimeout,
     TimestampConsole,
     TimestampKeysTimeout,
+    MaintenanceMode,
     Seeds,
     Peers,
     Completed,
@@ -50,6 +51,7 @@ pub struct Stats {
     pub torrents: i64,
     pub torrents_updates: i64,
     pub torrents_shadow: i64,
+    pub maintenance_mode: i64,
     pub seeds: i64,
     pub peers: i64,
     pub completed: i64,
@@ -161,6 +163,7 @@ pub struct TorrentTracker {
 impl TorrentTracker {
     pub async fn new(config: Arc<Configuration>) -> TorrentTracker
     {
+
         TorrentTracker {
             config: config.clone(),
             torrents: Arc::new(RwLock::new(Torrents{
@@ -177,6 +180,7 @@ impl TorrentTracker {
                     torrents: 0,
                     torrents_updates: 0,
                     torrents_shadow: 0,
+                    maintenance_mode: 0,
                     seeds: 0,
                     peers: 0,
                     completed: 0,
@@ -232,6 +236,7 @@ impl TorrentTracker {
             StatsEvent::TimestampTimeout => { stats.timestamp_run_timeout += value; }
             StatsEvent::TimestampConsole => { stats.timestamp_run_console += value; }
             StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout += value; }
+            StatsEvent::MaintenanceMode => { stats.maintenance_mode += value; }
             StatsEvent::Seeds => { stats.seeds += value; }
             StatsEvent::Peers => { stats.peers += value; }
             StatsEvent::Completed => { stats.completed += value; }
@@ -271,6 +276,7 @@ impl TorrentTracker {
             StatsEvent::TimestampTimeout => { stats.timestamp_run_timeout = value; }
             StatsEvent::TimestampConsole => { stats.timestamp_run_console = value; }
             StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout = value; }
+            StatsEvent::MaintenanceMode => { stats.maintenance_mode = value; }
             StatsEvent::Seeds => { stats.seeds = value; }
             StatsEvent::Peers => { stats.peers = value; }
             StatsEvent::Completed => { stats.completed = value; }
@@ -825,7 +831,7 @@ impl TorrentTracker {
     {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        let time = SystemTime::from(Utc.timestamp(timeout, 0));
+        let time = SystemTime::from(Utc.timestamp_opt(timeout, 0).unwrap());
         match time.duration_since(SystemTime::now()) {
             Ok(_) => {
                 torrents_lock.keys.insert(hash, timeout as i64);
@@ -895,7 +901,7 @@ impl TorrentTracker {
 
         for (hash, timeout) in keys_index.iter() {
             if *timeout != 0 {
-                let time = SystemTime::from(Utc.timestamp(*timeout, 0));
+                let time = SystemTime::from(Utc.timestamp_opt(*timeout, 0).unwrap());
                 match time.duration_since(SystemTime::now()) {
                     Ok(_) => {}
                     Err(_) => {

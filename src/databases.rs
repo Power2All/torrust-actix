@@ -561,7 +561,7 @@ impl DatabaseConnector {
                             "INSERT OR REPLACE INTO {} ({}) VALUES ('{}')",
                             self.config.db_structure.db_whitelist,
                             self.config.db_structure.table_whitelist_info_hash,
-                            info_hash.to_string()
+                            info_hash
                         ))
                             .execute(&mut whitelist_transaction)
                             .await {
@@ -598,7 +598,7 @@ impl DatabaseConnector {
                             "INSERT INTO {} ({}) VALUES (UNHEX('{}'))",
                             self.config.db_structure.db_whitelist,
                             self.config.db_structure.table_whitelist_info_hash,
-                            info_hash.to_string()
+                            info_hash
                         ))
                             .execute(&mut whitelist_transaction)
                             .await {
@@ -641,7 +641,7 @@ impl DatabaseConnector {
                             "INSERT INTO {} ({}) VALUES (decode('{}','hex'))",
                             self.config.db_structure.db_whitelist,
                             self.config.db_structure.table_whitelist_info_hash,
-                            info_hash.to_string()
+                            info_hash
                         ))
                             .execute(&mut whitelist_transaction)
                             .await {
@@ -687,7 +687,7 @@ impl DatabaseConnector {
                             "INSERT OR REPLACE INTO {} ({}) VALUES ('{}')",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
-                            info_hash.to_string()
+                            info_hash
                         ))
                             .execute(&mut blacklist_transaction)
                             .await {
@@ -724,7 +724,7 @@ impl DatabaseConnector {
                             "INSERT INTO {} ({}) VALUES (UNHEX('{}'))",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
-                            info_hash.to_string()
+                            info_hash
                         ))
                             .execute(&mut blacklist_transaction)
                             .await {
@@ -761,7 +761,7 @@ impl DatabaseConnector {
                             "INSERT INTO {} ({}) VALUES (decode('{}','hex'))",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
-                            info_hash.to_string()
+                            info_hash
                         ))
                             .execute(&mut blacklist_transaction)
                             .await {
@@ -808,7 +808,7 @@ impl DatabaseConnector {
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,
-                            hash.to_string(),
+                            hash,
                             timeout.clone()
                         ))
                             .execute(&mut keys_transaction)
@@ -846,7 +846,7 @@ impl DatabaseConnector {
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,
-                            hash.to_string(),
+                            hash,
                             timeout.clone(),
                             self.config.db_structure.table_keys_timeout,
                             self.config.db_structure.table_keys_timeout
@@ -886,7 +886,7 @@ impl DatabaseConnector {
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,
-                            hash.to_string(),
+                            hash,
                             timeout.clone(),
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,
@@ -937,7 +937,7 @@ impl DatabaseConnector {
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,
-                            info_hash.to_string(),
+                            info_hash,
                             completed.clone()
                         ))
                             .execute(&mut torrents_transaction)
@@ -975,7 +975,7 @@ impl DatabaseConnector {
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,
-                            info_hash.to_string(),
+                            info_hash,
                             completed.clone(),
                             self.config.db_structure.table_torrents_completed,
                             self.config.db_structure.table_torrents_completed
@@ -1015,7 +1015,7 @@ impl DatabaseConnector {
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,
-                            info_hash.to_string(),
+                            info_hash,
                             completed.clone(),
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,

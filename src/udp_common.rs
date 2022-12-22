@@ -661,6 +661,9 @@ pub enum ServerError {
 
     #[error("bad request")]
     BadRequest,
+
+    #[error("maintenance mode enabled, please try again later")]
+    MaintenanceMode,
 }
 
 pub fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {

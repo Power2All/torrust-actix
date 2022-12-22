@@ -1,6 +1,12 @@
 #!/bin/sh
 
-cat << EOF > /root/torrust-axum/target/release/config.toml
+if [ ! -z "${FULL_CONFIG}" ]
+then
+  cat << EOF > /root/torrust-axum/target/release/config.toml
+${FULL_CONFIG}
+EOF
+else
+  cat << EOF > /root/torrust-axum/target/release/config.toml
 log_level = "${LOG_LEVEL}"
 log_console_interval = ${LOG_CONSOLE_INTERVAL}
 statistics_enabled = ${STATISTICS_ENABLED}
@@ -67,6 +73,7 @@ db_keys = "${DB_STRUCTURE_DB_KEYS}"
 table_keys_hash = "${DB_STRUCTURE_TABLE_KEYS_HASH}"
 table_keys_timeout = "${DB_STRUCTURE_TABLE_KEYS_TIMEOUT}"
 EOF
+fi
 
 echo "Configuration:"
 echo ""

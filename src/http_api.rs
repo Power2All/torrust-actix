@@ -42,6 +42,8 @@ pub async fn http_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker
             .route("/api/keys/reload", get(http_api_keys_reload))
             .route("/api/keys/:key", get(http_api_keys_get).delete(http_api_keys_delete))
             .route("/api/keys/:key/:seconds_valid", post(http_api_keys_post).patch(http_api_keys_patch))
+            .route("/api/maintenance/enable", get(http_api_maintenance_enable))
+            .route("/api/maintenance/disable", get(http_api_maintenance_disable))
             .layer(CorsLayer::new()
                 .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH])
                 .allow_origin(Any)
@@ -76,6 +78,8 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
             .route("/api/keys/reload", get(http_api_keys_reload))
             .route("/api/keys/:key", get(http_api_keys_get).delete(http_api_keys_delete))
             .route("/api/keys/:key/:seconds_valid", post(http_api_keys_post).patch(http_api_keys_patch))
+            .route("/api/maintenance/enable", get(http_api_maintenance_enable))
+            .route("/api/maintenance/disable", get(http_api_maintenance_disable))
             .layer(CorsLayer::new()
                 .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH])
                 .allow_origin(Any)
@@ -817,6 +821,54 @@ pub async fn http_api_keys_delete(ClientIp(ip): ClientIp, axum::extract::RawQuer
     };
 
     state.remove_key(key).await;
+
+    let return_data = json!({ "status": "ok"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
+}
+
+pub async fn http_api_maintenance_enable(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+{
+    http_api_stats_log(ip, state.clone()).await;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    let query_map_result = parse_query(params);
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
+    };
+
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
+    }
+
+    state.clone().set_stats(StatsEvent::MaintenanceMode, 1).await;
+
+    let return_data = json!({ "status": "ok"});
+    (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
+}
+
+pub async fn http_api_maintenance_disable(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+{
+    http_api_stats_log(ip, state.clone()).await;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    let query_map_result = parse_query(params);
+    let query_map = match api_query_hashing(query_map_result, headers.clone()) {
+        Ok(result) => { result }
+        Err(err) => { return err; }
+    };
+
+    let check_token = check_api_token(state.clone().config.clone(), ip, query_map.clone(), headers.clone()).await;
+    if check_token.is_some() {
+        return check_token.unwrap();
+    }
+
+    state.clone().set_stats(StatsEvent::MaintenanceMode, 0).await;
 
     let return_data = json!({ "status": "ok"});
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())

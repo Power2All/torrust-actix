@@ -64,6 +64,10 @@
 <div id="content_dashboard" class="content container mt-2 d-none">
     <div class="m-1">
         <button id="content_dashboard_button_reload" type="button" class="btn btn-primary"><i class="bi bi-arrow-clockwise" style="margin-right: 5px;"></i>Reload</button>
+        <div class="form-check form-switch" style="margin-top: 8px; margin-bottom: 10px">
+            <input class="form-check-input" type="checkbox" role="switch" id="content_dashboard_toggle_maintenance">
+            <label class="form-check-label" for="content_dashboard_toggle_maintenance">Maintenance Mode</label>
+        </div>
     </div>
     <div class="row">
         <div class="col-lg-3 p-1">
@@ -430,6 +434,15 @@
             $("#content_dashboard_button_reload").prop('disabled', true);
             loadStats();
         });
+        $("#content_dashboard_toggle_maintenance").on("click", function(event) {
+            console.log($(this).prop('checked'));
+            $("#content_dashboard_toggle_maintenance").prop('disabled', true);
+            if ($(this).prop('checked') === true) {
+                setMaintenance(true);
+            } else {
+                setMaintenance(false);
+            }
+        });
 
         // Buttons on Whitelist page
         $("#content_whitelist_button_load").on("click", function(event) {
@@ -564,6 +577,8 @@
     async function loadStats() {
         let access_token = $("#nav_input_access_token").val();
 
+        let content_dashboard_toggle_maintenance = $("#content_dashboard_toggle_maintenance");
+
         let content_dashboard_button_reload = $("#content_dashboard_button_reload");
         let content_dashboard_torrents_count = $("#content_dashboard_torrents_count");
         let content_dashboard_completed_count = $("#content_dashboard_completed_count");
@@ -597,6 +612,11 @@
                     content_dashboard_keys_state.html("<i class=\"bi bi-question\"></i>");
                     $(".content_dashboard_keys_card").css('background-color', 'darkgray');
                     return;
+                }
+                if (response.data.maintenance_mode === 0) {
+                    content_dashboard_toggle_maintenance.prop('checked', false);
+                } else {
+                    content_dashboard_toggle_maintenance.prop('checked', true);
                 }
                 content_dashboard_button_reload.prop('disabled', false);
                 content_dashboard_torrents_count.html(response.data.torrents);
@@ -639,6 +659,50 @@
                 content_dashboard_keys_state.html("<i class=\"bi bi-question\"></i>");
                 $(".content_dashboard_keys_card").css('background-color', 'darkgray');
             });
+    }
+
+    async function setMaintenance(state) {
+        let access_token = $("#nav_input_access_token").val();
+
+        let content_dashboard_toggle_maintenance = $("#content_dashboard_toggle_maintenance");
+
+        if (state === true) {
+            axios.get(root_url + '/api/maintenance/enable?token=' + encodeURIComponent(access_token))
+                .then(function (response) {
+                    if (response.data.status !== undefined && response.data.status !== "ok") {
+                        notificationOnScreen("Unable to set maintenance mode on: " + response.data.status);
+                        content_dashboard_toggle_maintenance.prop('disabled', false);
+                        return;
+                    }
+                    content_dashboard_toggle_maintenance.prop('checked', true);
+                    content_dashboard_toggle_maintenance.prop('disabled', false);
+                })
+                .catch(function (error) {
+                    let message = $("#message");
+                    message.find(".toast-body").html("Unable to set maintenance mode on: " + error.message);
+                    let toast = new bootstrap.Toast(message);
+                    toast.show();
+                    content_dashboard_toggle_maintenance.prop('disabled', false);
+                });
+        } else {
+            axios.get(root_url + '/api/maintenance/disable?token=' + encodeURIComponent(access_token))
+                .then(function (response) {
+                    if (response.data.status !== undefined && response.data.status !== "ok") {
+                        notificationOnScreen("Unable to set maintenance mode off: " + response.data.status);
+                        content_dashboard_toggle_maintenance.prop('disabled', false);
+                        return;
+                    }
+                    content_dashboard_toggle_maintenance.prop('checked', false);
+                    content_dashboard_toggle_maintenance.prop('disabled', false);
+                })
+                .catch(function (error) {
+                    let message = $("#message");
+                    message.find(".toast-body").html("Unable to set maintenance mode off: " + error.message);
+                    let toast = new bootstrap.Toast(message);
+                    toast.show();
+                    content_dashboard_toggle_maintenance.prop('disabled', false);
+                });
+        }
     }
 
     async function loadWhitelist(table_element) {

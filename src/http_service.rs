@@ -4,7 +4,6 @@ use std::future::Future;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use axum::{Extension, Router};
-use axum::handler::Handler;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::http::header::HeaderName;
 use axum::response::IntoResponse;
@@ -16,7 +15,7 @@ use log::{debug, info};
 use scc::ebr::Arc;
 use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
 use scc::HashIndex;
-use crate::common::{CustomError, InfoHash, parse_query};
+use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::{StatsEvent, TorrentTracker};
 
@@ -30,7 +29,7 @@ pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTra
             .route("/announce/:key", get(http_service_announce))
             .route("/scrape", get(http_service_scrape))
             .route("/scrape/:key", get(http_service_scrape))
-            .fallback(http_service_404.into_service())
+            .fallback(http_service_404)
             .layer(Extension(data))
             .into_make_service_with_connect_info::<SocketAddr>()
         )
@@ -51,7 +50,7 @@ pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTr
             .route("/announce/:key", get(http_service_announce))
             .route("/scrape", get(http_service_scrape))
             .route("/scrape/:key", get(http_service_scrape))
-            .fallback(http_service_404.into_service())
+            .fallback(http_service_404)
             .layer(Extension(data))
             .into_make_service_with_connect_info::<SocketAddr>()
         )
@@ -62,6 +61,11 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
     http_service_announce_log(ip, state.clone()).await;
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    if maintenance_mode(state.clone()).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
+        return (StatusCode::OK, headers, return_string);
+    }
 
     let query_map_result = parse_query(params);
     let query_map = match http_query_hashing(query_map_result, headers.clone()) {
@@ -222,6 +226,11 @@ pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
+    if maintenance_mode(state.clone()).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
+        return (StatusCode::OK, headers, return_string);
+    }
+
     let query_map_result = parse_query(params);
     let query_map = match http_query_hashing(query_map_result, headers.clone()) {
         Ok(result) => { result }
@@ -327,4 +336,3 @@ pub fn http_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>
         }
     }
 }
-

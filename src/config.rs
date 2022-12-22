@@ -76,6 +76,7 @@ pub struct Configuration {
     pub keys: bool,
     pub keys_cleanup_interval: Option<u64>,
 
+    pub maintenance_mode_enabled: bool,
     pub interval: Option<u64>,
     pub interval_minimum: Option<u64>,
     pub interval_cleanup: Option<u64>,
@@ -131,6 +132,7 @@ impl Configuration {
             keys: false,
             keys_cleanup_interval: Some(60),
 
+            maintenance_mode_enabled: false,
             interval: Some(1800),
             interval_minimum: Some(1800),
             interval_cleanup: Some(900),
@@ -186,12 +188,17 @@ impl Configuration {
         }
     }
 
-    pub fn load_from_file() -> Result<Configuration, CustomError> {
+    pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
         let mut config = Configuration::default();
         match Configuration::load_file("config.toml") {
             Ok(c) => { config = c; }
             Err(_) => {
                 eprintln!("No config file found.");
+
+                if !create {
+                    eprintln!("You can either create your own config.toml file, or start this app using '--create-config' as parameter.");
+                    return Err(CustomError::new("will not create automatically config.toml file"));
+                }
                 eprintln!("Creating config file..");
 
                 let config_toml = toml::to_string(&config).unwrap();
