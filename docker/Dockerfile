@@ -94,7 +94,7 @@ ENV DB_STRUCTURE_DB_KEYS=$DB_STRUCTURE_DB_KEYS DB_STRUCTURE_TABLE_KEYS_HASH=$DB_
 
 RUN apk add git musl-dev
 RUN git clone https://github.com/Power2All/torrust-axum.git /root/torrust-axum
-RUN cd /root/torrust-axum && git checkout tags/v3.1.1
+RUN cd /root/torrust-axum && git checkout tags/v3.1.2
 WORKDIR /root/torrust-axum
 RUN cd /root/torrust-axum
 RUN cargo build --release && rm -Rf target/release/.fingerprint target/release/build target/release/deps target/release/examples target/release/incremental
