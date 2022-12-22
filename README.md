@@ -339,6 +339,24 @@ This will remove a key from the keys list, and returns status if successful or f
 }
 ```
 
+#### GET `http(s)://127.0.0.1:8080/api/maintenance/enable?token=[TOKENID]`
+This will enable the maintenance mode.
+
+```json
+{
+  "status":"ok"
+}
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/maintenance/disable?token=[TOKENID]`
+This will disable the maintenance mode.
+
+```json
+{
+  "status":"ok"
+}
+```
+
 ### ChangeLog
 
 #### v3.1.2
