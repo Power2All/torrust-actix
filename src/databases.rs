@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::process::exit;
 use std::str::FromStr;
 use std::time::Duration;
+use clap::ValueEnum;
 use futures::TryStreamExt;
 use log::{info, error};
 use scc::ebr::Arc;
@@ -13,11 +14,11 @@ use serde::{Deserialize, Serialize};
 use crate::common::InfoHash;
 use crate::config::Configuration;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum DatabaseDrivers {
-    SQLite3,
-    MySQL,
-    PgSQL
+    sqlite3,
+    mysql,
+    pgsql
 }
 
 #[derive(Clone)]
@@ -90,7 +91,7 @@ impl DatabaseConnector {
         };
 
         match &config.db_driver {
-            DatabaseDrivers::SQLite3 => {
+            DatabaseDrivers::sqlite3 => {
                 let sqlite_connect = DatabaseConnectorSQLite::create(&config.db_path).await;
                 if sqlite_connect.is_err() {
                     error!("[SQLite] Unable to open the database {}", &config.db_path);
@@ -100,11 +101,13 @@ impl DatabaseConnector {
                 structure.sqlite = Some(DatabaseConnectorSQLite {
                     pool: sqlite_connect.unwrap()
                 });
-                structure.engine = Some(DatabaseDrivers::SQLite3);
+                structure.engine = Some(DatabaseDrivers::sqlite3);
                 let pool = &structure.sqlite.clone().unwrap().pool;
                 let _ = sqlx::query("PRAGMA temp_store = memory;").execute(pool).await;
                 let _ = sqlx::query("PRAGMA mmap_size = 30000000000;").execute(pool).await;
-                let _ = sqlx::query("PRAGMA page_size = 4096;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA page_size = 32768;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA journal_mode = WAL;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA synchronous = normal;").execute(pool).await;
                 let _ = sqlx::query(
                     format!(
                         "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY, {} INTEGER DEFAULT 0 NOT NULL)",
@@ -136,7 +139,7 @@ impl DatabaseConnector {
                     ).as_str()
                 ).execute(pool).await;
             }
-            DatabaseDrivers::MySQL => {
+            DatabaseDrivers::mysql => {
                 let mysql_connect = DatabaseConnectorMySQL::create(&config.db_path).await;
                 if mysql_connect.is_err() {
                     error!("[MySQL] Unable to connect to MySQL on DSL {}", &config.db_path);
@@ -145,9 +148,9 @@ impl DatabaseConnector {
                 structure.mysql = Some(DatabaseConnectorMySQL {
                     pool: mysql_connect.unwrap()
                 });
-                structure.engine = Some(DatabaseDrivers::MySQL);
+                structure.engine = Some(DatabaseDrivers::mysql);
             }
-            DatabaseDrivers::PgSQL => {
+            DatabaseDrivers::pgsql => {
                 let pgsql_connect = DatabaseConnectorPgSQL::create(&config.db_path).await;
                 if pgsql_connect.is_err() {
                     error!("[PgSQL] Unable to connect to PostgresSQL on DSL {}", &config.db_path)
@@ -155,7 +158,7 @@ impl DatabaseConnector {
                 structure.pgsql = Some(DatabaseConnectorPgSQL {
                     pool: pgsql_connect.unwrap()
                 });
-                structure.engine = Some(DatabaseDrivers::PgSQL);
+                structure.engine = Some(DatabaseDrivers::pgsql);
             }
         }
 
@@ -170,7 +173,7 @@ impl DatabaseConnector {
 
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
-                DatabaseDrivers::SQLite3 => {
+                DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
                     let query = format!(
@@ -197,7 +200,7 @@ impl DatabaseConnector {
                     info!("[SQLite3] Loaded {} whitelists...", total_whitelist);
                     Ok(return_data_whitelist)
                 }
-                DatabaseDrivers::MySQL => {
+                DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
                     let query = format!(
@@ -214,7 +217,8 @@ impl DatabaseConnector {
                             counter = 0;
                         }
                         let info_hash_data: &[u8] = result.get(self.config.db_structure.table_whitelist_info_hash.clone().as_str());
-                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         return_data_whitelist.push(InfoHash(info_hash));
                         counter += 1;
                         total_whitelist += 1;
@@ -223,7 +227,7 @@ impl DatabaseConnector {
                     info!("[MySQL] Loaded {} whitelists...", total_whitelist);
                     Ok(return_data_whitelist)
                 }
-                DatabaseDrivers::PgSQL => {
+                DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
                     let query = format!(
@@ -240,7 +244,8 @@ impl DatabaseConnector {
                             counter = 0;
                         }
                         let info_hash_data: &[u8] = result.get(self.config.db_structure.table_whitelist_info_hash.clone().as_str());
-                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         return_data_whitelist.push(InfoHash(info_hash));
                         counter += 1;
                         total_whitelist += 1;
@@ -263,7 +268,7 @@ impl DatabaseConnector {
 
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
-                DatabaseDrivers::SQLite3 => {
+                DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
                     let query = format!(
@@ -290,7 +295,7 @@ impl DatabaseConnector {
                     info!("[SQLite3] Loaded {} blacklists...", total_blacklist);
                     Ok(return_data_blacklist)
                 }
-                DatabaseDrivers::MySQL => {
+                DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
                     let query = format!(
@@ -307,7 +312,8 @@ impl DatabaseConnector {
                             counter = 0;
                         }
                         let info_hash_data: &[u8] = result.get(self.config.db_structure.table_blacklist_info_hash.clone().as_str());
-                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         return_data_blacklist.push(InfoHash(info_hash));
                         counter += 1;
                         total_blacklist += 1;
@@ -316,7 +322,7 @@ impl DatabaseConnector {
                     info!("[MySQL] Loaded {} blacklists...", total_blacklist);
                     Ok(return_data_blacklist)
                 }
-                DatabaseDrivers::PgSQL => {
+                DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
                     let query = format!(
@@ -333,7 +339,8 @@ impl DatabaseConnector {
                             counter = 0;
                         }
                         let info_hash_data: &[u8] = result.get(self.config.db_structure.table_blacklist_info_hash.clone().as_str());
-                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         return_data_blacklist.push(InfoHash(info_hash));
                         counter += 1;
                         total_blacklist += 1;
@@ -356,7 +363,7 @@ impl DatabaseConnector {
 
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
-                DatabaseDrivers::SQLite3 => {
+                DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
                     let query = format!(
@@ -385,7 +392,7 @@ impl DatabaseConnector {
                     info!("[SQLite3] Loaded {} keys...", total_keys);
                     Ok(return_data_keys)
                 }
-                DatabaseDrivers::MySQL => {
+                DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
                     let query = format!(
@@ -403,8 +410,9 @@ impl DatabaseConnector {
                             counter = 0;
                         }
                         let hash_data: &[u8] = result.get(self.config.db_structure.table_keys_hash.clone().as_str());
+                        let hash_decoded = hex::decode(hash_data).unwrap();
                         let timeout_data: i64 = result.get(self.config.db_structure.table_keys_timeout.clone().as_str());
-                        let hash = <[u8; 20]>::try_from(hash_data[0..20].as_ref()).unwrap();
+                        let hash = <[u8; 20]>::try_from(hash_decoded[0..20].as_ref()).unwrap();
                         return_data_keys.push((InfoHash(hash), timeout_data));
                         counter += 1;
                         total_keys += 1;
@@ -413,7 +421,7 @@ impl DatabaseConnector {
                     info!("[MySQL] Loaded {} keys...", total_keys);
                     Ok(return_data_keys)
                 }
-                DatabaseDrivers::PgSQL => {
+                DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
                     let query = format!(
@@ -431,8 +439,9 @@ impl DatabaseConnector {
                             counter = 0;
                         }
                         let hash_data: &[u8] = result.get(self.config.db_structure.table_keys_hash.clone().as_str());
+                        let hash_decoded = hex::decode(hash_data).unwrap();
                         let timeout_data: i64 = result.get(self.config.db_structure.table_keys_timeout.clone().as_str());
-                        let hash = <[u8; 20]>::try_from(hash_data[0..20].as_ref()).unwrap();
+                        let hash = <[u8; 20]>::try_from(hash_decoded[0..20].as_ref()).unwrap();
                         return_data_keys.push((InfoHash(hash), timeout_data));
                         counter += 1;
                         total_keys += 1;
@@ -455,7 +464,7 @@ impl DatabaseConnector {
 
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
-                DatabaseDrivers::SQLite3 => {
+                DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
                     let query = format!(
@@ -484,7 +493,7 @@ impl DatabaseConnector {
                     info!("[SQLite3] Loaded {} torrents...", total_torrents);
                     Ok(return_data_torrents)
                 }
-                DatabaseDrivers::MySQL => {
+                DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
                     let query = format!(
@@ -502,8 +511,9 @@ impl DatabaseConnector {
                             counter = 0;
                         }
                         let info_hash_data: &[u8] = result.get(self.config.db_structure.table_torrents_info_hash.clone().as_str());
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
-                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         return_data_torrents.push((InfoHash(info_hash), completed_data));
                         counter += 1;
                         total_torrents += 1;
@@ -512,7 +522,7 @@ impl DatabaseConnector {
                     info!("[MySQL] Loaded {} torrents...", total_torrents);
                     Ok(return_data_torrents)
                 }
-                DatabaseDrivers::PgSQL => {
+                DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
                     let query = format!(
@@ -530,8 +540,9 @@ impl DatabaseConnector {
                             counter = 0;
                         }
                         let info_hash_data: &[u8] = result.get(self.config.db_structure.table_torrents_info_hash.clone().as_str());
+                        let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
-                        let info_hash = <[u8; 20]>::try_from(info_hash_data[0..20].as_ref()).unwrap();
+                        let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         return_data_torrents.push((InfoHash(info_hash), completed_data));
                         counter += 1;
                         total_torrents += 1;
@@ -546,34 +557,52 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn save_whitelist(&self, whitelists: Vec<InfoHash>) -> Result<(), Error>
+    pub async fn save_whitelist(&self, whitelists: HashMap<InfoHash, i64>) -> Result<(), Error>
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
-                DatabaseDrivers::SQLite3 => {
+                DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
                     let mut whitelist_transaction = pool.begin().await?;
                     let mut whitelist_handled_entries = 0u64;
-                    for info_hash in whitelists.iter() {
-                        whitelist_handled_entries += 1;
-                        match sqlx::query(&*format!(
-                            "INSERT OR REPLACE INTO {} ({}) VALUES ('{}')",
-                            self.config.db_structure.db_whitelist,
-                            self.config.db_structure.table_whitelist_info_hash,
-                            info_hash
-                        ))
-                            .execute(&mut whitelist_transaction)
-                            .await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[SQLite3] Error: {}", e.to_string());
-                                return Err(e);
+                    for (info_hash, value) in whitelists.iter() {
+                        if value == &2 {
+                            whitelist_handled_entries += 1;
+                            match sqlx::query(&*format!(
+                                "INSERT OR IGNORE INTO {} ({}) VALUES ('{}')",
+                                self.config.db_structure.db_whitelist,
+                                self.config.db_structure.table_whitelist_info_hash,
+                                info_hash
+                            ))
+                                .execute(&mut whitelist_transaction)
+                                .await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("[SQLite3] Error: {}", e.to_string());
+                                    return Err(e);
+                                }
+                            }
+
+                            if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
+                                info!("[SQLite3] Handled {} whitelists", whitelist_handled_entries);
                             }
                         }
-
-                        if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
-                            info!("[SQLite3] Handled {} whitelists", whitelist_handled_entries);
+                        if value == &0 {
+                            match sqlx::query(&*format!(
+                                "DELETE FROM {} WHERE {} = '{}'",
+                                self.config.db_structure.db_whitelist,
+                                self.config.db_structure.table_whitelist_info_hash,
+                                info_hash
+                            ))
+                                .execute(&mut whitelist_transaction)
+                                .await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("[SQLite3] Error: {}", e.to_string());
+                                    return Err(e);
+                                }
+                            }
                         }
                     }
                     match whitelist_transaction.commit().await {
@@ -586,31 +615,49 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-                DatabaseDrivers::MySQL => {
+                DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
                     let mut whitelist_transaction = pool.begin().await?;
                     let mut whitelist_handled_entries = 0u64;
-                    let _ = sqlx::query(&*format!("TRUNCATE TABLE {}", self.config.db_structure.db_whitelist)).execute(&mut whitelist_transaction).await?;
-                    for info_hash in whitelists.iter() {
-                        whitelist_handled_entries += 1;
-                        match sqlx::query(&*format!(
-                            "INSERT INTO {} ({}) VALUES (UNHEX('{}'))",
-                            self.config.db_structure.db_whitelist,
-                            self.config.db_structure.table_whitelist_info_hash,
-                            info_hash
-                        ))
-                            .execute(&mut whitelist_transaction)
-                            .await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[MySQL] Error: {}", e.to_string());
-                                return Err(e);
+                    // let _ = sqlx::query(&*format!("TRUNCATE TABLE {}", self.config.db_structure.db_whitelist)).execute(&mut whitelist_transaction).await?;
+                    for (info_hash, value) in whitelists.iter() {
+                        if value == &2 {
+                            whitelist_handled_entries += 1;
+                            match sqlx::query(&*format!(
+                                "INSERT IGNORE INTO {} ({}) VALUES ('{}')",
+                                self.config.db_structure.db_whitelist,
+                                self.config.db_structure.table_whitelist_info_hash,
+                                info_hash
+                            ))
+                                .execute(&mut whitelist_transaction)
+                                .await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("[MySQL] Error: {}", e.to_string());
+                                    return Err(e);
+                                }
+                            }
+
+                            if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
+                                info!("[MySQL] Handled {} whitelists", whitelist_handled_entries);
                             }
                         }
-
-                        if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
-                            info!("[MySQL] Handled {} whitelists", whitelist_handled_entries);
+                        if value == &0 {
+                            match sqlx::query(&*format!(
+                                "DELETE FROM {} WHERE {} = '{}'",
+                                self.config.db_structure.db_whitelist,
+                                self.config.db_structure.table_whitelist_info_hash,
+                                info_hash
+                            ))
+                                .execute(&mut whitelist_transaction)
+                                .await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("[MySQL] Error: {}", e.to_string());
+                                    return Err(e);
+                                }
+                            }
                         }
                     }
                     match whitelist_transaction.commit().await {
@@ -623,7 +670,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-                DatabaseDrivers::PgSQL => {
+                DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
                     let mut whitelist_transaction = pool.begin().await?;
@@ -635,25 +682,44 @@ impl DatabaseConnector {
                             return Err(e);
                         }
                     }
-                    for info_hash in whitelists.iter() {
-                        whitelist_handled_entries += 1;
-                        match sqlx::query(&*format!(
-                            "INSERT INTO {} ({}) VALUES (decode('{}','hex'))",
-                            self.config.db_structure.db_whitelist,
-                            self.config.db_structure.table_whitelist_info_hash,
-                            info_hash
-                        ))
-                            .execute(&mut whitelist_transaction)
-                            .await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
-                                return Err(e);
+                    for (info_hash, value) in whitelists.iter() {
+                        if value == &2 {
+                            whitelist_handled_entries += 1;
+                            match sqlx::query(&*format!(
+                                "INSERT INTO {} ({}) VALUES ('{}') ON CONFLICT ({}) DO NOTHING;",
+                                self.config.db_structure.db_whitelist,
+                                self.config.db_structure.table_whitelist_info_hash,
+                                info_hash,
+                                self.config.db_structure.table_whitelist_info_hash
+                            ))
+                                .execute(&mut whitelist_transaction)
+                                .await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("[PgSQL] Error: {}", e.to_string());
+                                    return Err(e);
+                                }
+                            }
+
+                            if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
+                                info!("[PgSQL] Handled {} whitelists", whitelist_handled_entries);
                             }
                         }
-
-                        if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
-                            info!("[PgSQL] Handled {} whitelists", whitelist_handled_entries);
+                        if value == &0 {
+                            match sqlx::query(&*format!(
+                                "DELETE FROM {} WHERE {} = '{}';",
+                                self.config.db_structure.db_whitelist,
+                                self.config.db_structure.table_whitelist_info_hash,
+                                info_hash
+                            ))
+                                .execute(&mut whitelist_transaction)
+                                .await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("[PgSQL] Error: {}", e.to_string());
+                                    return Err(e);
+                                }
+                            }
                         }
                     }
                     match whitelist_transaction.commit().await {
@@ -676,7 +742,7 @@ impl DatabaseConnector {
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
-                DatabaseDrivers::SQLite3 => {
+                DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
                     let mut blacklist_transaction = pool.begin().await?;
@@ -712,7 +778,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-                DatabaseDrivers::MySQL => {
+                DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
                     let mut blacklist_transaction = pool.begin().await?;
@@ -721,7 +787,7 @@ impl DatabaseConnector {
                     for info_hash in blacklists.iter() {
                         blacklist_handled_entries += 1;
                         match sqlx::query(&*format!(
-                            "INSERT INTO {} ({}) VALUES (UNHEX('{}'))",
+                            "INSERT INTO {} ({}) VALUES ('{}')",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
                             info_hash
@@ -749,7 +815,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-                DatabaseDrivers::PgSQL => {
+                DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
                     let mut blacklist_transaction = pool.begin().await?;
@@ -758,7 +824,7 @@ impl DatabaseConnector {
                     for info_hash in blacklists.iter() {
                         blacklist_handled_entries += 1;
                         match sqlx::query(&*format!(
-                            "INSERT INTO {} ({}) VALUES (decode('{}','hex'))",
+                            "INSERT INTO {} ({}) VALUES ('{}')",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
                             info_hash
@@ -796,7 +862,7 @@ impl DatabaseConnector {
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
-                DatabaseDrivers::SQLite3 => {
+                DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
                     let mut keys_transaction = pool.begin().await?;
@@ -834,7 +900,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-                DatabaseDrivers::MySQL => {
+                DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
                     let mut keys_transaction = pool.begin().await?;
@@ -842,7 +908,7 @@ impl DatabaseConnector {
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
                         match sqlx::query(&*format!(
-                            "INSERT INTO {} (`{}`,`{}`) VALUES (UNHEX('{}'),{}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
+                            "INSERT INTO {} (`{}`,`{}`) VALUES ('{}',{}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,
@@ -874,7 +940,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-                DatabaseDrivers::PgSQL => {
+                DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
                     let mut keys_transaction = pool.begin().await?;
@@ -882,7 +948,7 @@ impl DatabaseConnector {
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
                         match sqlx::query(&*format!(
-                            "INSERT INTO {} ({},{}) VALUES (decode('{}','hex'),{}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                            "INSERT INTO {} ({},{}) VALUES ('{}',{}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
                             self.config.db_structure.table_keys_timeout,
@@ -925,7 +991,7 @@ impl DatabaseConnector {
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
-                DatabaseDrivers::SQLite3 => {
+                DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
 
                     let mut torrents_transaction = pool.begin().await?;
@@ -963,7 +1029,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-                DatabaseDrivers::MySQL => {
+                DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
 
                     let mut torrents_transaction = pool.begin().await?;
@@ -971,7 +1037,7 @@ impl DatabaseConnector {
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
                         match sqlx::query(&*format!(
-                            "INSERT INTO {} (`{}`,`{}`) VALUES (UNHEX('{}'),{}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
+                            "INSERT INTO {} (`{}`,`{}`) VALUES ('{}',{}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,
@@ -1003,7 +1069,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-                DatabaseDrivers::PgSQL => {
+                DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
 
                     let mut torrents_transaction = pool.begin().await?;
@@ -1011,7 +1077,7 @@ impl DatabaseConnector {
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
                         match sqlx::query(&*format!(
-                            "INSERT INTO {} ({},{}) VALUES (decode('{}','hex'),{}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                            "INSERT INTO {} ({},{}) VALUES ('{}',{}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
                             self.config.db_structure.table_torrents_completed,

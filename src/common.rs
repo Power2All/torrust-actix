@@ -279,6 +279,7 @@ impl PeerId {
                 b"MT" => "MoonlightTorrent",
                 b"NX" => "Net Transport",
                 b"PD" => "Pando",
+                b"PI" => "PicoTorrent",
                 b"qB" => "qBittorrent",
                 b"QD" => "QQDownload",
                 b"QT" => "Qt 4 Torrent example",

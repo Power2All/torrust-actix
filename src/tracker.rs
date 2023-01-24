@@ -331,7 +331,7 @@ impl TorrentTracker {
             let mut whitelist_count = 0i64;
 
             for info_hash in whitelists.iter() {
-                self.add_whitelist(*info_hash).await;
+                self.add_whitelist(*info_hash, true).await;
                 whitelist_count += 1;
             }
 
@@ -379,7 +379,15 @@ impl TorrentTracker {
     pub async fn save_whitelists(&self) -> bool
     {
         let whitelist = self.get_whitelist().await;
-        if self.sqlx.save_whitelist(whitelist).await.is_ok() {
+        if self.sqlx.save_whitelist(whitelist.clone()).await.is_ok() {
+            for (info_hash, value) in whitelist.iter() {
+                if value == &0 {
+                    self.remove_whitelist(*info_hash).await;
+                }
+                if value == &2 {
+                    self.add_whitelist(*info_hash, true).await;
+                }
+            }
             return true;
         }
         false
@@ -710,25 +718,46 @@ impl TorrentTracker {
     }
 
     /* === Whitelist === */
-    pub async fn add_whitelist(&self, info_hash: InfoHash)
+    pub async fn add_whitelist(&self, info_hash: InfoHash, on_load: bool)
     {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        torrents_lock.whitelist.insert(info_hash, 0i64);
+        if on_load {
+            torrents_lock.whitelist.insert(info_hash, 1i64);
+        } else {
+            torrents_lock.whitelist.insert(info_hash, 2i64);
+        }
         drop(torrents_lock);
         self.update_stats(StatsEvent::Whitelist, 1).await;
     }
 
-    pub async fn get_whitelist(&self) -> Vec<InfoHash>
+    pub async fn get_whitelist(&self) -> HashMap<InfoHash, i64>
     {
         let torrents_arc = self.torrents.clone();
         let torrents_lock = torrents_arc.write().await;
-        let mut return_list = vec![];
-        for (info_hash, _) in torrents_lock.whitelist.iter() {
-            return_list.push(*info_hash);
+        let mut return_list = HashMap::new();
+        for (info_hash, value) in torrents_lock.whitelist.iter() {
+            return_list.insert(*info_hash, *value);
         }
         drop(torrents_lock);
         return_list
+    }
+
+    pub async fn remove_flag_whitelist(&self, info_hash: InfoHash)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        if !torrents_lock.whitelist.get(&info_hash).is_none() {
+            torrents_lock.whitelist.insert(info_hash, 0i64);
+        }
+        let mut whitelist_count = 0i64;
+        for (_, value) in torrents_lock.whitelist.iter() {
+            if value == &1i64 {
+                whitelist_count = whitelist_count + 1;
+            }
+        }
+        drop(torrents_lock);
+        self.set_stats(StatsEvent::Whitelist, whitelist_count as i64).await;
     }
 
     pub async fn remove_whitelist(&self, info_hash: InfoHash)
@@ -736,7 +765,12 @@ impl TorrentTracker {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
         torrents_lock.whitelist.remove(&info_hash);
-        let whitelist_count = torrents_lock.whitelist.len();
+        let mut whitelist_count = 0i64;
+        for (_, value) in torrents_lock.whitelist.iter() {
+            if value == &1 {
+                whitelist_count = whitelist_count + 1;
+            }
+        }
         drop(torrents_lock);
         self.set_stats(StatsEvent::Whitelist, whitelist_count as i64).await;
     }

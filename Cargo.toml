@@ -1,6 +1,6 @@
 [package]
 name = "torrust-axum"
-version = "3.1.2"
+version = "3.2.0"
 edition = "2021"
 license = "AGPL-3.0"
 authors = [
@@ -29,6 +29,7 @@ binascii = "0.1.4"
 bip_bencode = "0.4.4"
 byteorder = "1.4.3"
 chrono = "0.4.19"
+clap = { version = "4.1.1", features = ["derive"] }
 either = "1.7.0"
 fern = { version = "0.6.1", features = ["colored"] }
 futures = "0.3.21"
@@ -39,12 +40,12 @@ log = "0.4.17"
 mime_guess = "2.0.4"
 percent-encoding = "2.1.0"
 rustls = "0.20.6"
-scc = "0.12.3"
+scc = "1.0.9"
 serde = { version = "1.0.141", features = ["derive"] }
 serde_json = "1.0.82"
 sqlx = { version = "0.6.0", features = ["mysql", "postgres", "sqlite", "runtime-tokio-rustls"] }
 thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["full"] }
-toml = "0.5.9"
+toml = "0.5.11"
 tower = "0.4.13"
 tower-http = { version = "0.3.4", features = ["cors"] }

@@ -120,7 +120,7 @@ impl Configuration {
             log_console_interval: Some(60),
             statistics_enabled: true,
 
-            db_driver: DatabaseDrivers::SQLite3,
+            db_driver: DatabaseDrivers::sqlite3,
             db_path: String::from("sqlite://:memory:"),
             persistence: false,
             persistence_interval: Some(60),
