@@ -1,38 +1,186 @@
 use std::env;
 use std::net::SocketAddr;
+use std::ops::Add;
 use std::process::exit;
 use std::time::Duration;
 use axum_server::Handle;
+use clap::Parser;
 use futures::future::try_join_all;
 use log::{error, info};
 use scc::ebr::Arc;
 use torrust_axum::common::{tcp_check_host_and_port_used, udp_check_host_and_port_used};
 use torrust_axum::config;
+use torrust_axum::config::{Configuration, DatabaseStructureConfig};
+use torrust_axum::databases::DatabaseDrivers;
 use torrust_axum::http_api::{http_api, https_api};
 use torrust_axum::http_service::{http_service, https_service};
 use torrust_axum::logging::setup_logging;
 use torrust_axum::tracker::{StatsEvent, TorrentTracker};
 use torrust_axum::udp_service::udp_service;
 
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Create config.toml file if not exists or is broken.
+    #[arg(long)]
+    create_config: bool,
+
+    /// Convert SQLite3, MySQL or PgSQL database to any of the other.
+    #[arg(long)]
+    convert_database: bool,
+
+    /// Which source engine to use.
+    #[arg(long, value_enum, required = false)]
+    source_engine: Option<DatabaseDrivers>,
+
+    /// Source database: 'sqlite://...', 'mysql://...', 'pgsql://...'.
+    #[arg(long, required = false)]
+    source: Option<String>,
+
+    /// Which destination engine to use.
+    #[arg(long, value_enum, required = false)]
+    destination_engine: Option<DatabaseDrivers>,
+
+    /// Destination database: 'sqlite://...', 'mysql://...', 'pgsql://...'.
+    #[arg(long, required = false)]
+    destination: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()>
 {
-    let args: Vec<String> = env::args().collect();
-    let mut config_create: bool = false;
-    if args.iter().any(|i| i=="--create-config") {
-        config_create = true;
+    let args = Cli::parse();
+
+    let mut create_config: bool = false;
+    if args.create_config {
+        create_config = true;
     }
 
-    let config = match config::Configuration::load_from_file(config_create) {
+    let config = match config::Configuration::load_from_file(create_config) {
         Ok(config) => Arc::new(config),
         Err(_) => exit(101)
     };
 
-    setup_logging(&config);
+    setup_logging(&config.clone());
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
+    if args.convert_database.clone() {
+        info!("Database Conversion execute.");
+
+        if args.source_engine.clone().is_none() || args.source.clone().is_none() || args.destination_engine.clone().is_none() || args.destination.clone().is_none() {
+            error!("Need Source/Destination Engine and URI to execute!");
+            exit(1);
+        }
+
+        info!("[RETRIEVE] [Engine: {:?}] [URI: {}]", args.source_engine.clone().unwrap(), args.source.clone().unwrap());
+
+        let source_engine = args.source_engine.clone().unwrap();
+        let source = args.source.clone().unwrap();
+        let destination_engine = args.destination_engine.clone().unwrap();
+        let destination = args.destination.clone().unwrap();
+        let config_retrieve_db_structure = config.db_structure.clone();
+        let config_send_db_structure = config.db_structure.clone();
+
+        let tracker_receive = Arc::new(TorrentTracker::new(Arc::new(Configuration{
+            log_level: "".to_string(),
+            log_console_interval: None,
+            statistics_enabled: false,
+            db_driver: source_engine,
+            db_path: source,
+            persistence: true,
+            persistence_interval: None,
+            api_key: "".to_string(),
+            whitelist: config.whitelist,
+            blacklist: config.blacklist,
+            keys: config.keys,
+            keys_cleanup_interval: None,
+            maintenance_mode_enabled: false,
+            interval: None,
+            interval_minimum: None,
+            interval_cleanup: None,
+            peer_timeout: None,
+            peers_returned: None,
+            udp_server: vec![],
+            http_server: vec![],
+            api_server: vec![],
+            db_structure: DatabaseStructureConfig {
+                db_torrents: config_retrieve_db_structure.db_torrents,
+                table_torrents_info_hash: config_retrieve_db_structure.table_torrents_info_hash,
+                table_torrents_completed: config_retrieve_db_structure.table_torrents_completed,
+                db_whitelist: config_retrieve_db_structure.db_whitelist,
+                table_whitelist_info_hash: config_retrieve_db_structure.table_whitelist_info_hash,
+                db_blacklist: config_retrieve_db_structure.db_blacklist,
+                table_blacklist_info_hash: config_retrieve_db_structure.table_blacklist_info_hash,
+                db_keys: config_retrieve_db_structure.db_keys,
+                table_keys_hash: config_retrieve_db_structure.table_keys_hash,
+                table_keys_timeout: config_retrieve_db_structure.table_keys_timeout,
+            },
+        }).clone()).await);
+        tracker_receive.clone().load_torrents().await;
+
+        let tracker_send = Arc::new(TorrentTracker::new(Arc::new(Configuration{
+            log_level: "".to_string(),
+            log_console_interval: None,
+            statistics_enabled: false,
+            db_driver: destination_engine,
+            db_path: destination,
+            persistence: true,
+            persistence_interval: None,
+            api_key: "".to_string(),
+            whitelist: config.whitelist,
+            blacklist: config.blacklist,
+            keys: config.keys,
+            keys_cleanup_interval: None,
+            maintenance_mode_enabled: false,
+            interval: None,
+            interval_minimum: None,
+            interval_cleanup: None,
+            peer_timeout: None,
+            peers_returned: None,
+            udp_server: vec![],
+            http_server: vec![],
+            api_server: vec![],
+            db_structure: DatabaseStructureConfig {
+                db_torrents: config_send_db_structure.db_torrents,
+                table_torrents_info_hash: config_send_db_structure.table_torrents_info_hash,
+                table_torrents_completed: config_send_db_structure.table_torrents_completed,
+                db_whitelist: config_send_db_structure.db_whitelist,
+                table_whitelist_info_hash: config_send_db_structure.table_whitelist_info_hash,
+                db_blacklist: config_send_db_structure.db_blacklist,
+                table_blacklist_info_hash: config_send_db_structure.table_blacklist_info_hash,
+                db_keys: config_send_db_structure.db_keys,
+                table_keys_hash: config_send_db_structure.table_keys_hash,
+                table_keys_timeout: config_send_db_structure.table_keys_timeout,
+            },
+        }).clone()).await);
+
+        info!("[SEND] [Engine: {:?}] [URI: {}]", args.destination_engine.clone().unwrap(), args.destination.clone().unwrap());
+        let mut start: u64 = 0;
+        let amount: u64 = 10000;
+        loop {
+            let torrents_block = tracker_receive.get_torrents(start, amount).await;
+            if torrents_block.is_empty() {
+                break;
+            }
+            for (info_hash, completed) in torrents_block.iter() {
+                tracker_send.add_shadow(*info_hash, *completed).await;
+                tracker_receive.remove_torrent(*info_hash, false).await;
+            }
+            start = start.add(amount);
+        }
+
+        tracker_send.save_torrents().await;
+
+
+        // tracker.clone().copy_torrents_to_shadow().await;
+        // tracker.clone().save_torrents().await;
+
+        exit(0);
+    }
+
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
+
 
     // Load torrents
     if config.persistence {

@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::common::InfoHash;
 use crate::config::Configuration;
 
+#[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum DatabaseDrivers {
     sqlite3,
@@ -52,7 +53,7 @@ impl DatabaseConnectorSQLite {
         options
             .log_statements(log::LevelFilter::Debug)
             .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
-        SqlitePoolOptions::new().connect_with(options).await
+        SqlitePoolOptions::new().connect_with(options.create_if_missing(true)).await
     }
 }
 

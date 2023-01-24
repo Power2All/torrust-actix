@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::ops::Add;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use chrono::{TimeZone, Utc};
 use log::info;
@@ -212,6 +213,21 @@ impl TorrentTracker {
             sqlx: DatabaseConnector::new(config.clone()).await
         }
     }
+
+    // /* === Config === */
+    // pub async fn set_config_db_driver(&mut self, db_driver: DatabaseDrivers)
+    // {
+    //     let mut config = self.config.clone();
+    //     config.db_driver = db_driver;
+    //     self.config = config;
+    // }
+    //
+    // pub async fn set_config_db_path(&mut self, db_path: String)
+    // {
+    //     let mut config = self.config.clone();
+    //     config.db_path = db_path;
+    //     self.config = config;
+    // }
 
     /* === Statistics === */
     pub async fn get_stats(&self) -> Stats
@@ -450,6 +466,30 @@ impl TorrentTracker {
         drop(torrents_lock);
 
         torrent
+    }
+
+    pub async fn get_torrents(&self, skip: u64, amount: u64) -> HashMap<InfoHash, i64>
+    {
+        let torrents_arc = self.torrents.clone();
+        let torrents_lock = torrents_arc.write().await;
+        let mut torrents_return: HashMap<InfoHash, i64> = HashMap::new();
+        let mut current_count: u64 = 0;
+        let mut handled_count: u64 = 0;
+        for (info_hash, item) in torrents_lock.map_torrents.iter() {
+            if current_count < skip {
+                current_count = current_count.add(1);
+                continue;
+            }
+            if handled_count >= amount {
+                break;
+            }
+            torrents_return.insert(*info_hash, item.completed);
+            current_count = current_count.add(1);
+            handled_count = handled_count.add(1);
+        }
+        drop(torrents_lock);
+
+        torrents_return
     }
 
     pub async fn remove_torrent(&self, info_hash: InfoHash, persistent: bool)

@@ -193,7 +193,7 @@ impl Configuration {
         match Configuration::load_file("config.toml") {
             Ok(c) => { config = c; }
             Err(_) => {
-                eprintln!("No config file found.");
+                eprintln!("No config file found or corrupt.");
 
                 if !create {
                     eprintln!("You can either create your own config.toml file, or start this app using '--create-config' as parameter.");
