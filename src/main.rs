@@ -157,7 +157,7 @@ async fn main() -> std::io::Result<()>
 
         info!("[SEND] [Engine: {:?}] [URI: {}]", args.destination_engine.clone().unwrap(), args.destination.clone().unwrap());
         let mut start: u64 = 0;
-        let amount: u64 = 10000;
+        let amount: u64 = 100000;
         loop {
             let torrents_block = tracker_receive.get_torrents(start, amount).await;
             if torrents_block.is_empty() {
