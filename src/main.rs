@@ -167,7 +167,6 @@ async fn main() -> std::io::Result<()>
                 tracker_send.add_shadow(*info_hash, *completed).await;
                 tracker_receive.remove_torrent(*info_hash, false).await;
             }
-            start = start.add(amount);
         }
 
         tracker_send.save_torrents().await;
