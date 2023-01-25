@@ -994,7 +994,6 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => {
                     let pool = &self.sqlite.clone().unwrap().pool;
-
                     let mut torrents_transaction = pool.begin().await?;
                     let mut torrents_handled_entries = 0u64;
                     for (info_hash, completed) in torrents.iter() {
@@ -1016,8 +1015,16 @@ impl DatabaseConnector {
                             }
                         }
 
-                        if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
+                        if (torrents_handled_entries as f64 / 10000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
+                            match torrents_transaction.commit().await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("[SQLite3] Error: {}", e.to_string());
+                                    return Err(e);
+                                }
+                            };
                             info!("[SQLite3] Handled {} torrents", torrents_handled_entries);
+                            torrents_transaction = pool.begin().await?
                         }
                     }
                     match torrents_transaction.commit().await {
