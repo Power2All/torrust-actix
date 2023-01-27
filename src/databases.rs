@@ -108,6 +108,7 @@ impl DatabaseConnector {
                 let _ = sqlx::query("PRAGMA mmap_size = 30000000000;").execute(pool).await;
                 let _ = sqlx::query("PRAGMA page_size = 32768;").execute(pool).await;
                 let _ = sqlx::query("PRAGMA journal_mode = WAL;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA journal_size_limit = 134217728;").execute(pool).await;
                 let _ = sqlx::query("PRAGMA synchronous = normal;").execute(pool).await;
                 let _ = sqlx::query(
                     format!(
