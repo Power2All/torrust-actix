@@ -107,9 +107,9 @@ impl DatabaseConnector {
                 let _ = sqlx::query("PRAGMA temp_store = memory;").execute(pool).await;
                 let _ = sqlx::query("PRAGMA mmap_size = 30000000000;").execute(pool).await;
                 let _ = sqlx::query("PRAGMA page_size = 32768;").execute(pool).await;
-                let _ = sqlx::query("PRAGMA journal_mode = WAL;").execute(pool).await;
-                let _ = sqlx::query("PRAGMA journal_size_limit = 134217728;").execute(pool).await;
-                let _ = sqlx::query("PRAGMA synchronous = normal;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA journal_mode = TRUNCATE;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA journal_size_limit = 536870912;").execute(pool).await;
+                let _ = sqlx::query("PRAGMA synchronous = full;").execute(pool).await;
                 let _ = sqlx::query(
                     format!(
                         "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY, {} INTEGER DEFAULT 0 NOT NULL)",
