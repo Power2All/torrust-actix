@@ -214,21 +214,6 @@ impl TorrentTracker {
         }
     }
 
-    // /* === Config === */
-    // pub async fn set_config_db_driver(&mut self, db_driver: DatabaseDrivers)
-    // {
-    //     let mut config = self.config.clone();
-    //     config.db_driver = db_driver;
-    //     self.config = config;
-    // }
-    //
-    // pub async fn set_config_db_path(&mut self, db_path: String)
-    // {
-    //     let mut config = self.config.clone();
-    //     config.db_path = db_path;
-    //     self.config = config;
-    // }
-
     /* === Statistics === */
     pub async fn get_stats(&self) -> Stats
     {

@@ -1,7 +1,7 @@
 use std::env;
 use std::net::SocketAddr;
-use std::ops::Add;
 use std::process::exit;
+use std::sync::mpsc;
 use std::time::Duration;
 use axum_server::Handle;
 use clap::Parser;
@@ -82,7 +82,7 @@ async fn main() -> std::io::Result<()>
         let config_retrieve_db_structure = config.db_structure.clone();
         let config_send_db_structure = config.db_structure.clone();
 
-        let tracker_receive = Arc::new(TorrentTracker::new(Arc::new(Configuration{
+        let tracker_receive = Arc::new(TorrentTracker::new(Arc::new(Configuration {
             log_level: "".to_string(),
             log_console_interval: None,
             statistics_enabled: false,
@@ -119,7 +119,7 @@ async fn main() -> std::io::Result<()>
         }).clone()).await);
         tracker_receive.clone().load_torrents().await;
 
-        let tracker_send = Arc::new(TorrentTracker::new(Arc::new(Configuration{
+        let tracker_send = Arc::new(TorrentTracker::new(Arc::new(Configuration {
             log_level: "".to_string(),
             log_console_interval: None,
             statistics_enabled: false,
@@ -156,7 +156,7 @@ async fn main() -> std::io::Result<()>
         }).clone()).await);
 
         info!("[SEND] [Engine: {:?}] [URI: {}]", args.destination_engine.clone().unwrap(), args.destination.clone().unwrap());
-        let mut start: u64 = 0;
+        let start: u64 = 0;
         let amount: u64 = 100000;
         loop {
             let torrents_block = tracker_receive.get_torrents(start, amount).await;
@@ -266,29 +266,25 @@ async fn main() -> std::io::Result<()>
 
     let interval_peer_cleanup = config.clone().interval_cleanup.unwrap_or(900);
     let tracker_clone = tracker.clone();
+    let (peer_cleanup_send, peer_cleanup_recv) = mpsc::channel();
     tokio::spawn(async move {
-        let interval = Duration::from_secs(interval_peer_cleanup);
-        let mut interval = tokio::time::interval(interval);
-        interval.tick().await;
         loop {
             tracker_clone.clone().set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.peer_timeout.unwrap() as i64).await;
-            interval.tick().await;
+            if let Ok(_) = peer_cleanup_recv.recv_timeout(Duration::from_secs(interval_peer_cleanup)) { break; }
             info!("[PEERS] Checking now for dead peers.");
             tracker_clone.clone().clean_peers(Duration::from_secs(tracker_clone.clone().config.clone().peer_timeout.unwrap())).await;
             info!("[PEERS] Peers cleaned up.");
         }
     });
 
+    let (keys_cleanup_send, keys_cleanup_recv) = mpsc::channel();
     if config.keys {
         let interval_keys_cleanup = config.clone().keys_cleanup_interval.unwrap_or(60);
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
-            let interval = Duration::from_secs(interval_keys_cleanup);
-            let mut interval = tokio::time::interval(interval);
-            interval.tick().await;
             loop {
                 tracker_clone.clone().set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.keys_cleanup_interval.unwrap() as i64).await;
-                interval.tick().await;
+                if let Ok(_) = keys_cleanup_recv.recv_timeout(Duration::from_secs(interval_keys_cleanup)) { break; }
                 info!("[KEYS] Checking now for old keys, and remove them.");
                 tracker_clone.clone().clean_keys().await;
                 info!("[KEYS] Keys cleaned up.");
@@ -298,13 +294,11 @@ async fn main() -> std::io::Result<()>
 
     let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
     let tracker_clone = tracker.clone();
+    let (persistence_send, persistence_recv) = mpsc::channel();
     tokio::spawn(async move {
-        let interval = Duration::from_secs(interval_persistence);
-        let mut interval = tokio::time::interval(interval);
-        interval.tick().await;
         loop {
             tracker_clone.clone().set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.persistence_interval.unwrap() as i64).await;
-            interval.tick().await;
+            if let Ok(_) = persistence_recv.recv_timeout(Duration::from_secs(interval_persistence)) { break; }
             info!("[SAVING] Starting persistence saving procedure.");
             info!("[SAVING] Moving Updates to Shadow...");
             tracker_clone.clone().transfer_updates_to_shadow().await;
@@ -343,15 +337,14 @@ async fn main() -> std::io::Result<()>
         }
     });
 
+    let (console_log_send, console_log_recv) = mpsc::channel();
     if config.statistics_enabled {
         let console_log_interval = config.clone().log_console_interval.unwrap();
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
-            let interval = Duration::from_secs(console_log_interval);
-            let mut interval = tokio::time::interval(interval);
             loop {
                 tracker_clone.clone().set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.log_console_interval.unwrap() as i64).await;
-                interval.tick().await;
+                if let Ok(_) = console_log_recv.recv_timeout(Duration::from_secs(console_log_interval)) { break; }
                 let stats = tracker_clone.clone().get_stats().await;
                 info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
                 info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
@@ -369,6 +362,10 @@ async fn main() -> std::io::Result<()>
             handle.shutdown();
             let _ = udp_tx.send(true);
             let _ = futures::future::join_all(udp_futures);
+            let _ = peer_cleanup_send.send(());
+            let _ = keys_cleanup_send.send(());
+            let _ = persistence_send.send(());
+            let _ = console_log_send.send(());
             if tracker.clone().config.persistence {
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");
