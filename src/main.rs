@@ -1,11 +1,10 @@
-use std::env;
+use std::{env, thread, process};
 use std::net::SocketAddr;
 use std::process::exit;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 use axum_server::Handle;
 use clap::Parser;
+use futures::channel::mpsc::unbounded;
 use futures::future::try_join_all;
 use log::{error, info};
 use scc::ebr::Arc;
@@ -267,25 +266,26 @@ async fn main() -> std::io::Result<()>
 
     let interval_peer_cleanup = config.clone().interval_cleanup.unwrap_or(900);
     let tracker_clone = tracker.clone();
-    let (peer_cleanup_send, peer_cleanup_recv) = mpsc::channel();
     tokio::spawn(async move {
         loop {
             tracker_clone.clone().set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.peer_timeout.unwrap() as i64).await;
-            if let Ok(_) = peer_cleanup_recv.recv_timeout(Duration::from_secs(interval_peer_cleanup)) { break; }
+            thread::sleep(Duration::from_secs(interval_peer_cleanup));
+            // if let Ok(_) = peer_cleanup_recv.recv_timeout(Duration::from_secs(interval_peer_cleanup)) { break; }
             info!("[PEERS] Checking now for dead peers.");
             tracker_clone.clone().clean_peers(Duration::from_secs(tracker_clone.clone().config.clone().peer_timeout.unwrap())).await;
             info!("[PEERS] Peers cleaned up.");
         }
     });
 
-    let (keys_cleanup_send, keys_cleanup_recv) = mpsc::channel();
+    // let (keys_cleanup_send, keys_cleanup_recv) = unbounded();
     if config.keys {
         let interval_keys_cleanup = config.clone().keys_cleanup_interval.unwrap_or(60);
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
             loop {
                 tracker_clone.clone().set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.keys_cleanup_interval.unwrap() as i64).await;
-                if let Ok(_) = keys_cleanup_recv.recv_timeout(Duration::from_secs(interval_keys_cleanup)) { break; }
+                // if let Ok(_) = keys_cleanup_recv.recv_timeout(Duration::from_secs(interval_keys_cleanup)) { break; }
+                thread::sleep(Duration::from_secs(interval_keys_cleanup));
                 info!("[KEYS] Checking now for old keys, and remove them.");
                 tracker_clone.clone().clean_keys().await;
                 info!("[KEYS] Keys cleaned up.");
@@ -295,11 +295,12 @@ async fn main() -> std::io::Result<()>
 
     let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
     let tracker_clone = tracker.clone();
-    let (persistence_send, persistence_recv) = mpsc::channel();
+    // let (persistence_send, persistence_recv) = unbounded();
     tokio::spawn(async move {
         loop {
             tracker_clone.clone().set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.persistence_interval.unwrap() as i64).await;
-            if let Ok(_) = persistence_recv.recv_timeout(Duration::from_secs(interval_persistence)) { break; }
+            // if let Ok(_) = persistence_recv.recv_timeout(Duration::from_secs(interval_persistence)) { break; }
+            thread::sleep(Duration::from_secs(interval_persistence));
             info!("[SAVING] Starting persistence saving procedure.");
             info!("[SAVING] Moving Updates to Shadow...");
             tracker_clone.clone().transfer_updates_to_shadow().await;
@@ -338,14 +339,15 @@ async fn main() -> std::io::Result<()>
         }
     });
 
-    let (console_log_send, console_log_recv) = mpsc::channel();
+    // let (console_log_send, console_log_recv) = unbounded();
     if config.statistics_enabled {
         let console_log_interval = config.clone().log_console_interval.unwrap();
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
             loop {
                 tracker_clone.clone().set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.log_console_interval.unwrap() as i64).await;
-                if let Ok(_) = console_log_recv.recv_timeout(Duration::from_secs(console_log_interval)) { break; }
+                // if let Ok(_) = console_log_recv.recv_timeout(Duration::from_secs(console_log_interval)) { break; }
+                thread::sleep(Duration::from_secs(console_log_interval));
                 let stats = tracker_clone.clone().get_stats().await;
                 info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
                 info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
@@ -363,10 +365,10 @@ async fn main() -> std::io::Result<()>
             handle.shutdown();
             let _ = udp_tx.send(true);
             let _ = futures::future::join_all(udp_futures);
-            let _ = peer_cleanup_send.send(());
-            let _ = keys_cleanup_send.send(());
-            let _ = persistence_send.send(());
-            let _ = console_log_send.send(());
+            // let _ = peer_cleanup_send.send(());
+            // let _ = keys_cleanup_send.send(());
+            // let _ = persistence_send.send(());
+            // let _ = console_log_send.send(());
             if tracker.clone().config.persistence {
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");
@@ -405,6 +407,7 @@ async fn main() -> std::io::Result<()>
                 }
             }
             info!("Server shutting down completed");
+            process::exit(0x0100);
             Ok(())
         }
     }
