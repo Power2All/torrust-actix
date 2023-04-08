@@ -341,10 +341,11 @@ async fn main() -> std::io::Result<()>
     if config.statistics_enabled {
         let console_log_interval = config.clone().log_console_interval.unwrap();
         let tracker_clone = tracker.clone();
+        let console_log_recv_clone = console_log_recv.clone();
         tokio::spawn(async move {
             loop {
                 tracker_clone.clone().set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.log_console_interval.unwrap() as i64).await;
-                if let Ok(_) = console_log_recv.recv_timeout(Duration::from_secs(console_log_interval)) { break; }
+                if let Ok(_) = console_log_recv_clone.recv_timeout(Duration::from_secs(console_log_interval)) { break; }
                 let stats = tracker_clone.clone().get_stats().await;
                 info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
                 info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
