@@ -697,18 +697,18 @@ impl TorrentTracker {
         let updates = torrents_lock.updates.clone();
         torrents_lock.updates = HashMap::new();
         drop(torrents_lock);
-        self.add_shadow(updates).await;
+        for (info_hash, completed) in updates.iter() {
+            self.add_shadow(*info_hash, *completed).await;
+        }
         self.set_stats(StatsEvent::TorrentsUpdates, 0).await;
     }
 
     /* === Shadow === */
-    pub async fn add_shadow(&self, updates: HashMap<InfoHash, i64>)
+    pub async fn add_shadow(&self, info_hash: InfoHash, completed: i64)
     {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        for (info_hash, completed) in updates.iter() {
-            torrents_lock.shadow.insert(*info_hash, *completed);
-        }
+        torrents_lock.shadow.insert(info_hash, completed);
         let shadow_count = torrents_lock.shadow.len();
         drop(torrents_lock);
         self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
