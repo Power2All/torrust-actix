@@ -1,11 +1,9 @@
-use std::{env, thread, process};
+use std::env;
 use std::net::SocketAddr;
-use std::ops::Add;
 use std::process::exit;
 use std::time::Duration;
 use axum_server::Handle;
 use clap::Parser;
-use futures::channel::mpsc::unbounded;
 use futures::future::try_join_all;
 use log::{error, info};
 use scc::ebr::Arc;
@@ -157,7 +155,7 @@ async fn main() -> std::io::Result<()>
         }).clone()).await);
 
         info!("[SEND] [Engine: {:?}] [URI: {}]", args.destination_engine.clone().unwrap(), args.destination.clone().unwrap());
-        let mut start: u64 = 0;
+        let start: u64 = 0;
         let amount: u64 = 100000;
         loop {
             let torrents_block = tracker_receive.get_torrents(start, amount).await;
@@ -408,7 +406,6 @@ async fn main() -> std::io::Result<()>
                 }
             }
             info!("Server shutting down completed");
-            process::exit(0x0100);
             Ok(())
         }
     }
