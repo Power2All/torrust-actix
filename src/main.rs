@@ -163,8 +163,8 @@ async fn main() -> std::io::Result<()>
             if torrents_block.is_empty() {
                 break;
             }
-            for (info_hash, completed) in torrents_block.iter() {
-                tracker_send.add_shadow(*info_hash, *completed).await;
+            tracker_send.add_shadow(torrents_block.clone()).await;
+            for (info_hash, _completed) in torrents_block.iter() {
                 tracker_receive.remove_torrent(*info_hash, false).await;
             }
         }
