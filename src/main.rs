@@ -268,11 +268,11 @@ async fn main() -> std::io::Result<()>
     let tracker_clone = tracker.clone();
     tokio::spawn(async move {
         loop {
-            tracker_clone.clone().set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.peer_timeout.unwrap() as i64).await;
+            tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.peer_timeout.unwrap() as i64).await;
             thread::sleep(Duration::from_secs(interval_peer_cleanup));
             // if let Ok(_) = peer_cleanup_recv.recv_timeout(Duration::from_secs(interval_peer_cleanup)) { break; }
             info!("[PEERS] Checking now for dead peers.");
-            tracker_clone.clone().clean_peers(Duration::from_secs(tracker_clone.clone().config.clone().peer_timeout.unwrap())).await;
+            tracker_clone.clean_peers(Duration::from_secs(tracker_clone.clone().config.clone().peer_timeout.unwrap())).await;
             info!("[PEERS] Peers cleaned up.");
         }
     });
@@ -283,11 +283,11 @@ async fn main() -> std::io::Result<()>
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
             loop {
-                tracker_clone.clone().set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.keys_cleanup_interval.unwrap() as i64).await;
+                tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.keys_cleanup_interval.unwrap() as i64).await;
                 // if let Ok(_) = keys_cleanup_recv.recv_timeout(Duration::from_secs(interval_keys_cleanup)) { break; }
                 thread::sleep(Duration::from_secs(interval_keys_cleanup));
                 info!("[KEYS] Checking now for old keys, and remove them.");
-                tracker_clone.clone().clean_keys().await;
+                tracker_clone.clean_keys().await;
                 info!("[KEYS] Keys cleaned up.");
             }
         });
@@ -298,39 +298,39 @@ async fn main() -> std::io::Result<()>
     // let (persistence_send, persistence_recv) = unbounded();
     tokio::spawn(async move {
         loop {
-            tracker_clone.clone().set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.persistence_interval.unwrap() as i64).await;
+            tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.persistence_interval.unwrap() as i64).await;
             // if let Ok(_) = persistence_recv.recv_timeout(Duration::from_secs(interval_persistence)) { break; }
             thread::sleep(Duration::from_secs(interval_persistence));
             info!("[SAVING] Starting persistence saving procedure.");
             info!("[SAVING] Moving Updates to Shadow...");
-            tracker_clone.clone().transfer_updates_to_shadow().await;
+            tracker_clone.transfer_updates_to_shadow().await;
             info!("[SAVING] Saving data from Shadow to database...");
-            if tracker_clone.clone().save_torrents().await {
+            if tracker_clone.save_torrents().await {
                 info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                tracker_clone.clone().clear_shadow().await;
+                tracker_clone.clear_shadow().await;
                 info!("[SAVING] Torrents saved.");
             } else {
                 error!("[SAVING] An error occurred while saving data...");
             }
-            if tracker_clone.clone().config.whitelist {
+            if tracker_clone.config.whitelist {
                 info!("[SAVING] Saving data from Whitelist to database...");
-                if tracker_clone.clone().save_whitelists().await {
+                if tracker_clone.save_whitelists().await {
                     info!("[SAVING] Whitelists saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
                 }
             }
-            if tracker_clone.clone().config.blacklist {
+            if tracker_clone.config.blacklist {
                 info!("[SAVING] Saving data from Blacklist to database...");
-                if tracker_clone.clone().save_blacklists().await {
+                if tracker_clone.save_blacklists().await {
                     info!("[SAVING] Blacklists saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
                 }
             }
-            if tracker_clone.clone().config.keys {
+            if tracker_clone.config.keys {
                 info!("[SAVING] Saving data from Keys to database...");
-                if tracker_clone.clone().save_keys().await {
+                if tracker_clone.save_keys().await {
                     info!("[SAVING] Keys saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
@@ -345,10 +345,10 @@ async fn main() -> std::io::Result<()>
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
             loop {
-                tracker_clone.clone().set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.log_console_interval.unwrap() as i64).await;
+                tracker_clone.set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() as i64 + tracker_clone.clone().config.log_console_interval.unwrap() as i64).await;
                 // if let Ok(_) = console_log_recv.recv_timeout(Duration::from_secs(console_log_interval)) { break; }
                 thread::sleep(Duration::from_secs(console_log_interval));
-                let stats = tracker_clone.clone().get_stats().await;
+                let stats = tracker_clone.get_stats().await;
                 info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
                 info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
                 info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);

@@ -697,8 +697,8 @@ impl TorrentTracker {
         let updates = torrents_lock.updates.clone();
         torrents_lock.updates = HashMap::new();
         drop(torrents_lock);
-        self.add_shadow(updates).await;
         self.set_stats(StatsEvent::TorrentsUpdates, 0).await;
+        self.add_shadow(updates).await;
     }
 
     /* === Shadow === */
