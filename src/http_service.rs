@@ -7,7 +7,7 @@ use axum::{Extension, Router};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::http::header::HeaderName;
 use axum::response::IntoResponse;
-use axum_client_ip::SecureClientIp;
+use axum_client_ip::{SecureClientIp, SecureClientIpSource};
 use axum::routing::get;
 use axum_server::Handle;
 use axum_server::tls_rustls::RustlsConfig;
@@ -30,6 +30,7 @@ pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTra
             .route("/scrape", get(http_service_scrape))
             .route("/scrape/:key", get(http_service_scrape))
             .fallback(http_service_404)
+            .layer(SecureClientIpSource::ConnectInfo.into_extension())
             .layer(Extension(data))
             .into_make_service_with_connect_info::<SocketAddr>()
         )
@@ -51,14 +52,15 @@ pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTr
             .route("/scrape", get(http_service_scrape))
             .route("/scrape/:key", get(http_service_scrape))
             .fallback(http_service_404)
+            .layer(SecureClientIpSource::ConnectInfo.into_extension())
             .layer(Extension(data))
             .into_make_service_with_connect_info::<SocketAddr>()
         )
 }
 
-pub async fn http_service_announce(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
+pub async fn http_service_announce(ip: SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
 {
-    http_service_announce_log(ip, state.clone()).await;
+    http_service_announce_log(ip.0, state.clone()).await;
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
@@ -73,7 +75,7 @@ pub async fn http_service_announce(SecureClientIp(ip): SecureClientIp, axum::ext
         Err(err) => { return err; }
     };
 
-    let announce = validate_announce(state.clone().config.clone(), ip, query_map).await;
+    let announce = validate_announce(state.clone().config.clone(), ip.0, query_map).await;
     let announce_unwrapped = match announce {
         Ok(result) => { result }
         Err(e) => {
@@ -220,9 +222,9 @@ pub async fn http_service_announce_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     }
 }
 
-pub async fn http_service_scrape(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
+pub async fn http_service_scrape(ip: SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
 {
-    http_service_scrape_log(ip, state.clone()).await;
+    http_service_scrape_log(ip.0, state.clone()).await;
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
@@ -267,7 +269,7 @@ pub async fn http_service_scrape(SecureClientIp(ip): SecureClientIp, axum::extra
         }
     }
 
-    let scrape = validate_scrape(state.clone().config.clone(), ip, query_map).await;
+    let scrape = validate_scrape(state.clone().config.clone(), ip.0, query_map).await;
     return match scrape {
         Ok(e) => {
             let data_scrape = handle_scrape(state.clone(), e.clone()).await;
@@ -307,9 +309,9 @@ pub async fn http_service_scrape_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     }
 }
 
-pub async fn http_service_404(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(_params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> impl IntoResponse
+pub async fn http_service_404(ip: SecureClientIp, axum::extract::RawQuery(_params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> impl IntoResponse
 {
-    http_service_404_log(ip, state.clone()).await;
+    http_service_404_log(ip.0, state.clone()).await;
     let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown request")}).encode();
     let body = std::str::from_utf8(&return_string).unwrap().to_string();
     (StatusCode::NOT_FOUND, body)
