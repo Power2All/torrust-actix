@@ -7,7 +7,7 @@ use axum::extract::Path;
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
 use axum::http::header::HeaderName;
 use axum::response::{IntoResponse, Response};
-use axum_client_ip::SecureClientIp;
+use axum_client_ip::ClientIp;
 use axum::routing::{get, post};
 use axum_server::{Handle, Server};
 use axum_server::tls_rustls::RustlsConfig;
@@ -92,7 +92,7 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
         )
 }
 
-pub async fn http_api_stats_get(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_stats_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -114,7 +114,7 @@ pub async fn http_api_stats_get(SecureClientIp(ip): SecureClientIp, axum::extrac
     (StatusCode::OK, headers, serde_json::to_string(&stats).unwrap())
 }
 
-pub async fn http_api_torrents_get(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>, axum::extract::Json(body): axum::extract::Json<serde_json::Value>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_torrents_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>, axum::extract::Json(body): axum::extract::Json<serde_json::Value>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -165,7 +165,7 @@ pub async fn http_api_torrents_get(SecureClientIp(ip): SecureClientIp, axum::ext
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_torrent_get(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_torrent_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -237,7 +237,7 @@ pub async fn http_api_torrent_get(SecureClientIp(ip): SecureClientIp, axum::extr
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_torrent_delete(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_torrent_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -278,7 +278,7 @@ pub async fn http_api_torrent_delete(SecureClientIp(ip): SecureClientIp, axum::e
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_whitelist_get_all(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_whitelist_get_all(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -300,7 +300,7 @@ pub async fn http_api_whitelist_get_all(SecureClientIp(ip): SecureClientIp, axum
     (StatusCode::OK, headers, serde_json::to_string(&whitelist).unwrap())
 }
 
-pub async fn http_api_whitelist_reload(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_whitelist_reload(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -325,7 +325,7 @@ pub async fn http_api_whitelist_reload(SecureClientIp(ip): SecureClientIp, axum:
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_whitelist_get(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_whitelist_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -369,7 +369,7 @@ pub async fn http_api_whitelist_get(SecureClientIp(ip): SecureClientIp, axum::ex
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_whitelist_post(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_whitelist_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -410,7 +410,7 @@ pub async fn http_api_whitelist_post(SecureClientIp(ip): SecureClientIp, axum::e
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_whitelist_delete(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_whitelist_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -451,7 +451,7 @@ pub async fn http_api_whitelist_delete(SecureClientIp(ip): SecureClientIp, axum:
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_get_all(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_get_all(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -473,7 +473,7 @@ pub async fn http_api_blacklist_get_all(SecureClientIp(ip): SecureClientIp, axum
     (StatusCode::OK, headers, serde_json::to_string(&blacklist).unwrap())
 }
 
-pub async fn http_api_blacklist_reload(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_reload(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -498,7 +498,7 @@ pub async fn http_api_blacklist_reload(SecureClientIp(ip): SecureClientIp, axum:
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_get(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -542,7 +542,7 @@ pub async fn http_api_blacklist_get(SecureClientIp(ip): SecureClientIp, axum::ex
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_post(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -583,7 +583,7 @@ pub async fn http_api_blacklist_post(SecureClientIp(ip): SecureClientIp, axum::e
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_blacklist_delete(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_blacklist_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -624,7 +624,7 @@ pub async fn http_api_blacklist_delete(SecureClientIp(ip): SecureClientIp, axum:
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_get_all(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_get_all(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -646,7 +646,7 @@ pub async fn http_api_keys_get_all(SecureClientIp(ip): SecureClientIp, axum::ext
     (StatusCode::OK, headers, serde_json::to_string(&keys).unwrap())
 }
 
-pub async fn http_api_keys_reload(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_reload(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -671,7 +671,7 @@ pub async fn http_api_keys_reload(SecureClientIp(ip): SecureClientIp, axum::extr
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_get(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_get(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -715,7 +715,7 @@ pub async fn http_api_keys_get(SecureClientIp(ip): SecureClientIp, axum::extract
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_post(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_post(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -776,7 +776,7 @@ pub async fn http_api_keys_post(SecureClientIp(ip): SecureClientIp, axum::extrac
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_patch(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_patch(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -838,7 +838,7 @@ pub async fn http_api_keys_patch(SecureClientIp(ip): SecureClientIp, axum::extra
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_keys_delete(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_keys_delete(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Path(path_params): Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -879,7 +879,7 @@ pub async fn http_api_keys_delete(SecureClientIp(ip): SecureClientIp, axum::extr
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_maintenance_enable(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_maintenance_enable(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
@@ -903,7 +903,7 @@ pub async fn http_api_maintenance_enable(SecureClientIp(ip): SecureClientIp, axu
     (StatusCode::OK, headers, serde_json::to_string(&return_data).unwrap())
 }
 
-pub async fn http_api_maintenance_disable(SecureClientIp(ip): SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
+pub async fn http_api_maintenance_disable(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
 {
     http_api_stats_log(ip, state.clone()).await;
 
