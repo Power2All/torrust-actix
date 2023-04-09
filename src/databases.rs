@@ -571,7 +571,7 @@ impl DatabaseConnector {
                     for (info_hash, value) in whitelists.iter() {
                         if value == &2 {
                             whitelist_handled_entries += 1;
-                            match sqlx::query(&*format!(
+                            match sqlx::query(&format!(
                                 "INSERT OR IGNORE INTO {} ({}) VALUES ('{}')",
                                 self.config.db_structure.db_whitelist,
                                 self.config.db_structure.table_whitelist_info_hash,
@@ -591,7 +591,7 @@ impl DatabaseConnector {
                             }
                         }
                         if value == &0 {
-                            match sqlx::query(&*format!(
+                            match sqlx::query(&format!(
                                 "DELETE FROM {} WHERE {} = '{}'",
                                 self.config.db_structure.db_whitelist,
                                 self.config.db_structure.table_whitelist_info_hash,
@@ -626,7 +626,7 @@ impl DatabaseConnector {
                     for (info_hash, value) in whitelists.iter() {
                         if value == &2 {
                             whitelist_handled_entries += 1;
-                            match sqlx::query(&*format!(
+                            match sqlx::query(&format!(
                                 "INSERT IGNORE INTO {} ({}) VALUES ('{}')",
                                 self.config.db_structure.db_whitelist,
                                 self.config.db_structure.table_whitelist_info_hash,
@@ -646,7 +646,7 @@ impl DatabaseConnector {
                             }
                         }
                         if value == &0 {
-                            match sqlx::query(&*format!(
+                            match sqlx::query(&format!(
                                 "DELETE FROM {} WHERE {} = '{}'",
                                 self.config.db_structure.db_whitelist,
                                 self.config.db_structure.table_whitelist_info_hash,
@@ -677,7 +677,7 @@ impl DatabaseConnector {
 
                     let mut whitelist_transaction = pool.begin().await?;
                     let mut whitelist_handled_entries = 0u64;
-                    match sqlx::query(&*format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_whitelist)).execute(&mut whitelist_transaction).await {
+                    match sqlx::query(&format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_whitelist)).execute(&mut whitelist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("[PgSQL] Error: {}", e.to_string());
@@ -687,7 +687,7 @@ impl DatabaseConnector {
                     for (info_hash, value) in whitelists.iter() {
                         if value == &2 {
                             whitelist_handled_entries += 1;
-                            match sqlx::query(&*format!(
+                            match sqlx::query(&format!(
                                 "INSERT INTO {} ({}) VALUES ('{}') ON CONFLICT ({}) DO NOTHING;",
                                 self.config.db_structure.db_whitelist,
                                 self.config.db_structure.table_whitelist_info_hash,
@@ -708,7 +708,7 @@ impl DatabaseConnector {
                             }
                         }
                         if value == &0 {
-                            match sqlx::query(&*format!(
+                            match sqlx::query(&format!(
                                 "DELETE FROM {} WHERE {} = '{}';",
                                 self.config.db_structure.db_whitelist,
                                 self.config.db_structure.table_whitelist_info_hash,
@@ -751,7 +751,7 @@ impl DatabaseConnector {
                     let mut blacklist_handled_entries = 0u64;
                     for info_hash in blacklists.iter() {
                         blacklist_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT OR REPLACE INTO {} ({}) VALUES ('{}')",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
@@ -785,10 +785,10 @@ impl DatabaseConnector {
 
                     let mut blacklist_transaction = pool.begin().await?;
                     let mut blacklist_handled_entries = 0u64;
-                    let _ = sqlx::query(&*format!("TRUNCATE TABLE {}", self.config.db_structure.db_blacklist)).execute(&mut blacklist_transaction).await?;
+                    let _ = sqlx::query(&format!("TRUNCATE TABLE {}", self.config.db_structure.db_blacklist)).execute(&mut blacklist_transaction).await?;
                     for info_hash in blacklists.iter() {
                         blacklist_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT INTO {} ({}) VALUES ('{}')",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
@@ -822,10 +822,10 @@ impl DatabaseConnector {
 
                     let mut blacklist_transaction = pool.begin().await?;
                     let mut blacklist_handled_entries = 0u64;
-                    let _ = sqlx::query(&*format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_blacklist)).execute(&mut blacklist_transaction).await?;
+                    let _ = sqlx::query(&format!("TRUNCATE TABLE {} RESTART IDENTITY", self.config.db_structure.db_blacklist)).execute(&mut blacklist_transaction).await?;
                     for info_hash in blacklists.iter() {
                         blacklist_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT INTO {} ({}) VALUES ('{}')",
                             self.config.db_structure.db_blacklist,
                             self.config.db_structure.table_blacklist_info_hash,
@@ -871,7 +871,7 @@ impl DatabaseConnector {
                     let mut keys_handled_entries = 0u64;
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT OR REPLACE INTO {} ({},{}) VALUES ('{}',{})",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
@@ -909,7 +909,7 @@ impl DatabaseConnector {
                     let mut keys_handled_entries = 0u64;
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT INTO {} (`{}`,`{}`) VALUES ('{}',{}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
@@ -949,7 +949,7 @@ impl DatabaseConnector {
                     let mut keys_handled_entries = 0u64;
                     for (hash, timeout) in keys.iter() {
                         keys_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT INTO {} ({},{}) VALUES ('{}',{}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                             self.config.db_structure.db_keys,
                             self.config.db_structure.table_keys_hash,
@@ -999,7 +999,7 @@ impl DatabaseConnector {
                     let mut torrents_handled_entries = 0u64;
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT OR REPLACE INTO {} ({},{}) VALUES ('{}',{})",
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
@@ -1045,7 +1045,7 @@ impl DatabaseConnector {
                     let mut torrents_handled_entries = 0u64;
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT INTO {} (`{}`,`{}`) VALUES ('{}',{}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,
@@ -1085,7 +1085,7 @@ impl DatabaseConnector {
                     let mut torrents_handled_entries = 0u64;
                     for (info_hash, completed) in torrents.iter() {
                         torrents_handled_entries += 1;
-                        match sqlx::query(&*format!(
+                        match sqlx::query(&format!(
                             "INSERT INTO {} ({},{}) VALUES ('{}',{}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                             self.config.db_structure.db_torrents,
                             self.config.db_structure.table_torrents_info_hash,

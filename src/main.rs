@@ -64,7 +64,7 @@ async fn main() -> std::io::Result<()>
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    if args.convert_database.clone() {
+    if args.convert_database {
         info!("Database Conversion execute.");
 
         if args.source_engine.clone().is_none() || args.source.clone().is_none() || args.destination_engine.clone().is_none() || args.destination.clone().is_none() {
@@ -266,7 +266,7 @@ async fn main() -> std::io::Result<()>
         let mut interval = tokio::time::interval(interval);
         interval.tick().await;
         loop {
-            tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.config.peer_timeout.unwrap() as i64).await;
+            tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.peer_timeout.unwrap() as i64).await;
             interval.tick().await;
             info!("[PEERS] Checking now for dead peers.");
             tracker_clone.clean_peers(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
@@ -282,7 +282,7 @@ async fn main() -> std::io::Result<()>
             let mut interval = tokio::time::interval(interval);
             interval.tick().await;
             loop {
-                tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() as i64 + tracker_clone.config.keys_cleanup_interval.clone().unwrap() as i64).await;
+                tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
                 interval.tick().await;
                 info!("[KEYS] Checking now for old keys, and remove them.");
                 tracker_clone.clean_keys().await;
@@ -298,7 +298,7 @@ async fn main() -> std::io::Result<()>
         let mut interval = tokio::time::interval(interval);
         interval.tick().await;
         loop {
-            tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() as i64 + tracker_clone.config.persistence_interval.clone().unwrap() as i64).await;
+            tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
             interval.tick().await;
             info!("[SAVING] Starting persistence saving procedure.");
             info!("[SAVING] Moving Updates to Shadow...");
@@ -345,7 +345,7 @@ async fn main() -> std::io::Result<()>
             let interval = Duration::from_secs(console_log_interval);
             let mut interval = tokio::time::interval(interval);
             loop {
-                tracker_clone.set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() as i64 + tracker_clone.config.log_console_interval.clone().unwrap() as i64).await;
+                tracker_clone.set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() + tracker_clone.config.log_console_interval.unwrap() as i64).await;
                 interval.tick().await;
                 let stats = tracker_clone.get_stats().await;
                 info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
