@@ -173,7 +173,7 @@ impl TorrentTracker {
                 updates: HashMap::new(),
                 shadow: HashMap::new(),
                 stats: Stats {
-                    started: Utc::now().timestamp() as i64,
+                    started: Utc::now().timestamp(),
                     timestamp_run_save: 0,
                     timestamp_run_timeout: 0,
                     timestamp_run_console: 0,
@@ -213,21 +213,6 @@ impl TorrentTracker {
             sqlx: DatabaseConnector::new(config.clone()).await
         }
     }
-
-    // /* === Config === */
-    // pub async fn set_config_db_driver(&mut self, db_driver: DatabaseDrivers)
-    // {
-    //     let mut config = self.config.clone();
-    //     config.db_driver = db_driver;
-    //     self.config = config;
-    // }
-    //
-    // pub async fn set_config_db_path(&mut self, db_path: String)
-    // {
-    //     let mut config = self.config.clone();
-    //     config.db_path = db_path;
-    //     self.config = config;
-    // }
 
     /* === Statistics === */
     pub async fn get_stats(&self) -> Stats
@@ -337,7 +322,7 @@ impl TorrentTracker {
             }
 
             info!("Loaded {} torrents with {} completes.", torrent_count, completed_count);
-            self.update_stats(StatsEvent::Completed, completed_count as i64).await;
+            self.update_stats(StatsEvent::Completed, completed_count).await;
         }
     }
 
@@ -787,17 +772,17 @@ impl TorrentTracker {
     {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
-        if !torrents_lock.whitelist.get(&info_hash).is_none() {
+        if torrents_lock.whitelist.get(&info_hash).is_some() {
             torrents_lock.whitelist.insert(info_hash, 0i64);
         }
         let mut whitelist_count = 0i64;
         for (_, value) in torrents_lock.whitelist.iter() {
             if value == &1i64 {
-                whitelist_count = whitelist_count + 1;
+                whitelist_count += 1;
             }
         }
         drop(torrents_lock);
-        self.set_stats(StatsEvent::Whitelist, whitelist_count as i64).await;
+        self.set_stats(StatsEvent::Whitelist, whitelist_count).await;
     }
 
     pub async fn remove_whitelist(&self, info_hash: InfoHash)
@@ -808,11 +793,11 @@ impl TorrentTracker {
         let mut whitelist_count = 0i64;
         for (_, value) in torrents_lock.whitelist.iter() {
             if value == &1 {
-                whitelist_count = whitelist_count + 1;
+                whitelist_count += 1;
             }
         }
         drop(torrents_lock);
-        self.set_stats(StatsEvent::Whitelist, whitelist_count as i64).await;
+        self.set_stats(StatsEvent::Whitelist, whitelist_count).await;
     }
 
     pub async fn check_whitelist(&self, info_hash: InfoHash) -> bool
@@ -908,7 +893,7 @@ impl TorrentTracker {
         let time = SystemTime::from(Utc.timestamp_opt(timeout, 0).unwrap());
         match time.duration_since(SystemTime::now()) {
             Ok(_) => {
-                torrents_lock.keys.insert(hash, timeout as i64);
+                torrents_lock.keys.insert(hash, timeout);
             }
             Err(_) => {
                 drop(torrents_lock);

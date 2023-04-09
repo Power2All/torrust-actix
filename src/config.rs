@@ -90,7 +90,7 @@ pub struct Configuration {
     pub db_structure: DatabaseStructureConfig
 }
 impl Configuration {
-    pub fn default() -> Configuration {
+    pub fn init() -> Configuration {
         let udp_server = vec!(
             UdpTrackersConfig {
                 enabled: false,
@@ -189,7 +189,7 @@ impl Configuration {
     }
 
     pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
-        let mut config = Configuration::default();
+        let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
             Ok(c) => { config = c; }
             Err(_) => {

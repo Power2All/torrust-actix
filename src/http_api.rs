@@ -978,7 +978,10 @@ async fn http_api_static_path(Path(path): Path<String>) -> impl IntoResponse {
     }
 }
 
-pub fn api_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>>, CustomError>, headers: HeaderMap) -> Result<HashIndex<String, Vec<Vec<u8>>>, (StatusCode, HeaderMap, String)>
+type ApiQueryHashingOk = HashIndex<String, Vec<Vec<u8>>>;
+type ApiQueryHashingErr = (StatusCode, HeaderMap, String);
+
+pub fn api_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>>, CustomError>, headers: HeaderMap) -> Result<ApiQueryHashingOk, ApiQueryHashingErr>
 {
     match query_map_result {
         Ok(e) => {

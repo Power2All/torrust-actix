@@ -145,9 +145,9 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
             let return_string = (ben_map! {
                 "interval" => ben_int!(state.config.interval.unwrap() as i64),
                 "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
-                "complete" => ben_int!(torrent_entry.seeders as i64),
-                "incomplete" => ben_int!(torrent_entry.leechers as i64),
-                "downloaded" => ben_int!(torrent_entry.completed as i64),
+                "complete" => ben_int!(torrent_entry.seeders),
+                "incomplete" => ben_int!(torrent_entry.leechers),
+                "downloaded" => ben_int!(torrent_entry.completed),
                 "peers" => ben_bytes!(peers.clone())
             }).encode();
             (StatusCode::OK, headers, return_string)
@@ -155,9 +155,9 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
             let return_string = (ben_map! {
                 "interval" => ben_int!(state.config.interval.unwrap() as i64),
                 "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
-                "complete" => ben_int!(torrent_entry.seeders as i64),
-                "incomplete" => ben_int!(torrent_entry.leechers as i64),
-                "downloaded" => ben_int!(torrent_entry.completed as i64),
+                "complete" => ben_int!(torrent_entry.seeders),
+                "incomplete" => ben_int!(torrent_entry.leechers),
+                "downloaded" => ben_int!(torrent_entry.completed),
                 "peers6" => ben_bytes!(peers.clone())
             }).encode();
             (StatusCode::OK, headers, return_string)
@@ -188,9 +188,9 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
         let return_string = (ben_map! {
             "interval" => ben_int!(state.config.interval.unwrap() as i64),
             "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
-            "complete" => ben_int!(torrent_entry.seeders as i64),
-            "incomplete" => ben_int!(torrent_entry.leechers as i64),
-            "downloaded" => ben_int!(torrent_entry.completed as i64),
+            "complete" => ben_int!(torrent_entry.seeders),
+            "incomplete" => ben_int!(torrent_entry.leechers),
+            "downloaded" => ben_int!(torrent_entry.completed),
             "peers" => peers_list.clone()
         }).encode();
         (StatusCode::OK, headers, return_string)
@@ -198,9 +198,9 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
         let return_string = (ben_map! {
             "interval" => ben_int!(state.config.interval.unwrap() as i64),
             "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
-            "complete" => ben_int!(torrent_entry.seeders as i64),
-            "incomplete" => ben_int!(torrent_entry.leechers as i64),
-            "downloaded" => ben_int!(torrent_entry.completed as i64),
+            "complete" => ben_int!(torrent_entry.seeders),
+            "incomplete" => ben_int!(torrent_entry.leechers),
+            "downloaded" => ben_int!(torrent_entry.completed),
             "peers6" => peers_list.clone()
         }).encode();
         (StatusCode::OK, headers, return_string)
@@ -275,9 +275,9 @@ pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery
             let scrape_list_mut = scrape_list.dict_mut().unwrap();
             for (key, value) in data_scrape.iter() {
                 scrape_list_mut.insert(Cow::from(key.0.to_vec()), ben_map! {
-                    "complete" => ben_int!(value.seeders as i64),
-                    "downloaded" => ben_int!(value.completed as i64),
-                    "incomplete" => ben_int!(value.leechers as i64)
+                    "complete" => ben_int!(value.seeders),
+                    "downloaded" => ben_int!(value.completed),
+                    "incomplete" => ben_int!(value.leechers)
                 });
             }
             let return_string = (ben_map! {
@@ -324,7 +324,10 @@ pub async fn http_service_404_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     }
 }
 
-pub fn http_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>>, CustomError>, headers: HeaderMap) -> Result<HashIndex<String, Vec<Vec<u8>>>, (StatusCode, HeaderMap, Vec<u8>)>
+type HttpQueryHashingMapOk = HashIndex<String, Vec<Vec<u8>>>;
+type HttpQueryHashingMapErr = (StatusCode, HeaderMap, Vec<u8>);
+
+pub fn http_query_hashing(query_map_result: Result<HttpQueryHashingMapOk, CustomError>, headers: HeaderMap) -> Result<HttpQueryHashingMapOk, HttpQueryHashingMapErr>
 {
     match query_map_result {
         Ok(e) => {
