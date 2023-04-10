@@ -159,7 +159,7 @@ impl Configuration {
     }
 
     pub fn load(data: &[u8]) -> Result<Configuration, toml::de::Error> {
-        toml::from_slice(data)
+        toml::from_str(&String::from_utf8_lossy(data))
     }
 
     pub fn load_file(path: &str) -> Result<Configuration, ConfigurationError> {
