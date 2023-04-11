@@ -4,6 +4,7 @@ use std::future::Future;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use axum::{Extension, Router};
+use axum::extract::connect_info::IntoMakeServiceWithConnectInfo;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::http::header::HeaderName;
 use axum::response::IntoResponse;
@@ -19,21 +20,26 @@ use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::{StatsEvent, TorrentTracker};
 
+pub async fn http_service_routing(data: Arc<TorrentTracker>) -> IntoMakeServiceWithConnectInfo<Router, SocketAddr>
+{
+    Router::new()
+        .route("/announce", get(http_service_announce))
+        .route("/announce/:key", get(http_service_announce))
+        .route("/scrape", get(http_service_scrape))
+        .route("/scrape/:key", get(http_service_scrape))
+        .fallback(http_service_404)
+        .layer(SecureClientIpSource::ConnectInfo.into_extension())
+        .layer(Extension(data))
+        .into_make_service_with_connect_info::<SocketAddr>()
+}
+
 pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>) -> impl Future<Output = Result<(), std::io::Error>>
 {
     info!("[HTTP] Starting server listener on {}", addr);
+    let routing = http_service_routing(data).await;
     axum_server::bind(addr)
         .handle(handle)
-        .serve(Router::new()
-            .route("/announce", get(http_service_announce))
-            .route("/announce/:key", get(http_service_announce))
-            .route("/scrape", get(http_service_scrape))
-            .route("/scrape/:key", get(http_service_scrape))
-            .fallback(http_service_404)
-            .layer(SecureClientIpSource::ConnectInfo.into_extension())
-            .layer(Extension(data))
-            .into_make_service_with_connect_info::<SocketAddr>()
-        )
+        .serve(routing)
 }
 
 pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> impl Future<Output = Result<(), std::io::Error>>
@@ -44,18 +50,10 @@ pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTr
     ).await.unwrap();
 
     info!("[HTTPS] Starting server listener on {}", addr);
+    let routing = http_service_routing(data).await;
     axum_server::bind_rustls(addr, ssl_config)
         .handle(handle)
-        .serve(Router::new()
-            .route("/announce", get(http_service_announce))
-            .route("/announce/:key", get(http_service_announce))
-            .route("/scrape", get(http_service_scrape))
-            .route("/scrape/:key", get(http_service_scrape))
-            .fallback(http_service_404)
-            .layer(SecureClientIpSource::ConnectInfo.into_extension())
-            .layer(Extension(data))
-            .into_make_service_with_connect_info::<SocketAddr>()
-        )
+        .serve(routing)
 }
 
 pub async fn http_service_announce(ip: SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
