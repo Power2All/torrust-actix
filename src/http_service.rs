@@ -62,9 +62,9 @@ pub async fn http_service_announce(ip: SecureClientIp, axum::extract::RawQuery(p
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
-    if maintenance_mode(state.clone()).await {
-        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
-        return (StatusCode::OK, headers, return_string);
+    let maintenance_check = maintenance_mode_check(headers.clone(), state.clone()).await;
+    if maintenance_check.is_some() {
+        return maintenance_check.unwrap();
     }
 
     let query_map_result = parse_query(params);
@@ -96,31 +96,9 @@ pub async fn http_service_announce(ip: SecureClientIp, axum::extract::RawQuery(p
 
     // We check if the path is set, and retrieve the possible "key" to check.
     if state.config.keys {
-        let key: InfoHash = match path_params.get("key") {
-            None => {
-                let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
-                return (StatusCode::OK, headers, return_string);
-            }
-            Some(result) => {
-                if result.len() != 40 {
-                    let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
-                    return (StatusCode::OK, headers, return_string);
-                }
-                match hex::decode(result) {
-                    Ok(result) => {
-                        let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
-                        InfoHash(key)
-                    }
-                    Err(_) => {
-                        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
-                        return (StatusCode::OK, headers, return_string);
-                    }
-                }
-            }
-        };
-        if !state.check_key(key).await {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
-            return (StatusCode::OK, headers, return_string);
+        let key_check = check_key_validation(headers.clone(), state.clone(), path_params.clone()).await;
+        if key_check.is_some() {
+            return key_check.unwrap();
         }
     }
 
@@ -226,9 +204,9 @@ pub async fn http_service_scrape(ip: SecureClientIp, axum::extract::RawQuery(par
     let mut headers = HeaderMap::new();
     headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
 
-    if maintenance_mode(state.clone()).await {
-        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
-        return (StatusCode::OK, headers, return_string);
+    let maintenance_check = maintenance_mode_check(headers.clone(), state.clone()).await;
+    if maintenance_check.is_some() {
+        return maintenance_check.unwrap();
     }
 
     let query_map_result = parse_query(params);
@@ -239,31 +217,9 @@ pub async fn http_service_scrape(ip: SecureClientIp, axum::extract::RawQuery(par
 
     // We check if the path is set, and retrieve the possible "key" to check.
     if state.config.keys {
-        let key: InfoHash = match path_params.get("key") {
-            None => {
-                let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
-                return (StatusCode::OK, headers, return_string);
-            }
-            Some(result) => {
-                if result.len() != 40 {
-                    let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
-                    return (StatusCode::OK, headers, return_string);
-                }
-                match hex::decode(result) {
-                    Ok(result) => {
-                        let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
-                        InfoHash(key)
-                    }
-                    Err(_) => {
-                        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
-                        return (StatusCode::OK, headers, return_string);
-                    }
-                }
-            }
-        };
-        if !state.check_key(key).await {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
-            return (StatusCode::OK, headers, return_string);
+        let key_check = check_key_validation(headers.clone(), state.clone(), path_params.clone()).await;
+        if key_check.is_some() {
+            return key_check.unwrap();
         }
     }
 
@@ -338,4 +294,44 @@ pub fn http_query_hashing(query_map_result: Result<HttpQueryHashingMapOk, Custom
             Err((StatusCode::OK, headers, return_string))
         }
     }
+}
+
+pub async fn maintenance_mode_check(headers: HeaderMap, state: Arc<TorrentTracker>) -> Option<(StatusCode, HeaderMap, Vec<u8>)>
+{
+    if maintenance_mode(state).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
+        return Some((StatusCode::OK, headers, return_string));
+    }
+    None
+}
+
+pub async fn check_key_validation(headers: HeaderMap, state: Arc<TorrentTracker>, path_params: HashMap<String, String>) -> Option<(StatusCode, HeaderMap, Vec<u8>)>
+{
+    let key: InfoHash = match path_params.get("key") {
+        None => {
+            let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
+            return Some((StatusCode::OK, headers, return_string));
+        }
+        Some(result) => {
+            if result.len() != 40 {
+                let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
+                return Some((StatusCode::OK, headers, return_string));
+            }
+            match hex::decode(result) {
+                Ok(result) => {
+                    let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
+                    InfoHash(key)
+                }
+                Err(_) => {
+                    let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
+                    return Some((StatusCode::OK, headers, return_string));
+                }
+            }
+        }
+    };
+    if !state.check_key(key).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
+        return Some((StatusCode::OK, headers, return_string));
+    }
+    None
 }
