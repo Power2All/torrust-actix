@@ -291,52 +291,52 @@ async fn main() -> std::io::Result<()>
         });
     }
 
-    let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
-    let tracker_clone = tracker.clone();
-    tokio::spawn(async move {
-        let interval = Duration::from_secs(interval_persistence);
-        let mut interval = tokio::time::interval(interval);
-        interval.tick().await;
-        loop {
-            tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
-            interval.tick().await;
-            info!("[SAVING] Starting persistence saving procedure.");
-            info!("[SAVING] Moving Updates to Shadow...");
-            tracker_clone.transfer_updates_to_shadow().await;
-            info!("[SAVING] Saving data from Shadow to database...");
-            if tracker_clone.save_torrents().await {
-                info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                tracker_clone.clear_shadow().await;
-                info!("[SAVING] Torrents saved.");
-            } else {
-                error!("[SAVING] An error occurred while saving data...");
-            }
-            if tracker_clone.config.whitelist {
-                info!("[SAVING] Saving data from Whitelist to database...");
-                if tracker_clone.save_whitelists().await {
-                    info!("[SAVING] Whitelists saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
-                }
-            }
-            if tracker_clone.config.blacklist {
-                info!("[SAVING] Saving data from Blacklist to database...");
-                if tracker_clone.save_blacklists().await {
-                    info!("[SAVING] Blacklists saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
-                }
-            }
-            if tracker_clone.config.keys {
-                info!("[SAVING] Saving data from Keys to database...");
-                if tracker_clone.save_keys().await {
-                    info!("[SAVING] Keys saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
-                }
-            }
-        }
-    });
+    // let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
+    // let tracker_clone = tracker.clone();
+    // tokio::spawn(async move {
+    //     let interval = Duration::from_secs(interval_persistence);
+    //     let mut interval = tokio::time::interval(interval);
+    //     interval.tick().await;
+    //     loop {
+    //         tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
+    //         interval.tick().await;
+    //         info!("[SAVING] Starting persistence saving procedure.");
+    //         info!("[SAVING] Moving Updates to Shadow...");
+    //         tracker_clone.transfer_updates_to_shadow().await;
+    //         info!("[SAVING] Saving data from Shadow to database...");
+    //         if tracker_clone.save_torrents().await {
+    //             info!("[SAVING] Clearing shadow, saving procedure finishing...");
+    //             tracker_clone.clear_shadow().await;
+    //             info!("[SAVING] Torrents saved.");
+    //         } else {
+    //             error!("[SAVING] An error occurred while saving data...");
+    //         }
+    //         if tracker_clone.config.whitelist {
+    //             info!("[SAVING] Saving data from Whitelist to database...");
+    //             if tracker_clone.save_whitelists().await {
+    //                 info!("[SAVING] Whitelists saved.");
+    //             } else {
+    //                 error!("[SAVING] An error occurred while saving data...");
+    //             }
+    //         }
+    //         if tracker_clone.config.blacklist {
+    //             info!("[SAVING] Saving data from Blacklist to database...");
+    //             if tracker_clone.save_blacklists().await {
+    //                 info!("[SAVING] Blacklists saved.");
+    //             } else {
+    //                 error!("[SAVING] An error occurred while saving data...");
+    //             }
+    //         }
+    //         if tracker_clone.config.keys {
+    //             info!("[SAVING] Saving data from Keys to database...");
+    //             if tracker_clone.save_keys().await {
+    //                 info!("[SAVING] Keys saved.");
+    //             } else {
+    //                 error!("[SAVING] An error occurred while saving data...");
+    //             }
+    //         }
+    //     }
+    // });
 
     if config.statistics_enabled {
         let console_log_interval = config.clone().log_console_interval.unwrap();
