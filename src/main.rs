@@ -7,6 +7,7 @@ use clap::Parser;
 use futures::future::try_join_all;
 use log::{error, info};
 use scc::ebr::Arc;
+use tokio::time::timeout;
 use torrust_axum::common::{tcp_check_host_and_port_used, udp_check_host_and_port_used};
 use torrust_axum::config;
 use torrust_axum::config::{Configuration, DatabaseStructureConfig};
@@ -262,15 +263,18 @@ async fn main() -> std::io::Result<()>
     let interval_peer_cleanup = config.clone().interval_cleanup.unwrap_or(900);
     let tracker_clone = tracker.clone();
     tokio::spawn(async move {
-        let interval = Duration::from_secs(interval_peer_cleanup);
-        let mut interval = tokio::time::interval(interval);
+        let interval_duration = Duration::from_secs(interval_peer_cleanup);
+        let mut interval = tokio::time::interval(interval_duration);
         interval.tick().await;
         loop {
             tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.peer_timeout.unwrap() as i64).await;
             interval.tick().await;
-            info!("[PEERS] Checking now for dead peers.");
-            tracker_clone.clean_peers(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
-            info!("[PEERS] Peers cleaned up.");
+            let tracker_clone_2 = tracker_clone.clone();
+            tokio::spawn(timeout(interval_duration, async move {
+                info!("[PEERS] Checking now for dead peers.");
+                tracker_clone_2.clean_peers(Duration::from_secs(tracker_clone_2.config.clone().peer_timeout.unwrap())).await;
+                info!("[PEERS] Peers cleaned up.");
+            }));
         }
     });
 
@@ -278,82 +282,90 @@ async fn main() -> std::io::Result<()>
         let interval_keys_cleanup = config.clone().keys_cleanup_interval.unwrap_or(60);
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
-            let interval = Duration::from_secs(interval_keys_cleanup);
-            let mut interval = tokio::time::interval(interval);
+            let interval_duration = Duration::from_secs(interval_keys_cleanup);
+            let mut interval = tokio::time::interval(interval_duration);
             interval.tick().await;
             loop {
                 tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
                 interval.tick().await;
-                info!("[KEYS] Checking now for old keys, and remove them.");
-                tracker_clone.clean_keys().await;
-                info!("[KEYS] Keys cleaned up.");
+                let tracker_clone_2 = tracker_clone.clone();
+                tokio::spawn(timeout(interval_duration, async move {
+                    info!("[KEYS] Checking now for old keys, and remove them.");
+                    tracker_clone_2.clean_keys().await;
+                    info!("[KEYS] Keys cleaned up.");
+                }));
             }
         });
     }
 
-    // let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
-    // let tracker_clone = tracker.clone();
-    // tokio::spawn(async move {
-    //     let interval = Duration::from_secs(interval_persistence);
-    //     let mut interval = tokio::time::interval(interval);
-    //     interval.tick().await;
-    //     loop {
-    //         tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
-    //         interval.tick().await;
-    //         info!("[SAVING] Starting persistence saving procedure.");
-    //         info!("[SAVING] Moving Updates to Shadow...");
-    //         tracker_clone.transfer_updates_to_shadow().await;
-    //         info!("[SAVING] Saving data from Shadow to database...");
-    //         if tracker_clone.save_torrents().await {
-    //             info!("[SAVING] Clearing shadow, saving procedure finishing...");
-    //             tracker_clone.clear_shadow().await;
-    //             info!("[SAVING] Torrents saved.");
-    //         } else {
-    //             error!("[SAVING] An error occurred while saving data...");
-    //         }
-    //         if tracker_clone.config.whitelist {
-    //             info!("[SAVING] Saving data from Whitelist to database...");
-    //             if tracker_clone.save_whitelists().await {
-    //                 info!("[SAVING] Whitelists saved.");
-    //             } else {
-    //                 error!("[SAVING] An error occurred while saving data...");
-    //             }
-    //         }
-    //         if tracker_clone.config.blacklist {
-    //             info!("[SAVING] Saving data from Blacklist to database...");
-    //             if tracker_clone.save_blacklists().await {
-    //                 info!("[SAVING] Blacklists saved.");
-    //             } else {
-    //                 error!("[SAVING] An error occurred while saving data...");
-    //             }
-    //         }
-    //         if tracker_clone.config.keys {
-    //             info!("[SAVING] Saving data from Keys to database...");
-    //             if tracker_clone.save_keys().await {
-    //                 info!("[SAVING] Keys saved.");
-    //             } else {
-    //                 error!("[SAVING] An error occurred while saving data...");
-    //             }
-    //         }
-    //     }
-    // });
+    let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
+    let tracker_clone = tracker.clone();
+    tokio::spawn(async move {
+        let interval_duration = Duration::from_secs(interval_persistence);
+        let mut interval = tokio::time::interval(interval_duration);
+        interval.tick().await;
+        loop {
+            tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
+            interval.tick().await;
+            let tracker_clone_2 = tracker_clone.clone();
+            tokio::spawn(timeout(interval_duration, async move {
+                info!("[SAVING] Starting persistence saving procedure.");
+                info!("[SAVING] Moving Updates to Shadow...");
+                tracker_clone_2.transfer_updates_to_shadow().await;
+                info!("[SAVING] Saving data from Shadow to database...");
+                if tracker_clone_2.save_torrents().await {
+                    info!("[SAVING] Clearing shadow, saving procedure finishing...");
+                    tracker_clone_2.clear_shadow().await;
+                    info!("[SAVING] Torrents saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
+                if tracker_clone_2.config.whitelist {
+                    info!("[SAVING] Saving data from Whitelist to database...");
+                    if tracker_clone_2.save_whitelists().await {
+                        info!("[SAVING] Whitelists saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
+                }
+                if tracker_clone_2.config.blacklist {
+                    info!("[SAVING] Saving data from Blacklist to database...");
+                    if tracker_clone_2.save_blacklists().await {
+                        info!("[SAVING] Blacklists saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
+                }
+                if tracker_clone_2.config.keys {
+                    info!("[SAVING] Saving data from Keys to database...");
+                    if tracker_clone_2.save_keys().await {
+                        info!("[SAVING] Keys saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
+                }
+            }));
+        }
+    });
 
     if config.statistics_enabled {
         let console_log_interval = config.clone().log_console_interval.unwrap();
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
-            let interval = Duration::from_secs(console_log_interval);
-            let mut interval = tokio::time::interval(interval);
+            let interval_duration = Duration::from_secs(console_log_interval);
+            let mut interval = tokio::time::interval(interval_duration);
             loop {
                 tracker_clone.set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() + tracker_clone.config.log_console_interval.unwrap() as i64).await;
                 interval.tick().await;
-                let stats = tracker_clone.get_stats().await;
-                info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
-                info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
-                info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
-                info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
-                info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
-                info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
+                let stats = tracker_clone.clone().get_stats().await;
+                tokio::spawn(timeout(interval_duration, async move {
+                    info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
+                    info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
+                    info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
+                    info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
+                    info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
+                    info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
+                }));
             }
         });
     }
