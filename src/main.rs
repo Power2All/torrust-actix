@@ -268,7 +268,7 @@ async fn main() -> std::io::Result<()>
     tokio::spawn(async move {
         // Set the timestamps for each action in the stats, this will be used to execute the activity.
         tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
-        tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.peer_timeout.unwrap() as i64).await;
+        tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.interval_cleanup.unwrap() as i64).await;
         tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
 
         // Here we run the scheduler action.
@@ -287,7 +287,7 @@ async fn main() -> std::io::Result<()>
             if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_timeout {
                 info!("[PEERS] Checking now for dead peers.");
                 tracker_clone.clean_peers(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
-                tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.peer_timeout.unwrap() as i64).await;
+                tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.interval_cleanup.unwrap() as i64).await;
                 info!("[PEERS] Peers cleaned up.");
             }
 
