@@ -260,91 +260,74 @@ async fn main() -> std::io::Result<()>
         });
     }
 
-    let interval_peer_cleanup = config.clone().interval_cleanup.unwrap_or(900);
+    // Schedule system, instead of each system in their own thread.
+    // This must prevent the system locking itself up when doing too much or already active.
+
     let tracker_clone = tracker.clone();
+    let interval_schedule = config.clone().interval_cleanup.unwrap_or(60);
     tokio::spawn(async move {
-        let interval_duration = Duration::from_secs(interval_peer_cleanup);
+        // Set the timestamps for each action in the stats, this will be used to execute the activity.
+        tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
+        tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.peer_timeout.unwrap() as i64).await;
+        tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
+
+        // Here we run the scheduler action.
+        let interval_duration = Duration::from_secs(interval_schedule);
         let mut interval = tokio::time::interval(interval_duration);
         interval.tick().await;
         loop {
-            tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.peer_timeout.unwrap() as i64).await;
-            interval.tick().await;
-            let tracker_clone_2 = tracker_clone.clone();
-            tokio::spawn(timeout(interval_duration, async move {
-                info!("[PEERS] Checking now for dead peers.");
-                tracker_clone_2.clean_peers(Duration::from_secs(tracker_clone_2.config.clone().peer_timeout.unwrap())).await;
-                info!("[PEERS] Peers cleaned up.");
-            }));
-        }
-    });
-
-    if config.keys {
-        let interval_keys_cleanup = config.clone().keys_cleanup_interval.unwrap_or(60);
-        let tracker_clone = tracker.clone();
-        tokio::spawn(async move {
-            let interval_duration = Duration::from_secs(interval_keys_cleanup);
-            let mut interval = tokio::time::interval(interval_duration);
-            interval.tick().await;
-            loop {
-                tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
-                interval.tick().await;
-                let tracker_clone_2 = tracker_clone.clone();
-                tokio::spawn(timeout(interval_duration, async move {
-                    info!("[KEYS] Checking now for old keys, and remove them.");
-                    tracker_clone_2.clean_keys().await;
-                    info!("[KEYS] Keys cleaned up.");
-                }));
+            // Check if we need to run the keys cleanup.
+            if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {
+                info!("[KEYS] Checking now for old keys, and remove them.");
+                tracker_clone.clean_keys().await;
+                info!("[KEYS] Keys cleaned up.");
             }
-        });
-    }
 
-    let interval_persistence = config.clone().persistence_interval.unwrap_or(900);
-    let tracker_clone = tracker.clone();
-    tokio::spawn(async move {
-        let interval_duration = Duration::from_secs(interval_persistence);
-        let mut interval = tokio::time::interval(interval_duration);
-        interval.tick().await;
-        loop {
-            tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
-            interval.tick().await;
-            let tracker_clone_2 = tracker_clone.clone();
-            tokio::spawn(timeout(interval_duration, async move {
+            // Check if we need to run the Peers cleanup.
+            if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_timeout {
+                info!("[PEERS] Checking now for dead peers.");
+                tracker_clone.clean_peers(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
+                info!("[PEERS] Peers cleaned up.");
+            }
+
+            // Check if we need to run the Save Data code.
+            if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_save {
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");
-                tracker_clone_2.transfer_updates_to_shadow().await;
+                tracker_clone.transfer_updates_to_shadow().await;
                 info!("[SAVING] Saving data from Shadow to database...");
-                if tracker_clone_2.save_torrents().await {
+                if tracker_clone.save_torrents().await {
                     info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                    tracker_clone_2.clear_shadow().await;
+                    tracker_clone.clear_shadow().await;
                     info!("[SAVING] Torrents saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
                 }
-                if tracker_clone_2.config.whitelist {
+                if tracker_clone.config.whitelist {
                     info!("[SAVING] Saving data from Whitelist to database...");
-                    if tracker_clone_2.save_whitelists().await {
+                    if tracker_clone.save_whitelists().await {
                         info!("[SAVING] Whitelists saved.");
                     } else {
                         error!("[SAVING] An error occurred while saving data...");
                     }
                 }
-                if tracker_clone_2.config.blacklist {
+                if tracker_clone.config.blacklist {
                     info!("[SAVING] Saving data from Blacklist to database...");
-                    if tracker_clone_2.save_blacklists().await {
+                    if tracker_clone.save_blacklists().await {
                         info!("[SAVING] Blacklists saved.");
                     } else {
                         error!("[SAVING] An error occurred while saving data...");
                     }
                 }
-                if tracker_clone_2.config.keys {
+                if tracker_clone.config.keys {
                     info!("[SAVING] Saving data from Keys to database...");
-                    if tracker_clone_2.save_keys().await {
+                    if tracker_clone.save_keys().await {
                         info!("[SAVING] Keys saved.");
                     } else {
                         error!("[SAVING] An error occurred while saving data...");
                     }
                 }
-            }));
+            }
         }
     });
 
