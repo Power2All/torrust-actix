@@ -276,7 +276,7 @@ async fn main() -> std::io::Result<()>
             task::sleep(Duration::from_secs(60)).await;
 
             // Check if we need to run the keys cleanup.
-            if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {
+            if tracker_clone.config.keys == true && chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {
                 info!("[KEYS] Checking now for old keys, and remove them.");
                 tracker_clone.clean_keys().await;
                 tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
@@ -292,7 +292,7 @@ async fn main() -> std::io::Result<()>
             }
 
             // Check if we need to run the Save Data code.
-            if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_save {
+            if tracker_clone.config.persistence == true && chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_save {
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");
                 tracker_clone.transfer_updates_to_shadow().await;
