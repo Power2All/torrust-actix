@@ -274,8 +274,9 @@ async fn main() -> std::io::Result<()>
         // Here we run the scheduler action.
         let interval_duration = Duration::from_secs(interval_schedule);
         let mut interval = tokio::time::interval(interval_duration);
-        interval.tick().await;
         loop {
+            interval.tick().await;
+
             // Check if we need to run the keys cleanup.
             if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {
                 info!("[KEYS] Checking now for old keys, and remove them.");
