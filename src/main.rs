@@ -280,6 +280,7 @@ async fn main() -> std::io::Result<()>
             if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {
                 info!("[KEYS] Checking now for old keys, and remove them.");
                 tracker_clone.clean_keys().await;
+                tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
                 info!("[KEYS] Keys cleaned up.");
             }
 
@@ -287,6 +288,7 @@ async fn main() -> std::io::Result<()>
             if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_timeout {
                 info!("[PEERS] Checking now for dead peers.");
                 tracker_clone.clean_peers(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
+                tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.peer_timeout.unwrap() as i64).await;
                 info!("[PEERS] Peers cleaned up.");
             }
 
@@ -327,6 +329,8 @@ async fn main() -> std::io::Result<()>
                         error!("[SAVING] An error occurred while saving data...");
                     }
                 }
+                tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
+                info!("[SAVING] Saving persistent data procedure done.");
             }
         }
     });
