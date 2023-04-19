@@ -1,4 +1,4 @@
-use std::{env, thread};
+use std::env;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
@@ -7,6 +7,7 @@ use clap::Parser;
 use futures::future::try_join_all;
 use log::{error, info};
 use scc::ebr::Arc;
+use async_std::task;
 use tokio::time::timeout;
 use torrust_axum::common::{tcp_check_host_and_port_used, udp_check_host_and_port_used};
 use torrust_axum::config;
@@ -272,7 +273,7 @@ async fn main() -> std::io::Result<()>
 
         // Here we run the scheduler action.
         loop {
-            thread::sleep(Duration::from_secs(60));
+            task::sleep(Duration::from_secs(60)).await;
 
             // Check if we need to run the keys cleanup.
             if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {
@@ -338,7 +339,7 @@ async fn main() -> std::io::Result<()>
         tokio::spawn(async move {
             loop {
                 tracker_clone.set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() + tracker_clone.config.log_console_interval.unwrap() as i64).await;
-                thread::sleep(Duration::from_secs(tracker_clone.config.log_console_interval.unwrap_or(30)));
+                task::sleep(Duration::from_secs(tracker_clone.config.log_console_interval.unwrap_or(30))).await;
                 let stats = tracker_clone.clone().get_stats().await;
                 tokio::spawn(timeout(Duration::from_secs(tracker_clone.config.log_console_interval.unwrap_or(30)), async move {
                     info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
