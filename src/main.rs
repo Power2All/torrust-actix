@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, thread};
 use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
@@ -264,7 +264,6 @@ async fn main() -> std::io::Result<()>
     // This must prevent the system locking itself up when doing too much or already active.
 
     let tracker_clone = tracker.clone();
-    let interval_schedule = config.clone().interval_cleanup.unwrap_or(60);
     tokio::spawn(async move {
         // Set the timestamps for each action in the stats, this will be used to execute the activity.
         tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
@@ -272,10 +271,8 @@ async fn main() -> std::io::Result<()>
         tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
 
         // Here we run the scheduler action.
-        let interval_duration = Duration::from_secs(interval_schedule);
-        let mut interval = tokio::time::interval(interval_duration);
         loop {
-            interval.tick().await;
+            thread::sleep(Duration::from_secs(60));
 
             // Check if we need to run the keys cleanup.
             if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {
@@ -337,16 +334,13 @@ async fn main() -> std::io::Result<()>
     });
 
     if config.statistics_enabled {
-        let console_log_interval = config.clone().log_console_interval.unwrap();
         let tracker_clone = tracker.clone();
         tokio::spawn(async move {
-            let interval_duration = Duration::from_secs(console_log_interval);
-            let mut interval = tokio::time::interval(interval_duration);
             loop {
                 tracker_clone.set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() + tracker_clone.config.log_console_interval.unwrap() as i64).await;
-                interval.tick().await;
+                thread::sleep(Duration::from_secs(tracker_clone.config.log_console_interval.unwrap_or(30)));
                 let stats = tracker_clone.clone().get_stats().await;
-                tokio::spawn(timeout(interval_duration, async move {
+                tokio::spawn(timeout(Duration::from_secs(tracker_clone.config.log_console_interval.unwrap_or(30)), async move {
                     info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
                     info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
                     info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
