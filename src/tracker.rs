@@ -39,7 +39,7 @@ pub enum StatsEvent {
     Udp4ScrapesHandled,
     Udp6ConnectionsHandled,
     Udp6AnnouncesHandled,
-    Udp6ScrapesHandled
+    Udp6ScrapesHandled,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -75,14 +75,14 @@ pub struct Stats {
     pub udp4_scrapes_handled: i64,
     pub udp6_connections_handled: i64,
     pub udp6_announces_handled: i64,
-    pub udp6_scrapes_handled: i64
+    pub udp6_scrapes_handled: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TorrentEntryItem {
     pub completed: i64,
     pub seeders: i64,
-    pub leechers: i64
+    pub leechers: i64,
 }
 
 impl TorrentEntryItem {
@@ -90,7 +90,7 @@ impl TorrentEntryItem {
         TorrentEntryItem {
             completed: 0,
             seeders: 0,
-            leechers: 0
+            leechers: 0,
         }
     }
 }
@@ -107,7 +107,7 @@ pub struct TorrentEntry {
     pub peers: BTreeMap<PeerId, TorrentPeer>,
     pub completed: i64,
     pub seeders: i64,
-    pub leechers: i64
+    pub leechers: i64,
 }
 
 impl TorrentEntry {
@@ -116,7 +116,7 @@ impl TorrentEntry {
             peers: BTreeMap::new(),
             completed: 0,
             seeders: 0,
-            leechers: 0
+            leechers: 0,
         }
     }
 }
@@ -135,7 +135,7 @@ pub struct Torrents {
     pub stats: Stats,
     pub whitelist: HashMap<InfoHash, i64>,
     pub blacklist: HashMap<InfoHash, i64>,
-    pub keys: HashMap<InfoHash, i64>
+    pub keys: HashMap<InfoHash, i64>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -143,7 +143,7 @@ pub struct GetTorrentsApi {
     pub info_hash: String,
     pub completed: i64,
     pub seeders: i64,
-    pub leechers: i64
+    pub leechers: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -152,22 +152,21 @@ pub struct GetTorrentApi {
     pub completed: i64,
     pub seeders: i64,
     pub leechers: i64,
-    pub peers: Vec<Value>
+    pub peers: Vec<Value>,
 }
 
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
     pub torrents: Arc<RwLock<Torrents>>,
-    pub sqlx: DatabaseConnector
+    pub sqlx: DatabaseConnector,
 }
 
 impl TorrentTracker {
     pub async fn new(config: Arc<Configuration>) -> TorrentTracker
     {
-
         TorrentTracker {
             config: config.clone(),
-            torrents: Arc::new(RwLock::new(Torrents{
+            torrents: Arc::new(RwLock::new(Torrents {
                 map_torrents: BTreeMap::new(),
                 map_peers: BTreeMap::new(),
                 updates: HashMap::new(),
@@ -204,13 +203,13 @@ impl TorrentTracker {
                     udp4_scrapes_handled: 0,
                     udp6_connections_handled: 0,
                     udp6_announces_handled: 0,
-                    udp6_scrapes_handled: 0
+                    udp6_scrapes_handled: 0,
                 },
                 whitelist: HashMap::new(),
                 blacklist: HashMap::new(),
-                keys: HashMap::new()
+                keys: HashMap::new(),
             })),
-            sqlx: DatabaseConnector::new(config.clone()).await
+            sqlx: DatabaseConnector::new(config.clone()).await,
         }
     }
 
@@ -315,7 +314,7 @@ impl TorrentTracker {
                 self.add_torrent(*info_hash, TorrentEntryItem {
                     completed: *completed,
                     seeders: 0,
-                    leechers: 0
+                    leechers: 0,
                 }, false).await;
                 torrent_count += 1;
                 completed_count += *completed;
@@ -422,7 +421,7 @@ impl TorrentTracker {
         if persistent {
             self.add_update(
                 info_hash,
-                torrent_entry.completed
+                torrent_entry.completed,
             ).await;
         }
 
@@ -440,11 +439,11 @@ impl TorrentTracker {
                     None => { BTreeMap::new() }
                     Some(data) => { data }
                 };
-                Some(TorrentEntry{
+                Some(TorrentEntry {
                     peers,
                     completed: data.completed,
                     seeders: data.seeders,
-                    leechers: data.leechers
+                    leechers: data.leechers,
                 })
             }
         };
@@ -562,11 +561,11 @@ impl TorrentTracker {
                 };
                 torrents_lock.map_torrents.insert(info_hash, data_torrent.clone());
                 torrents_lock.map_peers.insert(info_hash, peers.clone());
-                TorrentEntry{
+                TorrentEntry {
                     peers,
                     completed: data_torrent.completed,
                     seeders: data_torrent.seeders,
-                    leechers: data_torrent.leechers
+                    leechers: data_torrent.leechers,
                 }
             }
         };
@@ -574,7 +573,7 @@ impl TorrentTracker {
         if persistent && completed {
             self.add_update(
                 info_hash,
-                torrent.completed
+                torrent.completed,
             ).await;
         }
 
@@ -619,11 +618,11 @@ impl TorrentTracker {
                 } else {
                     torrents_lock.map_peers.insert(info_hash, peers.clone());
                 }
-                TorrentEntry{
+                TorrentEntry {
                     peers,
                     completed: data_torrent.completed,
                     seeders: data_torrent.seeders,
-                    leechers: data_torrent.leechers
+                    leechers: data_torrent.leechers,
                 }
             }
         };

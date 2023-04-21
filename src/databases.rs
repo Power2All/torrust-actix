@@ -19,22 +19,22 @@ use crate::config::Configuration;
 pub enum DatabaseDrivers {
     sqlite3,
     mysql,
-    pgsql
+    pgsql,
 }
 
 #[derive(Clone)]
 pub struct DatabaseConnectorMySQL {
-    pool: Pool<MySql>
+    pool: Pool<MySql>,
 }
 
 #[derive(Clone)]
 pub struct DatabaseConnectorSQLite {
-    pool: Pool<Sqlite>
+    pool: Pool<Sqlite>,
 }
 
 #[derive(Clone)]
 pub struct DatabaseConnectorPgSQL {
-    pool: Pool<Postgres>
+    pool: Pool<Postgres>,
 }
 
 #[derive(Clone)]
@@ -43,7 +43,7 @@ pub struct DatabaseConnector {
     mysql: Option<DatabaseConnectorMySQL>,
     sqlite: Option<DatabaseConnectorSQLite>,
     pgsql: Option<DatabaseConnectorPgSQL>,
-    engine: Option<DatabaseDrivers>
+    engine: Option<DatabaseDrivers>,
 }
 
 impl DatabaseConnectorSQLite {
@@ -82,13 +82,12 @@ impl DatabaseConnectorPgSQL {
 impl DatabaseConnector {
     pub async fn new(config: Arc<Configuration>) -> DatabaseConnector
     {
-
-        let mut structure = DatabaseConnector{
+        let mut structure = DatabaseConnector {
             config: config.clone(),
             mysql: None,
             sqlite: None,
             pgsql: None,
-            engine: None
+            engine: None,
         };
 
         match &config.db_driver {
@@ -256,7 +255,7 @@ impl DatabaseConnector {
                     info!("[PgSQL] Loaded {} whitelists...", total_whitelist);
                     Ok(return_data_whitelist)
                 }
-            }
+            };
         }
 
         Err(Error::RowNotFound)
@@ -351,7 +350,7 @@ impl DatabaseConnector {
                     info!("[PgSQL] Loaded {} blacklists...", total_blacklist);
                     Ok(return_data_blacklist)
                 }
-            }
+            };
         }
 
         Err(Error::RowNotFound)
@@ -452,7 +451,7 @@ impl DatabaseConnector {
                     info!("[PgSQL] Loaded {} keys...", total_keys);
                     Ok(return_data_keys)
                 }
-            }
+            };
         }
 
         Err(Error::RowNotFound)
@@ -553,7 +552,7 @@ impl DatabaseConnector {
                     info!("[PgSQL] Loaded {} torrents...", total_torrents);
                     Ok(return_data_torrents)
                 }
-            }
+            };
         }
 
         Err(Error::RowNotFound)
@@ -734,7 +733,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-            }
+            };
         }
 
         Err(Error::RowNotFound)
@@ -854,7 +853,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-            }
+            };
         }
 
         Err(Error::RowNotFound)
@@ -983,7 +982,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-            }
+            };
         }
 
         Err(Error::RowNotFound)
@@ -1119,7 +1118,7 @@ impl DatabaseConnector {
 
                     Ok(())
                 }
-            }
+            };
         }
 
         Err(Error::RowNotFound)

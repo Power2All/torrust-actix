@@ -8,8 +8,9 @@ use crate::databases::DatabaseDrivers;
 #[derive(Debug)]
 pub enum ConfigurationError {
     IOError(std::io::Error),
-    ParseError(toml::de::Error)
+    ParseError(toml::de::Error),
 }
+
 impl std::fmt::Display for ConfigurationError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -18,12 +19,13 @@ impl std::fmt::Display for ConfigurationError {
         }
     }
 }
+
 impl std::error::Error for ConfigurationError {}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UdpTrackersConfig {
     pub enabled: bool,
-    pub bind_address: String
+    pub bind_address: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -32,7 +34,7 @@ pub struct HttpTrackersConfig {
     pub bind_address: String,
     pub ssl: bool,
     pub ssl_key: String,
-    pub ssl_cert: String
+    pub ssl_cert: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -41,7 +43,7 @@ pub struct ApiTrackersConfig {
     pub bind_address: String,
     pub ssl: bool,
     pub ssl_key: String,
-    pub ssl_cert: String
+    pub ssl_cert: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -55,7 +57,7 @@ pub struct DatabaseStructureConfig {
     pub table_blacklist_info_hash: String,
     pub db_keys: String,
     pub table_keys_hash: String,
-    pub table_keys_timeout: String
+    pub table_keys_timeout: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -87,14 +89,15 @@ pub struct Configuration {
     pub http_server: Vec<HttpTrackersConfig>,
     pub api_server: Vec<ApiTrackersConfig>,
 
-    pub db_structure: DatabaseStructureConfig
+    pub db_structure: DatabaseStructureConfig,
 }
+
 impl Configuration {
     pub fn init() -> Configuration {
         let udp_server = vec!(
             UdpTrackersConfig {
                 enabled: false,
-                bind_address: String::from("0.0.0.0:6969")
+                bind_address: String::from("0.0.0.0:6969"),
             }
         );
         let http_server = vec!(
@@ -103,7 +106,7 @@ impl Configuration {
                 bind_address: String::from("0.0.0.0:6969"),
                 ssl: false,
                 ssl_key: String::from(""),
-                ssl_cert: String::from("")
+                ssl_cert: String::from(""),
             }
         );
         let api_server = vec!(
@@ -112,7 +115,7 @@ impl Configuration {
                 bind_address: String::from("0.0.0.0:8080"),
                 ssl: false,
                 ssl_key: String::from(""),
-                ssl_cert: String::from("")
+                ssl_cert: String::from(""),
             }
         );
         Configuration {
@@ -143,7 +146,7 @@ impl Configuration {
             http_server,
             api_server,
 
-            db_structure: DatabaseStructureConfig{
+            db_structure: DatabaseStructureConfig {
                 db_torrents: String::from("torrents"),
                 table_torrents_info_hash: String::from("info_hash"),
                 table_torrents_completed: String::from("completed"),
@@ -153,8 +156,8 @@ impl Configuration {
                 table_blacklist_info_hash: String::from("info_hash"),
                 db_keys: String::from("keys"),
                 table_keys_hash: String::from("hash"),
-                table_keys_timeout: String::from("timeout")
-            }
+                table_keys_timeout: String::from("timeout"),
+            },
         }
     }
 
@@ -213,7 +216,7 @@ impl Configuration {
                         eprintln!("{}", e);
                         Err(CustomError::new("could not create config.toml file"))
                     }
-                }
+                };
             }
         };
         Ok(config)

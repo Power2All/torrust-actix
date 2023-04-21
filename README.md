@@ -359,6 +359,14 @@ This will disable the maintenance mode.
 
 ### ChangeLog
 
+#### v3.2.0
+* Bumped library versions.
+* Modified the way scheduling was done through threads, it could lock up and slow down public trackers with heavy activity.
+* Tweaking the SQLite3 database usage and database space consumption.
+* Adding optional user tracking as a separate plugin, by default this is disabled.
+* Adding optional torrent tracking extension, will save a peer info when a completed download is tracked for any purposes.
+* Some various improvement on coding performance, readability and linting the files.
+
 #### v3.1.2
 * Bumped library versions.
 * Added a Code of Conduct file, as some open source projects need this.

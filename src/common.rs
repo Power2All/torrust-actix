@@ -452,13 +452,13 @@ pub struct AnnounceQueryRequest {
     pub(crate) no_peer_id: bool,
     pub(crate) event: AnnounceEvent,
     pub(crate) remote_addr: IpAddr,
-    pub(crate) numwant: u64
+    pub(crate) numwant: u64,
 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[allow(dead_code)]
 pub struct ScrapeQueryRequest {
-    pub(crate) info_hash: Vec<InfoHash>
+    pub(crate) info_hash: Vec<InfoHash>,
 }
 
 fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {

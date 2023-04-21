@@ -33,7 +33,7 @@ pub async fn http_service_routing(data: Arc<TorrentTracker>) -> IntoMakeServiceW
         .into_make_service_with_connect_info::<SocketAddr>()
 }
 
-pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>) -> impl Future<Output = Result<(), std::io::Error>>
+pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>) -> impl Future<Output=Result<(), std::io::Error>>
 {
     info!("[HTTP] Starting server listener on {}", addr);
     let routing = http_service_routing(data).await;
@@ -42,11 +42,11 @@ pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTra
         .serve(routing)
 }
 
-pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> impl Future<Output = Result<(), std::io::Error>>
+pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> impl Future<Output=Result<(), std::io::Error>>
 {
     let ssl_config = RustlsConfig::from_pem_file(
         ssl_cert.clone(),
-        ssl_key.clone()
+        ssl_key.clone(),
     ).await.unwrap();
 
     info!("[HTTPS] Starting server listener on {}", addr);
@@ -139,7 +139,7 @@ pub async fn http_service_announce(ip: SecureClientIp, axum::extract::RawQuery(p
                 "peers6" => ben_bytes!(peers.clone())
             }).encode();
             (StatusCode::OK, headers, return_string)
-        }
+        };
     }
 
     let mut peers_list = ben_list!();
@@ -152,7 +152,7 @@ pub async fn http_service_announce(ip: SecureClientIp, axum::extract::RawQuery(p
                     "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                     "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
                 });
-            },
+            }
             IpAddr::V6(_) => {
                 peers_list_mut.push(ben_map! {
                     "peer id" => ben_bytes!(peer_id.clone().to_string()),
@@ -319,7 +319,7 @@ pub async fn check_key_validation(headers: HeaderMap, state: Arc<TorrentTracker>
             }
             match hex::decode(result) {
                 Ok(result) => {
-                    let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
+                    let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
                     InfoHash(key)
                 }
                 Err(_) => {

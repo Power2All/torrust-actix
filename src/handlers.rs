@@ -20,7 +20,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             }
 
             if result[0].len() != 20 {
-                return Err(CustomError::new("invalid info_hash size"))
+                return Err(CustomError::new("invalid info_hash size"));
             }
 
             result
@@ -34,11 +34,11 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
         }
         Some(result) => {
             if result.is_empty() {
-                return Err(CustomError::new("no peer_id given"))
+                return Err(CustomError::new("no peer_id given"));
             }
 
             if result[0].len() != 20 {
-                return Err(CustomError::new("invalid peer_id size"))
+                return Err(CustomError::new("invalid peer_id size"));
             }
 
             result
@@ -51,8 +51,14 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             return Err(CustomError::new("missing port"));
         }
         Some(result) => {
-            let port = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid port")) };
-            match port.parse::<u16>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid port")) }
+            let port = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid port"))
+            };
+            match port.parse::<u16>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid port"))
+            }
         }
     };
 
@@ -62,8 +68,14 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             return Err(CustomError::new("missing uploaded"));
         }
         Some(result) => {
-            let uploaded = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid uploaded")) };
-            match uploaded.parse::<u64>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid uploaded")) }
+            let uploaded = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid uploaded"))
+            };
+            match uploaded.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid uploaded"))
+            }
         }
     };
 
@@ -73,8 +85,14 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             return Err(CustomError::new("missing downloaded"));
         }
         Some(result) => {
-            let downloaded = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid downloaded")) };
-            match downloaded.parse::<u64>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid downloaded")) }
+            let downloaded = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid downloaded"))
+            };
+            match downloaded.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid downloaded"))
+            }
         }
     };
 
@@ -84,8 +102,14 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             return Err(CustomError::new("missing left"));
         }
         Some(result) => {
-            let left = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid left")) };
-            match left.parse::<u64>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid left")) }
+            let left = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid left"))
+            };
+            match left.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid left"))
+            }
         }
     };
 
@@ -94,8 +118,14 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     match query.read("compact", |_, v| v.clone()) {
         None => {}
         Some(result) => {
-            let compact = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid compact")) };
-            let compact_integer = match compact.parse::<u8>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid compact")) };
+            let compact = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid compact"))
+            };
+            let compact_integer = match compact.parse::<u8>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid compact"))
+            };
             if compact_integer == 1 {
                 compact_bool = true;
             }
@@ -107,7 +137,10 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     match query.read("event", |_, v| v.clone()) {
         None => {}
         Some(result) => {
-            let event = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid event")) };
+            let event = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid event"))
+            };
             match event.as_str().to_lowercase().as_str() {
                 "started" => {
                     event_integer = AnnounceEvent::Started;
@@ -139,8 +172,14 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     match query.read("numwant", |_, v| v.clone()) {
         None => {}
         Some(result) => {
-            let numwant = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid numwant")) };
-            numwant_integer = match numwant.parse::<u64>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid numwant")) };
+            let numwant = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid numwant"))
+            };
+            numwant_integer = match numwant.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid numwant"))
+            };
             if numwant_integer == 0 || numwant_integer > config.peers_returned.unwrap() {
                 numwant_integer = config.peers_returned.unwrap();
             }
@@ -158,7 +197,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
         no_peer_id: no_peer_id_bool,
         event: event_integer,
         remote_addr,
-        numwant: numwant_integer
+        numwant: numwant_integer,
     };
 
     Ok(announce_data)
@@ -185,7 +224,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         uploaded: NumberOfBytes(announce_query.uploaded as i64),
         downloaded: NumberOfBytes(announce_query.downloaded as i64),
         left: NumberOfBytes(announce_query.left as i64),
-        event: AnnounceEvent::None
+        event: AnnounceEvent::None,
     };
 
     match announce_query.event {
@@ -197,30 +236,30 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.peer_id,
                 torrent_peer,
                 false,
-                data.config.persistence
+                data.config.persistence,
             ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
                 announce_query.remote_addr,
-                torrent_peer.peer_addr
+                torrent_peer.peer_addr,
             );
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,
                 seeders: torrent_entry.seeders,
-                leechers: torrent_entry.leechers
+                leechers: torrent_entry.leechers,
             }))
         }
         AnnounceEvent::Stopped => {
             torrent_peer.event = AnnounceEvent::Stopped;
             debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
             let torrent_entry = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await;
-            Ok((torrent_peer, TorrentEntry{
+            Ok((torrent_peer, TorrentEntry {
                 peers: BTreeMap::new(),
                 completed: torrent_entry.completed,
                 seeders: torrent_entry.seeders,
-                leechers: torrent_entry.leechers
+                leechers: torrent_entry.leechers,
             }))
         }
         AnnounceEvent::Completed => {
@@ -231,19 +270,19 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.peer_id,
                 torrent_peer,
                 true,
-                data.config.persistence
+                data.config.persistence,
             ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
                 announce_query.remote_addr,
-                torrent_peer.peer_addr
+                torrent_peer.peer_addr,
             );
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,
                 seeders: torrent_entry.seeders,
-                leechers: torrent_entry.leechers
+                leechers: torrent_entry.leechers,
             }))
         }
         AnnounceEvent::None => {
@@ -253,19 +292,19 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.peer_id,
                 torrent_peer,
                 false,
-                data.config.persistence
+                data.config.persistence,
             ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
                 announce_query.remote_addr,
-                torrent_peer.peer_addr
+                torrent_peer.peer_addr,
             );
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,
                 seeders: torrent_entry.seeders,
-                leechers: torrent_entry.leechers
+                leechers: torrent_entry.leechers,
             }))
         }
     }
@@ -311,7 +350,7 @@ pub async fn handle_scrape(data: Arc<TorrentTracker>, scrape_query: ScrapeQueryR
                     peers: BTreeMap::new(),
                     completed: 0,
                     seeders: 0,
-                    leechers: 0
+                    leechers: 0,
                 });
             }
             Some(result) => {
@@ -319,7 +358,7 @@ pub async fn handle_scrape(data: Arc<TorrentTracker>, scrape_query: ScrapeQueryR
                     peers: BTreeMap::new(),
                     completed: result.completed,
                     seeders: result.seeders,
-                    leechers: result.leechers
+                    leechers: result.leechers,
                 });
             }
         }

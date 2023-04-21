@@ -83,7 +83,7 @@ async fn main() -> std::io::Result<()>
         let config_retrieve_db_structure = config.db_structure.clone();
         let config_send_db_structure = config.db_structure.clone();
 
-        let tracker_receive = Arc::new(TorrentTracker::new(Arc::new(Configuration{
+        let tracker_receive = Arc::new(TorrentTracker::new(Arc::new(Configuration {
             log_level: "".to_string(),
             log_console_interval: None,
             statistics_enabled: false,
@@ -120,7 +120,7 @@ async fn main() -> std::io::Result<()>
         }).clone()).await);
         tracker_receive.clone().load_torrents().await;
 
-        let tracker_send = Arc::new(TorrentTracker::new(Arc::new(Configuration{
+        let tracker_send = Arc::new(TorrentTracker::new(Arc::new(Configuration {
             log_level: "".to_string(),
             log_console_interval: None,
             statistics_enabled: false,
