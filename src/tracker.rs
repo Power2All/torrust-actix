@@ -638,10 +638,7 @@ impl TorrentTracker {
         let torrents_arc = self.torrents.clone();
         let torrents_lock = torrents_arc.write().await;
 
-        let mut torrent_index = vec![];
-        for (info_hash, _torrent_entry) in torrents_lock.map_peers.iter() {
-            torrent_index.push(*info_hash);
-        }
+        let torrent_index = torrents_lock.map_peers.clone();
         drop(torrents_lock);
 
         for info_hash in torrent_index.iter() {
