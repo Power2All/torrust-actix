@@ -641,7 +641,7 @@ impl TorrentTracker {
         let torrent_index = torrents_lock.map_peers.clone();
         drop(torrents_lock);
 
-        for info_hash in torrent_index.iter() {
+        for (info_hash, _) in torrent_index.iter() {
             let torrent_option = self.get_torrent(*info_hash).await.clone();
             if torrent_option.is_some() {
                 let torrent = torrent_option.unwrap().clone();
