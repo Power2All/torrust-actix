@@ -1,3 +1,4 @@
+use std::alloc::System;
 use std::env;
 use std::net::SocketAddr;
 use std::process::exit;
@@ -18,6 +19,9 @@ use torrust_axum::http_service::{http_service, https_service};
 use torrust_axum::logging::setup_logging;
 use torrust_axum::tracker::{StatsEvent, TorrentTracker};
 use torrust_axum::udp_service::udp_service;
+
+#[global_allocator]
+static A: System = System;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
