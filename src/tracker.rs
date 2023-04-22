@@ -672,6 +672,8 @@ impl TorrentTracker {
                 break;
             }
 
+            drop(torrent_index);
+
             start += size;
         }
     }
