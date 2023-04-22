@@ -635,24 +635,44 @@ impl TorrentTracker {
 
     pub async fn clean_peers(&self, peer_timeout: Duration)
     {
-        let torrents_arc = self.torrents.clone();
-        let torrents_lock = torrents_arc.write().await;
+        // Cleaning up peers in chunks, to prevent slow behavior.
+        let mut start: usize = 0;
+        let size: usize = 100000;
 
-        let torrent_index = torrents_lock.map_peers.clone();
-        drop(torrents_lock);
+        loop {
+            info!("[PEERS] Scanning peers {} to {}", start, (start + size));
 
-        for (info_hash, _) in torrent_index.iter() {
-            let torrent_option = self.get_torrent(*info_hash).await.clone();
-            if torrent_option.is_some() {
-                let torrent = torrent_option.unwrap().clone();
-                for (peer_id, torrent_peer) in torrent.peers.iter() {
-                    if torrent_peer.updated.elapsed() > peer_timeout {
-                        let _ = self.remove_peer(*info_hash, *peer_id, self.config.clone().persistence).await;
-                    }
+            let torrents_arc = self.torrents.clone();
+            let torrents_lock = torrents_arc.write().await;
+            let mut torrent_index = vec![];
+            for (info_hash, _) in torrents_lock.map_peers.iter().skip(start) {
+                torrent_index.push(*info_hash);
+                if torrent_index.len() == size {
+                    break;
                 }
-            } else {
-                continue;
             }
+            drop(torrents_lock);
+            drop(torrents_arc);
+
+            for info_hash in torrent_index.iter() {
+                let torrent_option = self.get_torrent(*info_hash).await.clone();
+                if torrent_option.is_some() {
+                    let torrent = torrent_option.unwrap().clone();
+                    for (peer_id, torrent_peer) in torrent.peers.iter() {
+                        if torrent_peer.updated.elapsed() > peer_timeout {
+                            let _ = self.remove_peer(*info_hash, *peer_id, self.config.clone().persistence).await;
+                        }
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            if torrent_index.len() != size {
+                break;
+            }
+
+            start += size;
         }
     }
 
