@@ -43,6 +43,7 @@ pub async fn http_api_routing(data: Arc<TorrentTracker>) -> IntoMakeServiceWithC
         .route("/api/keys/:key/:seconds_valid", post(http_api_keys_post).patch(http_api_keys_patch))
         .route("/api/maintenance/enable", get(http_api_maintenance_enable))
         .route("/api/maintenance/disable", get(http_api_maintenance_disable))
+        .fallback(http_api_404)
         .layer(CorsLayer::new()
             .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH])
             .allow_origin(Any)
@@ -74,6 +75,16 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
     axum_server::bind_rustls(addr, ssl_config)
         .handle(handle)
         .serve(routing)
+}
+
+pub async fn http_api_404(ip: SecureClientIp, axum::extract::RawQuery(_params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> impl IntoResponse
+{
+    http_api_stats_log(ip.0, state.clone()).await;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+
+    (StatusCode::NOT_FOUND, headers, "{}")
 }
 
 pub async fn http_api_stats_get(ip: SecureClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, String)
