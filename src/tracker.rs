@@ -478,10 +478,10 @@ impl TorrentTracker {
         let torrents_lock = torrents_arc.write().await;
         let mut return_torrents = HashMap::new();
         for info_hash in hashes.iter() {
-            return_torrents.insert(*info_hash, match torrents_lock.map_torrents.get(&info_hash).cloned() {
+            return_torrents.insert(*info_hash, match torrents_lock.map_torrents.get(info_hash).cloned() {
                 None => { None }
                 Some(data) => {
-                    let peers = match torrents_lock.map_peers.get(&info_hash).cloned() {
+                    let peers = match torrents_lock.map_peers.get(info_hash).cloned() {
                         None => { BTreeMap::new() }
                         Some(data) => { data }
                     };
@@ -564,15 +564,15 @@ impl TorrentTracker {
         let mut torrents_lock = torrents_arc.write().await;
 
         for info_hash in hashes.iter() {
-            let torrent_option = torrents_lock.map_torrents.get(&info_hash);
+            let torrent_option = torrents_lock.map_torrents.get(info_hash);
             match torrent_option {
                 None => {}
                 Some(data) => {
                     removed_torrent -= 1;
                     remove_seeders -= data.seeders;
                     remove_leechers -= data.leechers;
-                    torrents_lock.map_torrents.remove(&info_hash);
-                    torrents_lock.map_peers.remove(&info_hash);
+                    torrents_lock.map_torrents.remove(info_hash);
+                    torrents_lock.map_peers.remove(info_hash);
                 }
             }
         }
@@ -724,29 +724,29 @@ impl TorrentTracker {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
         for (info_hash, peer_id) in peers.iter() {
-            return_torrententries.insert(*info_hash, match torrents_lock.map_torrents.get(&info_hash).cloned() {
+            return_torrententries.insert(*info_hash, match torrents_lock.map_torrents.get(info_hash).cloned() {
                 None => { TorrentEntry::new() }
                 Some(mut data_torrent) => {
-                    let mut peers = match torrents_lock.map_peers.get(&info_hash).cloned() {
+                    let mut peers = match torrents_lock.map_peers.get(info_hash).cloned() {
                         None => { BTreeMap::new() }
                         Some(data_peers) => { data_peers }
                     };
-                    let peer_option = peers.get(&peer_id);
+                    let peer_option = peers.get(peer_id);
                     if peer_option.is_some() {
                         let peer = *peer_option.unwrap();
                         if peer.left == NumberOfBytes(0) {
-                            peers.remove(&peer_id);
+                            peers.remove(peer_id);
                             data_torrent.seeders -= 1;
                             removed_seeder -= 1;
                         } else {
-                            peers.remove(&peer_id);
+                            peers.remove(peer_id);
                             data_torrent.leechers -= 1;
                             removed_leecher -= 1;
                         }
                     }
                     torrents_lock.map_torrents.insert(*info_hash, data_torrent.clone());
                     if peers.is_empty() {
-                        torrents_lock.map_peers.remove(&info_hash);
+                        torrents_lock.map_peers.remove(info_hash);
                     } else {
                         torrents_lock.map_peers.insert(*info_hash, peers.clone());
                     }
@@ -860,7 +860,7 @@ impl TorrentTracker {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
         for info_hash in hashes.iter() {
-            torrents_lock.updates.remove(&info_hash);
+            torrents_lock.updates.remove(info_hash);
         }
         let update_count = torrents_lock.updates.len();
         drop(torrents_lock);
@@ -906,7 +906,7 @@ impl TorrentTracker {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
         for info_hash in hashes.iter() {
-            torrents_lock.shadow.remove(&info_hash);
+            torrents_lock.shadow.remove(info_hash);
         }
         let shadow_count = torrents_lock.shadow.len();
         drop(torrents_lock);
