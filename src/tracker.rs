@@ -428,6 +428,26 @@ impl TorrentTracker {
         self.update_stats(StatsEvent::Torrents, 1).await;
     }
 
+    pub async fn add_torrents(&self, torrents: HashMap<InfoHash, TorrentEntryItem>, persistent: bool)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        let mut updates = HashMap::new();
+        for (info_hash, torrent_entry) in torrents.iter() {
+            let _ = torrents_lock.map_torrents.insert(*info_hash, torrent_entry.clone());
+            updates.insert(*info_hash, torrent_entry.completed);
+        }
+        drop(torrents_lock);
+
+        if persistent {
+            self.add_updates(
+                updates
+            ).await;
+        }
+
+        self.update_stats(StatsEvent::Torrents, torrents.len() as i64).await;
+    }
+
     pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         let torrents_arc = self.torrents.clone();
@@ -452,7 +472,34 @@ impl TorrentTracker {
         torrent
     }
 
-    pub async fn get_torrents(&self, skip: u64, amount: u64) -> HashMap<InfoHash, i64>
+    pub async fn get_torrents(&self, hashes: Vec<InfoHash>) -> HashMap<InfoHash, Option<TorrentEntry>>
+    {
+        let torrents_arc = self.torrents.clone();
+        let torrents_lock = torrents_arc.write().await;
+        let mut return_torrents = HashMap::new();
+        for info_hash in hashes.iter() {
+            return_torrents.insert(*info_hash, match torrents_lock.map_torrents.get(&info_hash).cloned() {
+                None => { None }
+                Some(data) => {
+                    let peers = match torrents_lock.map_peers.get(&info_hash).cloned() {
+                        None => { BTreeMap::new() }
+                        Some(data) => { data }
+                    };
+                    Some(TorrentEntry {
+                        peers,
+                        completed: data.completed,
+                        seeders: data.seeders,
+                        leechers: data.leechers,
+                    })
+                }
+            });
+        }
+        drop(torrents_lock);
+
+        return_torrents
+    }
+
+    pub async fn get_torrents_chunk(&self, skip: u64, amount: u64) -> HashMap<InfoHash, i64>
     {
         let torrents_arc = self.torrents.clone();
         let torrents_lock = torrents_arc.write().await;
@@ -489,8 +536,8 @@ impl TorrentTracker {
             None => {}
             Some(data) => {
                 removed_torrent = true;
-                remove_seeders = data.seeders;
-                remove_leechers = data.leechers;
+                remove_seeders -= data.seeders;
+                remove_leechers -= data.leechers;
                 torrents_lock.map_torrents.remove(&info_hash);
                 torrents_lock.map_peers.remove(&info_hash);
             }
@@ -503,8 +550,43 @@ impl TorrentTracker {
         }
 
         if removed_torrent { self.update_stats(StatsEvent::Torrents, -1).await; }
-        if remove_seeders > 0 { self.update_stats(StatsEvent::Seeds, 0 - remove_seeders).await; }
-        if remove_leechers > 0 { self.update_stats(StatsEvent::Peers, 0 - remove_leechers).await; }
+        if remove_seeders != 0 { self.update_stats(StatsEvent::Seeds, remove_seeders).await; }
+        if remove_leechers != 0 { self.update_stats(StatsEvent::Peers, remove_leechers).await; }
+    }
+
+    pub async fn remove_torrents(&self, hashes: Vec<InfoHash>, persistent: bool)
+    {
+        let mut removed_torrent = 0i64;
+        let mut remove_seeders = 0i64;
+        let mut remove_leechers = 0i64;
+
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+
+        for info_hash in hashes.iter() {
+            let torrent_option = torrents_lock.map_torrents.get(&info_hash);
+            match torrent_option {
+                None => {}
+                Some(data) => {
+                    removed_torrent -= 1;
+                    remove_seeders -= data.seeders;
+                    remove_leechers -= data.leechers;
+                    torrents_lock.map_torrents.remove(&info_hash);
+                    torrents_lock.map_peers.remove(&info_hash);
+                }
+            }
+        }
+
+        drop(torrents_lock);
+
+        if persistent {
+            self.remove_updates(hashes.clone()).await;
+            self.remove_shadows(hashes.clone()).await;
+        }
+
+        if removed_torrent != 0 { self.update_stats(StatsEvent::Torrents, removed_torrent).await; }
+        if remove_seeders != 0 { self.update_stats(StatsEvent::Seeds, remove_seeders).await; }
+        if remove_leechers != 0 { self.update_stats(StatsEvent::Peers, remove_leechers).await; }
     }
 
     /* === Peers === */
@@ -633,6 +715,57 @@ impl TorrentTracker {
         torrent
     }
 
+    pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, _persistent: bool) -> HashMap<InfoHash, TorrentEntry>
+    {
+        let mut removed_seeder = 0i64;
+        let mut removed_leecher = 0i64;
+        let mut return_torrententries = HashMap::new();
+
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        for (info_hash, peer_id) in peers.iter() {
+            return_torrententries.insert(*info_hash, match torrents_lock.map_torrents.get(&info_hash).cloned() {
+                None => { TorrentEntry::new() }
+                Some(mut data_torrent) => {
+                    let mut peers = match torrents_lock.map_peers.get(&info_hash).cloned() {
+                        None => { BTreeMap::new() }
+                        Some(data_peers) => { data_peers }
+                    };
+                    let peer_option = peers.get(&peer_id);
+                    if peer_option.is_some() {
+                        let peer = *peer_option.unwrap();
+                        if peer.left == NumberOfBytes(0) {
+                            peers.remove(&peer_id);
+                            data_torrent.seeders -= 1;
+                            removed_seeder -= 1;
+                        } else {
+                            peers.remove(&peer_id);
+                            data_torrent.leechers -= 1;
+                            removed_leecher -= 1;
+                        }
+                    }
+                    torrents_lock.map_torrents.insert(*info_hash, data_torrent.clone());
+                    if peers.is_empty() {
+                        torrents_lock.map_peers.remove(&info_hash);
+                    } else {
+                        torrents_lock.map_peers.insert(*info_hash, peers.clone());
+                    }
+                    TorrentEntry {
+                        peers,
+                        completed: data_torrent.completed,
+                        seeders: data_torrent.seeders,
+                        leechers: data_torrent.leechers,
+                    }
+                }
+            });
+        }
+        drop(torrents_lock);
+
+        if removed_seeder != 0 { self.update_stats(StatsEvent::Seeds, removed_seeder).await; }
+        if removed_leecher != 0 { self.update_stats(StatsEvent::Peers, removed_leecher).await; }
+        return_torrententries
+    }
+
     pub async fn clean_peers(&self, peer_timeout: Duration)
     {
         // Cleaning up peers in chunks, to prevent slow behavior.
@@ -654,19 +787,21 @@ impl TorrentTracker {
             drop(torrents_lock);
             drop(torrents_arc);
 
-            for info_hash in torrent_index.iter() {
-                let torrent_option = self.get_torrent(*info_hash).await.clone();
-                if torrent_option.is_some() {
-                    let torrent = torrent_option.unwrap().clone();
+            let mut peers = vec![];
+            let torrents = self.get_torrents(torrent_index.clone()).await;
+            for (info_hash, torrent_entry) in torrents.iter() {
+                if torrent_entry.is_some() {
+                    let torrent = torrent_entry.clone().unwrap().clone();
                     for (peer_id, torrent_peer) in torrent.peers.iter() {
                         if torrent_peer.updated.elapsed() > peer_timeout {
-                            let _ = self.remove_peer(*info_hash, *peer_id, self.config.clone().persistence).await;
+                            peers.push((*info_hash, *peer_id));
                         }
                     }
                 } else {
                     continue;
                 }
             }
+            let _ = self.remove_peers(peers, self.config.clone().persistence).await;
 
             if torrent_index.len() != size {
                 break;
@@ -689,6 +824,18 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64).await;
     }
 
+    pub async fn add_updates(&self, updates: HashMap<InfoHash, i64>)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        for (info_hash, completed) in updates.iter() {
+            torrents_lock.updates.insert(*info_hash, *completed);
+        }
+        let update_count = torrents_lock.updates.len();
+        drop(torrents_lock);
+        self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64).await;
+    }
+
     pub async fn get_update(&self) -> HashMap<InfoHash, i64>
     {
         let torrents_arc = self.torrents.clone();
@@ -703,6 +850,18 @@ impl TorrentTracker {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
         torrents_lock.updates.remove(&info_hash);
+        let update_count = torrents_lock.updates.len();
+        drop(torrents_lock);
+        self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64).await;
+    }
+
+    pub async fn remove_updates(&self, hashes: Vec<InfoHash>)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        for info_hash in hashes.iter() {
+            torrents_lock.updates.remove(&info_hash);
+        }
         let update_count = torrents_lock.updates.len();
         drop(torrents_lock);
         self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64).await;
@@ -737,6 +896,18 @@ impl TorrentTracker {
         let torrents_arc = self.torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
         torrents_lock.shadow.remove(&info_hash);
+        let shadow_count = torrents_lock.shadow.len();
+        drop(torrents_lock);
+        self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
+    }
+
+    pub async fn remove_shadows(&self, hashes: Vec<InfoHash>)
+    {
+        let torrents_arc = self.torrents.clone();
+        let mut torrents_lock = torrents_arc.write().await;
+        for info_hash in hashes.iter() {
+            torrents_lock.shadow.remove(&info_hash);
+        }
         let shadow_count = torrents_lock.shadow.len();
         drop(torrents_lock);
         self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;

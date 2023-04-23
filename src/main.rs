@@ -164,7 +164,7 @@ async fn main() -> std::io::Result<()>
         let start: u64 = 0;
         let amount: u64 = 100000;
         loop {
-            let torrents_block = tracker_receive.get_torrents(start, amount).await;
+            let torrents_block = tracker_receive.get_torrents_chunk(start, amount).await;
             if torrents_block.is_empty() {
                 break;
             }
