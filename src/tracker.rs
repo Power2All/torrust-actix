@@ -771,6 +771,7 @@ impl TorrentTracker {
         // Cleaning up peers in chunks, to prevent slow behavior.
         let mut start: usize = 0;
         let size: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
+        let mut removed_peers = 0u64;
 
         loop {
             info!("[PEERS] Scanning peers {} to {}", start, (start + size));
@@ -801,6 +802,7 @@ impl TorrentTracker {
                     continue;
                 }
             }
+            removed_peers += peers.len() as u64;
             let _ = self.remove_peers(peers, self.config.clone().persistence).await;
 
             if torrent_index.len() != size {
@@ -811,6 +813,7 @@ impl TorrentTracker {
 
             start += size;
         }
+        info!("[PEERS] Removed {} peers", removed_peers);
     }
 
     /* === Updates === */
