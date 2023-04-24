@@ -91,6 +91,7 @@ async fn main() -> std::io::Result<()>
             log_level: "".to_string(),
             log_console_interval: None,
             statistics_enabled: false,
+            global_check_interval: None,
             db_driver: source_engine,
             db_path: source,
             persistence: true,
@@ -103,9 +104,10 @@ async fn main() -> std::io::Result<()>
             maintenance_mode_enabled: false,
             interval: None,
             interval_minimum: None,
-            interval_cleanup: None,
             peer_timeout: None,
             peers_returned: None,
+            interval_cleanup: None,
+            cleanup_chunks: None,
             udp_server: vec![],
             http_server: vec![],
             api_server: vec![],
@@ -128,6 +130,7 @@ async fn main() -> std::io::Result<()>
             log_level: "".to_string(),
             log_console_interval: None,
             statistics_enabled: false,
+            global_check_interval: None,
             db_driver: destination_engine,
             db_path: destination,
             persistence: true,
@@ -140,9 +143,10 @@ async fn main() -> std::io::Result<()>
             maintenance_mode_enabled: false,
             interval: None,
             interval_minimum: None,
-            interval_cleanup: None,
             peer_timeout: None,
             peers_returned: None,
+            interval_cleanup: None,
+            cleanup_chunks: None,
             udp_server: vec![],
             http_server: vec![],
             api_server: vec![],
@@ -277,7 +281,7 @@ async fn main() -> std::io::Result<()>
 
         // Here we run the scheduler action.
         loop {
-            task::sleep(Duration::from_secs(60)).await;
+            task::sleep(Duration::from_secs(tracker_clone.config.global_check_interval.unwrap_or(10))).await;
 
             // Check if we need to run the keys cleanup.
             if tracker_clone.config.keys && chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {

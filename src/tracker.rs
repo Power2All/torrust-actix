@@ -770,7 +770,7 @@ impl TorrentTracker {
     {
         // Cleaning up peers in chunks, to prevent slow behavior.
         let mut start: usize = 0;
-        let size: usize = 100000;
+        let size: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
 
         loop {
             info!("[PEERS] Scanning peers {} to {}", start, (start + size));

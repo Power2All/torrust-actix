@@ -65,6 +65,7 @@ pub struct Configuration {
     pub log_level: String,
     pub log_console_interval: Option<u64>,
     pub statistics_enabled: bool,
+    pub global_check_interval: Option<u64>,
 
     pub db_driver: DatabaseDrivers,
     pub db_path: String,
@@ -81,9 +82,11 @@ pub struct Configuration {
     pub maintenance_mode_enabled: bool,
     pub interval: Option<u64>,
     pub interval_minimum: Option<u64>,
-    pub interval_cleanup: Option<u64>,
     pub peer_timeout: Option<u64>,
     pub peers_returned: Option<u64>,
+
+    pub interval_cleanup: Option<u64>,
+    pub cleanup_chunks: Option<u64>,
 
     pub udp_server: Vec<UdpTrackersConfig>,
     pub http_server: Vec<HttpTrackersConfig>,
@@ -122,6 +125,7 @@ impl Configuration {
             log_level: String::from("info"),
             log_console_interval: Some(60),
             statistics_enabled: true,
+            global_check_interval: Some(10),
 
             db_driver: DatabaseDrivers::sqlite3,
             db_path: String::from("sqlite://:memory:"),
@@ -138,9 +142,11 @@ impl Configuration {
             maintenance_mode_enabled: false,
             interval: Some(1800),
             interval_minimum: Some(1800),
-            interval_cleanup: Some(900),
             peer_timeout: Some(2700),
             peers_returned: Some(200),
+
+            interval_cleanup: Some(900),
+            cleanup_chunks: Some(100000),
 
             udp_server,
             http_server,
