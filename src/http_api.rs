@@ -1,30 +1,35 @@
+use std::any::Any;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use axum::{body, Extension, Router};
 use axum::body::{Empty, Full};
-use axum::extract::connect_info::IntoMakeServiceWithConnectInfo;
 use axum::extract::Path;
-use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, Method, Request, StatusCode, Uri};
 use axum::http::header::HeaderName;
+use axum::middleware::{from_fn, Next};
 use axum::response::{IntoResponse, Response};
 use axum_client_ip::{SecureClientIp, SecureClientIpSource};
-use axum::routing::{get, post};
+use axum::routing::{get, MethodRouter, post};
 use axum_server::{Handle, Server};
 use axum_server::tls_rustls::RustlsConfig;
+use futures::FutureExt;
+use hyper::Body;
 use include_dir::{include_dir, Dir};
-use log::info;
+use log::{error, info};
 use scc::ebr::Arc;
 use scc::HashIndex;
 use serde_json::json;
-use tower_http::cors::{Any, CorsLayer};
+
+use tower_http::cors::CorsLayer;
 use crate::common::{AnnounceEvent, CustomError, InfoHash, parse_query};
 use crate::config::Configuration;
 use crate::tracker::{GetTorrentApi, StatsEvent, TorrentTracker};
 
 static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/webgui");
 
-pub async fn http_api_routing(data: Arc<TorrentTracker>) -> IntoMakeServiceWithConnectInfo<Router, SocketAddr>
+pub async fn http_api_routing(data: Arc<TorrentTracker>) -> Router<(), Body>
 {
     Router::new()
         .route("/webgui/*path", get(http_api_static_path))
@@ -46,21 +51,21 @@ pub async fn http_api_routing(data: Arc<TorrentTracker>) -> IntoMakeServiceWithC
         .fallback(http_api_404)
         .layer(CorsLayer::new()
             .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH])
-            .allow_origin(Any)
+            .allow_origin(tower_http::cors::Any)
             .allow_headers(vec![header::CONTENT_TYPE])
         )
         .layer(SecureClientIpSource::ConnectInfo.into_extension())
         .layer(Extension(data))
-        .into_make_service_with_connect_info::<SocketAddr>()
 }
 
 pub async fn http_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>) -> impl Future<Output=Result<(), std::io::Error>>
 {
     info!("[API] Starting server listener on {}", addr);
     let routing = http_api_routing(data).await;
+    let routing_logging: MethodRouter = axum::routing::any_service(routing).layer(from_fn(http_api_log_panic));
     Server::bind(addr)
         .handle(handle)
-        .serve(routing)
+        .serve(routing_logging.into_make_service_with_connect_info::<SocketAddr>())
 }
 
 pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> impl Future<Output=Result<(), std::io::Error>>
@@ -72,9 +77,42 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
 
     info!("[API] Starting server listener with SSL on {}", addr);
     let routing = http_api_routing(data).await;
+    let routing_logging: MethodRouter = axum::routing::any_service(routing).layer(from_fn(http_api_log_panic));
     axum_server::bind_rustls(addr, ssl_config)
         .handle(handle)
-        .serve(routing)
+        .serve(routing_logging.into_make_service_with_connect_info::<SocketAddr>())
+}
+
+async fn http_api_log_panic<B>(request: Request<B>, next: Next<B>) -> Response {
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    let headers = request.headers().clone();
+
+    let future = match catch_unwind(AssertUnwindSafe(|| next.run(request))) {
+        Ok(future) => future,
+        Err(err) => {
+            return http_api_handle_panic(&method, &uri, &headers, err);
+        }
+    };
+
+    match AssertUnwindSafe(future).catch_unwind().await {
+        Ok(response) => response,
+        Err(err) => http_api_handle_panic(&method, &uri, &headers, err),
+    }
+}
+
+fn http_api_handle_panic(method: &Method, uri: &Uri, headers: &HeaderMap, err: Box<dyn Any + Send>) -> Response {
+    let details = if let Some(s) = err.downcast_ref::<String>() {
+        s.clone()
+    } else if let Some(s) = err.downcast_ref::<&str>() {
+        s.to_string()
+    } else {
+        "Unknown panic message".to_string()
+    };
+
+    error!("{} {:?} {:?} {:?} {}", details, method, uri, headers, "request panicked!");
+
+    StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
 
 pub async fn http_api_404(ip: SecureClientIp, axum::extract::RawQuery(_params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> impl IntoResponse

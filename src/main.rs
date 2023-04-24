@@ -185,7 +185,6 @@ async fn main() -> std::io::Result<()>
 
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
 
-
     // Load torrents
     if config.persistence {
         tracker.clone().load_torrents().await;

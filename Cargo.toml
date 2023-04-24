@@ -24,7 +24,7 @@ strip = true
 [dependencies]
 async-std = "1.12.0"
 async-trait = "0.1.57"
-axum = { version = "=0.6.12" }
+axum = { version = "0.6.16" }
 axum-client-ip = "0.4.0"
 axum-server = { version = "0.4.1", features = ["tls-rustls"] }
 binascii = "0.1.4"
@@ -41,6 +41,7 @@ include_dir = "0.7.2"
 log = "0.4.17"
 mime_guess = "2.0.4"
 percent-encoding = "2.1.0"
+regex = "1.8.1"
 scc = "1.0.9"
 serde = { version = "1.0.141", features = ["derive"] }
 serde_json = "1.0.82"
