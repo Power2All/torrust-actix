@@ -365,7 +365,7 @@ async fn main() -> std::io::Result<()>
             info!("Shutdown request received, shutting down...");
             handle.shutdown();
             let _ = udp_tx.send(true);
-            let _ = futures::future::join_all(udp_futures);
+            let _ = futures::future::join_all(udp_futures).await;
             if tracker.clone().config.persistence {
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");

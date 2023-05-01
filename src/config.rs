@@ -219,7 +219,7 @@ impl Configuration {
                     }
                     Err(e) => {
                         eprintln!("config.toml file could not be created, check permissions...");
-                        eprintln!("{}", e);
+                        eprintln!("{e}");
                         Err(CustomError::new("could not create config.toml file"))
                     }
                 };
