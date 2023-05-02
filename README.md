@@ -20,6 +20,7 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Blacklist system, to block and ban hashes
 * [X] Web Interface (through API) to control the tracker software
 * [X] Torrent key support, for private tracking support
+* [X] Optional: User account tracking support, will push updates to database of individual users
 * [X] Dockerfile to build an image for Docker, and pushed to Docker Hub
 
 ## Implemented BEPs

@@ -15,6 +15,9 @@ pub enum StatsEvent {
     Torrents,
     TorrentsUpdates,
     TorrentsShadow,
+    Users,
+    UsersUpdates,
+    UsersShadow,
     TimestampSave,
     TimestampTimeout,
     TimestampConsole,
@@ -52,6 +55,9 @@ pub struct Stats {
     pub torrents: i64,
     pub torrents_updates: i64,
     pub torrents_shadow: i64,
+    pub users: i64,
+    pub users_updates: i64,
+    pub users_shadow: i64,
     pub maintenance_mode: i64,
     pub seeds: i64,
     pub peers: i64,
@@ -127,15 +133,35 @@ impl Default for TorrentEntry {
     }
 }
 
-pub struct Torrents {
-    pub map_torrents: BTreeMap<InfoHash, TorrentEntryItem>,
-    pub map_peers: BTreeMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>,
-    pub updates: HashMap<InfoHash, i64>,
-    pub shadow: HashMap<InfoHash, i64>,
-    pub stats: Stats,
-    pub whitelist: HashMap<InfoHash, i64>,
-    pub blacklist: HashMap<InfoHash, i64>,
-    pub keys: HashMap<InfoHash, i64>,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UserEntryItem {
+    pub uuid: String,
+    pub key: String,
+    pub uploaded: i64,
+    pub downloaded: i64,
+    pub completed: i64,
+    pub active: i64,
+    pub updated: i64,
+}
+
+impl UserEntryItem {
+    pub fn new() -> UserEntryItem {
+        UserEntryItem {
+            uuid: "".to_string(),
+            key: "".to_string(),
+            uploaded: 0,
+            downloaded: 0,
+            completed: 0,
+            active: 0,
+            updated: 0,
+        }
+    }
+}
+
+impl Default for UserEntryItem {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -165,6 +191,7 @@ pub struct TorrentTracker {
     pub whitelist: Arc<RwLock<HashMap<InfoHash, i64>>>,
     pub blacklist: Arc<RwLock<HashMap<InfoHash, i64>>>,
     pub keys: Arc<RwLock<HashMap<InfoHash, i64>>>,
+    pub users: Arc<RwLock<HashMap<String, UserEntryItem>>>,
     pub sqlx: DatabaseConnector,
 }
 
@@ -186,6 +213,9 @@ impl TorrentTracker {
                 torrents: 0,
                 torrents_updates: 0,
                 torrents_shadow: 0,
+                users: 0,
+                users_updates: 0,
+                users_shadow: 0,
                 maintenance_mode: 0,
                 seeds: 0,
                 peers: 0,
@@ -214,6 +244,7 @@ impl TorrentTracker {
             whitelist: Arc::new(RwLock::new(HashMap::new())),
             blacklist: Arc::new(RwLock::new(HashMap::new())),
             keys: Arc::new(RwLock::new(HashMap::new())),
+            users: Arc::new(RwLock::new(HashMap::new())),
             sqlx: DatabaseConnector::new(config.clone()).await,
         }
     }
@@ -237,6 +268,9 @@ impl TorrentTracker {
             StatsEvent::Torrents => { stats_lock.torrents += value; }
             StatsEvent::TorrentsUpdates => { stats_lock.torrents_updates += value; }
             StatsEvent::TorrentsShadow => { stats_lock.torrents_shadow += value; }
+            StatsEvent::Users => { stats_lock.users += value; }
+            StatsEvent::UsersUpdates => { stats_lock.users_updates += value; }
+            StatsEvent::UsersShadow => { stats_lock.users_shadow += value; }
             StatsEvent::TimestampSave => { stats_lock.timestamp_run_save += value; }
             StatsEvent::TimestampTimeout => { stats_lock.timestamp_run_timeout += value; }
             StatsEvent::TimestampConsole => { stats_lock.timestamp_run_console += value; }
@@ -277,6 +311,9 @@ impl TorrentTracker {
             StatsEvent::Torrents => { stats_lock.torrents = value; }
             StatsEvent::TorrentsUpdates => { stats_lock.torrents_updates = value; }
             StatsEvent::TorrentsShadow => { stats_lock.torrents_shadow = value; }
+            StatsEvent::Users => { stats_lock.users = value; }
+            StatsEvent::UsersUpdates => { stats_lock.users_updates = value; }
+            StatsEvent::UsersShadow => { stats_lock.users_shadow = value; }
             StatsEvent::TimestampSave => { stats_lock.timestamp_run_save = value; }
             StatsEvent::TimestampTimeout => { stats_lock.timestamp_run_timeout = value; }
             StatsEvent::TimestampConsole => { stats_lock.timestamp_run_console = value; }
