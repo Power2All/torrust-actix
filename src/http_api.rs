@@ -31,13 +31,13 @@ static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/webgui");
 
 #[derive(serde::Deserialize, Debug)]
 struct HttpApiConfig {
-    ip_source: Option<SecureClientIpSource>,
+    ip_api_source: Option<SecureClientIpSource>,
 }
 
 pub async fn http_api_routing(data: Arc<TorrentTracker>) -> Router<(), Body>
 {
     let config_extract = envy::from_env::<HttpApiConfig>().unwrap();
-    let config = match config_extract.ip_source {
+    let config = match config_extract.ip_api_source {
         None => {
             SecureClientIpSource::ConnectInfo
         }

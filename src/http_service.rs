@@ -26,13 +26,13 @@ use crate::tracker::{StatsEvent, TorrentTracker};
 
 #[derive(serde::Deserialize, Debug)]
 struct HttpServiceConfig {
-    ip_source: Option<SecureClientIpSource>,
+    ip_service_source: Option<SecureClientIpSource>,
 }
 
 pub async fn http_service_routing(data: Arc<TorrentTracker>) -> Router<(), Body>
 {
     let config_extract = envy::from_env::<HttpServiceConfig>().unwrap();
-    let config = match config_extract.ip_source {
+    let config = match config_extract.ip_service_source {
         None => {
             SecureClientIpSource::ConnectInfo
         }
