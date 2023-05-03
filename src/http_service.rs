@@ -24,15 +24,32 @@ use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::{StatsEvent, TorrentTracker};
 
+#[derive(serde::Deserialize, Debug)]
+struct HttpServiceConfig {
+    ip_source: Option<SecureClientIpSource>,
+}
+
 pub async fn http_service_routing(data: Arc<TorrentTracker>) -> Router<(), Body>
 {
+    let config_extract = envy::from_env::<HttpServiceConfig>().unwrap();
+    let config = match config_extract.ip_source {
+        None => {
+            SecureClientIpSource::ConnectInfo
+        }
+        Some(data) => {
+            data
+        }
+    };
+
+    debug!("{:#?}", config);
+
     Router::new()
         .route("/announce", get(http_service_announce))
         .route("/announce/:key", get(http_service_announce))
         .route("/scrape", get(http_service_scrape))
         .route("/scrape/:key", get(http_service_scrape))
         .fallback(http_service_404)
-        .layer(SecureClientIpSource::ConnectInfo.into_extension())
+        .layer(config.into_extension())
         .layer(Extension(data))
 }
 

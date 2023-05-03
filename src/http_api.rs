@@ -17,7 +17,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use futures::FutureExt;
 use hyper::Body;
 use include_dir::{include_dir, Dir};
-use log::{error, info};
+use log::{debug, error, info};
 use scc::ebr::Arc;
 use scc::HashIndex;
 use serde_json::json;
@@ -29,8 +29,25 @@ use crate::tracker::{GetTorrentApi, StatsEvent, TorrentTracker};
 
 static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/webgui");
 
+#[derive(serde::Deserialize, Debug)]
+struct HttpApiConfig {
+    ip_source: Option<SecureClientIpSource>,
+}
+
 pub async fn http_api_routing(data: Arc<TorrentTracker>) -> Router<(), Body>
 {
+    let config_extract = envy::from_env::<HttpApiConfig>().unwrap();
+    let config = match config_extract.ip_source {
+        None => {
+            SecureClientIpSource::ConnectInfo
+        }
+        Some(data) => {
+            data
+        }
+    };
+
+    debug!("{:#?}", config);
+
     Router::new()
         .route("/webgui/*path", get(http_api_static_path))
         .route("/api/stats", get(http_api_stats_get))
@@ -54,7 +71,7 @@ pub async fn http_api_routing(data: Arc<TorrentTracker>) -> Router<(), Body>
             .allow_origin(tower_http::cors::Any)
             .allow_headers(vec![header::CONTENT_TYPE])
         )
-        .layer(SecureClientIpSource::ConnectInfo.into_extension())
+        .layer(config.into_extension())
         .layer(Extension(data))
 }
 
