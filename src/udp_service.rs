@@ -49,8 +49,14 @@ impl UdpServer {
                     debug!("Received {} bytes from {}", payload.len(), remote_addr);
                     debug!("{:?}", payload);
 
-                    let response = handle_packet(remote_addr, payload, tracker.clone()).await;
-                    UdpServer::send_response(socket, remote_addr, response).await;
+                    let remote_addr_cloned = remote_addr.clone();
+                    let payload_cloned = payload.clone();
+                    let tracker_cloned = tracker.clone();
+                    let socket_cloned = socket.clone();
+                    tokio::spawn(async move {
+                        let response = handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
+                        UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
+                    });
                 }
             }
         }

@@ -140,8 +140,8 @@ pub struct UserEntryItem {
     pub uploaded: i64,
     pub downloaded: i64,
     pub completed: i64,
-    pub active: i64,
     pub updated: i64,
+    pub active: i64,
 }
 
 impl UserEntryItem {
@@ -152,8 +152,8 @@ impl UserEntryItem {
             uploaded: 0,
             downloaded: 0,
             completed: 0,
-            active: 0,
             updated: 0,
+            active: 0,
         }
     }
 }
@@ -367,6 +367,26 @@ impl TorrentTracker {
             self.update_stats(StatsEvent::Completed, completed_count).await;
         }
     }
+
+    // pub async fn load_users(&self)
+    // {
+    //     if let Ok(users) = self.sqlx.load_users().await {
+    //         let mut user_count = 0i64;
+    //
+    //         for (info_hash, completed) in torrents.iter() {
+    //             self.add_torrent(*info_hash, TorrentEntryItem {
+    //                 completed: *completed,
+    //                 seeders: 0,
+    //                 leechers: 0,
+    //             }, false).await;
+    //             torrent_count += 1;
+    //             completed_count += *completed;
+    //         }
+    //
+    //         info!("Loaded {} torrents with {} completes.", torrent_count, completed_count);
+    //         self.update_stats(StatsEvent::Completed, completed_count).await;
+    //     }
+    // }
 
     pub async fn load_whitelists(&self)
     {

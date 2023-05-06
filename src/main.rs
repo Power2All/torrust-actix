@@ -61,7 +61,7 @@ async fn main() -> std::io::Result<()>
         create_config = true;
     }
 
-    let config = match config::Configuration::load_from_file(create_config) {
+    let config = match Configuration::load_from_file(create_config) {
         Ok(config) => Arc::new(config),
         Err(_) => exit(101)
     };
