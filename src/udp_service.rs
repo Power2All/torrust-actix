@@ -1,16 +1,17 @@
+use log::{error, info, debug};
+use scc::ebr::Arc;
 use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::process::exit;
 use std::time::Duration;
-use log::{error, info, debug};
-use scc::ebr::Arc;
 use tokio::net::UdpSocket;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use crate::udp_common;
+
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, maintenance_mode, PeerId};
 use crate::handlers::handle_announce;
 use crate::tracker::{StatsEvent, TorrentEntry, TorrentEntryItem, TorrentTracker};
+use crate::udp_common;
 use crate::udp_common::{AnnounceInterval, AnnounceRequest, AnnounceResponse, ConnectRequest, ConnectResponse, ErrorResponse, get_connection_id, NumberOfDownloads, NumberOfPeers, Port, Request, Response, ResponsePeer, ScrapeRequest, ScrapeResponse, ServerError, TorrentScrapeStatistics, TransactionId};
 
 const MAX_SCRAPE_TORRENTS: u8 = 74;
@@ -52,11 +53,11 @@ impl UdpServer {
                     debug!("Received {} bytes from {}", payload.len(), remote_addr);
                     debug!("{:?}", payload);
 
-                    let remote_addr_cloned = remote_addr.clone();
+                    let remote_addr_cloned = remote_addr;
                     let payload_cloned = payload.clone();
                     let tracker_cloned = tracker.clone();
                     let socket_cloned = socket.clone();
-                    tokio::spawn(timeout(Duration::from_secs(10), async move {
+                    tokio::spawn(timeout(Duration::from_secs(30), async move {
                         let response = handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
                         UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
                     }));

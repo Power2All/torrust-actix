@@ -1,5 +1,6 @@
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
+
 use crate::config::Configuration;
 
 pub fn setup_logging(config: &Configuration)

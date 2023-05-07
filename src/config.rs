@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
-use serde::{Deserialize, Serialize};
 use toml;
+
 use crate::common::CustomError;
 use crate::databases::DatabaseDrivers;
 

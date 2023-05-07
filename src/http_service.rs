@@ -1,10 +1,3 @@
-use std::any::Any;
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::future::Future;
-use std::io::Write;
-use std::net::{IpAddr, SocketAddr};
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use axum::{Extension, Router};
 use axum::http::{HeaderMap, HeaderValue, Method, Request, StatusCode, Uri};
 use axum::http::header::HeaderName;
@@ -12,15 +5,23 @@ use axum::middleware::{from_fn, Next};
 use axum::response::{IntoResponse, Response};
 use axum_client_ip::{SecureClientIp, SecureClientIpSource};
 use axum::routing::{get, MethodRouter};
-use axum_server::Handle;
+use axum_server::{Handle};
 use axum_server::tls_rustls::RustlsConfig;
-use log::{debug, error, info};
-use scc::ebr::Arc;
 use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
 use futures::FutureExt;
 use hyper::Body;
+use log::{debug, error, info};
+use scc::ebr::Arc;
 use scc::HashIndex;
-use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
+use std::any::Any;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::future::{Future};
+use std::io::Write;
+use std::net::{IpAddr, SocketAddr};
+use std::panic::{AssertUnwindSafe, catch_unwind};
+
+use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query, TimeoutAcceptor};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::{StatsEvent, TorrentTracker};
 
@@ -59,6 +60,7 @@ pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTra
     let routing = http_service_routing(data).await;
     let routing_logging: MethodRouter = axum::routing::any_service(routing).layer(from_fn(http_service_log_panic));
     axum_server::bind(addr)
+        .acceptor(TimeoutAcceptor)
         .handle(handle)
         .serve(routing_logging.into_make_service_with_connect_info::<SocketAddr>())
 }
@@ -73,7 +75,9 @@ pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTr
     info!("[HTTPS] Starting server listener on {}", addr);
     let routing = http_service_routing(data).await;
     let routing_logging: MethodRouter = axum::routing::any_service(routing).layer(from_fn(http_service_log_panic));
+
     axum_server::bind_rustls(addr, ssl_config)
+        .acceptor(TimeoutAcceptor)
         .handle(handle)
         .serve(routing_logging.into_make_service_with_connect_info::<SocketAddr>())
 }

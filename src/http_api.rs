@@ -1,8 +1,3 @@
-use std::any::Any;
-use std::collections::HashMap;
-use std::future::Future;
-use std::net::{IpAddr, SocketAddr};
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use axum::{body, Extension, Router};
 use axum::body::{Empty, Full};
 use axum::extract::Path;
@@ -21,9 +16,14 @@ use log::{debug, error, info};
 use scc::ebr::Arc;
 use scc::HashIndex;
 use serde_json::json;
-
+use std::any::Any;
+use std::collections::HashMap;
+use std::future::Future;
+use std::net::{IpAddr, SocketAddr};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use tower_http::cors::CorsLayer;
-use crate::common::{AnnounceEvent, CustomError, InfoHash, parse_query};
+
+use crate::common::{AnnounceEvent, CustomError, InfoHash, parse_query, TimeoutAcceptor};
 use crate::config::Configuration;
 use crate::tracker::{GetTorrentApi, StatsEvent, TorrentTracker};
 
@@ -81,6 +81,7 @@ pub async fn http_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker
     let routing = http_api_routing(data).await;
     let routing_logging: MethodRouter = axum::routing::any_service(routing).layer(from_fn(http_api_log_panic));
     Server::bind(addr)
+        .acceptor(TimeoutAcceptor)
         .handle(handle)
         .serve(routing_logging.into_make_service_with_connect_info::<SocketAddr>())
 }
@@ -96,6 +97,7 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
     let routing = http_api_routing(data).await;
     let routing_logging: MethodRouter = axum::routing::any_service(routing).layer(from_fn(http_api_log_panic));
     axum_server::bind_rustls(addr, ssl_config)
+        .acceptor(TimeoutAcceptor)
         .handle(handle)
         .serve(routing_logging.into_make_service_with_connect_info::<SocketAddr>())
 }

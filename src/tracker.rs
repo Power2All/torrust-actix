@@ -1,14 +1,15 @@
-use std::collections::{BTreeMap, HashMap};
-use std::ops::Add;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use chrono::{TimeZone, Utc};
 use log::info;
 use scc::ebr::Arc;
-use tokio::sync::RwLock;
-use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
-use crate::config::Configuration;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::{BTreeMap, HashMap};
+use std::ops::Add;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
+
+use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
+use crate::config::Configuration;
 use crate::databases::DatabaseConnector;
 
 pub enum StatsEvent {

@@ -1,8 +1,8 @@
+use byteorder::{NetworkEndian, BigEndian, ReadBytesExt, WriteBytesExt};
+use either::Either;
 use std::borrow::Cow;
 use std::convert::TryInto;
 use std::io::{self, Cursor, Read, Write};
-use byteorder::{NetworkEndian, BigEndian, ReadBytesExt, WriteBytesExt};
-use either::Either;
 use std::fmt::Debug;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::time::SystemTime;

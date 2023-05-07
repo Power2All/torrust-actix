@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
-use std::net::{IpAddr, SocketAddr};
 use log::debug;
 use scc::ebr::Arc;
 use scc::HashIndex;
+use std::collections::BTreeMap;
+use std::net::{IpAddr, SocketAddr};
+
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, CustomError, InfoHash, NumberOfBytes, PeerId, ScrapeQueryRequest, TorrentPeer};
 use crate::config::Configuration;
 use crate::tracker::{TorrentEntry, TorrentEntryItem, TorrentTracker};

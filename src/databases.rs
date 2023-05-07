@@ -1,16 +1,17 @@
-use std::collections::HashMap;
-use std::process::exit;
-use std::str::FromStr;
-use std::time::Duration;
 use clap::ValueEnum;
 use futures::TryStreamExt;
 use log::{info, error};
 use scc::ebr::Arc;
-use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
+use serde::{Deserialize, Serialize};
 use sqlx::{Error, MySql, Pool, Postgres, Row, Sqlite, ConnectOptions};
+use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::process::exit;
+use std::str::FromStr;
+use std::time::Duration;
+
 use crate::common::InfoHash;
 use crate::config::Configuration;
 
