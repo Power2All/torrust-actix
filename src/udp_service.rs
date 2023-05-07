@@ -1,10 +1,12 @@
 use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::process::exit;
+use std::time::Duration;
 use log::{error, info, debug};
 use scc::ebr::Arc;
 use tokio::net::UdpSocket;
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use crate::udp_common;
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, maintenance_mode, PeerId};
 use crate::handlers::handle_announce;
@@ -23,6 +25,7 @@ impl UdpServer {
     pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr) -> tokio::io::Result<UdpServer>
     {
         let socket = UdpSocket::bind(bind_address).await?;
+
         Ok(UdpServer {
             socket: Arc::new(socket),
             tracker,
@@ -53,10 +56,10 @@ impl UdpServer {
                     let payload_cloned = payload.clone();
                     let tracker_cloned = tracker.clone();
                     let socket_cloned = socket.clone();
-                    tokio::spawn(async move {
+                    tokio::spawn(timeout(Duration::from_secs(10), async move {
                         let response = handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
                         UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
-                    });
+                    }));
                 }
             }
         }
