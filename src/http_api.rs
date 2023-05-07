@@ -97,7 +97,6 @@ pub async fn https_api(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracke
     let routing = http_api_routing(data).await;
     let routing_logging: MethodRouter = axum::routing::any_service(routing).layer(from_fn(http_api_log_panic));
     axum_server::bind_rustls(addr, ssl_config)
-        .acceptor(TimeoutAcceptor)
         .handle(handle)
         .serve(routing_logging.into_make_service_with_connect_info::<SocketAddr>())
 }

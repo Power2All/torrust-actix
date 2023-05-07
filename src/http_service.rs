@@ -77,7 +77,6 @@ pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTr
     let routing_logging: MethodRouter = axum::routing::any_service(routing).layer(from_fn(http_service_log_panic));
 
     axum_server::bind_rustls(addr, ssl_config)
-        .acceptor(TimeoutAcceptor)
         .handle(handle)
         .serve(routing_logging.into_make_service_with_connect_info::<SocketAddr>())
 }
