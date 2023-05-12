@@ -198,23 +198,30 @@ async fn main() -> std::io::Result<()>
         }
     }
 
-    let handle = Handle::new();
-
+    let mut api_handlers = Vec::new();
     let mut api_futures = Vec::new();
+    let mut apis_handlers = Vec::new();
     let mut apis_futures = Vec::new();
+
+    // let mut apis_futures = Vec::new();
     for api_server_object in &config.api_server {
         if api_server_object.enabled {
             tcp_check_host_and_port_used(api_server_object.bind_address.clone());
             let address: SocketAddr = api_server_object.bind_address.parse().unwrap();
-            let handle = handle.clone();
             let tracker_clone = tracker.clone();
             if api_server_object.ssl {
-                apis_futures.push(https_api(handle.clone(), address, tracker_clone, api_server_object.ssl_key.clone(), api_server_object.ssl_cert.clone()).await);
+                let (handle, https_api) = https_api(address, tracker_clone, api_server_object.ssl_key.clone(), api_server_object.ssl_cert.clone()).await;
+                apis_handlers.push(handle);
+                apis_futures.push(https_api);
             } else {
-                api_futures.push(http_api(handle.clone(), address, tracker_clone).await);
+                let (handle, http_api) = http_api(address, tracker_clone).await;
+                api_handlers.push(handle);
+                api_futures.push(http_api);
             }
         }
     }
+
+    let handle = Handle::new();
 
     let mut http_futures = Vec::new();
     let mut https_futures = Vec::new();
@@ -249,11 +256,11 @@ async fn main() -> std::io::Result<()>
         });
     }
 
-    if !apis_futures.is_empty() {
-        tokio::spawn(async move {
-            let _ = try_join_all(apis_futures).await;
-        });
-    }
+    // if !apis_futures.is_empty() {
+    //     tokio::spawn(async move {
+    //         let _ = try_join_all(apis_futures).await;
+    //     });
+    // }
 
     if !http_futures.is_empty() {
         tokio::spawn(async move {
@@ -374,6 +381,9 @@ async fn main() -> std::io::Result<()>
             handle.shutdown();
             let _ = udp_tx.send(true);
             let _ = futures::future::join_all(udp_futures).await;
+            for handle in api_handlers.iter() {
+                handle.stop(true).await;
+            }
             if tracker.clone().config.persistence {
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");

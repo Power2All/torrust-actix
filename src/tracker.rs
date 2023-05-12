@@ -409,7 +409,7 @@ impl TorrentTracker {
             let mut blacklist_count = 0i64;
 
             for info_hash in blacklists.iter() {
-                self.add_blacklist(*info_hash).await;
+                self.add_blacklist(*info_hash, true).await;
                 blacklist_count += 1;
             }
 
@@ -1159,11 +1159,15 @@ impl TorrentTracker {
     }
 
     /* === Blacklist === */
-    pub async fn add_blacklist(&self, info_hash: InfoHash)
+    pub async fn add_blacklist(&self, info_hash: InfoHash, on_load: bool)
     {
         let blacklist_arc = self.blacklist.clone();
         let mut blacklist_lock = blacklist_arc.write().await;
-        blacklist_lock.insert(info_hash, 0i64);
+        if on_load {
+            blacklist_lock.insert(info_hash, 1i64);
+        } else {
+            blacklist_lock.insert(info_hash, 2i64);
+        }
         drop(blacklist_lock);
 
         self.update_stats(StatsEvent::Blacklist, 1).await;
