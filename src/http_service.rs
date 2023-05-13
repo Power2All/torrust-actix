@@ -1,24 +1,22 @@
 use std::borrow::Cow;
 use std::fs::File;
 use actix_cors::Cors;
-use actix_remote_ip::RemoteIP;
-use actix_web::{App, Error, http, HttpRequest, HttpResponse, HttpServer, web};
+use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
-use actix_web::error::{InternalError, QueryPayloadError};
 use actix_web::http::header::ContentType;
-use actix_web::web::{Data, Query, ServiceConfig};
+use actix_web::web::ServiceConfig;
 use scc::ebr::Arc;
-use serde::{Serialize, Deserialize};
 use std::future::Future;
 use std::io::{BufReader, Write};
 use std::net::{IpAddr, SocketAddr};
+use std::str::FromStr;
 use std::time::Duration;
 use bip_bencode::{ben_map, ben_bytes, ben_list, ben_int, BMutAccess};
 use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use scc::HashIndex;
-use crate::common::{AnnounceQueryRequest, CustomError, InfoHash, maintenance_mode, parse_query};
+use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::{StatsEvent, TorrentTracker};
 
@@ -118,16 +116,14 @@ fn https_service_config(ssl_key: String, ssl_cert: String) -> ServerConfig {
     config.with_single_cert(cert_chain, keys.remove(0)).unwrap()
 }
 
-pub async fn http_service_announce_key(request: HttpRequest, remote_ip: RemoteIP, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    http_service_stats_log(remote_ip.0, data.clone()).await;
+    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    http_service_stats_log(ip, data.clone()).await;
 
-    if remote_ip.0.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
 
-    match http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        Some(result) => { return result; }
-        None => {}
-    }
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
 
     // We check if the path is set, and retrieve the possible "key" to check.
     if data.config.keys {
@@ -138,24 +134,22 @@ pub async fn http_service_announce_key(request: HttpRequest, remote_ip: RemoteIP
         }
     }
 
-    http_service_announce_handler(request, remote_ip, data.as_ref().clone()).await
+    http_service_announce_handler(request, ip, data.as_ref().clone()).await
 }
 
-pub async fn http_service_announce(request: HttpRequest, remote_ip: RemoteIP, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+pub async fn http_service_announce(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    http_service_stats_log(remote_ip.0, data.clone()).await;
+    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    http_service_stats_log(ip, data.clone()).await;
 
-    if remote_ip.0.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
 
-    match http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        Some(result) => { return result; }
-        None => {}
-    }
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
 
-    http_service_announce_handler(request, remote_ip, data.as_ref().clone()).await
+    http_service_announce_handler(request, ip, data.as_ref().clone()).await
 }
 
-pub async fn http_service_announce_handler(request: HttpRequest, remote_ip: RemoteIP, data: Arc<TorrentTracker>) -> HttpResponse
+pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
 {
     let query_map_result = parse_query(Some(request.query_string().to_string()));
     let query_map = match http_service_query_hashing(query_map_result) {
@@ -163,7 +157,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, remote_ip: Remo
         Err(err) => { return err; }
     };
 
-    let announce = validate_announce(data.clone().config.clone(), remote_ip.0, query_map).await;
+    let announce = validate_announce(data.clone().config.clone(), ip, query_map).await;
     let announce_unwrapped = match announce {
         Ok(result) => { result }
         Err(e) => {
@@ -267,16 +261,14 @@ pub async fn http_service_announce_handler(request: HttpRequest, remote_ip: Remo
     }
 }
 
-pub async fn http_service_scrape_key(request: HttpRequest, remote_ip: RemoteIP, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    http_service_stats_log(remote_ip.0, data.clone()).await;
+    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    http_service_stats_log(ip, data.clone()).await;
 
-    if remote_ip.0.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
 
-    match http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        Some(result) => { return result; }
-        None => {}
-    }
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
 
     // We check if the path is set, and retrieve the possible "key" to check.
     if data.config.keys {
@@ -287,24 +279,22 @@ pub async fn http_service_scrape_key(request: HttpRequest, remote_ip: RemoteIP, 
         }
     }
 
-    http_service_scrape_handler(request, remote_ip, data.as_ref().clone()).await
+    http_service_scrape_handler(request, ip, data.as_ref().clone()).await
 }
 
-pub async fn http_service_scrape(request: HttpRequest, remote_ip: RemoteIP, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+pub async fn http_service_scrape(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    http_service_stats_log(remote_ip.0, data.clone()).await;
+    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    http_service_stats_log(ip, data.clone()).await;
 
-    if remote_ip.0.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
 
-    match http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        Some(result) => { return result; }
-        None => {}
-    }
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
 
-    http_service_scrape_handler(request, remote_ip, data.as_ref().clone()).await
+    http_service_scrape_handler(request, ip, data.as_ref().clone()).await
 }
 
-pub async fn http_service_scrape_handler(request: HttpRequest, remote_ip: RemoteIP, data: Arc<TorrentTracker>) -> HttpResponse
+pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
 {
     let query_map_result = parse_query(Some(request.query_string().to_string()));
     let query_map = match http_service_query_hashing(query_map_result) {
@@ -312,14 +302,11 @@ pub async fn http_service_scrape_handler(request: HttpRequest, remote_ip: Remote
         Err(err) => { return err; }
     };
 
-    let scrape = validate_scrape(data.clone().config.clone(), remote_ip.0, query_map).await;
-    let scrape_unwrapped = match scrape.as_ref() {
-        Ok(result) => { result }
-        Err(e) => {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
-            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
-        }
-    };
+    let scrape = validate_scrape(data.clone().config.clone(), ip, query_map).await;
+    if scrape.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!(scrape.unwrap_err().to_string())}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
 
     match scrape.as_ref() {
         Ok(e) => {
@@ -347,9 +334,10 @@ pub async fn http_service_scrape_handler(request: HttpRequest, remote_ip: Remote
     }
 }
 
-async fn http_service_not_found(remote_ip: RemoteIP, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    http_service_stats_log(remote_ip.0, data.clone()).await;
+    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    http_service_stats_log(ip, data.clone()).await;
 
     let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown request")}).encode();
     let body = std::str::from_utf8(&return_string).unwrap().to_string();
@@ -423,4 +411,25 @@ pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: S
         return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string));
     }
     None
+}
+
+pub async fn http_service_retrieve_remote_ip(request: HttpRequest) -> IpAddr
+{
+    let origin_ip = request.peer_addr().unwrap().ip();
+    let cloudflare_ip = request.headers().get("CF-Connecting-IP");
+    let xreal_ip = request.headers().get("X-Real-IP");
+
+    // Check if IP is from Cloudflare
+    if cloudflare_ip.is_some() && cloudflare_ip.unwrap().to_str().is_ok() {
+        let check = IpAddr::from_str(cloudflare_ip.unwrap().to_str().unwrap());
+        if check.is_ok() { return check.unwrap(); }
+    };
+
+    // Check if IP is from X-Real-IP
+    if xreal_ip.is_some() && xreal_ip.unwrap().to_str().is_ok() {
+        let check = IpAddr::from_str(xreal_ip.unwrap().to_str().unwrap());
+        if check.is_ok() { return check.unwrap(); }
+    };
+
+    origin_ip
 }
