@@ -1,5 +1,4 @@
 use async_std::task;
-use axum_server::Handle;
 use clap::Parser;
 use futures::future::try_join_all;
 use log::{error, info};
@@ -221,20 +220,24 @@ async fn main() -> std::io::Result<()>
         }
     }
 
-    let handle = Handle::new();
-
+    let mut http_handlers = Vec::new();
     let mut http_futures = Vec::new();
+    let mut https_handlers = Vec::new();
     let mut https_futures = Vec::new();
+
     for http_server_object in &config.http_server {
         if http_server_object.enabled {
             tcp_check_host_and_port_used(http_server_object.bind_address.clone());
             let address: SocketAddr = http_server_object.bind_address.parse().unwrap();
-            let handle = handle.clone();
             let tracker_clone = tracker.clone();
             if http_server_object.ssl {
-                https_futures.push(https_service(handle.clone(), address, tracker_clone, http_server_object.ssl_key.clone(), http_server_object.ssl_cert.clone()).await);
+                let (handle, https_service) = https_service(address, tracker_clone, http_server_object.ssl_key.clone(), http_server_object.ssl_cert.clone()).await;
+                https_handlers.push(handle);
+                https_futures.push(https_service);
             } else {
-                http_futures.push(http_service(handle.clone(), address, tracker_clone).await);
+                let (handle, http_service) = http_service(address, tracker_clone).await;
+                http_handlers.push(handle);
+                http_futures.push(http_service);
             }
         }
     }
@@ -256,11 +259,11 @@ async fn main() -> std::io::Result<()>
         });
     }
 
-    // if !apis_futures.is_empty() {
-    //     tokio::spawn(async move {
-    //         let _ = try_join_all(apis_futures).await;
-    //     });
-    // }
+    if !apis_futures.is_empty() {
+        tokio::spawn(async move {
+            let _ = try_join_all(apis_futures).await;
+        });
+    }
 
     if !http_futures.is_empty() {
         tokio::spawn(async move {
@@ -378,10 +381,18 @@ async fn main() -> std::io::Result<()>
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             info!("Shutdown request received, shutting down...");
-            handle.shutdown();
             let _ = udp_tx.send(true);
             let _ = futures::future::join_all(udp_futures).await;
             for handle in api_handlers.iter() {
+                handle.stop(true).await;
+            }
+            for handle in apis_handlers.iter() {
+                handle.stop(true).await;
+            }
+            for handle in http_handlers.iter() {
+                handle.stop(true).await;
+            }
+            for handle in https_handlers.iter() {
                 handle.stop(true).await;
             }
             if tracker.clone().config.persistence {

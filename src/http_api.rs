@@ -165,7 +165,7 @@ pub async fn http_api_stats_get(request: HttpRequest, remote_ip: RemoteIP, data:
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     let stats = data.get_stats().await;
 
@@ -178,14 +178,14 @@ pub async fn http_api_torrent_get(request: HttpRequest, remote_ip: RemoteIP, pat
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash
     let info_hash = path.into_inner();
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -234,14 +234,14 @@ pub async fn http_api_torrent_delete(request: HttpRequest, remote_ip: RemoteIP, 
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash
     let info_hash = path.into_inner();
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -257,13 +257,13 @@ pub async fn http_api_torrents_get(request: HttpRequest, remote_ip: RemoteIP, bo
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash vector
     let mut torrents = vec![];
     for hash in body.iter() {
         if hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
-        let hash_decoded = match decode_hex_hash(hash.to_string()).await {
+        let hash_decoded = match http_api_decode_hex_hash(hash.to_string()).await {
             Ok(data_returned) => { data_returned }
             Err(data_returned) => { return data_returned; }
         };
@@ -287,7 +287,7 @@ pub async fn http_api_whitelist_get_all(request: HttpRequest, remote_ip: RemoteI
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     let whitelist = data.get_whitelist().await;
 
@@ -300,7 +300,7 @@ pub async fn http_api_whitelist_reload(request: HttpRequest, remote_ip: RemoteIP
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     data.clear_whitelist().await;
     data.load_whitelists().await;
@@ -314,14 +314,14 @@ pub async fn http_api_whitelist_get(request: HttpRequest, remote_ip: RemoteIP, p
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash
     let info_hash = path.into_inner();
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -339,14 +339,14 @@ pub async fn http_api_whitelist_post(request: HttpRequest, remote_ip: RemoteIP, 
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash
     let info_hash = path.into_inner();
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -362,14 +362,14 @@ pub async fn http_api_whitelist_delete(request: HttpRequest, remote_ip: RemoteIP
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash
     let info_hash = path.into_inner();
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -385,7 +385,7 @@ pub async fn http_api_blacklist_get_all(request: HttpRequest, remote_ip: RemoteI
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     let blacklist = data.get_blacklist().await;
 
@@ -398,7 +398,7 @@ pub async fn http_api_blacklist_reload(request: HttpRequest, remote_ip: RemoteIP
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     data.clear_blacklist().await;
     data.load_blacklists().await;
@@ -412,14 +412,14 @@ pub async fn http_api_blacklist_get(request: HttpRequest, remote_ip: RemoteIP, p
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash
     let info_hash = path.into_inner();
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -437,14 +437,14 @@ pub async fn http_api_blacklist_post(request: HttpRequest, remote_ip: RemoteIP, 
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash
     let info_hash = path.into_inner();
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -460,14 +460,14 @@ pub async fn http_api_blacklist_delete(request: HttpRequest, remote_ip: RemoteIP
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate info_hash
     let info_hash = path.into_inner();
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -483,7 +483,7 @@ pub async fn http_api_keys_get_all(request: HttpRequest, remote_ip: RemoteIP, da
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     let keys = data.get_keys().await;
     return HttpResponse::Ok().content_type(ContentType::json()).json(&keys);
@@ -495,7 +495,7 @@ pub async fn http_api_keys_reload(request: HttpRequest, remote_ip: RemoteIP, dat
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     data.clear_keys().await;
     data.load_keys().await;
@@ -509,14 +509,14 @@ pub async fn http_api_keys_get(request: HttpRequest, remote_ip: RemoteIP, path: 
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate key
     let key = path.into_inner();
     if key.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid key size (HEX 40 characters)"})); }
 
     // Decode key into a InfoHash string or give error
-    let key_decoded = match decode_hex_hash(key).await {
+    let key_decoded = match http_api_decode_hex_hash(key).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -534,7 +534,7 @@ pub async fn http_api_keys_post(request: HttpRequest, remote_ip: RemoteIP, path:
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate key
     let (key, valid) = path.into_inner();
@@ -542,7 +542,7 @@ pub async fn http_api_keys_post(request: HttpRequest, remote_ip: RemoteIP, path:
     if valid < 0 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid seconds_valid, should be 0 or higher"})); }
 
     // Decode key into a InfoHash string or give error
-    let key_decoded = match decode_hex_hash(key).await {
+    let key_decoded = match http_api_decode_hex_hash(key).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -558,7 +558,7 @@ pub async fn http_api_keys_patch(request: HttpRequest, remote_ip: RemoteIP, path
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate key and seconds_valid
     let (key, valid) = path.into_inner();
@@ -566,7 +566,7 @@ pub async fn http_api_keys_patch(request: HttpRequest, remote_ip: RemoteIP, path
     if valid < 0 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid seconds_valid, should be 0 or higher"})); }
 
     // Decode key into a InfoHash string or give error
-    let key_decoded = match decode_hex_hash(key).await {
+    let key_decoded = match http_api_decode_hex_hash(key).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -583,14 +583,14 @@ pub async fn http_api_keys_delete(request: HttpRequest, remote_ip: RemoteIP, pat
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     // Validate key
     let key = path.into_inner();
     if key.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid key size (HEX 40 characters)"})); }
 
     // Decode key into a InfoHash string or give error
-    let key_decoded = match decode_hex_hash(key).await {
+    let key_decoded = match http_api_decode_hex_hash(key).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -606,7 +606,7 @@ pub async fn http_api_maintenance_enable(request: HttpRequest, remote_ip: Remote
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     data.set_stats(StatsEvent::MaintenanceMode, 1).await;
 
@@ -619,15 +619,17 @@ pub async fn http_api_maintenance_disable(request: HttpRequest, remote_ip: Remot
 
     // Validate token
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
-    if let Some(response) = check_api_token(params.token.clone(), data.config.clone()).await { return response; }
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     data.set_stats(StatsEvent::MaintenanceMode, 0).await;
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
 }
 
-async fn http_api_not_found() -> HttpResponse
+async fn http_api_not_found(remote_ip: RemoteIP, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
+    http_api_stats_log(remote_ip.0, data.clone()).await;
+
     let filename = "404.htm";
     let mime_type = mime_guess::from_path(filename).first_or_text_plain();
 
@@ -648,7 +650,7 @@ pub async fn http_api_stats_log(ip: IpAddr, tracker: web::Data<Arc<TorrentTracke
     }
 }
 
-pub async fn check_api_token(token: Option<String>, config: Arc<Configuration>) -> Option<HttpResponse>
+pub async fn http_api_token(token: Option<String>, config: Arc<Configuration>) -> Option<HttpResponse>
 {
     match token {
         None => { return Some(HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "missing token"}))); }
@@ -659,7 +661,7 @@ pub async fn check_api_token(token: Option<String>, config: Arc<Configuration>) 
     }
 }
 
-pub async fn decode_hex_hash(hash: String) -> Result<InfoHash, HttpResponse>
+pub async fn http_api_decode_hex_hash(hash: String) -> Result<InfoHash, HttpResponse>
 {
     return match hex::decode(hash) {
         Ok(hash_result) => {
