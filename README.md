@@ -1,13 +1,13 @@
-# Torrust-Axum Tracker
-![Test](https://github.com/Power2All/torrust-axum/actions/workflows/rust.yml/badge.svg)
-[<img src="https://img.shields.io/badge/DockerHub-link-blue.svg">](<https://hub.docker.com/r/power2all/torrust-axum>)
+# Torrust-Actix Tracker
+![Test](https://github.com/Power2All/torrust-actix/actions/workflows/rust.yml/badge.svg)
+[<img src="https://img.shields.io/badge/DockerHub-link-blue.svg">](<https://hub.docker.com/r/power2all/torrust-actix>)
 
 ## Project Description
-Torrust-Axum Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
+Torrust-Actix Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
 
-Currently, it's being actively used at https://www.gbitt.info/ which as of current writing has 100 million torrent hashes loaded and hitting 5 million peers.
+Currently, it's being actively used at https://www.gbitt.info/ which as of current writing has 200+ million torrent hashes loaded and hitting 5+ million peers.
 
-This project originated from Torrust Tracker code originally developed by Mick van Dijke, further developed by Power2All as alternative for OpenTracker and other tracker code available on GitHub.
+This project originated from Torrust-Tracker code originally developed by Mick van Dijke, further developed by Power2All as alternative for OpenTracker and other tracker code available on GitHub.
 
 ## Features
 * [X] Multiple UDP server and HTTP(S) server blocks for socket binding possibilities
@@ -32,13 +32,13 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [BEP 48](https://www.bittorrent.org/beps/bep_0048.html): Tracker Protocol Extension: Scrape
 
 ## Getting Started
-You can get the latest binaries from [releases](https://github.com/Power2All/torrust-axum/releases) or follow the install from scratch instructions below.
+You can get the latest binaries from [releases](https://github.com/Power2All/torrust-actix/releases) or follow the install from scratch instructions below.
 
 ### Install From Scratch
 1. Clone the repository:
 ```bash
-git clone https://github.com/Power2All/torrust-axum.git
-cd torrust-axum
+git clone https://github.com/Power2All/torrust-actix.git
+cd torrust-actix
 ```
 
 2. Build the source code using Rust (make sure you have installed rustup with stable branch)
@@ -55,7 +55,7 @@ cargo build --release
 ### Usage
 * Running the code will create a `config.toml` file when it doesn't exist yet. The configuration will be filled with default values, and will use SQLite3 in memory as default persistence. Persistence is turned OFF by default, so you need to activate that manually:
 ```bash
-./target/release/torrust-axum
+./target/release/torrust-actix
 ```
 
 * Modify the newly created `config.toml` file according to your liking. (ToDo: Create extended documentation)
@@ -110,9 +110,9 @@ table_keys_hash = "hash"
 table_keys_timeout = "timeout"
 ```
 
-* Run the torrust-axum again after finishing the configuration:
+* Run the torrust-actix again after finishing the configuration:
 ```bash
-./target/release/torrust-axum
+./target/release/torrust-actix
 ```
 
 ## Tracker URL
@@ -367,6 +367,8 @@ This will disable the maintenance mode.
 * Adding optional user tracking as a separate plugin, by default this is disabled.
 * Adding optional torrent tracking extension, will save a peer info when a completed download is tracked for any purposes.
 * Some various improvement on coding performance, readability and linting the files.
+* Replaced Tokio Axum web framework for Actix, reasons: Memory leaks, deadlocks and missing basic functions a web services should have.
+* Renamed the github repository from torrust-axum to torrust-actix.
 
 #### v3.1.2
 * Bumped library versions.
@@ -402,4 +404,4 @@ Initial version of Torrust-Axum.
 ### Credits
 This Torrust-Tracker was a joint effort by [Nautilus Cyberneering GmbH](https://nautilus-cyberneering.de/), [Dutch Bits](https://dutchbits.nl) and [Power2All](https://power2all.com).
 Also thanks to [Naim A.](https://github.com/naim94a/udpt) and [greatest-ape](https://github.com/greatest-ape/aquatic) for some parts in the Torrust-Tracker code.
-This project (Torrust-Axum) is built from scratch by [Power2All](https://power2all.com).
+This project (Torrust-Actix) is built from scratch by [Power2All](https://power2all.com).
