@@ -118,7 +118,12 @@ fn https_service_config(ssl_key: String, ssl_cert: String) -> ServerConfig {
 
 pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
     http_service_stats_log(ip, data.clone()).await;
 
     if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
@@ -139,7 +144,12 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
 
 pub async fn http_service_announce(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
     http_service_stats_log(ip, data.clone()).await;
 
     if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
@@ -263,7 +273,12 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
 pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
     http_service_stats_log(ip, data.clone()).await;
 
     if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
@@ -284,7 +299,12 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
 
 pub async fn http_service_scrape(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
     http_service_stats_log(ip, data.clone()).await;
 
     if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
@@ -336,7 +356,12 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
 
 async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    let ip = http_service_retrieve_remote_ip(request.clone()).await;
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
     http_service_stats_log(ip, data.clone()).await;
 
     let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown request")}).encode();
@@ -413,23 +438,26 @@ pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: S
     None
 }
 
-pub async fn http_service_retrieve_remote_ip(request: HttpRequest) -> IpAddr
+pub async fn http_service_retrieve_remote_ip(request: HttpRequest) -> Result<IpAddr, ()>
 {
-    let origin_ip = request.peer_addr().unwrap().ip();
+    let origin_ip = match request.peer_addr() {
+        None => { return Err(()); }
+        Some(ip) => { ip.ip() }
+    };
     let cloudflare_ip = request.headers().get("CF-Connecting-IP");
     let xreal_ip = request.headers().get("X-Real-IP");
 
     // Check if IP is from Cloudflare
     if cloudflare_ip.is_some() && cloudflare_ip.unwrap().to_str().is_ok() {
         let check = IpAddr::from_str(cloudflare_ip.unwrap().to_str().unwrap());
-        if check.is_ok() { return check.unwrap(); }
+        if check.is_ok() { return Ok(check.unwrap()); }
     };
 
     // Check if IP is from X-Real-IP
     if xreal_ip.is_some() && xreal_ip.unwrap().to_str().is_ok() {
         let check = IpAddr::from_str(xreal_ip.unwrap().to_str().unwrap());
-        if check.is_ok() { return check.unwrap(); }
+        if check.is_ok() { return Ok(check.unwrap()); }
     };
 
-    origin_ip
+    Ok(origin_ip)
 }
