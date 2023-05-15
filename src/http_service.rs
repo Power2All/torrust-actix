@@ -11,6 +11,7 @@ use std::io::{BufReader, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
+use actix_ratelimit::{MemoryStore, MemoryStoreActor, RateLimiter};
 use bip_bencode::{ben_map, ben_bytes, ben_list, ben_int, BMutAccess};
 use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
@@ -42,12 +43,17 @@ pub fn http_service_routes(data: Arc<TorrentTracker>) -> Box<dyn Fn(&mut Service
     })
 }
 
-pub async fn http_service(addr: SocketAddr, data: Arc<TorrentTracker>) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
+pub async fn http_service(store: MemoryStore, addr: SocketAddr, data: Arc<TorrentTracker>) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
     info!("[SERVICE] Starting server listener on {}", addr);
     let data_cloned = data;
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(
+                RateLimiter::new(MemoryStoreActor::from(store.clone()).start())
+                        .with_interval(Duration::from_secs(60))
+                        .with_max_requests(5000)
+            )
             .wrap(http_service_cors())
             .configure(http_service_routes(data_cloned.clone()))
     })
@@ -62,7 +68,7 @@ pub async fn http_service(addr: SocketAddr, data: Arc<TorrentTracker>) -> (Serve
     (handle, server)
 }
 
-pub async fn https_service(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
+pub async fn https_service(store: MemoryStore, addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
     info!("[SERVICE] Starting server listener with SSL on {}", addr);
     let data_cloned = data;
@@ -71,6 +77,11 @@ pub async fn https_service(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key:
 
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(
+                RateLimiter::new(MemoryStoreActor::from(store.clone()).start())
+                    .with_interval(Duration::from_secs(60))
+                    .with_max_requests(5000)
+            )
             .wrap(http_service_cors())
             .configure(http_service_routes(data_cloned.clone()))
     })
