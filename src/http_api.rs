@@ -4,7 +4,6 @@ use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use actix_cors::Cors;
-use actix_ratelimit::MemoryStore;
 use actix_remote_ip::RemoteIP;
 use actix_web::{App, Error, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
@@ -59,7 +58,7 @@ pub fn http_api_routes(data: Arc<TorrentTracker>) -> Box<dyn Fn(&mut ServiceConf
     })
 }
 
-pub async fn http_api(store: MemoryStore, addr: SocketAddr, data: Arc<TorrentTracker>) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
+pub async fn http_api(addr: SocketAddr, data: Arc<TorrentTracker>) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
     info!("[API] Starting server listener on {}", addr);
     let data_cloned = data;
@@ -79,7 +78,7 @@ pub async fn http_api(store: MemoryStore, addr: SocketAddr, data: Arc<TorrentTra
     (handle, server)
 }
 
-pub async fn https_api(store: MemoryStore, addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
+pub async fn https_api(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
     info!("[API] Starting server listener with SSL on {}", addr);
     let data_cloned = data;

@@ -8,7 +8,6 @@ use std::env;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
-use actix_ratelimit::MemoryStore;
 use tokio::time::timeout;
 use torrust_axum::common::{tcp_check_host_and_port_used, udp_check_host_and_port_used};
 use torrust_axum::config::{Configuration, DatabaseStructureConfig};
@@ -183,7 +182,6 @@ async fn main() -> std::io::Result<()>
     }
 
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
-    let store = MemoryStore::new();
 
     // Load torrents
     if config.persistence {
@@ -211,11 +209,11 @@ async fn main() -> std::io::Result<()>
             let address: SocketAddr = api_server_object.bind_address.parse().unwrap();
             let tracker_clone = tracker.clone();
             if api_server_object.ssl {
-                let (handle, https_api) = https_api(store.clone(), address, tracker_clone, api_server_object.ssl_key.clone(), api_server_object.ssl_cert.clone()).await;
+                let (handle, https_api) = https_api(address, tracker_clone, api_server_object.ssl_key.clone(), api_server_object.ssl_cert.clone()).await;
                 apis_handlers.push(handle);
                 apis_futures.push(https_api);
             } else {
-                let (handle, http_api) = http_api(store.clone(), address, tracker_clone).await;
+                let (handle, http_api) = http_api(address, tracker_clone).await;
                 api_handlers.push(handle);
                 api_futures.push(http_api);
             }
@@ -233,11 +231,11 @@ async fn main() -> std::io::Result<()>
             let address: SocketAddr = http_server_object.bind_address.parse().unwrap();
             let tracker_clone = tracker.clone();
             if http_server_object.ssl {
-                let (handle, https_service) = https_service(store.clone(), address, tracker_clone, http_server_object.ssl_key.clone(), http_server_object.ssl_cert.clone()).await;
+                let (handle, https_service) = https_service(address, tracker_clone, http_server_object.ssl_key.clone(), http_server_object.ssl_cert.clone()).await;
                 https_handlers.push(handle);
                 https_futures.push(https_service);
             } else {
-                let (handle, http_service) = http_service(store.clone(), address, tracker_clone).await;
+                let (handle, http_service) = http_service(address, tracker_clone).await;
                 http_handlers.push(handle);
                 http_futures.push(http_service);
             }
