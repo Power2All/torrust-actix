@@ -23,6 +23,7 @@ strip = true
 
 [dependencies]
 actix-cors = "0.6.4"
+actix-extensible-rate-limit = "0.2.1"
 actix-remote-ip = "0.1.0"
 actix-web = { version = "4", features = ["rustls"] }
 async-std = "1.12.0"
