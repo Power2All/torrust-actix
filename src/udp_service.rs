@@ -10,7 +10,9 @@ use tokio::time::timeout;
 
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, maintenance_mode, PeerId};
 use crate::handlers::handle_announce;
-use crate::tracker::{StatsEvent, TorrentEntry, TorrentEntryItem, TorrentTracker};
+use crate::tracker::TorrentTracker;
+use crate::tracker_channels::stats::StatsEvent;
+use crate::tracker_channels::torrents::{TorrentEntry, TorrentEntryItem};
 use crate::udp_common;
 use crate::udp_common::{AnnounceInterval, AnnounceRequest, AnnounceResponse, ConnectRequest, ConnectResponse, ErrorResponse, get_connection_id, NumberOfDownloads, NumberOfPeers, Port, Request, Response, ResponsePeer, ScrapeRequest, ScrapeResponse, ServerError, TorrentScrapeStatistics, TransactionId};
 

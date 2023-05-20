@@ -1,12 +1,87 @@
 use chrono::Utc;
 use log::debug;
+use serde::{Serialize, Deserialize};
 use serde_json::{json, Value};
-use crate::tracker::{Stats, StatsEvent, TorrentTracker};
+use crate::tracker::TorrentTracker;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum StatsEvent {
+    Torrents,
+    TorrentsUpdates,
+    TorrentsShadow,
+    Users,
+    UsersUpdates,
+    UsersShadow,
+    TimestampSave,
+    TimestampTimeout,
+    TimestampConsole,
+    TimestampKeysTimeout,
+    MaintenanceMode,
+    Seeds,
+    Peers,
+    Completed,
+    Whitelist,
+    Blacklist,
+    Key,
+    Tcp4ConnectionsHandled,
+    Tcp4ApiHandled,
+    Tcp4AnnouncesHandled,
+    Tcp4ScrapesHandled,
+    Tcp6ConnectionsHandled,
+    Tcp6ApiHandled,
+    Tcp6AnnouncesHandled,
+    Tcp6ScrapesHandled,
+    Udp4ConnectionsHandled,
+    Udp4AnnouncesHandled,
+    Udp4ScrapesHandled,
+    Udp6ConnectionsHandled,
+    Udp6AnnouncesHandled,
+    Udp6ScrapesHandled,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Stats {
+    pub started: i64,
+    pub timestamp_run_save: i64,
+    pub timestamp_run_timeout: i64,
+    pub timestamp_run_console: i64,
+    pub timestamp_run_keys_timeout: i64,
+    pub torrents: i64,
+    pub torrents_updates: i64,
+    pub torrents_shadow: i64,
+    pub users: i64,
+    pub users_updates: i64,
+    pub users_shadow: i64,
+    pub maintenance_mode: i64,
+    pub seeds: i64,
+    pub peers: i64,
+    pub completed: i64,
+    pub whitelist_enabled: bool,
+    pub whitelist: i64,
+    pub blacklist_enabled: bool,
+    pub blacklist: i64,
+    pub keys_enabled: bool,
+    pub keys: i64,
+    pub tcp4_connections_handled: i64,
+    pub tcp4_api_handled: i64,
+    pub tcp4_announces_handled: i64,
+    pub tcp4_scrapes_handled: i64,
+    pub tcp6_connections_handled: i64,
+    pub tcp6_api_handled: i64,
+    pub tcp6_announces_handled: i64,
+    pub tcp6_scrapes_handled: i64,
+    pub udp4_connections_handled: i64,
+    pub udp4_announces_handled: i64,
+    pub udp4_scrapes_handled: i64,
+    pub udp6_connections_handled: i64,
+    pub udp6_announces_handled: i64,
+    pub udp6_scrapes_handled: i64,
+}
 
 impl TorrentTracker {
     pub fn channel_stats_init(&self)
     {
-        let (channel_left, channel_right) = self.stats_channel.clone();
+        let (_channel_left, channel_right) = self.stats_channel.clone();
         let config = self.config.clone();
         tokio::spawn(async move {
             let mut stats: Stats = Stats {
@@ -153,7 +228,7 @@ impl TorrentTracker {
 
     pub async fn channel_stats_request(&self, action: &str, data: Value) -> (Value, Value)
     {
-        let (channel_left, channel_right) = self.stats_channel.clone();
+        let (channel_left, _channel_right) = self.stats_channel.clone();
         // Build the data with a action and data separated.
         let request_data = json!({
             "action": action,
@@ -167,14 +242,14 @@ impl TorrentTracker {
 
     pub async fn get_stats(&self) -> Stats
     {
-        let (action, data) = self.channel_stats_request("get", json!({})).await;
+        let (_action, data) = self.channel_stats_request("get", json!({})).await;
         let stats = serde_json::from_value::<Stats>(data).unwrap();
         stats
     }
 
     pub async fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
-        let (action, data) = self.channel_stats_request("update", json!({
+        let (_action, data) = self.channel_stats_request("update", json!({
             "event": event,
             "value": value
         })).await;
@@ -184,7 +259,7 @@ impl TorrentTracker {
 
     pub async fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
-        let (action, data) = self.channel_stats_request("set", json!({
+        let (_action, data) = self.channel_stats_request("set", json!({
             "event": event,
             "value": value
         })).await;

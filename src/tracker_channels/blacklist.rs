@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use log::{debug, info};
 use serde_json::{json, Value};
 use crate::common::InfoHash;
-use crate::tracker::{StatsEvent, TorrentTracker};
+use crate::tracker::TorrentTracker;
+use crate::tracker_channels::stats::StatsEvent;
 
 impl TorrentTracker {
     pub fn channel_blacklist_init(&self)
     {
-        let (channel_left, channel_right) = self.blacklist_channel.clone();
+        let (_channel_left, channel_right) = self.blacklist_channel.clone();
         tokio::spawn(async move {
             let mut blacklist: HashMap<InfoHash, i64> = HashMap::new();
 
@@ -38,7 +39,7 @@ impl TorrentTracker {
 
     pub async fn channel_blacklist_request(&self, action: &str, data: Value) -> (Value, Value)
     {
-        let (channel_left, channel_right) = self.blacklist_channel.clone();
+        let (channel_left, _channel_right) = self.blacklist_channel.clone();
         // Build the data with a action and data separated.
         let request_data = json!({
             "action": action,

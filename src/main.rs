@@ -1,14 +1,13 @@
 use async_std::task;
 use clap::Parser;
 use futures::future::try_join_all;
-use log::{debug, error, info};
+use log::{error, info};
 use scc::ebr::Arc;
 use std::alloc::System;
 use std::env;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
-use actix_extensible_rate_limit::backend::memory::InMemoryBackend;
 use serde_json::json;
 use tokio::time::timeout;
 use torrust_axum::common::{tcp_check_host_and_port_used, udp_check_host_and_port_used};
@@ -17,7 +16,8 @@ use torrust_axum::databases::DatabaseDrivers;
 use torrust_axum::http_api::{http_api, https_api};
 use torrust_axum::http_service::{http_service, https_service};
 use torrust_axum::logging::setup_logging;
-use torrust_axum::tracker::{StatsEvent, TorrentTracker};
+use torrust_axum::tracker::TorrentTracker;
+use torrust_axum::tracker_channels::stats::StatsEvent;
 use torrust_axum::udp_service::udp_service;
 
 #[global_allocator]

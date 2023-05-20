@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use std::fs::File;
 use actix_cors::Cors;
-use actix_web::{App, Error, http, HttpRequest, HttpResponse, HttpServer, web};
-use actix_web::dev::{Response, ServerHandle};
+use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
+use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
 use actix_web::web::ServiceConfig;
 use scc::ebr::Arc;
@@ -14,8 +14,7 @@ use std::time::Duration;
 use actix_extensible_rate_limit::backend::memory::InMemoryBackend;
 use actix_extensible_rate_limit::backend::SimpleInputFunctionBuilder;
 use actix_extensible_rate_limit::RateLimiter;
-use actix_web::body::BoxBody;
-use async_std::future::{timeout, TimeoutError};
+use async_std::future::timeout;
 use bip_bencode::{ben_map, ben_bytes, ben_list, ben_int, BMutAccess};
 use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
@@ -23,7 +22,8 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 use scc::HashIndex;
 use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
-use crate::tracker::{StatsEvent, TorrentTracker};
+use crate::tracker::TorrentTracker;
+use crate::tracker_channels::stats::StatsEvent;
 
 pub fn http_service_cors() -> Cors
 {

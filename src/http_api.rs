@@ -19,12 +19,30 @@ use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use scc::ebr::Arc;
 use serde::{Serialize, Deserialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use crate::common::{InfoHash, AnnounceEvent};
 use crate::config::Configuration;
-use crate::tracker::{GetTorrentApi, StatsEvent, TorrentTracker};
+use crate::tracker::TorrentTracker;
+use crate::tracker_channels::stats::StatsEvent;
 
 static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/webgui");
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct GetTorrentsApi {
+    pub info_hash: String,
+    pub completed: i64,
+    pub seeders: i64,
+    pub leechers: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct GetTorrentApi {
+    pub info_hash: String,
+    pub completed: i64,
+    pub seeders: i64,
+    pub leechers: i64,
+    pub peers: Vec<Value>,
+}
 
 pub fn http_api_cors() -> Cors
 {
@@ -68,7 +86,7 @@ pub async fn http_api(addr: SocketAddr, data: Arc<TorrentTracker>) -> (ServerHan
     let server = HttpServer::new(move || {
         let backend = InMemoryBackend::builder().build();
         let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
-        let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
+        // let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
         App::new()
             .wrap(http_api_cors())
             .configure(http_api_routes(data_cloned.clone()))
@@ -92,7 +110,7 @@ pub async fn https_api(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: Str
     let server = HttpServer::new(move || {
         let backend = InMemoryBackend::builder().build();
         let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
-        let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
+        // let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
         App::new()
             .wrap(http_api_cors())
             .configure(http_api_routes(data_cloned.clone()))
