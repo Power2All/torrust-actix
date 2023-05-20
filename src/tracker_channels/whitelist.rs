@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use log::{debug, info};
 use serde_json::{json, Value};
+
 use crate::common::InfoHash;
 use crate::tracker::TorrentTracker;
 use crate::tracker_channels::stats::StatsEvent;
@@ -13,7 +14,7 @@ impl TorrentTracker {
             let mut whitelist: HashMap<InfoHash, i64> = HashMap::new();
 
             loop {
-                match serde_json::from_str::<Value>(&*channel_right.recv().unwrap()) {
+                match serde_json::from_str::<Value>(&channel_right.recv().unwrap()) {
                     Ok(data) => {
                         // Main handler and interact with action.
                         match data["action"].as_str().unwrap() {
@@ -30,7 +31,7 @@ impl TorrentTracker {
                             "add_multi" => {
                                 let hashes = serde_json::from_value::<Vec<(InfoHash, i64)>>(data["data"]["hashes"].clone()).unwrap();
                                 for (info_hash, code) in hashes.iter() {
-                                    let _ = whitelist.insert(info_hash.clone(), code.clone());
+                                    let _ = whitelist.insert(*info_hash, *code);
                                 }
                                 channel_right.send(json!({
                                     "action": "add_multi",
@@ -51,10 +52,7 @@ impl TorrentTracker {
                                 let mut return_data = Vec::new();
                                 let hashes = serde_json::from_value::<Vec<InfoHash>>(data["data"]["hashes"].clone()).unwrap();
                                 for info_hash in hashes.iter() {
-                                    let torrent = match whitelist.get(info_hash) {
-                                        None => { None }
-                                        Some(data) => { Some(data) }
-                                    };
+                                    let torrent = whitelist.get(info_hash);
                                     return_data.push((info_hash, torrent));
                                 }
                                 channel_right.send(json!({
@@ -125,7 +123,7 @@ impl TorrentTracker {
         });
         channel_left.send(request_data.to_string()).unwrap();
         let response = channel_left.recv().unwrap();
-        let response_data: Value = serde_json::from_str(&*response).unwrap();
+        let response_data: Value = serde_json::from_str(&response).unwrap();
         (response_data["action"].clone(), response_data["data"].clone())
     }
 

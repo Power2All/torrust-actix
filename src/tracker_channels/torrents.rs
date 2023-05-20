@@ -60,13 +60,13 @@ impl Default for TorrentEntry {
 impl TorrentTracker {
     pub fn channel_torrents_init(&self)
     {
-        let (channel_left, channel_right) = self.torrents_channel.clone();
-        let config = self.config.clone();
+        let (_channel_left, channel_right) = self.torrents_channel.clone();
+        let _config = self.config.clone();
         tokio::spawn(async move {
             let mut torrents: BTreeMap<InfoHash, TorrentEntryItem> = BTreeMap::new();
 
             loop {
-                match serde_json::from_str::<Value>(&*channel_right.recv().unwrap()) {
+                match serde_json::from_str::<Value>(&channel_right.recv().unwrap()) {
                     Ok(data) => {
                         // debug!("Received: {:#?}", data);
 
@@ -85,7 +85,7 @@ impl TorrentTracker {
                             "add_multi" => {
                                 let hashes = serde_json::from_value::<Vec<(InfoHash, TorrentEntryItem)>>(data["data"]["hashes"].clone()).unwrap();
                                 for (info_hash, torrent_entry) in hashes.iter() {
-                                    let _ = torrents.insert(info_hash.clone(), torrent_entry.clone());
+                                    let _ = torrents.insert(*info_hash, torrent_entry.clone());
                                 }
                                 channel_right.send(json!({
                                     "action": "add_multi",
@@ -106,18 +106,13 @@ impl TorrentTracker {
                                 let mut torrentslist: Vec<(InfoHash, Option<TorrentEntry>)> = Vec::new();
                                 let hashes = serde_json::from_value::<Vec<InfoHash>>(data["data"]["hashes"].clone()).unwrap();
                                 for &info_hash in hashes.iter() {
-                                    let torrent = match torrents.get(&info_hash) {
-                                        None => { None }
-                                        Some(torrent_entry) => {
-                                            Some(TorrentEntry {
+                                    let torrent = torrents.get(&info_hash).map(|torrent_entry| TorrentEntry {
                                                 peers: Default::default(),
                                                 completed: torrent_entry.completed,
                                                 seeders: torrent_entry.seeders,
                                                 leechers: torrent_entry.leechers,
-                                            })
-                                        }
-                                    };
-                                    torrentslist.push((info_hash.clone(), torrent));
+                                            });
+                                    torrentslist.push((info_hash, torrent));
                                 }
                                 channel_right.send(json!({
                                     "action": "get_multi",
@@ -214,7 +209,7 @@ impl TorrentTracker {
 
     pub async fn channel_torrents_request(&self, action: &str, data: Value) -> (Value, Value, Value)
     {
-        let (channel_left, channel_right) = self.torrents_channel.clone();
+        let (channel_left, _channel_right) = self.torrents_channel.clone();
         // Build the data with a action and data separated.
         let request_data = json!({
             "action": action,
@@ -222,7 +217,7 @@ impl TorrentTracker {
         });
         channel_left.send(request_data.to_string()).unwrap();
         let response = channel_left.recv().unwrap();
-        let response_data: Value = serde_json::from_str(&*response).unwrap();
+        let response_data: Value = serde_json::from_str(&response).unwrap();
         (response_data["action"].clone(), response_data["data"].clone(), response_data["torrent_count"].clone())
     }
 
@@ -258,7 +253,7 @@ impl TorrentTracker {
 
     pub async fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntryItem, persistent: bool)
     {
-        let (action, data, torrent_count) = self.channel_torrents_request(
+        let (_action, _data, torrent_count) = self.channel_torrents_request(
             "add_single",
             json!({
                 "info_hash": info_hash.clone(),
@@ -283,7 +278,7 @@ impl TorrentTracker {
         if persistent {
             let mut updates = Vec::new();
             for (info_hash, torrent_entry) in torrents.iter() {
-                updates.push((info_hash.clone(), torrent_entry.completed.clone()));
+                updates.push((*info_hash, torrent_entry.completed));
             }
             // self.add_updates(updates).await;
         }
@@ -291,7 +286,7 @@ impl TorrentTracker {
 
     pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let (action, data, torrent_count) = self.channel_torrents_request(
+        let (_action, data, _torrent_count) = self.channel_torrents_request(
             "get_single",
             json!({
                 "info_hash": info_hash.clone()
@@ -322,7 +317,7 @@ impl TorrentTracker {
     pub async fn get_torrents(&self, hashes: Vec<InfoHash>) -> HashMap<InfoHash, Option<TorrentEntry>>
     {
         let mut return_torrents = HashMap::new();
-        let (action, data, torrent_count) = self.channel_torrents_request(
+        let (_action, data, _torrent_count) = self.channel_torrents_request(
             "get_multi",
             json!({
                 "hashes": hashes.clone()
@@ -330,7 +325,7 @@ impl TorrentTracker {
         ).await;
         let torrents_data = serde_json::from_value::<Vec<(InfoHash, Option<TorrentEntry>)>>(data).unwrap();
         for (info_hash, torrent_entry) in torrents_data.iter() {
-            return_torrents.insert(info_hash.clone(), match torrent_entry {
+            return_torrents.insert(*info_hash, match torrent_entry {
                 None => { None }
                 Some(data) => {
                     let peers_arc = self.map_peers.clone();
@@ -355,7 +350,7 @@ impl TorrentTracker {
     pub async fn get_torrents_chunk(&self, skip: u64, amount: u64) -> HashMap<InfoHash, i64>
     {
         let mut return_torrents = HashMap::new();
-        let (action, data, torrent_count) = self.channel_torrents_request(
+        let (_action, data, _torrent_count) = self.channel_torrents_request(
             "get_multi_chunks",
             json!({
                 "skip": skip.clone(),
@@ -367,7 +362,7 @@ impl TorrentTracker {
             match torrent_entry_item {
                 None => {}
                 Some(torrent_entry) => {
-                    return_torrents.insert(info_hash.clone(), torrent_entry.completed.clone());
+                    return_torrents.insert(*info_hash, torrent_entry.completed);
                 }
             }
         }
@@ -376,17 +371,17 @@ impl TorrentTracker {
 
     pub async fn remove_torrent(&self, info_hash: InfoHash, persistent: bool)
     {
-        let mut removed_torrent = false;
-        let mut remove_seeders = 0i64;
-        let mut remove_leechers = 0i64;
-        let (action, data, torrent_count) = self.channel_torrents_request(
+        let _removed_torrent = false;
+        let remove_seeders = 0i64;
+        let remove_leechers = 0i64;
+        let (_action, data, torrent_count) = self.channel_torrents_request(
             "delete_single",
             json!({
                 "info_hash": info_hash.clone()
             })
         ).await;
         let torrents_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let torrents_deleted = serde_json::from_value::<bool>(data["removed"].clone()).unwrap();
+        let _torrents_deleted = serde_json::from_value::<bool>(data["removed"].clone()).unwrap();
         self.update_stats(StatsEvent::Torrents, torrents_count).await;
         self.update_stats(StatsEvent::Seeds, 0 - remove_seeders).await;
         self.update_stats(StatsEvent::Peers, 0 - remove_leechers).await;
@@ -398,14 +393,14 @@ impl TorrentTracker {
 
     pub async fn remove_torrents(&self, hashes: Vec<InfoHash>, persistent: bool)
     {
-        let (action, data, torrent_count) = self.channel_torrents_request(
+        let (_action, data, torrent_count) = self.channel_torrents_request(
             "delete_multi",
             json!({
                 "hashes": hashes.clone()
             })
         ).await;
         let torrents_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let torrents_deleted = serde_json::from_value::<bool>(data["removed"].clone()).unwrap();
+        let _torrents_deleted = serde_json::from_value::<bool>(data["removed"].clone()).unwrap();
         self.set_stats(StatsEvent::Torrents, torrents_count).await;
         // self.set_stats(StatsEvent::Seeds, 0 - remove_seeders).await;
         // self.set_stats(StatsEvent::Peers, 0 - remove_leechers).await;

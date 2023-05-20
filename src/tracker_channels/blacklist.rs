@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use log::{debug, info};
 use serde_json::{json, Value};
+
 use crate::common::InfoHash;
 use crate::tracker::TorrentTracker;
 use crate::tracker_channels::stats::StatsEvent;
@@ -13,7 +14,7 @@ impl TorrentTracker {
             let mut blacklist: HashMap<InfoHash, i64> = HashMap::new();
 
             loop {
-                match serde_json::from_str::<Value>(&*channel_right.recv().unwrap()) {
+                match serde_json::from_str::<Value>(&channel_right.recv().unwrap()) {
                     Ok(data) => {
                         debug!("Received: {:#?}", data);
 
@@ -47,7 +48,7 @@ impl TorrentTracker {
         });
         channel_left.send(request_data.to_string()).unwrap();
         let response = channel_left.recv().unwrap();
-        let response_data: Value = serde_json::from_str(&*response).unwrap();
+        let response_data: Value = serde_json::from_str(&response).unwrap();
         (response_data["action"].clone(), response_data["data"].clone())
     }
 
