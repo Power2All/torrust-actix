@@ -1,13 +1,12 @@
 use std::collections::{BTreeMap, HashMap};
-use std::ops::Deref;
 use std::time::Duration;
 use log::{debug, info};
-use serde_json::{json, Value};
+use serde_json::{Error, json, Value};
 
 use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
 use crate::tracker::TorrentTracker;
 use crate::tracker_channels::stats::StatsEvent;
-use crate::tracker_channels::torrents::{TorrentEntry, TorrentEntryItem};
+use crate::tracker_channels::torrents::TorrentEntry;
 
 impl TorrentTracker {
     pub fn channel_peers_init(&self)
@@ -72,10 +71,76 @@ impl TorrentTracker {
 
                             }
                             "delete_single" => {
-
+                                let mut removed_seeder = false;
+                                let mut removed_leecher = false;
+                                let info_hash = serde_json::from_value::<InfoHash>(data["data"]["info_hash"].clone()).unwrap();
+                                let peer_id = serde_json::from_value::<PeerId>(data["data"]["peer_id"].clone()).unwrap();
+                                let mut torrent = match peers.get(&info_hash) {
+                                    None => { BTreeMap::new() }
+                                    Some(data) => {
+                                        let mut data_cloned = data.clone();
+                                        let peer_option = data_cloned.get(&peer_id);
+                                        if peer_option.is_some() {
+                                            let peer = peer_option.unwrap();
+                                            if peer.left == NumberOfBytes(0) {
+                                                data_cloned.remove(&peer_id);
+                                                removed_seeder = true;
+                                            } else {
+                                                data_cloned.remove(&peer_id);
+                                                removed_leecher = true;
+                                            }
+                                        }
+                                        if data_cloned.len() == 0 {
+                                            peers.remove(&info_hash);
+                                        } else {
+                                            peers.insert(info_hash, data_cloned.clone());
+                                        }
+                                        data_cloned
+                                    }
+                                };
+                                channel_right.send(json!({"action": "delete_single", "data": {
+                                    "peers": torrent,
+                                    "removed_seeder": removed_seeder,
+                                    "removed_leecher": removed_leecher,
+                                    "peers_count": peers_count(&peers)
+                                }}).to_string()).unwrap();
                             }
                             "delete_multi" => {
-
+                                let mut entries = HashMap::new();
+                                let mut removed_seeder = 0u64;
+                                let mut removed_leecher = 0u64;
+                                let peers_list = serde_json::from_value::<Vec<(InfoHash, PeerId)>>(data["data"]["hashes"].clone()).unwrap();
+                                for (info_hash, peer_id) in peers_list.iter() {
+                                    entries.insert(info_hash, match peers.get(&info_hash) {
+                                        None => { BTreeMap::new() }
+                                        Some(data) => {
+                                            let mut data_cloned = data.clone();
+                                            let peer_option = data_cloned.get(&peer_id);
+                                            if peer_option.is_some() {
+                                                let peer = peer_option.unwrap();
+                                                if peer.left == NumberOfBytes(0) {
+                                                    data_cloned.remove(&peer_id);
+                                                    removed_seeder += 1;
+                                                } else {
+                                                    data_cloned.remove(&peer_id);
+                                                    removed_leecher += 1;
+                                                }
+                                            }
+                                            if data_cloned.len() == 0 {
+                                                peers.remove(&info_hash);
+                                            } else {
+                                                peers.insert(info_hash.clone(), data_cloned.clone());
+                                            }
+                                            data_cloned
+                                        }
+                                    });
+                                }
+                                channel_right.send(json!({"action": "delete_multi", "data": {
+                                    "peers": entries,
+                                    "removed_seeder": removed_seeder,
+                                    "removed_leecher": removed_leecher,
+                                    "peers_count": peers_count(&peers)
+                                }}).to_string()).unwrap();
                             }
                             "shutdown" => {
                                 channel_right.send(json!({"action": "shutdown", "data": {}}).to_string()).unwrap();
@@ -119,11 +184,11 @@ impl TorrentTracker {
                 "torrent_peer": torrent_peer.clone()
             })
         ).await;
-        let peers = serde_json::from_value::<BTreeMap<PeerId, TorrentPeer>>(data["data"]["peers"].clone()).unwrap();
-        let added_seeder = serde_json::from_value::<bool>(data["data"]["added_seeder"].clone()).unwrap();
-        let added_leecher = serde_json::from_value::<bool>(data["data"]["added_leecher"].clone()).unwrap();
-        let removed_seeder = serde_json::from_value::<bool>(data["data"]["removed_seeder"].clone()).unwrap();
-        let removed_leecher = serde_json::from_value::<bool>(data["data"]["removed_leecher"].clone()).unwrap();
+        let peers = serde_json::from_value::<BTreeMap<PeerId, TorrentPeer>>(data["peers"].clone()).unwrap();
+        let added_seeder = serde_json::from_value::<bool>(data["added_seeder"].clone()).unwrap();
+        let added_leecher = serde_json::from_value::<bool>(data["added_leecher"].clone()).unwrap();
+        let removed_seeder = serde_json::from_value::<bool>(data["removed_seeder"].clone()).unwrap();
+        let removed_leecher = serde_json::from_value::<bool>(data["removed_leecher"].clone()).unwrap();
 
         let mut torrent = match self.get_torrent(info_hash).await {
             None => { TorrentEntry::default() }
@@ -161,142 +226,73 @@ impl TorrentTracker {
 
     pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, _persistent: bool) -> TorrentEntry
     {
-        let mut removed_seeder = false;
-        let mut removed_leecher = false;
+        let (action, data, peers_count) = self.channel_peers_request(
+            "delete_single",
+            json!({
+                "info_hash": info_hash.clone(),
+                "peer_id": peer_id.clone()
+            })
+        ).await;
+        let peers = serde_json::from_value::<BTreeMap<PeerId, TorrentPeer>>(data["peers"].clone()).unwrap();
+        let removed_seeder = serde_json::from_value::<bool>(data["removed_seeder"].clone()).unwrap();
+        let removed_leecher = serde_json::from_value::<bool>(data["removed_leecher"].clone()).unwrap();
 
-        let torrents_arc = self.map_torrents.clone();
-        let torrents_lock = torrents_arc.read().await;
-        let torrent_input = torrents_lock.get(&info_hash).cloned();
-        drop(torrents_lock);
-
-        let torrent = match torrent_input {
-            None => { TorrentEntry::new() }
-            Some(mut data_torrent) => {
-                let peers_arc = self.map_peers.clone();
-                let peers_lock = peers_arc.read().await;
-                let peer = peers_lock.get(&info_hash).cloned();
-                drop(peers_lock);
-
-                let mut peers = match peer {
-                    None => { BTreeMap::new() }
-                    Some(data_peers) => { data_peers }
-                };
-                let peer_option = peers.get(&peer_id);
-                if peer_option.is_some() {
-                    let peer = *peer_option.unwrap();
-                    if peer.left == NumberOfBytes(0) {
-                        peers.remove(&peer_id);
-                        data_torrent.seeders -= 1;
-                        removed_seeder = true;
-                    } else {
-                        peers.remove(&peer_id);
-                        data_torrent.leechers -= 1;
-                        removed_leecher = true;
-                    }
-                }
-
-                let torrents_arc = self.map_torrents.clone();
-                let mut torrents_lock = torrents_arc.write().await;
-                torrents_lock.insert(info_hash, data_torrent.clone());
-                drop(torrents_lock);
-
-                if peers.is_empty() {
-                    let peers_arc = self.map_peers.clone();
-                    let mut peers_lock = peers_arc.write().await;
-                    peers_lock.remove(&info_hash);
-                    drop(peers_lock);
-                } else {
-                    let peers_arc = self.map_peers.clone();
-                    let mut peers_lock = peers_arc.write().await;
-                    peers_lock.insert(info_hash, peers.clone());
-                    drop(peers_lock);
-                }
-
-                TorrentEntry {
-                    peers,
-                    completed: data_torrent.completed,
-                    seeders: data_torrent.seeders,
-                    leechers: data_torrent.leechers,
-                }
-            }
+        let mut torrent = match self.get_torrent(info_hash).await {
+            None => { TorrentEntry::default() }
+            Some(data) => { data }
         };
 
-        if removed_seeder { self.update_stats(StatsEvent::Seeds, -1).await; }
-        if removed_leecher { self.update_stats(StatsEvent::Peers, -1).await; }
+        torrent.peers = peers;
+        if removed_seeder {
+            torrent.seeders -= 1;
+            self.update_stats(StatsEvent::Seeds, -1).await;
+        }
+        if removed_leecher {
+            torrent.leechers -= 1;
+            self.update_stats(StatsEvent::Peers, -1).await;
+        }
 
         torrent
     }
 
     pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, _persistent: bool) -> HashMap<InfoHash, TorrentEntry>
     {
-        let mut removed_seeder = 0i64;
-        let mut removed_leecher = 0i64;
-        let mut return_torrententries = HashMap::new();
+        let (action, data, peers_count) = self.channel_peers_request(
+            "delete_multi",
+            json!({
+                "hashes": peers.clone()
+            })
+        ).await;
+        let peers_list = serde_json::from_value::<HashMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>>(data["peers"].clone()).unwrap();
+        let removed_seeder = serde_json::from_value::<u64>(data["removed_seeder"].clone()).unwrap();
+        let removed_leecher = serde_json::from_value::<u64>(data["removed_leecher"].clone()).unwrap();
 
-        for (info_hash, peer_id) in peers.iter() {
-            let torrents_arc = self.map_torrents.clone();
-            let torrents_lock = torrents_arc.read().await;
-            let torrent = torrents_lock.get(info_hash).cloned();
-            drop(torrents_lock);
-
-            return_torrententries.insert(*info_hash, match torrent {
-                None => { TorrentEntry::new() }
-                Some(mut data_torrent) => {
-                    let peers_arc = self.map_peers.clone();
-                    let peers_lock = peers_arc.read().await;
-                    let peer = peers_lock.get(info_hash).cloned();
-                    drop(peers_lock);
-
-                    let mut peers = match peer {
-                        None => { BTreeMap::new() }
-                        Some(data_peers) => { data_peers }
-                    };
-
-                    let peer_option = peers.get(peer_id);
-                    if peer_option.is_some() {
-                        let peer = *peer_option.unwrap();
-                        if peer.left == NumberOfBytes(0) {
-                            peers.remove(peer_id);
-                            data_torrent.seeders -= 1;
-                            removed_seeder -= 1;
-                        } else {
-                            peers.remove(peer_id);
-                            data_torrent.leechers -= 1;
-                            removed_leecher -= 1;
-                        }
+        let mut entries = HashMap::new();
+        for (info_hash, torrent_entry) in peers_list.iter() {
+            entries.insert(info_hash.clone(), match self.get_torrent(info_hash.clone()).await {
+                None => { TorrentEntry::default() }
+                Some(mut data) => {
+                    data.peers = torrent_entry.clone();
+                    if removed_seeder > 0 && (data.seeders - removed_seeder as i64) >= 0 {
+                        data.seeders = data.seeders - removed_seeder as i64;
+                        self.update_stats(StatsEvent::Seeds, 0 - removed_seeder as i64).await;
+                    } else if removed_seeder > 0 {
+                        data.seeders = 0;
+                        self.update_stats(StatsEvent::Seeds, 0 - removed_seeder as i64).await;
                     }
-
-                    let torrents_arc = self.map_torrents.clone();
-                    let mut torrents_lock = torrents_arc.write().await;
-                    torrents_lock.insert(*info_hash, data_torrent.clone());
-                    drop(torrents_lock);
-
-                    if peers.is_empty() {
-                        let peers_arc = self.map_peers.clone();
-                        let mut peers_lock = peers_arc.write().await;
-                        peers_lock.remove(info_hash);
-                        drop(peers_lock);
-                    } else {
-                        let peers_arc = self.map_peers.clone();
-                        let mut peers_lock = peers_arc.write().await;
-                        peers_lock.insert(*info_hash, peers.clone());
-                        drop(peers_lock);
+                    if removed_leecher > 0 && (data.leechers - removed_leecher as i64) >= 0 {
+                        data.leechers = data.leechers - removed_leecher as i64;
+                        self.update_stats(StatsEvent::Peers, 0 - removed_leecher as i64).await;
+                    } else if removed_leecher > 0 {
+                        data.leechers = 0;
+                        self.update_stats(StatsEvent::Peers, 0 - removed_leecher as i64).await;
                     }
-
-                    TorrentEntry {
-                        peers,
-                        completed: data_torrent.completed,
-                        seeders: data_torrent.seeders,
-                        leechers: data_torrent.leechers,
-                    }
+                    data
                 }
             });
         }
 
-        if removed_seeder != 0 { self.update_stats(StatsEvent::Seeds, removed_seeder).await; }
-        if removed_leecher != 0 { self.update_stats(StatsEvent::Peers, removed_leecher).await; }
-
-        return_torrententries
+        entries
     }
 
     pub async fn clean_peers(&self, peer_timeout: Duration)
