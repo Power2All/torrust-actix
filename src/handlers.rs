@@ -7,7 +7,7 @@ use std::net::{IpAddr, SocketAddr};
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, CustomError, InfoHash, NumberOfBytes, PeerId, ScrapeQueryRequest, TorrentPeer};
 use crate::config::Configuration;
 use crate::tracker::TorrentTracker;
-use crate::tracker_channels::torrents::{TorrentEntry, TorrentEntryItem};
+use crate::tracker_channels::torrents_peers::{TorrentEntry, TorrentEntryItem};
 
 pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
 {

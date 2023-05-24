@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 use crate::common::{InfoHash, PeerId, TorrentPeer};
 use crate::config::Configuration;
 use crate::databases::DatabaseConnector;
-use crate::tracker_channels::torrents::TorrentEntryItem;
+use crate::tracker_channels::torrents_peers::TorrentEntryItem;
 
 // #[derive(Serialize, Deserialize, Clone, Debug)]
 // pub struct UserEntryItem {
@@ -40,8 +40,7 @@ use crate::tracker_channels::torrents::TorrentEntryItem;
 
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
-    pub torrents_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
-    pub peers_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
+    pub torrents_peers_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
     pub updates_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
     pub shadow_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
     pub whitelist_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
@@ -62,8 +61,7 @@ pub struct TorrentTracker {
 impl TorrentTracker {
     pub async fn new(config: Arc<Configuration>) -> TorrentTracker
     {
-        let (torrents_left, torrents_right) = bichannel::channel();
-        let (peers_left, peers_right) = bichannel::channel();
+        let (torrents_peers_left, torrents_peers_right) = bichannel::channel();
         let (updates_left, updates_right) = bichannel::channel();
         let (shadow_left, shadow_right) = bichannel::channel();
         let (whitelist_left, whitelist_right) = bichannel::channel();
@@ -72,8 +70,7 @@ impl TorrentTracker {
         let (stats_left, stats_right) = bichannel::channel();
         TorrentTracker {
             config: config.clone(),
-            torrents_channel: (torrents_left, torrents_right),
-            peers_channel: (peers_left, peers_right),
+            torrents_peers_channel: (torrents_peers_left, torrents_peers_right),
             updates_channel: (updates_left, updates_right),
             shadow_channel: (shadow_left, shadow_right),
             whitelist_channel: (whitelist_left, whitelist_right),
