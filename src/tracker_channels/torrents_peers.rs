@@ -451,7 +451,7 @@ impl TorrentTracker {
 
     pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
+        let (action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
             "torrent_get",
             json!({
                 "info_hash": info_hash
@@ -459,7 +459,7 @@ impl TorrentTracker {
         ).await;
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        match serde_json::from_value::<Option<TorrentEntry>>(data.clone()) { Ok(data) => { data } Err(_) => { panic!("{:#?}", data.clone()); } }
+        match serde_json::from_value::<Option<TorrentEntry>>(data.clone()) { Ok(data) => { data } Err(_) => { panic!("{:#?} {:#?}", action, data.clone()); } }
     }
 
     pub async fn get_torrents(&self, torrents: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
