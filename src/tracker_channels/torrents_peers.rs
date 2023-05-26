@@ -63,7 +63,9 @@ impl TorrentTracker {
         let _config = self.config.clone();
         tokio::spawn(async move {
             let mut torrents: BTreeMap<InfoHash, TorrentEntryItem> = BTreeMap::new();
+            let mut torrents_count = 0u64;
             let mut peers: BTreeMap<InfoHash, BTreeMap<PeerId, TorrentPeer>> = BTreeMap::new();
+            let mut peers_count = 0u64;
 
             loop {
                 match serde_json::from_str::<Value>(&channel_right.recv().unwrap()) {
@@ -73,12 +75,13 @@ impl TorrentTracker {
                             "torrent_add" => {
                                 let info_hash = serde_json::from_value::<InfoHash>(data["data"]["info_hash"].clone()).unwrap();
                                 let torrent_entry_item = serde_json::from_value::<TorrentEntryItem>(data["data"]["torrent_entry_item"].clone()).unwrap();
-                                let _ = torrents.insert(info_hash, torrent_entry_item);
+                                torrents.insert(info_hash, torrent_entry_item);
+                                torrents_count = torrents.len() as u64;
                                 channel_right.send(json!({
                                     "action": "torrent_add",
                                     "data": {},
-                                    "torrent_count": torrents.len(),
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
                                 }).to_string()).unwrap();
                             }
                             "torrent_remove" => {
@@ -90,6 +93,7 @@ impl TorrentTracker {
                                 let peers_list = peers.get(&info_hash);
                                 if torrent.is_some() {
                                     torrents.remove(&info_hash);
+                                    torrents_count = torrents.len() as u64;
                                     removed_torrent = true;
                                 }
                                 if let Some(peers_list_unwrapped) = peers_list {
@@ -101,6 +105,7 @@ impl TorrentTracker {
                                         }
                                     }
                                     peers.remove(&info_hash);
+                                    peers_count -= 1;
                                 }
                                 channel_right.send(json!({
                                     "action": "torrent_remove",
@@ -109,8 +114,8 @@ impl TorrentTracker {
                                         "removed_seed_count": removed_seed_count,
                                         "removed_peer_count": removed_peer_count
                                     },
-                                    "torrent_count": torrents.len(),
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
                                 }).to_string()).unwrap();
                             }
                             "torrent_get" => {
@@ -135,8 +140,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({
                                     "action": "torrent_get",
                                     "data": torrent_entry,
-                                    "torrent_count": torrents.len(),
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
                                 }).to_string()).unwrap();
                             }
                             "torrents_get_chunk" => {
@@ -165,8 +170,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({
                                     "action": "torrents_get_chunk",
                                     "data": return_data,
-                                    "torrent_count": torrents.len(),
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
                                 }).to_string()).unwrap();
                             }
 
@@ -202,6 +207,7 @@ impl TorrentTracker {
                                                     added_leecher = true;
                                                 }
                                                 let _ = peers_list.insert(peer_id, torrent_peer);
+                                                peers_count += 1;
                                             }
                                             Some(data_peer) => {
                                                 if data_peer.left == NumberOfBytes(0) && torrent_peer.left != NumberOfBytes(0) {
@@ -223,6 +229,7 @@ impl TorrentTracker {
                                             }
                                         }
                                         torrents.insert(info_hash, data_torrent.clone());
+                                        torrents_count = torrents.len() as u64;
                                         peers.insert(info_hash, peers_list.clone());
                                         TorrentEntry {
                                             peers: peers_list.clone(),
@@ -242,8 +249,8 @@ impl TorrentTracker {
                                         "completed_applied": completed_applied,
                                         "torrent_entry": torrent
                                     },
-                                    "torrent_count": torrents.len(),
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
                                 }).to_string()).unwrap();
                             }
                             "peer_remove" => {
@@ -268,6 +275,7 @@ impl TorrentTracker {
                                                 data_torrent.leechers -= 1;
                                                 removed_leecher = true;
                                             }
+                                            peers_count -= 1;
                                         }
                                         torrents.insert(info_hash, data_torrent.clone());
                                         if peers_list.is_empty() {
@@ -290,8 +298,8 @@ impl TorrentTracker {
                                         "removed_leecher": removed_leecher,
                                         "torrent_entry": torrent
                                     },
-                                    "torrent_count": torrents.len(),
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
                                 }).to_string()).unwrap();
                             }
                             "peer_get" => {}
@@ -301,8 +309,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({
                                     "action": "shutdown",
                                     "data": {},
-                                    "torrent_count": torrents.len() as i64,
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
                                 }).to_string()).unwrap();
                                 break;
                             }
@@ -310,8 +318,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({
                                     "action": "error",
                                     "data": "unknown action",
-                                    "torrent_count": torrents.len(),
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
                                 }).to_string()).unwrap();
                             }
                         }
@@ -321,8 +329,8 @@ impl TorrentTracker {
                         channel_right.send(json!({
                             "action": "error",
                             "data": error.to_string(),
-                            "torrent_count": torrents.len(),
-                            "peer_count": peers_count(&peers)
+                            "torrent_count": torrents_count,
+                            "peer_count": peers_count
                         }).to_string()).unwrap();
                     }
                 }
