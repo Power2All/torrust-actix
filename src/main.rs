@@ -172,8 +172,8 @@ async fn main() -> std::io::Result<()>
             if torrents_block.is_empty() {
                 break;
             }
-            for (info_hash, completed) in torrents_block.iter() {
-                tracker_send.add_shadow(*info_hash, *completed).await;
+            for (info_hash, torrent_entry) in torrents_block.iter() {
+                tracker_send.add_shadow(*info_hash, torrent_entry.completed).await;
                 tracker_receive.remove_torrent(*info_hash, false).await;
             }
         }
@@ -186,11 +186,8 @@ async fn main() -> std::io::Result<()>
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
 
     tracker.channel_torrents_peers_init();
-    tracker.channel_updates_init();
-    tracker.channel_shadow_init();
-    tracker.channel_whitelist_init();
-    tracker.channel_blacklist_init();
-    tracker.channel_keys_init();
+    tracker.channel_updates_shadow_init();
+    tracker.channel_whitelist_blacklist_keys_init();
     tracker.channel_stats_init();
 
     // Load torrents
@@ -443,11 +440,8 @@ async fn main() -> std::io::Result<()>
                 }
             }
             let _ = tracker.channel_torrents_peers_request("shutdown", json!({})).await;
-            let _ = tracker.channel_updates_request("shutdown", json!({})).await;
-            let _ = tracker.channel_shadow_request("shutdown", json!({})).await;
-            let _ = tracker.channel_whitelist_request("shutdown", json!({})).await;
-            let _ = tracker.channel_blacklist_request("shutdown", json!({})).await;
-            let _ = tracker.channel_keys_request("shutdown", json!({})).await;
+            let _ = tracker.channel_updates_shadow_request("shutdown", json!({})).await;
+            let _ = tracker.channel_whitelist_blacklist_keys_request("shutdown", json!({})).await;
             let _ = tracker.channel_stats_request("shutdown", json!({})).await;
             info!("Server shutting down completed");
             Ok(())
