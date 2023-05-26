@@ -5,6 +5,7 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
 use std::net::{IpAddr, SocketAddr};
+use crossbeam_channel::{bounded as create_channel, Receiver, Sender, RecvError, SendError, TryRecvError};
 
 use crate::tracker::TorrentTracker;
 use crate::udp_common;
@@ -484,4 +485,47 @@ pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> bool
         return true;
     }
     false
+}
+
+#[derive(Debug)]
+pub struct Channel<S, R> {
+    sender: Sender<S>,
+    receiver: Receiver<R>,
+}
+
+impl<S, R> Clone for Channel<S, R> {
+    fn clone(&self) -> Self {
+        Channel {
+            sender: self.sender.clone(),
+            receiver: self.receiver.clone(),
+        }
+    }
+}
+
+impl<S, R> Channel<S, R> {
+    pub fn send(&self, s: S) -> Result<(), SendError<S>> {
+        self.sender.send(s)
+    }
+    pub fn recv(&self) -> Result<R, RecvError> {
+        self.receiver.recv()
+    }
+    pub fn try_recv(&self) -> Result<R, TryRecvError> {
+        self.receiver.try_recv()
+    }
+}
+
+pub fn channel<T, U>() -> (Channel<T, U>, Channel<U, T>) {
+    let (ls, lr) = create_channel(1);
+    let (rs, rr) = create_channel(1);
+
+    (
+        Channel {
+            sender: ls,
+            receiver: rr,
+        },
+        Channel {
+            sender: rs,
+            receiver: lr,
+        },
+    )
 }

@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
-use log::{debug, error, info};
+use log::{debug, info};
 use serde::{Serialize, Deserialize};
-use serde_json::{Error, json, Value};
+use serde_json::{json, Value};
+
 use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
 use crate::tracker::TorrentTracker;
 use crate::tracker_channels::stats::StatsEvent;
@@ -451,7 +452,7 @@ impl TorrentTracker {
 
     pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let (action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
+        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
             "torrent_get",
             json!({
                 "info_hash": info_hash
@@ -459,7 +460,7 @@ impl TorrentTracker {
         ).await;
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        match serde_json::from_value::<Option<TorrentEntry>>(data.clone()) { Ok(data) => { data } Err(_) => { panic!("{:#?} {:#?}", action, data.clone()); } }
+        serde_json::from_value::<Option<TorrentEntry>>(data.clone()).unwrap()
     }
 
     pub async fn get_torrents(&self, torrents: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
@@ -496,7 +497,7 @@ impl TorrentTracker {
 
     pub async fn add_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool, persistent: bool) -> TorrentEntry
     {
-        let (action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
+        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
             "peer_add",
             json!({
                 "info_hash": info_hash,
@@ -507,10 +508,7 @@ impl TorrentTracker {
         ).await;
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        let added_seeder = match serde_json::from_value::<bool>(data["added_seeder"].clone()) {
-            Ok(data) => { data }
-            Err(error) => { panic!("{:#?} {:#?}", action, data); }
-        };
+        let added_seeder = serde_json::from_value::<bool>(data["added_seeder"].clone()).unwrap();
         let added_leecher = serde_json::from_value::<bool>(data["added_leecher"].clone()).unwrap();
         let removed_seeder = serde_json::from_value::<bool>(data["removed_seeder"].clone()).unwrap();
         let removed_leecher = serde_json::from_value::<bool>(data["removed_leecher"].clone()).unwrap();
