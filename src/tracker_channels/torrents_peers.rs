@@ -131,6 +131,7 @@ impl TorrentTracker {
                                         })
                                     }
                                 };
+                                info!("{:#?}", torrent_entry);
                                 channel_right.send(json!({
                                     "action": "torrent_get",
                                     "data": torrent_entry,
@@ -459,7 +460,6 @@ impl TorrentTracker {
         ).await;
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        info!("{:#?}", data.clone());
         serde_json::from_value::<Option<TorrentEntry>>(data).unwrap()
     }
 
