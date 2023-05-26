@@ -417,7 +417,7 @@ mod approx_instant {
         let system_now = SystemTime::now();
         let instant_now = Instant::now();
         let duration = system_now.duration_since(de).map_err(Error::custom)?;
-        let approx = instant_now - duration;
+        let approx = instant_now.checked_sub(duration).unwrap();
         Ok(approx)
     }
 }

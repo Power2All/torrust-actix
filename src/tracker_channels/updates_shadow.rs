@@ -277,7 +277,7 @@ impl TorrentTracker {
 
     pub async fn add_updates(&self, updates: HashMap<InfoHash, i64>)
     {
-        let updates_vec: Vec<(InfoHash, i64)> = updates.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let updates_vec: Vec<(InfoHash, i64)> = updates.into_iter().map(|(k, v)| (k, v)).collect();
         let (_action, _data, updates_count, _shadow_count) = self.channel_updates_shadow_request(
             "updates_add_multi",
             json!({
@@ -334,7 +334,7 @@ impl TorrentTracker {
 
     pub async fn add_shadows(&self, shadows: HashMap<InfoHash, i64>)
     {
-        let shadows_vec: Vec<(InfoHash, i64)> = shadows.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let shadows_vec: Vec<(InfoHash, i64)> = shadows.into_iter().map(|(k, v)| (k, v)).collect();
         let (_action, _data, _updates_count, shadow_count) = self.channel_updates_shadow_request(
             "shadow_add_multi",
             json!({
@@ -394,7 +394,7 @@ impl TorrentTracker {
         ).await;
         let updates = serde_json::from_value::<HashMap<InfoHash, i64>>(data).unwrap();
         for (info_hash, completed) in updates.iter() {
-            self.add_shadow(*info_hash, completed.clone()).await;
+            self.add_shadow(*info_hash, *completed).await;
         }
     }
 }
