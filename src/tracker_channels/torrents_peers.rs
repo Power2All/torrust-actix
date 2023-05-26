@@ -452,7 +452,7 @@ impl TorrentTracker {
 
     pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let (action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
+        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
             "torrent_get",
             json!({
                 "info_hash": info_hash
@@ -497,7 +497,7 @@ impl TorrentTracker {
 
     pub async fn add_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool, persistent: bool) -> TorrentEntry
     {
-        let (action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
+        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
             "peer_add",
             json!({
                 "info_hash": info_hash,
