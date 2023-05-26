@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
-use log::{debug, info};
+use log::{debug, error, info};
 use serde::{Serialize, Deserialize};
-use serde_json::{json, Value};
+use serde_json::{Error, json, Value};
 use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
 use crate::tracker::TorrentTracker;
 use crate::tracker_channels::stats::StatsEvent;
@@ -459,7 +459,11 @@ impl TorrentTracker {
         ).await;
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        serde_json::from_value::<Option<TorrentEntry>>(data).unwrap()
+        match serde_json::from_value::<Option<TorrentEntry>>(data) {
+            Ok(data) => { data }
+            Err(error) => { error!("{:#?}", data)}
+        }
+        // serde_json::from_value::<Option<TorrentEntry>>(data).unwrap()
     }
 
     pub async fn get_torrents(&self, torrents: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
