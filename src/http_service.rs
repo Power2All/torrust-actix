@@ -14,7 +14,6 @@ use std::time::Duration;
 use actix_extensible_rate_limit::backend::memory::InMemoryBackend;
 use actix_extensible_rate_limit::backend::SimpleInputFunctionBuilder;
 use actix_extensible_rate_limit::RateLimiter;
-use async_std::future::timeout;
 use bip_bencode::{ben_map, ben_bytes, ben_list, ben_int, BMutAccess};
 use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
@@ -53,15 +52,11 @@ pub async fn http_service(addr: SocketAddr, data: Arc<TorrentTracker>) -> (Serve
     info!("[SERVICE] Starting server listener on {}", addr);
     let data_cloned = data;
     let server = HttpServer::new(move || {
-        let backend = InMemoryBackend::builder().build();
-        let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 1000).build();
-        let middleware = RateLimiter::builder(backend, input).add_headers().build();
         App::new()
             .wrap(http_service_cors())
-            .wrap(middleware)
             .configure(http_service_routes(data_cloned.clone()))
     })
-        .keep_alive(Duration::from_secs(10))
+        .keep_alive(Duration::from_secs(30))
         .client_request_timeout(Duration::from_secs(5))
         .client_disconnect_timeout(Duration::from_secs(5))
         .bind((addr.ip(), addr.port()))
@@ -78,12 +73,8 @@ pub async fn https_service(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key:
     let data_cloned = data;
     let config = https_service_config(ssl_key, ssl_cert);
     let server = HttpServer::new(move || {
-        let backend = InMemoryBackend::builder().build();
-        let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 1000).build();
-        let middleware = RateLimiter::builder(backend, input).add_headers().build();
         App::new()
             .wrap(http_service_cors())
-            .wrap(middleware)
             .configure(http_service_routes(data_cloned.clone()))
     })
         .keep_alive(Duration::from_secs(10))
@@ -130,59 +121,43 @@ fn https_service_config(ssl_key: String, ssl_cert: String) -> ServerConfig {
 
 pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    return match timeout(Duration::from_secs(5), async move {
-        let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
-        if ip_check.is_err() {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
-            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
-        }
-        let ip = ip_check.unwrap();
-        http_service_stats_log(ip, data.clone()).await;
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
 
-        if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
 
-        if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
 
-        // We check if the path is set, and retrieve the possible "key" to check.
-        if data.config.keys {
-            let key = path.into_inner();
-            let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
-            if let Some(key) = key_check { return key; }
-        }
+    // We check if the path is set, and retrieve the possible "key" to check.
+    if data.config.keys {
+        let key = path.into_inner();
+        let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
+        if let Some(key) = key_check { return key; }
+    }
 
-        http_service_announce_handler(request, ip, data.as_ref().clone()).await
-    }).await {
-        Ok(result) => { result }
-        Err(_) => {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("request timeout")}).encode();
-            HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(return_string)
-        }
-    };
+    http_service_announce_handler(request, ip, data.as_ref().clone()).await
 }
 
 pub async fn http_service_announce(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    return match timeout(Duration::from_secs(5), async move {
-        let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
-        if ip_check.is_err() {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
-            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
-        }
-        let ip = ip_check.unwrap();
-        http_service_stats_log(ip, data.clone()).await;
-
-        if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
-
-        if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
-
-        http_service_announce_handler(request, ip, data.as_ref().clone()).await
-    }).await {
-        Ok(result) => { result }
-        Err(_) => {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("request timeout")}).encode();
-            HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(return_string)
-        }
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    http_service_announce_handler(request, ip, data.as_ref().clone()).await
 }
 
 pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
@@ -299,59 +274,43 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
 pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    return match timeout(Duration::from_secs(5), async move {
-        let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
-        if ip_check.is_err() {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
-            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
-        }
-        let ip = ip_check.unwrap();
-        http_service_stats_log(ip, data.clone()).await;
-
-        if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
-
-        if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
-
-        // We check if the path is set, and retrieve the possible "key" to check.
-        if data.config.keys {
-            let key = path.into_inner();
-            let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
-            if let Some(key) = key_check { return key; }
-        }
-
-        http_service_scrape_handler(request, ip, data.as_ref().clone()).await
-    }).await {
-        Ok(result) => { result }
-        Err(_) => {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("request timeout")}).encode();
-            HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(return_string)
-        }
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    // We check if the path is set, and retrieve the possible "key" to check.
+    if data.config.keys {
+        let key = path.into_inner();
+        let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
+        if let Some(key) = key_check { return key; }
+    }
+
+    http_service_scrape_handler(request, ip, data.as_ref().clone()).await
 }
 
 pub async fn http_service_scrape(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    return match timeout(Duration::from_secs(5), async move {
-        let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
-        if ip_check.is_err() {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
-            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
-        }
-        let ip = ip_check.unwrap();
-        http_service_stats_log(ip, data.clone()).await;
-
-        if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
-
-        if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
-
-        http_service_scrape_handler(request, ip, data.as_ref().clone()).await
-    }).await {
-        Ok(result) => { result }
-        Err(_) => {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("request timeout")}).encode();
-            HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(return_string)
-        }
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    http_service_scrape_handler(request, ip, data.as_ref().clone()).await
 }
 
 pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
@@ -396,25 +355,17 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
 
 async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    return match timeout(Duration::from_secs(5), async move {
-        let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
-        if ip_check.is_err() {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
-            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
-        }
-        let ip = ip_check.unwrap();
-        http_service_stats_log(ip, data.clone()).await;
-
-        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown request")}).encode();
-        let body = std::str::from_utf8(&return_string).unwrap().to_string();
-        HttpResponse::NotFound().content_type(ContentType::plaintext()).body(body)
-    }).await {
-        Ok(result) => { result }
-        Err(_) => {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("request timeout")}).encode();
-            HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(return_string)
-        }
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown request")}).encode();
+    let body = std::str::from_utf8(&return_string).unwrap().to_string();
+    HttpResponse::NotFound().content_type(ContentType::plaintext()).body(body)
 }
 
 pub async fn http_service_stats_log(ip: IpAddr, tracker: web::Data<Arc<TorrentTracker>>)
