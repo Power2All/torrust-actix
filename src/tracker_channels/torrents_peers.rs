@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 use log::{debug, info};
+use scc::ebr::Arc;
 use serde::{Serialize, Deserialize};
 use serde_json::{json, Value};
 
@@ -378,25 +379,14 @@ impl TorrentTracker {
         (response_data["action"].clone(), response_data["data"].clone(), response_data["torrent_count"].clone(), response_data["peer_count"].clone())
     }
 
-    pub async fn load_torrents(&self)
+    pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(torrents) = self.sqlx.load_torrents().await {
-            let mut torrent_count = 0i64;
-            let mut completed_count = 0i64;
-
-            for (info_hash, completed) in torrents.iter() {
-                self.add_torrent(*info_hash, TorrentEntryItem {
-                    completed: *completed,
-                    seeders: 0,
-                    leechers: 0,
-                }, false).await;
-                torrent_count += 1;
-                completed_count += *completed;
-            }
-
-            info!("Loaded {} torrents with {} completes.", torrent_count, completed_count);
-            self.update_stats(StatsEvent::Completed, completed_count).await;
-        }
+        let (torrents, completes) = match self.sqlx.load_torrents(tracker.clone()).await {
+            Ok(data) => { data }
+            Err(_) => { panic!("Unable to obtain data from database!"); }
+        };
+        info!("Loaded {} torrents with {} completes.", torrents, completes);
+        self.update_stats(StatsEvent::Completed, completes as i64).await;
     }
 
     pub async fn save_torrents(&self) -> bool

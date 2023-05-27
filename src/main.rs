@@ -124,7 +124,7 @@ async fn main() -> std::io::Result<()>
                 table_keys_timeout: config_retrieve_db_structure.table_keys_timeout,
             },
         }).clone()).await);
-        tracker_receive.clone().load_torrents().await;
+        tracker_receive.clone().load_torrents(tracker_receive.clone()).await;
 
         let tracker_send = Arc::new(TorrentTracker::new(Arc::new(Configuration {
             log_level: "".to_string(),
@@ -192,7 +192,7 @@ async fn main() -> std::io::Result<()>
 
     // Load torrents
     if config.persistence {
-        tracker.clone().load_torrents().await;
+        tracker.clone().load_torrents(tracker.clone()).await;
         if config.whitelist {
             tracker.clone().load_whitelists().await;
         }
