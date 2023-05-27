@@ -388,6 +388,7 @@ async fn main() -> std::io::Result<()>
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             info!("Shutdown request received, shutting down...");
+            tracker.set_stats(StatsEvent::MaintenanceMode, 1).await;
             let _ = udp_tx.send(true);
             let _ = futures::future::join_all(udp_futures).await;
             for handle in api_handlers.iter() {
