@@ -303,7 +303,33 @@ impl TorrentTracker {
                                 }).to_string()).unwrap();
                             }
                             "peer_get" => {}
-                            "peers_get_chunk" => {}
+                            "peers_get_chunk" => {
+                                let mut return_data = Vec::new();
+                                let skip = serde_json::from_value::<u64>(data["data"]["skip"].clone()).unwrap();
+                                let mut current = 0u64;
+                                let amount = serde_json::from_value::<u64>(data["data"]["amount"].clone()).unwrap();
+                                for (info_hash, peers_list) in peers.iter() {
+                                    if current > skip + amount {
+                                        break;
+                                    }
+                                    for (peer_id, torrent_peer) in peers_list.iter() {
+                                        if current > skip + amount {
+                                            break;
+                                        }
+                                        if current < skip {
+                                            current += 1;
+                                            continue;
+                                        }
+                                        return_data.push(((info_hash.clone(), peer_id.clone(), torrent_peer.clone())));
+                                    }
+                                }
+                                channel_right.send(json!({
+                                    "action": "peers_get_chunk",
+                                    "data": return_data,
+                                    "torrent_count": torrents_count,
+                                    "peer_count": peers_count
+                                }).to_string()).unwrap();
+                            }
 
                             "shutdown" => {
                                 channel_right.send(json!({
@@ -600,21 +626,31 @@ impl TorrentTracker {
         return_data
     }
 
+    pub async fn get_peers_chunk(&self, skip: u64, amount: u64) -> Vec<(InfoHash, PeerId, TorrentPeer)>
+    {
+        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
+            "peers_get_chunk",
+            json!({
+                "skip": skip,
+                "amount": amount
+            })
+        ).await;
+        serde_json::from_value::<Vec<(InfoHash, PeerId, TorrentPeer)>>(data).unwrap()
+    }
+
     pub async fn clean_peers(&self, peer_timeout: Duration)
     {
         let mut skip: usize = 0;
         let amount: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
         let mut removed_peers = 0u64;
         loop {
-            info!("[PEERS] Scanning torrents with peers {} to {}", skip, (skip + amount));
-            let torrents = self.get_torrents_chunk(skip as u64, amount as u64).await;
-            if !torrents.is_empty() {
-                for (info_hash, torrent_entry) in torrents.iter() {
-                    for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
-                        if torrent_peer.updated.elapsed() > peer_timeout {
-                            removed_peers += 1;
-                            self.remove_peer(*info_hash, *peer_id, false).await;
-                        }
+            info!("[PEERS] Scanning peers {} to {}", skip, (skip + amount));
+            let peers = self.get_peers_chunk(skip as u64, amount as u64).await;
+            if !peers.is_empty() {
+                for (info_hash, peer_id, torrent_peer) in peers.iter() {
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        removed_peers += 1;
+                        self.remove_peer(*info_hash, *peer_id, false).await;
                     }
                 }
                 skip += amount;
