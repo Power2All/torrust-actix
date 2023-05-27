@@ -52,13 +52,17 @@ pub async fn http_service(addr: SocketAddr, data: Arc<TorrentTracker>) -> (Serve
     info!("[SERVICE] Starting server listener on {}", addr);
     let data_cloned = data;
     let server = HttpServer::new(move || {
+        let backend = InMemoryBackend::builder().build();
+        let input = SimpleInputFunctionBuilder::new(Duration::from_secs(10), 5000).build();
+        let middleware = RateLimiter::builder(backend, input).add_headers().build();
         App::new()
             .wrap(http_service_cors())
+            .wrap(middleware)
             .configure(http_service_routes(data_cloned.clone()))
     })
-        .keep_alive(Duration::from_secs(900))
-        .client_request_timeout(Duration::from_secs(10))
-        .client_disconnect_timeout(Duration::from_secs(10))
+        .keep_alive(Duration::from_secs(30))
+        .client_request_timeout(Duration::from_secs(5))
+        .client_disconnect_timeout(Duration::from_secs(5))
         .bind((addr.ip(), addr.port()))
         .unwrap()
         .disable_signals()
@@ -73,13 +77,17 @@ pub async fn https_service(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key:
     let data_cloned = data;
     let config = https_service_config(ssl_key, ssl_cert);
     let server = HttpServer::new(move || {
+        let backend = InMemoryBackend::builder().build();
+        let input = SimpleInputFunctionBuilder::new(Duration::from_secs(10), 5000).build();
+        let middleware = RateLimiter::builder(backend, input).add_headers().build();
         App::new()
             .wrap(http_service_cors())
+            .wrap(middleware)
             .configure(http_service_routes(data_cloned.clone()))
     })
-        .keep_alive(Duration::from_secs(900))
-        .client_request_timeout(Duration::from_secs(10))
-        .client_disconnect_timeout(Duration::from_secs(10))
+        .keep_alive(Duration::from_secs(10))
+        .client_request_timeout(Duration::from_secs(5))
+        .client_disconnect_timeout(Duration::from_secs(5))
         .bind_rustls((addr.ip(), addr.port()), config)
         .unwrap()
         .disable_signals()
