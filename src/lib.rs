@@ -8,4 +8,3 @@ pub mod udp_common;
 pub mod udp_service;
 pub mod tracker;
 pub mod databases;
-pub mod tracker_channels;
