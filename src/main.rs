@@ -185,7 +185,8 @@ async fn main() -> std::io::Result<()>
 
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
 
-    tracker.channel_torrents_peers_init();
+    tracker.channel_torrents_init();
+    tracker.channel_peers_init();
     tracker.channel_updates_init();
     tracker.channel_shadow_init();
     tracker.channel_whitelist_init();
@@ -442,7 +443,8 @@ async fn main() -> std::io::Result<()>
                     }
                 }
             }
-            let _ = tracker.channel_torrents_peers_request("shutdown", json!({})).await;
+            let _ = tracker.channel_torrents_request("shutdown", json!({})).await;
+            let _ = tracker.channel_peers_request("shutdown", json!({})).await;
             let _ = tracker.channel_updates_request("shutdown", json!({})).await;
             let _ = tracker.channel_shadow_request("shutdown", json!({})).await;
             let _ = tracker.channel_whitelist_request("shutdown", json!({})).await;
