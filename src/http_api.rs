@@ -4,6 +4,9 @@ use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use actix_cors::Cors;
+use actix_extensible_rate_limit::backend::memory::InMemoryBackend;
+use actix_extensible_rate_limit::backend::SimpleInputFunctionBuilder;
+use actix_extensible_rate_limit::RateLimiter;
 use actix_remote_ip::RemoteIP;
 use actix_web::{App, Error, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
@@ -17,7 +20,6 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 use scc::ebr::Arc;
 use serde::{Serialize, Deserialize};
 use serde_json::{json, Value};
-
 use crate::common::{InfoHash, AnnounceEvent};
 use crate::config::Configuration;
 use crate::tracker::TorrentTracker;
@@ -82,8 +84,8 @@ pub async fn http_api(addr: SocketAddr, data: Arc<TorrentTracker>) -> (ServerHan
     info!("[API] Starting server listener on {}", addr);
     let data_cloned = data;
     let server = HttpServer::new(move || {
-        // let backend = InMemoryBackend::builder().build();
-        // let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
+        let backend = InMemoryBackend::builder().build();
+        let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
         // let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
         App::new()
             .wrap(http_api_cors())
@@ -106,8 +108,8 @@ pub async fn https_api(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: Str
     let data_cloned = data;
     let config = https_api_config(ssl_key, ssl_cert);
     let server = HttpServer::new(move || {
-        // let _backend = InMemoryBackend::builder().build();
-        // let _input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
+        let backend = InMemoryBackend::builder().build();
+        let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
         // let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
         App::new()
             .wrap(http_api_cors())

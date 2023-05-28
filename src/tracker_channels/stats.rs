@@ -2,7 +2,6 @@ use chrono::Utc;
 use log::debug;
 use serde::{Serialize, Deserialize};
 use serde_json::{json, Value};
-
 use crate::tracker::TorrentTracker;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -124,7 +123,7 @@ impl TorrentTracker {
             };
 
             loop {
-                match serde_json::from_str::<Value>(&channel_right.recv().unwrap()) {
+                match serde_json::from_str::<Value>(&*channel_right.recv().unwrap()) {
                     Ok(data) => {
                         // debug!("Received: {:#?}", data);
 
@@ -237,15 +236,15 @@ impl TorrentTracker {
         });
         channel_left.send(request_data.to_string()).unwrap();
         let response = channel_left.recv().unwrap();
-        let response_data: Value = serde_json::from_str(&response).unwrap();
+        let response_data: Value = serde_json::from_str(&*response).unwrap();
         (response_data["action"].clone(), response_data["data"].clone())
     }
 
     pub async fn get_stats(&self) -> Stats
     {
         let (_action, data) = self.channel_stats_request("get", json!({})).await;
-        
-        serde_json::from_value::<Stats>(data).unwrap()
+        let stats = serde_json::from_value::<Stats>(data).unwrap();
+        stats
     }
 
     pub async fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
@@ -254,8 +253,8 @@ impl TorrentTracker {
             "event": event,
             "value": value
         })).await;
-        
-        serde_json::from_value::<Stats>(data).unwrap()
+        let stats = serde_json::from_value::<Stats>(data).unwrap();
+        stats
     }
 
     pub async fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
@@ -264,7 +263,7 @@ impl TorrentTracker {
             "event": event,
             "value": value
         })).await;
-        
-        serde_json::from_value::<Stats>(data).unwrap()
+        let stats = serde_json::from_value::<Stats>(data).unwrap();
+        stats
     }
 }
