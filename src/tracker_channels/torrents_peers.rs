@@ -1,5 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
-use std::time::Duration;
+use std::collections::BTreeMap;
 use log::{debug, info};
 use serde::{Serialize, Deserialize};
 use serde_json::{json, Value};
@@ -32,6 +31,7 @@ impl Default for TorrentEntryItem {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TorrentEntry {
+    #[serde(skip)]
     pub peers: BTreeMap<PeerId, TorrentPeer>,
     pub completed: i64,
     pub seeders: i64,
@@ -99,7 +99,7 @@ impl TorrentTracker {
                                 }
                                 if peers_list.is_some() {
                                     let peers_list_unwrapped = peers_list.unwrap();
-                                    for (_peer_id, torrent_peer) in peers_list_unwrapped.iter() {
+                                    for (peer_id, torrent_peer) in peers_list_unwrapped.iter() {
                                         if torrent_peer.left == NumberOfBytes(0) {
                                             removed_seed_count += 1;
                                         } else {
@@ -145,36 +145,7 @@ impl TorrentTracker {
                                     "peer_count": peers_count(&peers)
                                 }).to_string()).unwrap();
                             }
-                            "torrents_get_chunk" => {
-                                let mut return_data = HashMap::new();
-                                let skip = serde_json::from_value::<u64>(data["data"]["skip"].clone()).unwrap();
-                                let mut current = skip;
-                                let amount = serde_json::from_value::<u64>(data["data"]["amount"].clone()).unwrap();
-                                for (info_hash, torrent_entry_item) in torrents.iter().skip(skip as usize) {
-                                    let peers_list = match peers.get(&info_hash) {
-                                        None => { BTreeMap::new() }
-                                        Some(peers_get) => {
-                                            peers_get.clone()
-                                        }
-                                    };
-                                    return_data.insert(*info_hash, TorrentEntry {
-                                        peers: peers_list,
-                                        completed: torrent_entry_item.completed,
-                                        seeders: torrent_entry_item.seeders,
-                                        leechers: torrent_entry_item.leechers
-                                    });
-                                    current += 1;
-                                    if current >= skip + amount {
-                                        break;
-                                    }
-                                }
-                                channel_right.send(json!({
-                                    "action": "torrents_get_chunk",
-                                    "data": return_data,
-                                    "torrent_count": torrents.len(),
-                                    "peer_count": peers_count(&peers)
-                                }).to_string()).unwrap();
-                            }
+                            "torrents_get_chunk" => {}
 
                             /* == Peers == */
                             "peer_add" => {
@@ -309,8 +280,7 @@ impl TorrentTracker {
                                 channel_right.send(json!({
                                     "action": "shutdown",
                                     "data": {},
-                                    "torrent_count": torrents.len() as i64,
-                                    "peer_count": peers_count(&peers)
+                                    "torrent_count": torrents.len() as i64
                                 }).to_string()).unwrap();
                                 break;
                             }
@@ -373,15 +343,6 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_torrents(&self) -> bool
-    {
-        let shadow = self.get_shadow().await;
-        if self.sqlx.save_torrents(shadow).await.is_ok() {
-            return true;
-        }
-        false
-    }
-
     pub async fn add_torrent(&self, info_hash: InfoHash, torrent_entry_item: TorrentEntryItem, persistent: bool)
     {
         let (_action, _data, torrent_count, peer_count) = self.channel_torrents_peers_request(
@@ -392,7 +353,7 @@ impl TorrentTracker {
             })
         ).await;
         let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+        let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         self.update_stats(StatsEvent::Torrents, torrent_count).await;
         if persistent {
             self.add_update(info_hash, torrent_entry_item.completed).await;
@@ -410,7 +371,7 @@ impl TorrentTracker {
                 })
             ).await;
             let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-            let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+            let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
             self.update_stats(StatsEvent::Torrents, torrent_count).await;
             if persistent {
                 self.add_update(*info_hash, torrent_entry_item.completed).await;
@@ -426,8 +387,8 @@ impl TorrentTracker {
                 "info_hash": info_hash
             })
         ).await;
-        let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+        let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+        let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         let removed_torrent = serde_json::from_value::<bool>(data["removed_torrent"].clone()).unwrap();
         let removed_seed_count = serde_json::from_value::<u64>(data["removed_seed_count"].clone()).unwrap();
         let removed_peer_count = serde_json::from_value::<u64>(data["removed_peer_count"].clone()).unwrap();
@@ -443,11 +404,11 @@ impl TorrentTracker {
             let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
                 "torrent_remove",
                 json!({
-                    "info_hash": *info_hash
-                })
+                "info_hash": *info_hash
+            })
             ).await;
-            let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-            let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+            let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+            let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
             let removed_torrent = serde_json::from_value::<bool>(data["removed_torrent"].clone()).unwrap();
             let removed_seed_count = serde_json::from_value::<u64>(data["removed_seed_count"].clone()).unwrap();
             let removed_peer_count = serde_json::from_value::<u64>(data["removed_peer_count"].clone()).unwrap();
@@ -466,8 +427,8 @@ impl TorrentTracker {
                 "info_hash": info_hash
             })
         ).await;
-        let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+        let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+        let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         serde_json::from_value::<Option<TorrentEntry>>(data).unwrap()
     }
 
@@ -478,30 +439,16 @@ impl TorrentTracker {
             let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
                 "torrent_get",
                 json!({
-                    "info_hash": *info_hash
-                })
+                "info_hash": *info_hash
+            })
             ).await;
-            let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-            let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-            return_data.insert(*info_hash, serde_json::from_value::<Option<TorrentEntry>>(data).unwrap());
+            let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+            let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+            let torrent_entry = serde_json::from_value::<Option<TorrentEntry>>(data).unwrap();
+            return_data.insert(*info_hash, torrent_entry);
         }
         return_data
     }
-
-    pub async fn get_torrents_chunk(&self, skip: u64, amount: u64) -> HashMap<InfoHash, TorrentEntry>
-    {
-        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
-            "torrents_get_chunk",
-            json!({
-                "skip": skip,
-                "amount": amount
-            })
-        ).await;
-        let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        serde_json::from_value::<HashMap<InfoHash, TorrentEntry>>(data).unwrap()
-    }
-
 
     pub async fn add_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool, persistent: bool) -> TorrentEntry
     {
@@ -514,20 +461,21 @@ impl TorrentTracker {
                 "completed": completed
             })
         ).await;
-        let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+        let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+        let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         let added_seeder = serde_json::from_value::<bool>(data["added_seeder"].clone()).unwrap();
         let added_leecher = serde_json::from_value::<bool>(data["added_leecher"].clone()).unwrap();
         let removed_seeder = serde_json::from_value::<bool>(data["removed_seeder"].clone()).unwrap();
         let removed_leecher = serde_json::from_value::<bool>(data["removed_leecher"].clone()).unwrap();
         let completed_applied = serde_json::from_value::<bool>(data["completed_applied"].clone()).unwrap();
-        if persistent && completed { self.add_update(info_hash, serde_json::from_value::<TorrentEntry>(data["torrent_entry"].clone()).unwrap().completed).await }
+        let torrent_entry_return = serde_json::from_value::<TorrentEntry>(data["torrent_entry"].clone()).unwrap();
+        if persistent && completed { self.add_update(info_hash, torrent_entry_return.completed).await }
         if added_seeder  { self.update_stats(StatsEvent::Seeds, 1).await; }
         if added_leecher  { self.update_stats(StatsEvent::Peers, 1).await; }
         if removed_seeder  { self.update_stats(StatsEvent::Seeds, -1).await; }
         if removed_leecher  { self.update_stats(StatsEvent::Peers, -1).await; }
         if completed_applied { self.update_stats(StatsEvent::Completed, 1).await; }
-        serde_json::from_value::<TorrentEntry>(data["torrent_entry"].clone()).unwrap()
+        torrent_entry_return
     }
 
     pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, _persistent: bool) -> TorrentEntry
@@ -539,13 +487,14 @@ impl TorrentTracker {
                 "peer_id": peer_id
             })
         ).await;
-        let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+        let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+        let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         let removed_seeder = serde_json::from_value::<bool>(data["removed_seeder"].clone()).unwrap();
         let removed_leecher = serde_json::from_value::<bool>(data["removed_leecher"].clone()).unwrap();
+        let torrent_entry_return = serde_json::from_value::<TorrentEntry>(data["torrent_entry"].clone()).unwrap();
         if removed_seeder { self.update_stats(StatsEvent::Seeds, -1).await; }
         if removed_leecher { self.update_stats(StatsEvent::Peers, -1).await; }
-        serde_json::from_value::<TorrentEntry>(data["torrent_entry"].clone()).unwrap()
+        torrent_entry_return
     }
 
     pub async fn remove_peers(&self, torrents: Vec<(InfoHash, PeerId)>, _persistent: bool) -> BTreeMap<InfoHash, TorrentEntry>
@@ -559,18 +508,19 @@ impl TorrentTracker {
                 "peer_id": *peer_id
             })
             ).await;
-            let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-            let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+            let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+            let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
             let removed_seeder = serde_json::from_value::<bool>(data["removed_seeder"].clone()).unwrap();
             let removed_leecher = serde_json::from_value::<bool>(data["removed_leecher"].clone()).unwrap();
+            let torrent_entry_return = serde_json::from_value::<TorrentEntry>(data["torrent_entry"].clone()).unwrap();
             if removed_seeder { self.update_stats(StatsEvent::Seeds, -1).await; }
             if removed_leecher { self.update_stats(StatsEvent::Peers, -1).await; }
-            return_data.insert(*info_hash, serde_json::from_value::<TorrentEntry>(data["torrent_entry"].clone()).unwrap());
+            return_data.insert(*info_hash, torrent_entry_return);
         }
         return_data
     }
 
-    pub async fn get_peer(&self, info_hash: InfoHash, _peer_id: PeerId) -> Option<TorrentPeer>
+    pub async fn get_peer(&self, info_hash: InfoHash, peer_id: PeerId) -> Option<TorrentPeer>
     {
         let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
             "peer_get",
@@ -578,51 +528,9 @@ impl TorrentTracker {
                 "info_hash": info_hash
             })
         ).await;
-        let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+        let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+        let peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         serde_json::from_value::<Option<TorrentPeer>>(data).unwrap()
-    }
-
-    pub async fn get_peers(&self, peers: Vec<(InfoHash, PeerId)>) -> BTreeMap<InfoHash, Option<TorrentPeer>>
-    {
-        let mut return_data = BTreeMap::new();
-        for (info_hash, _peer_id) in peers.iter() {
-            let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
-                "peer_get",
-                json!({
-                "info_hash": info_hash
-            })
-            ).await;
-            let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-            let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-            return_data.insert(*info_hash, serde_json::from_value::<Option<TorrentPeer>>(data).unwrap());
-        }
-        return_data
-    }
-
-    pub async fn clean_peers(&self, peer_timeout: Duration)
-    {
-        let mut skip: usize = 0;
-        let amount: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
-        let mut removed_peers = 0u64;
-        loop {
-            info!("[PEERS] Scanning torrents with peers {} to {}", skip, (skip + amount));
-            let torrents = self.get_torrents_chunk(skip as u64, amount as u64).await;
-            if !torrents.is_empty() {
-                for (info_hash, torrent_entry) in torrents.iter() {
-                    for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
-                        if torrent_peer.updated.elapsed() > peer_timeout {
-                            removed_peers += 1;
-                            self.remove_peer(*info_hash, *peer_id, false).await;
-                        }
-                    }
-                }
-                skip += amount;
-            } else {
-                break;
-            }
-        }
-        info!("[PEERS] Removed {} peers", removed_peers);
     }
 }
 
