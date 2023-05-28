@@ -458,6 +458,7 @@ impl TorrentTracker {
                 "info_hash": info_hash
             })
         ).await;
+        info!("{} {:#?}", action.clone(), data.clone());
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         serde_json::from_value::<Option<TorrentEntry>>(data.clone()).unwrap()
@@ -508,6 +509,7 @@ impl TorrentTracker {
         ).await;
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+        info!("{} {:#?}", action.clone(), data.clone());
         let added_seeder = serde_json::from_value::<bool>(data["added_seeder"].clone()).unwrap();
         let added_leecher = serde_json::from_value::<bool>(data["added_leecher"].clone()).unwrap();
         let removed_seeder = serde_json::from_value::<bool>(data["removed_seeder"].clone()).unwrap();
