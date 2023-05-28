@@ -320,7 +320,7 @@ impl TorrentTracker {
                                             current += 1;
                                             continue;
                                         }
-                                        return_data.push((info_hash.clone(), peer_id.clone(), torrent_peer.clone()));
+                                        return_data.push(((info_hash.clone(), peer_id.clone(), torrent_peer.clone())));
                                     }
                                 }
                                 channel_right.send(json!({
@@ -628,7 +628,7 @@ impl TorrentTracker {
 
     pub async fn get_peers_chunk(&self, skip: u64, amount: u64) -> Vec<(InfoHash, PeerId, TorrentPeer)>
     {
-        let (_action, data, _torrent_count, _peer_count) = self.channel_torrents_peers_request(
+        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
             "peers_get_chunk",
             json!({
                 "skip": skip,
