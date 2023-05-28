@@ -863,76 +863,79 @@ impl TorrentTracker {
         Ok(torrent)
     }
 
-    pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, _persistent: bool) -> HashMap<InfoHash, TorrentEntry>
+    pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, _persistent: bool) -> Result<Vec<(InfoHash, PeerId)>, ()>
     {
         let mut removed_seeder = 0i64;
         let mut removed_leecher = 0i64;
-        let mut return_torrententries = HashMap::new();
+        let mut return_torrententries = Vec::new();
 
         for (info_hash, peer_id) in peers.iter() {
-            let torrents_arc = self.map_torrents.clone();
-            let torrents_lock = torrents_arc.read().await;
-            let torrent = torrents_lock.get(info_hash).cloned();
-            drop(torrents_lock);
+            let torrent = match timeout(Duration::from_secs(5), async move {
+                let torrents_arc = self.map_torrents.clone();
+                let torrents_lock = torrents_arc.read().await;
+                let torrent = torrents_lock.get(&info_hash).cloned();
+                drop(torrents_lock);
+                torrent
+            }).await {
+                Ok(data) => { data }
+                Err(_) => { return Err(()); }
+            };
 
-            return_torrententries.insert(*info_hash, match torrent {
-                None => { TorrentEntry::new() }
-                Some(mut data_torrent) => {
+            if let Some(mut data_torrent) = torrent {
+                let peer = match timeout(Duration::from_secs(5), async move {
                     let peers_arc = self.map_peers.clone();
                     let peers_lock = peers_arc.read().await;
-                    let peer = peers_lock.get(info_hash).cloned();
+                    let peer = peers_lock.get(&info_hash).cloned();
                     drop(peers_lock);
+                    peer
+                }).await {
+                    Ok(data) => { data }
+                    Err(_) => {return Err(()); }
+                };
 
-                    let mut peers = match peer {
-                        None => { BTreeMap::new() }
-                        Some(data_peers) => { data_peers }
-                    };
+                let mut peers = match peer {
+                    None => { BTreeMap::new() }
+                    Some(data_peers) => { data_peers }
+                };
 
-                    let peer_option = peers.get(peer_id);
-                    if peer_option.is_some() {
-                        let peer = *peer_option.unwrap();
-                        if peer.left == NumberOfBytes(0) {
-                            peers.remove(peer_id);
-                            data_torrent.seeders -= 1;
-                            removed_seeder -= 1;
-                        } else {
-                            peers.remove(peer_id);
-                            data_torrent.leechers -= 1;
-                            removed_leecher -= 1;
-                        }
-                    }
-
-                    let torrents_arc = self.map_torrents.clone();
-                    let mut torrents_lock = torrents_arc.write().await;
-                    torrents_lock.insert(*info_hash, data_torrent.clone());
-                    drop(torrents_lock);
-
-                    if peers.is_empty() {
-                        let peers_arc = self.map_peers.clone();
-                        let mut peers_lock = peers_arc.write().await;
-                        peers_lock.remove(info_hash);
-                        drop(peers_lock);
+                let peer_option = peers.get(peer_id);
+                if peer_option.is_some() {
+                    let peer = *peer_option.unwrap();
+                    if peer.left == NumberOfBytes(0) {
+                        peers.remove(peer_id);
+                        data_torrent.seeders -= 1;
+                        removed_seeder -= 1;
                     } else {
-                        let peers_arc = self.map_peers.clone();
-                        let mut peers_lock = peers_arc.write().await;
-                        peers_lock.insert(*info_hash, peers.clone());
-                        drop(peers_lock);
+                        peers.remove(peer_id);
+                        data_torrent.leechers -= 1;
+                        removed_leecher -= 1;
                     }
-
-                    TorrentEntry {
-                        peers,
-                        completed: data_torrent.completed,
-                        seeders: data_torrent.seeders,
-                        leechers: data_torrent.leechers,
-                    }
+                    return_torrententries.push((info_hash.clone(), peer_id.clone()));
                 }
-            });
+
+                let torrents_arc = self.map_torrents.clone();
+                let mut torrents_lock = torrents_arc.write().await;
+                torrents_lock.insert(*info_hash, data_torrent.clone());
+                drop(torrents_lock);
+
+                if peers.is_empty() {
+                    let peers_arc = self.map_peers.clone();
+                    let mut peers_lock = peers_arc.write().await;
+                    peers_lock.remove(info_hash);
+                    drop(peers_lock);
+                } else {
+                    let peers_arc = self.map_peers.clone();
+                    let mut peers_lock = peers_arc.write().await;
+                    peers_lock.insert(*info_hash, peers.clone());
+                    drop(peers_lock);
+                }
+            };
         }
 
         if removed_seeder != 0 { self.update_stats(StatsEvent::Seeds, removed_seeder).await; }
         if removed_leecher != 0 { self.update_stats(StatsEvent::Peers, removed_leecher).await; }
 
-        return_torrententries
+        Ok(return_torrententries)
     }
 
     pub async fn clean_peers(&self, peer_timeout: Duration)
@@ -973,8 +976,12 @@ impl TorrentTracker {
                     continue;
                 }
             }
-            removed_peers += peers.len() as u64;
-            let _ = self.remove_peers(peers, self.config.clone().persistence).await;
+            if let Ok(data_request) = self.remove_peers(peers.clone(), self.config.clone().persistence).await {
+                removed_peers += data_request.len() as u64;
+            } else {
+                error!("[REMOVE_PEERS] Read Lock (peers) request timed out!");
+                continue;
+            }
 
             if torrent_index.len() != size {
                 break;
