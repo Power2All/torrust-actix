@@ -3,7 +3,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{TimeZone, Utc};
 use log::{debug, info};
 use serde_json::{json, Value};
-
 use crate::common::InfoHash;
 use crate::tracker::TorrentTracker;
 use crate::tracker_channels::stats::StatsEvent;

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use log::debug;
 use serde_json::{json, Value};
-
 use crate::common::InfoHash;
 use crate::tracker::TorrentTracker;
 use crate::tracker_channels::stats::StatsEvent;

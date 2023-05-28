@@ -1,6 +1,5 @@
 use scc::ebr::Arc;
 
-use crate::common::{channel, Channel};
 use crate::config::Configuration;
 use crate::databases::DatabaseConnector;
 
@@ -37,20 +36,20 @@ use crate::databases::DatabaseConnector;
 
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
-    pub torrents_peers_channel: (Channel<String, String>, Channel<String, String>),
-    pub updates_shadow_channel: (Channel<String, String>, Channel<String, String>),
-    pub whitelist_blacklist_keys_channel: (Channel<String, String>, Channel<String, String>),
-    pub stats_channel: (Channel<String, String>, Channel<String, String>),
+    pub torrents_peers_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
+    pub updates_shadow_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
+    pub whitelist_blacklist_keys_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
+    pub stats_channel: (bichannel::Channel<String, String>, bichannel::Channel<String, String>),
     pub sqlx: DatabaseConnector,
 }
 
 impl TorrentTracker {
     pub async fn new(config: Arc<Configuration>) -> TorrentTracker
     {
-        let (torrents_peers_left, torrents_peers_right) = channel();
-        let (updates_shadow_left, updates_shadow_right) = channel();
-        let (whitelist_blacklist_keys_left, whitelist_blacklist_keys_right) = channel();
-        let (stats_left, stats_right) = channel();
+        let (torrents_peers_left, torrents_peers_right) = bichannel::channel();
+        let (updates_shadow_left, updates_shadow_right) = bichannel::channel();
+        let (whitelist_blacklist_keys_left, whitelist_blacklist_keys_right) = bichannel::channel();
+        let (stats_left, stats_right) = bichannel::channel();
         TorrentTracker {
             config: config.clone(),
             torrents_peers_channel: (torrents_peers_left, torrents_peers_right),
