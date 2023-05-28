@@ -14,7 +14,8 @@ use std::time::Duration;
 
 use crate::common::InfoHash;
 use crate::config::Configuration;
-use crate::tracker::{TorrentEntryItem, TorrentTracker};
+use crate::tracker::TorrentTracker;
+use crate::tracker_objects::torrents::TorrentEntryItem;
 
 #[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -492,7 +493,7 @@ impl DatabaseConnector {
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         torrents_parsing.insert(InfoHash(info_hash), TorrentEntryItem {
-                            completed: completed_data.clone(),
+                            completed: completed_data,
                             seeders: 0,
                             leechers: 0,
                         });
@@ -534,7 +535,7 @@ impl DatabaseConnector {
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         torrents_parsing.insert(InfoHash(info_hash), TorrentEntryItem {
-                            completed: completed_data.clone(),
+                            completed: completed_data,
                             seeders: 0,
                             leechers: 0,
                         });
@@ -576,7 +577,7 @@ impl DatabaseConnector {
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
                         torrents_parsing.insert(InfoHash(info_hash), TorrentEntryItem {
-                            completed: completed_data.clone(),
+                            completed: completed_data,
                             seeders: 0,
                             leechers: 0,
                         });

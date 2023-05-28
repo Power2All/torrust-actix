@@ -1,8 +1,3 @@
-use std::fs::File;
-use std::future::Future;
-use std::io::BufReader;
-use std::net::{IpAddr, SocketAddr};
-use std::time::Duration;
 use actix_cors::Cors;
 use actix_remote_ip::RemoteIP;
 use actix_web::{App, Error, http, HttpRequest, HttpResponse, HttpServer, web};
@@ -17,9 +12,17 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 use scc::ebr::Arc;
 use serde::{Serialize, Deserialize};
 use serde_json::json;
+use std::fs::File;
+use std::future::Future;
+use std::io::BufReader;
+use std::net::{IpAddr, SocketAddr};
+use std::time::Duration;
+
 use crate::common::{InfoHash, AnnounceEvent};
 use crate::config::Configuration;
-use crate::tracker::{GetTorrentApi, StatsEvent, TorrentTracker};
+use crate::tracker::TorrentTracker;
+use crate::tracker_objects::stats::StatsEvent;
+use crate::tracker_objects::torrents::GetTorrentApi;
 
 static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/webgui");
 
@@ -168,7 +171,7 @@ pub async fn http_api_stats_get(request: HttpRequest, remote_ip: RemoteIP, data:
     if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     return if let Ok(stats) = data.get_stats().await {
-        HttpResponse::Ok().content_type(ContentType::json()).json(&stats)
+        HttpResponse::Ok().content_type(ContentType::json()).json(stats)
     } else {
         HttpResponse::InternalServerError().content_type(ContentType::json()).json(())
     };
