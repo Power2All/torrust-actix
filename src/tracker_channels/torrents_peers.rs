@@ -459,8 +459,11 @@ impl TorrentTracker {
         ).await;
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        info!("{:#?}", data.clone());
-        serde_json::from_value::<Option<TorrentEntry>>(data).unwrap()
+        match serde_json::from_value::<Option<TorrentEntry>>(data.clone()) {
+            Ok(data) => { data }
+            Err(error) => { error!("{:#?}", data); None }
+        }
+        // serde_json::from_value::<Option<TorrentEntry>>(data).unwrap()
     }
 
     pub async fn get_torrents(&self, torrents: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
