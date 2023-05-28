@@ -317,11 +317,25 @@ impl PeerId {
 }
 
 impl Serialize for PeerId {
-    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut buffer = [0u8; 40];
-        let bytes_out = binascii::bin2hex(&self.0, &mut buffer).ok().unwrap();
-        let str_out = std::str::from_utf8(bytes_out).unwrap();
-        serializer.serialize_str(str_out)
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer, {
+        let buff_size = self.0.len() * 2;
+        let mut tmp: Vec<u8> = vec![0; buff_size];
+        binascii::bin2hex(&self.0, &mut tmp).unwrap();
+        let id = std::str::from_utf8(&tmp).ok();
+
+        #[derive(Serialize)]
+        struct PeerIdInfo<'a> {
+            id: Option<&'a str>,
+            client: Option<&'a str>,
+        }
+
+        let obj = PeerIdInfo {
+            id,
+            client: self.get_client_name(),
+        };
+        obj.serialize(serializer)
     }
 }
 
