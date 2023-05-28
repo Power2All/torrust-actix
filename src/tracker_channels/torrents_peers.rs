@@ -654,14 +654,12 @@ impl TorrentTracker {
             info!("[PEERS] Scanning peers {} to {}", skip, (skip + amount));
             let peers = self.get_peers_chunk(skip as u64, amount as u64).await;
             if !peers.is_empty() {
-                let mut remove_peers = Vec::new();
                 for (info_hash, peer_id, torrent_peer) in peers.iter() {
                     if torrent_peer.updated.elapsed() > peer_timeout {
                         removed_peers += 1;
-                        remove_peers.push((info_hash.clone(), peer_id.clone()));
+                        self.remove_peer(*info_hash, *peer_id, false).await;
                     }
                 }
-                if !remove_peers.is_empty() { self.remove_peers(remove_peers, false).await; }
                 skip += amount;
             } else {
                 break;
