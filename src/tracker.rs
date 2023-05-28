@@ -268,88 +268,110 @@ impl TorrentTracker {
 
     pub async fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
-        let stats_arc = self.stats.clone();
-        let mut stats_lock = stats_arc.write().await;
-        match event {
-            StatsEvent::Torrents => { stats_lock.torrents += value; }
-            StatsEvent::TorrentsUpdates => { stats_lock.torrents_updates += value; }
-            StatsEvent::TorrentsShadow => { stats_lock.torrents_shadow += value; }
-            StatsEvent::Users => { stats_lock.users += value; }
-            StatsEvent::UsersUpdates => { stats_lock.users_updates += value; }
-            StatsEvent::UsersShadow => { stats_lock.users_shadow += value; }
-            StatsEvent::TimestampSave => { stats_lock.timestamp_run_save += value; }
-            StatsEvent::TimestampTimeout => { stats_lock.timestamp_run_timeout += value; }
-            StatsEvent::TimestampConsole => { stats_lock.timestamp_run_console += value; }
-            StatsEvent::TimestampKeysTimeout => { stats_lock.timestamp_run_keys_timeout += value; }
-            StatsEvent::MaintenanceMode => { stats_lock.maintenance_mode += value; }
-            StatsEvent::Seeds => { stats_lock.seeds += value; }
-            StatsEvent::Peers => { stats_lock.peers += value; }
-            StatsEvent::Completed => { stats_lock.completed += value; }
-            StatsEvent::Whitelist => { stats_lock.whitelist += value; }
-            StatsEvent::Blacklist => { stats_lock.blacklist += value; }
-            StatsEvent::Key => { stats_lock.keys += value; }
-            StatsEvent::Tcp4ConnectionsHandled => { stats_lock.tcp4_connections_handled += value; }
-            StatsEvent::Tcp4ApiHandled => { stats_lock.tcp4_api_handled += value; }
-            StatsEvent::Tcp4AnnouncesHandled => { stats_lock.tcp4_announces_handled += value; }
-            StatsEvent::Tcp4ScrapesHandled => { stats_lock.tcp4_scrapes_handled += value; }
-            StatsEvent::Tcp6ConnectionsHandled => { stats_lock.tcp6_connections_handled += value; }
-            StatsEvent::Tcp6ApiHandled => { stats_lock.tcp6_api_handled += value; }
-            StatsEvent::Tcp6AnnouncesHandled => { stats_lock.tcp6_announces_handled += value; }
-            StatsEvent::Tcp6ScrapesHandled => { stats_lock.tcp6_scrapes_handled += value; }
-            StatsEvent::Udp4ConnectionsHandled => { stats_lock.udp4_connections_handled += value; }
-            StatsEvent::Udp4AnnouncesHandled => { stats_lock.udp4_announces_handled += value; }
-            StatsEvent::Udp4ScrapesHandled => { stats_lock.udp4_scrapes_handled += value; }
-            StatsEvent::Udp6ConnectionsHandled => { stats_lock.udp6_connections_handled += value; }
-            StatsEvent::Udp6AnnouncesHandled => { stats_lock.udp6_announces_handled += value; }
-            StatsEvent::Udp6ScrapesHandled => { stats_lock.udp6_scrapes_handled += value; }
+        let mut count = 1;
+        loop {
+            match timeout(Duration::from_secs(5), async move {
+                let stats_arc = self.stats.clone();
+                let mut stats_lock = stats_arc.write().await;
+                match event {
+                    StatsEvent::Torrents => { stats_lock.torrents += value; }
+                    StatsEvent::TorrentsUpdates => { stats_lock.torrents_updates += value; }
+                    StatsEvent::TorrentsShadow => { stats_lock.torrents_shadow += value; }
+                    StatsEvent::Users => { stats_lock.users += value; }
+                    StatsEvent::UsersUpdates => { stats_lock.users_updates += value; }
+                    StatsEvent::UsersShadow => { stats_lock.users_shadow += value; }
+                    StatsEvent::TimestampSave => { stats_lock.timestamp_run_save += value; }
+                    StatsEvent::TimestampTimeout => { stats_lock.timestamp_run_timeout += value; }
+                    StatsEvent::TimestampConsole => { stats_lock.timestamp_run_console += value; }
+                    StatsEvent::TimestampKeysTimeout => { stats_lock.timestamp_run_keys_timeout += value; }
+                    StatsEvent::MaintenanceMode => { stats_lock.maintenance_mode += value; }
+                    StatsEvent::Seeds => { stats_lock.seeds += value; }
+                    StatsEvent::Peers => { stats_lock.peers += value; }
+                    StatsEvent::Completed => { stats_lock.completed += value; }
+                    StatsEvent::Whitelist => { stats_lock.whitelist += value; }
+                    StatsEvent::Blacklist => { stats_lock.blacklist += value; }
+                    StatsEvent::Key => { stats_lock.keys += value; }
+                    StatsEvent::Tcp4ConnectionsHandled => { stats_lock.tcp4_connections_handled += value; }
+                    StatsEvent::Tcp4ApiHandled => { stats_lock.tcp4_api_handled += value; }
+                    StatsEvent::Tcp4AnnouncesHandled => { stats_lock.tcp4_announces_handled += value; }
+                    StatsEvent::Tcp4ScrapesHandled => { stats_lock.tcp4_scrapes_handled += value; }
+                    StatsEvent::Tcp6ConnectionsHandled => { stats_lock.tcp6_connections_handled += value; }
+                    StatsEvent::Tcp6ApiHandled => { stats_lock.tcp6_api_handled += value; }
+                    StatsEvent::Tcp6AnnouncesHandled => { stats_lock.tcp6_announces_handled += value; }
+                    StatsEvent::Tcp6ScrapesHandled => { stats_lock.tcp6_scrapes_handled += value; }
+                    StatsEvent::Udp4ConnectionsHandled => { stats_lock.udp4_connections_handled += value; }
+                    StatsEvent::Udp4AnnouncesHandled => { stats_lock.udp4_announces_handled += value; }
+                    StatsEvent::Udp4ScrapesHandled => { stats_lock.udp4_scrapes_handled += value; }
+                    StatsEvent::Udp6ConnectionsHandled => { stats_lock.udp6_connections_handled += value; }
+                    StatsEvent::Udp6AnnouncesHandled => { stats_lock.udp6_announces_handled += value; }
+                    StatsEvent::Udp6ScrapesHandled => { stats_lock.udp6_scrapes_handled += value; }
+                }
+                let stats = stats_lock.clone();
+                drop(stats_lock);
+                stats
+            }).await {
+                Ok(stats) => { return stats; }
+                Err(_) => {
+                    if count == 5 { panic!("[UPDATE_STATS] Write Lock (stats) request timed out, giving up..."); }
+                    error!("[UPDATE_STATS] Write Lock (stats) request timed out, retrying {} time(s)...", count);
+                    count += 1;
+                }
+            }
         }
-        let stats = stats_lock.clone();
-        drop(stats_lock);
-
-        stats
     }
 
     pub async fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
-        let stats_arc = self.stats.clone();
-        let mut stats_lock = stats_arc.write().await;
-        match event {
-            StatsEvent::Torrents => { stats_lock.torrents = value; }
-            StatsEvent::TorrentsUpdates => { stats_lock.torrents_updates = value; }
-            StatsEvent::TorrentsShadow => { stats_lock.torrents_shadow = value; }
-            StatsEvent::Users => { stats_lock.users = value; }
-            StatsEvent::UsersUpdates => { stats_lock.users_updates = value; }
-            StatsEvent::UsersShadow => { stats_lock.users_shadow = value; }
-            StatsEvent::TimestampSave => { stats_lock.timestamp_run_save = value; }
-            StatsEvent::TimestampTimeout => { stats_lock.timestamp_run_timeout = value; }
-            StatsEvent::TimestampConsole => { stats_lock.timestamp_run_console = value; }
-            StatsEvent::TimestampKeysTimeout => { stats_lock.timestamp_run_keys_timeout = value; }
-            StatsEvent::MaintenanceMode => { stats_lock.maintenance_mode = value; }
-            StatsEvent::Seeds => { stats_lock.seeds = value; }
-            StatsEvent::Peers => { stats_lock.peers = value; }
-            StatsEvent::Completed => { stats_lock.completed = value; }
-            StatsEvent::Whitelist => { stats_lock.whitelist = value; }
-            StatsEvent::Blacklist => { stats_lock.blacklist = value; }
-            StatsEvent::Key => { stats_lock.keys = value; }
-            StatsEvent::Tcp4ConnectionsHandled => { stats_lock.tcp4_connections_handled = value; }
-            StatsEvent::Tcp4ApiHandled => { stats_lock.tcp4_api_handled = value; }
-            StatsEvent::Tcp4AnnouncesHandled => { stats_lock.tcp4_announces_handled = value; }
-            StatsEvent::Tcp4ScrapesHandled => { stats_lock.tcp4_scrapes_handled = value; }
-            StatsEvent::Tcp6ConnectionsHandled => { stats_lock.tcp6_connections_handled = value; }
-            StatsEvent::Tcp6ApiHandled => { stats_lock.tcp6_api_handled = value; }
-            StatsEvent::Tcp6AnnouncesHandled => { stats_lock.tcp6_announces_handled = value; }
-            StatsEvent::Tcp6ScrapesHandled => { stats_lock.tcp6_scrapes_handled = value; }
-            StatsEvent::Udp4ConnectionsHandled => { stats_lock.udp4_connections_handled = value; }
-            StatsEvent::Udp4AnnouncesHandled => { stats_lock.udp4_announces_handled = value; }
-            StatsEvent::Udp4ScrapesHandled => { stats_lock.udp4_scrapes_handled = value; }
-            StatsEvent::Udp6ConnectionsHandled => { stats_lock.udp6_connections_handled = value; }
-            StatsEvent::Udp6AnnouncesHandled => { stats_lock.udp6_announces_handled = value; }
-            StatsEvent::Udp6ScrapesHandled => { stats_lock.udp6_scrapes_handled = value; }
+        let mut count = 1;
+        loop {
+            match timeout(Duration::from_secs(5), async move {
+                let stats_arc = self.stats.clone();
+                let mut stats_lock = stats_arc.write().await;
+                match event {
+                    StatsEvent::Torrents => { stats_lock.torrents = value; }
+                    StatsEvent::TorrentsUpdates => { stats_lock.torrents_updates = value; }
+                    StatsEvent::TorrentsShadow => { stats_lock.torrents_shadow = value; }
+                    StatsEvent::Users => { stats_lock.users = value; }
+                    StatsEvent::UsersUpdates => { stats_lock.users_updates = value; }
+                    StatsEvent::UsersShadow => { stats_lock.users_shadow = value; }
+                    StatsEvent::TimestampSave => { stats_lock.timestamp_run_save = value; }
+                    StatsEvent::TimestampTimeout => { stats_lock.timestamp_run_timeout = value; }
+                    StatsEvent::TimestampConsole => { stats_lock.timestamp_run_console = value; }
+                    StatsEvent::TimestampKeysTimeout => { stats_lock.timestamp_run_keys_timeout = value; }
+                    StatsEvent::MaintenanceMode => { stats_lock.maintenance_mode = value; }
+                    StatsEvent::Seeds => { stats_lock.seeds = value; }
+                    StatsEvent::Peers => { stats_lock.peers = value; }
+                    StatsEvent::Completed => { stats_lock.completed = value; }
+                    StatsEvent::Whitelist => { stats_lock.whitelist = value; }
+                    StatsEvent::Blacklist => { stats_lock.blacklist = value; }
+                    StatsEvent::Key => { stats_lock.keys = value; }
+                    StatsEvent::Tcp4ConnectionsHandled => { stats_lock.tcp4_connections_handled = value; }
+                    StatsEvent::Tcp4ApiHandled => { stats_lock.tcp4_api_handled = value; }
+                    StatsEvent::Tcp4AnnouncesHandled => { stats_lock.tcp4_announces_handled = value; }
+                    StatsEvent::Tcp4ScrapesHandled => { stats_lock.tcp4_scrapes_handled = value; }
+                    StatsEvent::Tcp6ConnectionsHandled => { stats_lock.tcp6_connections_handled = value; }
+                    StatsEvent::Tcp6ApiHandled => { stats_lock.tcp6_api_handled = value; }
+                    StatsEvent::Tcp6AnnouncesHandled => { stats_lock.tcp6_announces_handled = value; }
+                    StatsEvent::Tcp6ScrapesHandled => { stats_lock.tcp6_scrapes_handled = value; }
+                    StatsEvent::Udp4ConnectionsHandled => { stats_lock.udp4_connections_handled = value; }
+                    StatsEvent::Udp4AnnouncesHandled => { stats_lock.udp4_announces_handled = value; }
+                    StatsEvent::Udp4ScrapesHandled => { stats_lock.udp4_scrapes_handled = value; }
+                    StatsEvent::Udp6ConnectionsHandled => { stats_lock.udp6_connections_handled = value; }
+                    StatsEvent::Udp6AnnouncesHandled => { stats_lock.udp6_announces_handled = value; }
+                    StatsEvent::Udp6ScrapesHandled => { stats_lock.udp6_scrapes_handled = value; }
+                }
+                let stats = stats_lock.clone();
+                drop(stats_lock);
+                stats
+            }).await {
+                Ok(stats) => { return stats; }
+                Err(_) => {
+                    if count == 5 { panic!("[SET_STATS] Write Lock (stats) request timed out, giving up..."); }
+                    error!("[SET_STATS] Write Lock (stats) request timed out, retrying...");
+                    count += 1;
+                }
+            }
         }
-        let stats = stats_lock.clone();
-        drop(stats_lock);
-
-        stats
     }
 
     /* === Torrents === */
