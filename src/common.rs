@@ -515,8 +515,8 @@ impl<S, R> Channel<S, R> {
 }
 
 pub fn channel<T, U>() -> (Channel<T, U>, Channel<U, T>) {
-    let (ls, lr) = create_channel(0);
-    let (rs, rr) = create_channel(0);
+    let (ls, lr) = create_channel(1);
+    let (rs, rr) = create_channel(1);
 
     (
         Channel {
