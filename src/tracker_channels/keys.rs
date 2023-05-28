@@ -4,13 +4,12 @@ use chrono::{TimeZone, Utc};
 use log::{debug, info};
 use serde_json::{json, Value};
 use crate::common::InfoHash;
-use crate::tracker::TorrentTracker;
-use crate::tracker_channels::stats::StatsEvent;
+use crate::tracker::{StatsEvent, TorrentTracker};
 
 impl TorrentTracker {
     pub fn channel_keys_init(&self)
     {
-        let (_channel_left, channel_right) = self.keys_channel.clone();
+        let (channel_left, channel_right) = self.keys_channel.clone();
         tokio::spawn(async move {
             let mut keys: HashMap<InfoHash, i64> = HashMap::new();
 
@@ -41,7 +40,7 @@ impl TorrentTracker {
 
     pub async fn channel_keys_request(&self, action: &str, data: Value) -> (Value, Value)
     {
-        let (channel_left, _channel_right) = self.keys_channel.clone();
+        let (channel_left, channel_right) = self.keys_channel.clone();
         // Build the data with a action and data separated.
         let request_data = json!({
             "action": action,

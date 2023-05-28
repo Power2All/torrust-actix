@@ -3,14 +3,12 @@ use std::time::Duration;
 use log::{debug, info};
 use serde_json::{json, Value};
 use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
-use crate::tracker::TorrentTracker;
-use crate::tracker_channels::stats::StatsEvent;
-use crate::tracker_channels::torrents::TorrentEntry;
+use crate::tracker::{StatsEvent, TorrentEntry, TorrentTracker};
 
 impl TorrentTracker {
     pub fn channel_peers_init(&self)
     {
-        let (_channel_left, channel_right) = self.peers_channel.clone();
+        let (channel_left, channel_right) = self.peers_channel.clone();
         tokio::spawn(async move {
             let mut peers: BTreeMap<InfoHash, BTreeMap<PeerId, TorrentPeer>> = BTreeMap::new();
 
@@ -41,7 +39,7 @@ impl TorrentTracker {
 
     pub async fn channel_peers_request(&self, action: &str, data: Value) -> (Value, Value)
     {
-        let (channel_left, _channel_right) = self.peers_channel.clone();
+        let (channel_left, channel_right) = self.peers_channel.clone();
         // Build the data with a action and data separated.
         let request_data = json!({
             "action": action,
