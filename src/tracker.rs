@@ -1,11 +1,12 @@
 use chrono::{TimeZone, Utc};
-use log::info;
+use log::{error, info};
 use scc::ebr::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Add;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use async_std::future::timeout;
 use tokio::sync::RwLock;
 
 use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
@@ -251,14 +252,18 @@ impl TorrentTracker {
     }
 
     /* === Statistics === */
-    pub async fn get_stats(&self) -> Stats
+    pub async fn get_stats(&self) -> Result<Stats, ()>
     {
-        let stats_arc = self.stats.clone();
-        let stats_lock = stats_arc.write().await;
-        let stats = stats_lock.clone();
-        drop(stats_lock);
-
-        stats
+        match timeout(Duration::from_secs(5), async move {
+            let stats_arc = self.stats.clone();
+            let stats_lock = stats_arc.read().await;
+            let stats = stats_lock.clone();
+            drop(stats_lock);
+            stats
+        }).await {
+            Ok(data) => { Ok(data) }
+            Err(_) => { error!("[GET_STATS] Read Lock (stats) request timed out!"); Err(()) }
+        }
     }
 
     pub async fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
@@ -512,23 +517,35 @@ impl TorrentTracker {
         self.update_stats(StatsEvent::Torrents, torrents.len() as i64).await;
     }
 
-    pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
+    pub async fn get_torrent(&self, info_hash: InfoHash) -> Result<Option<TorrentEntry>, ()>
     {
-        let torrents_arc = self.map_torrents.clone();
-        let torrents_lock = torrents_arc.write().await;
-        let torrent = torrents_lock.get(&info_hash).cloned();
-        drop(torrents_lock);
+        let torrent = match timeout(Duration::from_secs(5), async move {
+            let torrents_arc = self.map_torrents.clone();
+            let torrents_lock = torrents_arc.read().await;
+            let torrent = torrents_lock.get(&info_hash).cloned();
+            drop(torrents_lock);
+            torrent
+        }).await {
+            Ok(data) => { data }
+            Err(_) => { error!("[GET_TORRENT] Read Lock (torrents) request timed out!"); return Err(()); }
+        };
 
         let torrent = match torrent {
             None => { None }
             Some(data) => {
-                let peers_arc = self.map_peers.clone();
-                let peers_lock = peers_arc.write().await;
-                let peers = match peers_lock.get(&info_hash).cloned() {
-                    None => { BTreeMap::new() }
-                    Some(data) => { data }
+                let peers = match timeout(Duration::from_secs(5), async move {
+                    let peers_arc = self.map_peers.clone();
+                    let peers_lock = peers_arc.read().await;
+                    let peers = match peers_lock.get(&info_hash).cloned() {
+                        None => { BTreeMap::new() }
+                        Some(data) => { data }
+                    };
+                    drop(peers_lock);
+                    peers
+                }).await {
+                    Ok(data) => { data }
+                    Err(_) => { error!("[GET_TORRENT] Read Lock (peers) request timed out!"); return Err(()); }
                 };
-                drop(peers_lock);
                 Some(TorrentEntry {
                     peers,
                     completed: data.completed,
@@ -538,29 +555,41 @@ impl TorrentTracker {
             }
         };
 
-        torrent
+        Ok(torrent)
     }
 
-    pub async fn get_torrents(&self, hashes: Vec<InfoHash>) -> HashMap<InfoHash, Option<TorrentEntry>>
+    pub async fn get_torrents(&self, hashes: Vec<InfoHash>) -> Result<HashMap<InfoHash, Option<TorrentEntry>>, ()>
     {
         let mut return_torrents = HashMap::new();
 
         for info_hash in hashes.iter() {
-            let torrents_arc = self.map_torrents.clone();
-            let torrents_lock = torrents_arc.write().await;
-            let torrent = torrents_lock.get(info_hash).cloned();
-            drop(torrents_lock);
+            let torrent = match timeout(Duration::from_secs(5), async move {
+                let torrents_arc = self.map_torrents.clone();
+                let torrents_lock = torrents_arc.read().await;
+                let torrent = torrents_lock.get(info_hash).cloned();
+                drop(torrents_lock);
+                torrent
+            }).await {
+                Ok(data) => { data }
+                Err(_) => { error!("[GET_TORRENTS] Read Lock (torrents) request timed out!"); return Err(()); }
+            };
 
             return_torrents.insert(*info_hash, match torrent {
                 None => { None }
                 Some(data) => {
-                    let peers_arc = self.map_peers.clone();
-                    let peers_lock = peers_arc.write().await;
-                    let peers = match peers_lock.get(info_hash).cloned() {
-                        None => { BTreeMap::new() }
-                        Some(data) => { data }
+                    let peers = match timeout(Duration::from_secs(5), async move {
+                        let peers_arc = self.map_peers.clone();
+                        let peers_lock = peers_arc.read().await;
+                        let peers_data = match peers_lock.get(info_hash).cloned() {
+                            None => { BTreeMap::new() }
+                            Some(data_peers) => { data_peers }
+                        };
+                        drop(peers_lock);
+                        peers_data
+                    }).await {
+                        Ok(data_peers) => { data_peers }
+                        Err(_) => { error!("[GET_TORRENTS] Read Lock (peers) request timed out!"); return Err(()); }
                     };
-                    drop(peers_lock);
                     Some(TorrentEntry {
                         peers,
                         completed: data.completed,
@@ -571,31 +600,35 @@ impl TorrentTracker {
             });
         }
 
-        return_torrents
+        Ok(return_torrents)
     }
 
-    pub async fn get_torrents_chunk(&self, skip: u64, amount: u64) -> HashMap<InfoHash, i64>
+    pub async fn get_torrents_chunk(&self, skip: u64, amount: u64) -> Result<HashMap<InfoHash, i64>, ()>
     {
-        let torrents_arc = self.map_torrents.clone();
-        let torrents_lock = torrents_arc.write().await;
-        let mut torrents_return: HashMap<InfoHash, i64> = HashMap::new();
-        let mut current_count: u64 = 0;
-        let mut handled_count: u64 = 0;
-        for (info_hash, item) in torrents_lock.iter() {
-            if current_count < skip {
+        match timeout(Duration::from_secs(5), async move {
+            let torrents_arc = self.map_torrents.clone();
+            let torrents_lock = torrents_arc.read().await;
+            let mut torrents_return: HashMap<InfoHash, i64> = HashMap::new();
+            let mut current_count: u64 = 0;
+            let mut handled_count: u64 = 0;
+            for (info_hash, item) in torrents_lock.iter() {
+                if current_count < skip {
+                    current_count = current_count.add(1);
+                    continue;
+                }
+                if handled_count >= amount {
+                    break;
+                }
+                torrents_return.insert(*info_hash, item.completed);
                 current_count = current_count.add(1);
-                continue;
+                handled_count = handled_count.add(1);
             }
-            if handled_count >= amount {
-                break;
-            }
-            torrents_return.insert(*info_hash, item.completed);
-            current_count = current_count.add(1);
-            handled_count = handled_count.add(1);
+            drop(torrents_lock);
+            torrents_return
+        }).await {
+            Ok(data) => { Ok(data) }
+            Err(_) => { Err(()) }
         }
-        drop(torrents_lock);
-
-        torrents_return
     }
 
     pub async fn remove_torrent(&self, info_hash: InfoHash, persistent: bool)
@@ -633,22 +666,29 @@ impl TorrentTracker {
         if remove_leechers != 0 { self.update_stats(StatsEvent::Peers, remove_leechers).await; }
     }
 
-    pub async fn remove_torrents(&self, hashes: Vec<InfoHash>, persistent: bool)
+    pub async fn remove_torrents(&self, hashes: Vec<InfoHash>, persistent: bool) -> Result<(), ()>
     {
         for info_hash in hashes.iter() {
-            let torrents_arc = self.map_torrents.clone();
-            let torrents_lock = torrents_arc.write().await;
-            let torrent_option = torrents_lock.get(info_hash).cloned();
-            drop(torrents_lock);
+            let torrent_option = match timeout(Duration::from_secs(5), async move {
+                let torrents_arc = self.map_torrents.clone();
+                let torrents_lock = torrents_arc.read().await;
+                let torrent_option = torrents_lock.get(info_hash).cloned();
+                drop(torrents_lock);
+                torrent_option
+            }).await {
+                Ok(data) => { data }
+                Err(_) => { return Err(()); }
+            };
 
             if torrent_option.is_some() {
                 self.remove_torrent(*info_hash, persistent).await;
             }
         }
+        Ok(())
     }
 
     /* === Peers === */
-    pub async fn add_peer(&self, info_hash: InfoHash, peer_id: PeerId, peer_entry: TorrentPeer, completed: bool, persistent: bool) -> TorrentEntry
+    pub async fn add_peer(&self, info_hash: InfoHash, peer_id: PeerId, peer_entry: TorrentPeer, completed: bool, persistent: bool) -> Result<TorrentEntry, ()>
     {
         let mut added_seeder = false;
         let mut added_leecher = false;
@@ -656,18 +696,30 @@ impl TorrentTracker {
         let mut removed_leecher = false;
         let mut completed_applied = false;
 
-        let torrents_arc = self.map_torrents.clone();
-        let torrents_lock = torrents_arc.write().await;
-        let torrent_input = torrents_lock.get(&info_hash).cloned();
-        drop(torrents_lock);
+        let torrent_input = match timeout(Duration::from_secs(5), async move {
+            let torrents_arc = self.map_torrents.clone();
+            let torrents_lock = torrents_arc.read().await;
+            let torrent_input = torrents_lock.get(&info_hash).cloned();
+            drop(torrents_lock);
+            torrent_input
+        }).await {
+            Ok(data) => { data }
+            Err(_) => { return Err(()); }
+        };
 
         let torrent = match torrent_input {
             None => { TorrentEntry::new() }
             Some(mut data_torrent) => {
-                let peers_arc = self.map_peers.clone();
-                let peers_lock = peers_arc.write().await;
-                let peer = peers_lock.get(&info_hash).cloned();
-                drop(peers_lock);
+                let peer = match timeout(Duration::from_secs(5), async move {
+                    let peers_arc = self.map_peers.clone();
+                    let peers_lock = peers_arc.read().await;
+                    let peer = peers_lock.get(&info_hash).cloned();
+                    drop(peers_lock);
+                    peer
+                }).await {
+                    Ok(data) => { data }
+                    Err(_) => {return Err(()); }
+                };
 
                 let mut peers = match peer {
                     None => { BTreeMap::new() }
@@ -741,26 +793,38 @@ impl TorrentTracker {
         if removed_leecher { self.update_stats(StatsEvent::Peers, -1).await; }
         if completed_applied { self.update_stats(StatsEvent::Completed, 1).await; }
 
-        torrent
+        Ok(torrent)
     }
 
-    pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, _persistent: bool) -> TorrentEntry
+    pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, _persistent: bool) -> Result<TorrentEntry, ()>
     {
         let mut removed_seeder = false;
         let mut removed_leecher = false;
 
-        let torrents_arc = self.map_torrents.clone();
-        let torrents_lock = torrents_arc.write().await;
-        let torrent_input = torrents_lock.get(&info_hash).cloned();
-        drop(torrents_lock);
+        let torrent_input = match timeout(Duration::from_secs(5), async move {
+            let torrents_arc = self.map_torrents.clone();
+            let torrents_lock = torrents_arc.read().await;
+            let torrent_input = torrents_lock.get(&info_hash).cloned();
+            drop(torrents_lock);
+            torrent_input
+        }).await {
+            Ok(data) => { data }
+            Err(_) => { return Err(()); }
+        };
 
         let torrent = match torrent_input {
             None => { TorrentEntry::new() }
             Some(mut data_torrent) => {
-                let peers_arc = self.map_peers.clone();
-                let peers_lock = peers_arc.write().await;
-                let peer = peers_lock.get(&info_hash).cloned();
-                drop(peers_lock);
+                let peer = match timeout(Duration::from_secs(5), async move {
+                    let peers_arc = self.map_peers.clone();
+                    let peers_lock = peers_arc.read().await;
+                    let peer = peers_lock.get(&info_hash).cloned();
+                    drop(peers_lock);
+                    peer
+                }).await {
+                    Ok(data) => { data }
+                    Err(_) => {return Err(()); }
+                };
 
                 let mut peers = match peer {
                     None => { BTreeMap::new() }
@@ -809,7 +873,7 @@ impl TorrentTracker {
         if removed_seeder { self.update_stats(StatsEvent::Seeds, -1).await; }
         if removed_leecher { self.update_stats(StatsEvent::Peers, -1).await; }
 
-        torrent
+        Ok(torrent)
     }
 
     pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, _persistent: bool) -> HashMap<InfoHash, TorrentEntry>
@@ -820,7 +884,7 @@ impl TorrentTracker {
 
         for (info_hash, peer_id) in peers.iter() {
             let torrents_arc = self.map_torrents.clone();
-            let torrents_lock = torrents_arc.write().await;
+            let torrents_lock = torrents_arc.read().await;
             let torrent = torrents_lock.get(info_hash).cloned();
             drop(torrents_lock);
 
@@ -828,7 +892,7 @@ impl TorrentTracker {
                 None => { TorrentEntry::new() }
                 Some(mut data_torrent) => {
                     let peers_arc = self.map_peers.clone();
-                    let peers_lock = peers_arc.write().await;
+                    let peers_lock = peers_arc.read().await;
                     let peer = peers_lock.get(info_hash).cloned();
                     drop(peers_lock);
 
@@ -906,7 +970,10 @@ impl TorrentTracker {
             drop(peers_lock);
 
             let mut peers = vec![];
-            let torrents = self.get_torrents(torrent_index.clone()).await;
+            let torrents = match self.get_torrents(torrent_index.clone()).await {
+                Ok(data_request) => { data_request }
+                Err(_) => { error!("[GET_TORRENTS] Read Lock (torrents) request timed out!"); continue; }
+            };
             for (info_hash, torrent_entry) in torrents.iter() {
                 if torrent_entry.is_some() {
                     let torrent = torrent_entry.clone().unwrap().clone();
@@ -961,7 +1028,7 @@ impl TorrentTracker {
     pub async fn get_update(&self) -> HashMap<InfoHash, i64>
     {
         let updates_arc = self.updates.clone();
-        let updates_lock = updates_arc.write().await;
+        let updates_lock = updates_arc.read().await;
         let updates = updates_lock.clone();
         drop(updates_lock);
 
@@ -1050,7 +1117,7 @@ impl TorrentTracker {
     pub async fn get_shadow(&self) -> HashMap<InfoHash, i64>
     {
         let shadow_arc = self.shadow.clone();
-        let shadow_lock = shadow_arc.write().await;
+        let shadow_lock = shadow_arc.read().await;
         let shadow = shadow_lock.clone();
         drop(shadow_lock);
 
@@ -1137,7 +1204,7 @@ impl TorrentTracker {
     pub async fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let whitelist_arc = self.whitelist.clone();
-        let whitelist_lock = whitelist_arc.write().await;
+        let whitelist_lock = whitelist_arc.read().await;
         let whitelist = whitelist_lock.get(&info_hash).cloned();
         drop(whitelist_lock);
 
@@ -1178,7 +1245,7 @@ impl TorrentTracker {
         let mut return_list = vec![];
 
         let blacklist_arc = self.blacklist.clone();
-        let blacklist_lock = blacklist_arc.write().await;
+        let blacklist_lock = blacklist_arc.read().await;
         for (info_hash, _) in blacklist_lock.iter() {
             return_list.push(*info_hash);
         }
@@ -1228,7 +1295,7 @@ impl TorrentTracker {
     pub async fn check_blacklist(&self, info_hash: InfoHash) -> bool
     {
         let blacklist_arc = self.blacklist.clone();
-        let blacklist_lock = blacklist_arc.write().await;
+        let blacklist_lock = blacklist_arc.read().await;
         let blacklist = blacklist_lock.get(&info_hash).cloned();
         drop(blacklist_lock);
 
@@ -1284,7 +1351,7 @@ impl TorrentTracker {
     pub async fn get_keys(&self) -> Vec<(InfoHash, i64)>
     {
         let keys_arc = self.keys.clone();
-        let keys_lock = keys_arc.write().await;
+        let keys_lock = keys_arc.read().await;
         let keys = keys_lock.clone();
         drop(keys_lock);
 
@@ -1310,7 +1377,7 @@ impl TorrentTracker {
     pub async fn check_key(&self, hash: InfoHash) -> bool
     {
         let keys_arc = self.keys.clone();
-        let keys_lock = keys_arc.write().await;
+        let keys_lock = keys_arc.read().await;
         let key = keys_lock.get(&hash).cloned();
         drop(keys_lock);
 
@@ -1334,7 +1401,7 @@ impl TorrentTracker {
     pub async fn clean_keys(&self)
     {
         let keys_arc = self.keys.clone();
-        let keys_lock = keys_arc.write().await;
+        let keys_lock = keys_arc.read().await;
         let keys = keys_lock.clone();
         drop(keys_lock);
 

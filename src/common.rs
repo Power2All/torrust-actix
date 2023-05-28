@@ -73,7 +73,7 @@ pub fn calculate_count(src_count: u64, calc: i64) -> u64
 
 #[derive(Debug)]
 pub struct CustomError {
-    message: String,
+    pub(crate) message: String,
 }
 
 impl CustomError {
@@ -468,11 +468,14 @@ fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
 }
 
-pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> bool
+pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> Result<bool, ()>
 {
-    let stats = tracker.clone().get_stats().await;
+    let stats = match tracker.clone().get_stats().await {
+        Ok(timeout_check) => { timeout_check }
+        Err(_) => { return Err(()); }
+    };
     if stats.maintenance_mode != 0 {
-        return true;
+        return Ok(true);
     }
-    false
+    Ok(false)
 }
