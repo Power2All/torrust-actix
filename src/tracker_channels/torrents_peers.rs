@@ -452,13 +452,12 @@ impl TorrentTracker {
 
     pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let (action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
+        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
             "torrent_get",
             json!({
                 "info_hash": info_hash
             })
         ).await;
-        info!("{} {:#?}", action.clone(), data.clone());
         let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         serde_json::from_value::<Option<TorrentEntry>>(data.clone()).unwrap()
