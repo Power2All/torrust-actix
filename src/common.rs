@@ -397,11 +397,11 @@ impl<'v> serde::de::Visitor<'v> for PeerIdVisitor {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Copy)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Copy)]
 pub struct TorrentPeer {
     pub peer_id: PeerId,
     pub peer_addr: SocketAddr,
-    #[serde(with = "approx_instant")]
+    #[serde(serialize_with = "ser_instant")]
     pub updated: std::time::Instant,
     #[serde(with = "NumberOfBytesDef")]
     pub uploaded: NumberOfBytes,
@@ -411,33 +411,6 @@ pub struct TorrentPeer {
     pub left: NumberOfBytes,
     #[serde(with = "AnnounceEventDef")]
     pub event: AnnounceEvent,
-}
-
-mod approx_instant {
-    use std::time::{Instant, SystemTime};
-    use serde::{Serialize, Serializer, Deserialize, Deserializer, de::Error};
-
-    pub fn serialize<S>(instant: &Instant, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-    {
-        let system_now = SystemTime::now();
-        let instant_now = Instant::now();
-        let approx = system_now - (instant_now - *instant);
-        approx.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Instant, D::Error>
-        where
-            D: Deserializer<'de>,
-    {
-        let de = SystemTime::deserialize(deserializer)?;
-        let system_now = SystemTime::now();
-        let instant_now = Instant::now();
-        let duration = system_now.duration_since(de).map_err(Error::custom)?;
-        let approx = instant_now - duration;
-        Ok(approx)
-    }
 }
 
 impl TorrentPeer {
