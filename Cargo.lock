@@ -542,6 +542,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
+name = "bichannel"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4bdf5473d36d166934ddefbedab84ad123ba887d2dd16eb2e1a036c484c213b"
+dependencies = [
+ "crossbeam-channel",
+]
+
+[[package]]
 name = "binascii"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2594,12 +2603,12 @@ dependencies = [
  "actix-remote-ip",
  "actix-web",
  "async-std",
+ "bichannel",
  "binascii",
  "bip_bencode",
  "byteorder",
  "chrono",
  "clap",
- "crossbeam-channel",
  "either",
  "fern",
  "futures",
