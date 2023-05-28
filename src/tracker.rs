@@ -13,6 +13,7 @@ use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
 use crate::config::Configuration;
 use crate::databases::DatabaseConnector;
 
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub enum StatsEvent {
     Torrents,
     TorrentsUpdates,
@@ -47,7 +48,7 @@ pub enum StatsEvent {
     Udp6ScrapesHandled,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct Stats {
     pub started: i64,
     pub timestamp_run_save: i64,
