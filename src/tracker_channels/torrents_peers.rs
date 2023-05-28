@@ -85,13 +85,20 @@ impl TorrentTracker {
                                 let mut removed_seed_count = 0u64;
                                 let mut removed_peer_count = 0u64;
                                 let info_hash = serde_json::from_value::<InfoHash>(data["data"]["info_hash"].clone()).unwrap();
-                                let torrent = torrents.get(&info_hash);
-                                let peers_list = peers.get(&info_hash);
+                                let torrent = match torrents.get(&info_hash) {
+                                    None => { None }
+                                    Some(torrent_get) => { Some(torrent_get) }
+                                };
+                                let peers_list = match peers.get(&info_hash) {
+                                    None => { None }
+                                    Some(peers_get) => { Some(peers_get) }
+                                };
                                 if torrent.is_some() {
                                     torrents.remove(&info_hash);
                                     removed_torrent = true;
                                 }
-                                if let Some(peers_list_unwrapped) = peers_list {
+                                if peers_list.is_some() {
+                                    let peers_list_unwrapped = peers_list.unwrap();
                                     for (_peer_id, torrent_peer) in peers_list_unwrapped.iter() {
                                         if torrent_peer.left == NumberOfBytes(0) {
                                             removed_seed_count += 1;
@@ -144,7 +151,7 @@ impl TorrentTracker {
                                 let mut current = skip;
                                 let amount = serde_json::from_value::<u64>(data["data"]["amount"].clone()).unwrap();
                                 for (info_hash, torrent_entry_item) in torrents.iter().skip(skip as usize) {
-                                    let peers_list = match peers.get(info_hash) {
+                                    let peers_list = match peers.get(&info_hash) {
                                         None => { BTreeMap::new() }
                                         Some(peers_get) => {
                                             peers_get.clone()
@@ -225,9 +232,9 @@ impl TorrentTracker {
                                         peers.insert(info_hash, peers_list.clone());
                                         TorrentEntry {
                                             peers: peers_list.clone(),
-                                            completed: data_torrent.completed,
-                                            seeders: data_torrent.seeders,
-                                            leechers: data_torrent.leechers,
+                                            completed: data_torrent.completed.clone(),
+                                            seeders: data_torrent.seeders.clone(),
+                                            leechers: data_torrent.leechers.clone(),
                                         }
                                     }
                                 };
@@ -257,7 +264,9 @@ impl TorrentTracker {
                                             None => { BTreeMap::new() }
                                             Some(data_peers) => { data_peers }
                                         };
-                                        if let Some(peer) = peers_list.get(&peer_id) {
+                                        let peer_option = peers_list.get(&peer_id);
+                                        if peer_option.is_some() {
+                                            let peer = peer_option.unwrap().clone();
                                             if peer.left == NumberOfBytes(0) {
                                                 peers_list.remove(&peer_id);
                                                 data_torrent.seeders -= 1;
@@ -276,9 +285,9 @@ impl TorrentTracker {
                                         }
                                         TorrentEntry {
                                             peers: peers_list.clone(),
-                                            completed: data_torrent.completed,
-                                            seeders: data_torrent.seeders,
-                                            leechers: data_torrent.leechers
+                                            completed: data_torrent.completed.clone(),
+                                            seeders: data_torrent.seeders.clone(),
+                                            leechers: data_torrent.leechers.clone()
                                         }
                                     }
                                 };
