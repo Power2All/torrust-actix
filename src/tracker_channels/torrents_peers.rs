@@ -461,7 +461,7 @@ impl TorrentTracker {
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         match serde_json::from_value::<Option<TorrentEntry>>(data) {
             Ok(data) => { data }
-            Err(error) => { error!("{:#?}", data); None }
+            Err(error) => { error!("{:#?}", data)}
         }
         // serde_json::from_value::<Option<TorrentEntry>>(data).unwrap()
     }
