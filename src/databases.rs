@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use crate::common::InfoHash;
 use crate::config::Configuration;
+use crate::tracker::{TorrentEntryItem, TorrentTracker};
 
 #[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -458,11 +459,11 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn load_torrents(&self) -> Result<Vec<(InfoHash, i64)>, Error>
+    pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error>
     {
-        let mut return_data_torrents = vec![];
         let mut counter = 0u64;
         let mut total_torrents = 0u64;
+        let mut total_completes = 0u64;
 
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
@@ -478,8 +479,11 @@ impl DatabaseConnector {
                     let mut rows = sqlx::query(
                         query.as_str()
                     ).fetch(pool);
+                    let mut torrents_parsing = HashMap::new();
                     while let Some(result) = rows.try_next().await? {
                         if counter == 100000 {
+                            tracker.add_torrents(torrents_parsing.clone(), false).await;
+                            torrents_parsing.clear();
                             info!("[SQLite3] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
@@ -487,13 +491,23 @@ impl DatabaseConnector {
                         let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-                        return_data_torrents.push((InfoHash(info_hash), completed_data));
+                        torrents_parsing.insert(InfoHash(info_hash), TorrentEntryItem {
+                            completed: completed_data.clone(),
+                            seeders: 0,
+                            leechers: 0,
+                        });
                         counter += 1;
                         total_torrents += 1;
+                        total_completes += completed_data as u64;
+                    }
+
+                    if counter != 0 {
+                        tracker.add_torrents(torrents_parsing.clone(), false).await;
+                        torrents_parsing.clear();
                     }
 
                     info!("[SQLite3] Loaded {} torrents...", total_torrents);
-                    Ok(return_data_torrents)
+                    Ok((total_torrents, total_completes))
                 }
                 DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
@@ -507,8 +521,11 @@ impl DatabaseConnector {
                     let mut rows = sqlx::query(
                         query.as_str()
                     ).fetch(pool);
+                    let mut torrents_parsing = HashMap::new();
                     while let Some(result) = rows.try_next().await? {
                         if counter == 100000 {
+                            tracker.add_torrents(torrents_parsing.clone(), false).await;
+                            torrents_parsing.clear();
                             info!("[MySQL] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
@@ -516,13 +533,23 @@ impl DatabaseConnector {
                         let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-                        return_data_torrents.push((InfoHash(info_hash), completed_data));
+                        torrents_parsing.insert(InfoHash(info_hash), TorrentEntryItem {
+                            completed: completed_data.clone(),
+                            seeders: 0,
+                            leechers: 0,
+                        });
                         counter += 1;
                         total_torrents += 1;
+                        total_completes += completed_data as u64;
+                    }
+
+                    if counter != 0 {
+                        tracker.add_torrents(torrents_parsing.clone(), false).await;
+                        torrents_parsing.clear();
                     }
 
                     info!("[MySQL] Loaded {} torrents...", total_torrents);
-                    Ok(return_data_torrents)
+                    Ok((total_torrents, total_completes))
                 }
                 DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
@@ -536,8 +563,11 @@ impl DatabaseConnector {
                     let mut rows = sqlx::query(
                         query.as_str()
                     ).fetch(pool);
+                    let mut torrents_parsing = HashMap::new();
                     while let Some(result) = rows.try_next().await? {
                         if counter == 100000 {
+                            tracker.add_torrents(torrents_parsing.clone(), false).await;
+                            torrents_parsing.clear();
                             info!("[PgSQL] Loaded {} torrents...", total_torrents);
                             counter = 0;
                         }
@@ -545,13 +575,23 @@ impl DatabaseConnector {
                         let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-                        return_data_torrents.push((InfoHash(info_hash), completed_data));
+                        torrents_parsing.insert(InfoHash(info_hash), TorrentEntryItem {
+                            completed: completed_data.clone(),
+                            seeders: 0,
+                            leechers: 0,
+                        });
                         counter += 1;
                         total_torrents += 1;
+                        total_completes += completed_data as u64;
+                    }
+
+                    if counter != 0 {
+                        tracker.add_torrents(torrents_parsing.clone(), false).await;
+                        torrents_parsing.clear();
                     }
 
                     info!("[PgSQL] Loaded {} torrents...", total_torrents);
-                    Ok(return_data_torrents)
+                    Ok((total_torrents, total_completes))
                 }
             };
         }

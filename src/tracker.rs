@@ -353,24 +353,11 @@ impl TorrentTracker {
     }
 
     /* === Torrents === */
-    pub async fn load_torrents(&self)
+    pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(torrents) = self.sqlx.load_torrents().await {
-            let mut torrent_count = 0i64;
-            let mut completed_count = 0i64;
-
-            for (info_hash, completed) in torrents.iter() {
-                self.add_torrent(*info_hash, TorrentEntryItem {
-                    completed: *completed,
-                    seeders: 0,
-                    leechers: 0,
-                }, false).await;
-                torrent_count += 1;
-                completed_count += *completed;
-            }
-
-            info!("Loaded {} torrents with {} completes.", torrent_count, completed_count);
-            self.update_stats(StatsEvent::Completed, completed_count).await;
+        if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker.clone()).await {
+            info!("Loaded {} torrents with {} completes.", torrents, completes);
+            self.set_stats(StatsEvent::Completed, completes as i64).await;
         }
     }
 
