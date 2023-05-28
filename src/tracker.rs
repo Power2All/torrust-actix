@@ -3,11 +3,10 @@ use chrono::{TimeZone, Utc};
 use log::{debug, error, info};
 use scc::ebr::Arc;
 use serde::{Deserialize, Serialize};
-use serde::de::value::MapDeserializer;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
-use std::ops::{Add, Deref};
+use std::ops::Add;
 use std::str::FromStr;
 use std::sync::mpsc::{RecvError, SendError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -18,7 +17,6 @@ use crate::common::{InfoHash, NumberOfBytes, PeerId, TorrentPeer};
 use crate::config::Configuration;
 use crate::databases::DatabaseConnector;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum StatsEvent {
     Torrents,
     TorrentsUpdates,
@@ -53,7 +51,7 @@ pub enum StatsEvent {
     Udp6ScrapesHandled,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Stats {
     pub started: i64,
     pub timestamp_run_save: i64,
@@ -203,6 +201,7 @@ pub struct TorrentTracker {
     pub map_peers: Arc<RwLock<BTreeMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>>>,
     pub updates: Arc<RwLock<HashMap<InfoHash, i64>>>,
     pub shadow: Arc<RwLock<HashMap<InfoHash, i64>>>,
+    pub stats: Arc<RwLock<Stats>>,
     pub whitelist: Arc<RwLock<HashMap<InfoHash, i64>>>,
     pub blacklist: Arc<RwLock<HashMap<InfoHash, i64>>>,
     pub keys: Arc<RwLock<HashMap<InfoHash, i64>>>,
@@ -235,6 +234,43 @@ impl TorrentTracker {
             map_peers: Arc::new(RwLock::new(BTreeMap::new())),
             updates: Arc::new(RwLock::new(HashMap::new())),
             shadow: Arc::new(RwLock::new(HashMap::new())),
+            stats: Arc::new(RwLock::new(Stats {
+                started: Utc::now().timestamp(),
+                timestamp_run_save: 0,
+                timestamp_run_timeout: 0,
+                timestamp_run_console: 0,
+                timestamp_run_keys_timeout: 0,
+                torrents: 0,
+                torrents_updates: 0,
+                torrents_shadow: 0,
+                users: 0,
+                users_updates: 0,
+                users_shadow: 0,
+                maintenance_mode: 0,
+                seeds: 0,
+                peers: 0,
+                completed: 0,
+                whitelist_enabled: config.whitelist,
+                whitelist: 0,
+                blacklist_enabled: config.blacklist,
+                blacklist: 0,
+                keys_enabled: config.keys,
+                keys: 0,
+                tcp4_connections_handled: 0,
+                tcp4_api_handled: 0,
+                tcp4_announces_handled: 0,
+                tcp4_scrapes_handled: 0,
+                tcp6_connections_handled: 0,
+                tcp6_api_handled: 0,
+                tcp6_announces_handled: 0,
+                tcp6_scrapes_handled: 0,
+                udp4_connections_handled: 0,
+                udp4_announces_handled: 0,
+                udp4_scrapes_handled: 0,
+                udp6_connections_handled: 0,
+                udp6_announces_handled: 0,
+                udp6_scrapes_handled: 0,
+            })),
             whitelist: Arc::new(RwLock::new(HashMap::new())),
             blacklist: Arc::new(RwLock::new(HashMap::new())),
             keys: Arc::new(RwLock::new(HashMap::new())),
@@ -250,11 +286,54 @@ impl TorrentTracker {
         let config = self.config.clone();
         tokio::spawn(async move {
             let mut torrents: BTreeMap<InfoHash, TorrentEntryItem> = BTreeMap::new();
+            let mut peers: BTreeMap<InfoHash, BTreeMap<PeerId, TorrentPeer>> = BTreeMap::new();
+            let mut updates: HashMap<InfoHash, i64> = HashMap::new();
+            let mut shadow: HashMap<InfoHash, i64> = HashMap::new();
+            let mut whitelist: HashMap<InfoHash, i64> = HashMap::new();
+            let mut blacklist: HashMap<InfoHash, i64> = HashMap::new();
+            let mut keys: HashMap<InfoHash, i64> = HashMap::new();
+            let mut stats: Stats = Stats {
+                started: Utc::now().timestamp(),
+                timestamp_run_save: 0,
+                timestamp_run_timeout: 0,
+                timestamp_run_console: 0,
+                timestamp_run_keys_timeout: 0,
+                torrents: 0,
+                torrents_updates: 0,
+                torrents_shadow: 0,
+                users: 0,
+                users_updates: 0,
+                users_shadow: 0,
+                maintenance_mode: 0,
+                seeds: 0,
+                peers: 0,
+                completed: 0,
+                whitelist_enabled: config.whitelist,
+                whitelist: 0,
+                blacklist_enabled: config.blacklist,
+                blacklist: 0,
+                keys_enabled: config.keys,
+                keys: 0,
+                tcp4_connections_handled: 0,
+                tcp4_api_handled: 0,
+                tcp4_announces_handled: 0,
+                tcp4_scrapes_handled: 0,
+                tcp6_connections_handled: 0,
+                tcp6_api_handled: 0,
+                tcp6_announces_handled: 0,
+                tcp6_scrapes_handled: 0,
+                udp4_connections_handled: 0,
+                udp4_announces_handled: 0,
+                udp4_scrapes_handled: 0,
+                udp6_connections_handled: 0,
+                udp6_announces_handled: 0,
+                udp6_scrapes_handled: 0,
+            };
 
             loop {
                 match serde_json::from_str::<Value>(&*channel_right.recv().unwrap()) {
                     Ok(data) => {
-                        // debug!("Received: {:#?}", data);
+                        debug!("Received: {:#?}", data);
 
                         // Main handler and interact with action.
                         match data["action"].as_str().unwrap() {
@@ -265,79 +344,17 @@ impl TorrentTracker {
                                 };
                                 let entry = serde_json::from_value::<TorrentEntryItem>(data["data"]["entry"].clone()).unwrap();
                                 let persistent = serde_json::from_value::<bool>(data["data"]["persistent"].clone()).unwrap();
-                                let _ = torrents.insert(info_hash, entry);
+                                torrents.insert(info_hash, entry);
                                 channel_right.send(json!({"action": "add_single", "data": {}}).to_string()).unwrap();
-                            }
-                            "add_multi" => {
-                                let hashes: Result<Vec<(InfoHash, TorrentEntryItem)>, _> = serde_json::from_value(data["data"]["hashes"].clone());
-                                let persistent = serde_json::from_value::<bool>(data["data"]["persistent"].clone()).unwrap();
-                                for (info_hash, torrent_entry) in hashes.unwrap().iter() {
-                                    let _ = torrents.insert(info_hash.clone(), torrent_entry.clone());
-                                }
-                                channel_right.send(json!({"action": "add_multi", "data": {}}).to_string()).unwrap();
                             }
                             "get_single" => {
                                 let info_hash = match InfoHash::from_str(data["data"]["info_hash"].clone().to_string().as_str()) {
                                     Ok(data) => { data }
                                     Err(error) => { channel_right.send(json!({"action": "error", "data": "error info_hash"}).to_string()).unwrap(); continue }
                                 };
+
                                 let torrent = torrents.get(&info_hash);
-                                channel_right.send(json!({"action": "get_single", "data": torrent.clone()}).to_string()).unwrap();
-                            }
-                            "get_multi" => {
-                                let mut torrentslist: Vec<(InfoHash, Option<TorrentEntry>)> = Vec::new();
-                                let hashes: Result<Vec<InfoHash>, _> = serde_json::from_value(data["data"]["hashes"].clone());
-                                for &info_hash in hashes.unwrap().iter() {
-                                    let torrent = match torrents.get(&info_hash) {
-                                        None => { None }
-                                        Some(torrent_entry) => {
-                                            Some(TorrentEntry {
-                                                peers: Default::default(),
-                                                completed: torrent_entry.completed,
-                                                seeders: torrent_entry.seeders,
-                                                leechers: torrent_entry.leechers,
-                                            })
-                                        }
-                                    };
-                                    torrentslist.push((info_hash.clone(), torrent));
-                                }
-                                channel_right.send(json!({"action": "add_multi", "data": torrentslist.clone()}).to_string()).unwrap();
-                            }
-                            "get_multi_chunks" => {
-                                let mut torrentslist: Vec<(InfoHash, i64)> = Vec::new();
-                                let skip: u64 = serde_json::from_value::<u64>(data["data"]["skip"].clone()).unwrap();
-                                let amount: u64 = serde_json::from_value::<u64>(data["data"]["amount"].clone()).unwrap();
-                                let mut current_count: u64 = 0;
-                                let mut handled_count: u64 = 0;
-                                for (info_hash, entry) in torrents.iter() {
-                                    if current_count < skip {
-                                        current_count = current_count.add(1);
-                                        continue;
-                                    }
-                                    if handled_count >= amount {
-                                        break;
-                                    }
-                                    torrentslist.push((*info_hash, entry.completed));
-                                    current_count = current_count.add(1);
-                                    handled_count = handled_count.add(1);
-                                }
-                                channel_right.send(json!({"action": "get_multi_chunks", "data": torrentslist.clone()}).to_string()).unwrap();
-                            }
-                            "delete_single" => {
-                                let info_hash = match InfoHash::from_str(data["data"]["info_hash"].clone().to_string().as_str()) {
-                                    Ok(data) => { data }
-                                    Err(error) => { channel_right.send(json!({"action": "error", "data": "error info_hash"}).to_string()).unwrap(); continue }
-                                };
-                                let _ = torrents.remove(&info_hash);
-                                channel_right.send(json!({"action": "get_single", "data": {}}).to_string()).unwrap();
-                            }
-                            "delete_multi" => {
-                                let hashes: Result<Vec<InfoHash>, _> = serde_json::from_value(data["data"]["hashes"].clone());
-                                let persistent = serde_json::from_value::<bool>(data["data"]["persistent"].clone()).unwrap();
-                                for info_hash in hashes.unwrap().iter() {
-                                    let _ = torrents.remove(info_hash);
-                                }
-                                channel_right.send(json!({"action": "delete_multi", "data": {}}).to_string()).unwrap();
+                                channel_right.send(json!({"action": "add_single", "data": torrent}).to_string()).unwrap();
                             }
                             "shutdown" => {
                                 channel_right.send(json!({"action": "shutdown", "data": {}}).to_string()).unwrap();
@@ -347,6 +364,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({"action": "error", "data": "unknown action"}).to_string()).unwrap();
                             }
                         }
+
+                        channel_right.send(json!({"action": "return", "data": {}}).to_string()).unwrap();
                     }
                     Err(error) => {
                         debug!("Received: {:#?}", error);
@@ -392,6 +411,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({"action": "error", "data": "unknown action"}).to_string()).unwrap();
                             }
                         }
+
+                        channel_right.send(json!({"action": "return", "data": {}}).to_string()).unwrap();
                     }
                     Err(error) => {
                         debug!("Received: {:#?}", error);
@@ -437,6 +458,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({"action": "error", "data": "unknown action"}).to_string()).unwrap();
                             }
                         }
+
+                        channel_right.send(json!({"action": "return", "data": {}}).to_string()).unwrap();
                     }
                     Err(error) => {
                         debug!("Received: {:#?}", error);
@@ -482,6 +505,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({"action": "error", "data": "unknown action"}).to_string()).unwrap();
                             }
                         }
+
+                        channel_right.send(json!({"action": "return", "data": {}}).to_string()).unwrap();
                     }
                     Err(error) => {
                         debug!("Received: {:#?}", error);
@@ -527,6 +552,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({"action": "error", "data": "unknown action"}).to_string()).unwrap();
                             }
                         }
+
+                        channel_right.send(json!({"action": "return", "data": {}}).to_string()).unwrap();
                     }
                     Err(error) => {
                         debug!("Received: {:#?}", error);
@@ -572,6 +599,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({"action": "error", "data": "unknown action"}).to_string()).unwrap();
                             }
                         }
+
+                        channel_right.send(json!({"action": "return", "data": {}}).to_string()).unwrap();
                     }
                     Err(error) => {
                         debug!("Received: {:#?}", error);
@@ -617,6 +646,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({"action": "error", "data": "unknown action"}).to_string()).unwrap();
                             }
                         }
+
+                        channel_right.send(json!({"action": "return", "data": {}}).to_string()).unwrap();
                     }
                     Err(error) => {
                         debug!("Received: {:#?}", error);
@@ -687,89 +718,10 @@ impl TorrentTracker {
             loop {
                 match serde_json::from_str::<Value>(&*channel_right.recv().unwrap()) {
                     Ok(data) => {
-                        // debug!("Received: {:#?}", data);
+                        debug!("Received: {:#?}", data);
 
                         // Main handler and interact with action.
                         match data["action"].as_str().unwrap() {
-                            "get" => {
-                                channel_right.send(json!({"action": "get", "data": stats.clone()}).to_string()).unwrap();
-                            }
-                            "set" => {
-                                let event: StatsEvent = serde_json::from_value::<StatsEvent>(data["data"]["event"].clone()).unwrap();
-                                let value: i64 = serde_json::from_value::<i64>(data["data"]["value"].clone()).unwrap();
-                                match event {
-                                    StatsEvent::Torrents => { stats.torrents = value; }
-                                    StatsEvent::TorrentsUpdates => { stats.torrents_updates = value; }
-                                    StatsEvent::TorrentsShadow => { stats.torrents_shadow = value; }
-                                    StatsEvent::Users => { stats.users = value; }
-                                    StatsEvent::UsersUpdates => { stats.users_updates = value; }
-                                    StatsEvent::UsersShadow => { stats.users_shadow = value; }
-                                    StatsEvent::TimestampSave => { stats.timestamp_run_save = value; }
-                                    StatsEvent::TimestampTimeout => { stats.timestamp_run_timeout = value; }
-                                    StatsEvent::TimestampConsole => { stats.timestamp_run_console = value; }
-                                    StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout = value; }
-                                    StatsEvent::MaintenanceMode => { stats.maintenance_mode = value; }
-                                    StatsEvent::Seeds => { stats.seeds = value; }
-                                    StatsEvent::Peers => { stats.peers = value; }
-                                    StatsEvent::Completed => { stats.completed = value; }
-                                    StatsEvent::Whitelist => { stats.whitelist = value; }
-                                    StatsEvent::Blacklist => { stats.blacklist = value; }
-                                    StatsEvent::Key => { stats.keys = value; }
-                                    StatsEvent::Tcp4ConnectionsHandled => { stats.tcp4_connections_handled = value; }
-                                    StatsEvent::Tcp4ApiHandled => { stats.tcp4_api_handled = value; }
-                                    StatsEvent::Tcp4AnnouncesHandled => { stats.tcp4_announces_handled = value; }
-                                    StatsEvent::Tcp4ScrapesHandled => { stats.tcp4_scrapes_handled = value; }
-                                    StatsEvent::Tcp6ConnectionsHandled => { stats.tcp6_connections_handled = value; }
-                                    StatsEvent::Tcp6ApiHandled => { stats.tcp6_api_handled = value; }
-                                    StatsEvent::Tcp6AnnouncesHandled => { stats.tcp6_announces_handled = value; }
-                                    StatsEvent::Tcp6ScrapesHandled => { stats.tcp6_scrapes_handled = value; }
-                                    StatsEvent::Udp4ConnectionsHandled => { stats.udp4_connections_handled = value; }
-                                    StatsEvent::Udp4AnnouncesHandled => { stats.udp4_announces_handled = value; }
-                                    StatsEvent::Udp4ScrapesHandled => { stats.udp4_scrapes_handled = value; }
-                                    StatsEvent::Udp6ConnectionsHandled => { stats.udp6_connections_handled = value; }
-                                    StatsEvent::Udp6AnnouncesHandled => { stats.udp6_announces_handled = value; }
-                                    StatsEvent::Udp6ScrapesHandled => { stats.udp6_scrapes_handled = value; }
-                                }
-                                channel_right.send(json!({"action": "set", "data": stats.clone()}).to_string()).unwrap();
-                            }
-                            "update" => {
-                                let event: StatsEvent = serde_json::from_value::<StatsEvent>(data["data"]["event"].clone()).unwrap();
-                                let value: i64 = serde_json::from_value::<i64>(data["data"]["value"].clone()).unwrap();
-                                match event {
-                                    StatsEvent::Torrents => { stats.torrents += value; }
-                                    StatsEvent::TorrentsUpdates => { stats.torrents_updates += value; }
-                                    StatsEvent::TorrentsShadow => { stats.torrents_shadow += value; }
-                                    StatsEvent::Users => { stats.users += value; }
-                                    StatsEvent::UsersUpdates => { stats.users_updates += value; }
-                                    StatsEvent::UsersShadow => { stats.users_shadow += value; }
-                                    StatsEvent::TimestampSave => { stats.timestamp_run_save += value; }
-                                    StatsEvent::TimestampTimeout => { stats.timestamp_run_timeout += value; }
-                                    StatsEvent::TimestampConsole => { stats.timestamp_run_console += value; }
-                                    StatsEvent::TimestampKeysTimeout => { stats.timestamp_run_keys_timeout += value; }
-                                    StatsEvent::MaintenanceMode => { stats.maintenance_mode += value; }
-                                    StatsEvent::Seeds => { stats.seeds += value; }
-                                    StatsEvent::Peers => { stats.peers += value; }
-                                    StatsEvent::Completed => { stats.completed += value; }
-                                    StatsEvent::Whitelist => { stats.whitelist += value; }
-                                    StatsEvent::Blacklist => { stats.blacklist += value; }
-                                    StatsEvent::Key => { stats.keys += value; }
-                                    StatsEvent::Tcp4ConnectionsHandled => { stats.tcp4_connections_handled += value; }
-                                    StatsEvent::Tcp4ApiHandled => { stats.tcp4_api_handled += value; }
-                                    StatsEvent::Tcp4AnnouncesHandled => { stats.tcp4_announces_handled += value; }
-                                    StatsEvent::Tcp4ScrapesHandled => { stats.tcp4_scrapes_handled += value; }
-                                    StatsEvent::Tcp6ConnectionsHandled => { stats.tcp6_connections_handled += value; }
-                                    StatsEvent::Tcp6ApiHandled => { stats.tcp6_api_handled += value; }
-                                    StatsEvent::Tcp6AnnouncesHandled => { stats.tcp6_announces_handled += value; }
-                                    StatsEvent::Tcp6ScrapesHandled => { stats.tcp6_scrapes_handled += value; }
-                                    StatsEvent::Udp4ConnectionsHandled => { stats.udp4_connections_handled += value; }
-                                    StatsEvent::Udp4AnnouncesHandled => { stats.udp4_announces_handled += value; }
-                                    StatsEvent::Udp4ScrapesHandled => { stats.udp4_scrapes_handled += value; }
-                                    StatsEvent::Udp6ConnectionsHandled => { stats.udp6_connections_handled += value; }
-                                    StatsEvent::Udp6AnnouncesHandled => { stats.udp6_announces_handled += value; }
-                                    StatsEvent::Udp6ScrapesHandled => { stats.udp6_scrapes_handled += value; }
-                                };
-                                channel_right.send(json!({"action": "update", "data": stats.clone()}).to_string()).unwrap();
-                            }
                             "shutdown" => {
                                 channel_right.send(json!({"action": "shutdown", "data": {}}).to_string()).unwrap();
                                 break;
@@ -778,6 +730,8 @@ impl TorrentTracker {
                                 channel_right.send(json!({"action": "error", "data": "unknown action"}).to_string()).unwrap();
                             }
                         }
+
+                        channel_right.send(json!({"action": "return", "data": {}}).to_string()).unwrap();
                     }
                     Err(error) => {
                         debug!("Received: {:#?}", error);
@@ -805,28 +759,97 @@ impl TorrentTracker {
     /* === Statistics === */
     pub async fn get_stats(&self) -> Stats
     {
-        let (action, data) = self.channel_stats_request("get", json!({})).await;
-        let stats = serde_json::from_value::<Stats>(data).unwrap();
+        let stats_arc = self.stats.clone();
+        let stats_lock = stats_arc.read().await;
+        let stats = stats_lock.clone();
+        drop(stats_lock);
+
         stats
     }
 
     pub async fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
-        let (action, data) = self.channel_stats_request("update", json!({
-            "event": event,
-            "value": value
-        })).await;
-        let stats = serde_json::from_value::<Stats>(data).unwrap();
+        let stats_arc = self.stats.clone();
+        let mut stats_lock = stats_arc.write().await;
+        match event {
+            StatsEvent::Torrents => { stats_lock.torrents += value; }
+            StatsEvent::TorrentsUpdates => { stats_lock.torrents_updates += value; }
+            StatsEvent::TorrentsShadow => { stats_lock.torrents_shadow += value; }
+            StatsEvent::Users => { stats_lock.users += value; }
+            StatsEvent::UsersUpdates => { stats_lock.users_updates += value; }
+            StatsEvent::UsersShadow => { stats_lock.users_shadow += value; }
+            StatsEvent::TimestampSave => { stats_lock.timestamp_run_save += value; }
+            StatsEvent::TimestampTimeout => { stats_lock.timestamp_run_timeout += value; }
+            StatsEvent::TimestampConsole => { stats_lock.timestamp_run_console += value; }
+            StatsEvent::TimestampKeysTimeout => { stats_lock.timestamp_run_keys_timeout += value; }
+            StatsEvent::MaintenanceMode => { stats_lock.maintenance_mode += value; }
+            StatsEvent::Seeds => { stats_lock.seeds += value; }
+            StatsEvent::Peers => { stats_lock.peers += value; }
+            StatsEvent::Completed => { stats_lock.completed += value; }
+            StatsEvent::Whitelist => { stats_lock.whitelist += value; }
+            StatsEvent::Blacklist => { stats_lock.blacklist += value; }
+            StatsEvent::Key => { stats_lock.keys += value; }
+            StatsEvent::Tcp4ConnectionsHandled => { stats_lock.tcp4_connections_handled += value; }
+            StatsEvent::Tcp4ApiHandled => { stats_lock.tcp4_api_handled += value; }
+            StatsEvent::Tcp4AnnouncesHandled => { stats_lock.tcp4_announces_handled += value; }
+            StatsEvent::Tcp4ScrapesHandled => { stats_lock.tcp4_scrapes_handled += value; }
+            StatsEvent::Tcp6ConnectionsHandled => { stats_lock.tcp6_connections_handled += value; }
+            StatsEvent::Tcp6ApiHandled => { stats_lock.tcp6_api_handled += value; }
+            StatsEvent::Tcp6AnnouncesHandled => { stats_lock.tcp6_announces_handled += value; }
+            StatsEvent::Tcp6ScrapesHandled => { stats_lock.tcp6_scrapes_handled += value; }
+            StatsEvent::Udp4ConnectionsHandled => { stats_lock.udp4_connections_handled += value; }
+            StatsEvent::Udp4AnnouncesHandled => { stats_lock.udp4_announces_handled += value; }
+            StatsEvent::Udp4ScrapesHandled => { stats_lock.udp4_scrapes_handled += value; }
+            StatsEvent::Udp6ConnectionsHandled => { stats_lock.udp6_connections_handled += value; }
+            StatsEvent::Udp6AnnouncesHandled => { stats_lock.udp6_announces_handled += value; }
+            StatsEvent::Udp6ScrapesHandled => { stats_lock.udp6_scrapes_handled += value; }
+        }
+        let stats = stats_lock.clone();
+        drop(stats_lock);
+
         stats
     }
 
     pub async fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
-        let (action, data) = self.channel_stats_request("set", json!({
-            "event": event,
-            "value": value
-        })).await;
-        let stats = serde_json::from_value::<Stats>(data).unwrap();
+        let stats_arc = self.stats.clone();
+        let mut stats_lock = stats_arc.write().await;
+        match event {
+            StatsEvent::Torrents => { stats_lock.torrents = value; }
+            StatsEvent::TorrentsUpdates => { stats_lock.torrents_updates = value; }
+            StatsEvent::TorrentsShadow => { stats_lock.torrents_shadow = value; }
+            StatsEvent::Users => { stats_lock.users = value; }
+            StatsEvent::UsersUpdates => { stats_lock.users_updates = value; }
+            StatsEvent::UsersShadow => { stats_lock.users_shadow = value; }
+            StatsEvent::TimestampSave => { stats_lock.timestamp_run_save = value; }
+            StatsEvent::TimestampTimeout => { stats_lock.timestamp_run_timeout = value; }
+            StatsEvent::TimestampConsole => { stats_lock.timestamp_run_console = value; }
+            StatsEvent::TimestampKeysTimeout => { stats_lock.timestamp_run_keys_timeout = value; }
+            StatsEvent::MaintenanceMode => { stats_lock.maintenance_mode = value; }
+            StatsEvent::Seeds => { stats_lock.seeds = value; }
+            StatsEvent::Peers => { stats_lock.peers = value; }
+            StatsEvent::Completed => { stats_lock.completed = value; }
+            StatsEvent::Whitelist => { stats_lock.whitelist = value; }
+            StatsEvent::Blacklist => { stats_lock.blacklist = value; }
+            StatsEvent::Key => { stats_lock.keys = value; }
+            StatsEvent::Tcp4ConnectionsHandled => { stats_lock.tcp4_connections_handled = value; }
+            StatsEvent::Tcp4ApiHandled => { stats_lock.tcp4_api_handled = value; }
+            StatsEvent::Tcp4AnnouncesHandled => { stats_lock.tcp4_announces_handled = value; }
+            StatsEvent::Tcp4ScrapesHandled => { stats_lock.tcp4_scrapes_handled = value; }
+            StatsEvent::Tcp6ConnectionsHandled => { stats_lock.tcp6_connections_handled = value; }
+            StatsEvent::Tcp6ApiHandled => { stats_lock.tcp6_api_handled = value; }
+            StatsEvent::Tcp6AnnouncesHandled => { stats_lock.tcp6_announces_handled = value; }
+            StatsEvent::Tcp6ScrapesHandled => { stats_lock.tcp6_scrapes_handled = value; }
+            StatsEvent::Udp4ConnectionsHandled => { stats_lock.udp4_connections_handled = value; }
+            StatsEvent::Udp4AnnouncesHandled => { stats_lock.udp4_announces_handled = value; }
+            StatsEvent::Udp4ScrapesHandled => { stats_lock.udp4_scrapes_handled = value; }
+            StatsEvent::Udp6ConnectionsHandled => { stats_lock.udp6_connections_handled = value; }
+            StatsEvent::Udp6AnnouncesHandled => { stats_lock.udp6_announces_handled = value; }
+            StatsEvent::Udp6ScrapesHandled => { stats_lock.udp6_scrapes_handled = value; }
+        }
+        let stats = stats_lock.clone();
+        drop(stats_lock);
+
         stats
     }
 
@@ -838,6 +861,15 @@ impl TorrentTracker {
             let mut completed_count = 0i64;
 
             for (info_hash, completed) in torrents.iter() {
+                self.channel_torrents_request("add_single", json!({
+                    "info_hash": info_hash.clone(),
+                    "entry": TorrentEntryItem {
+                        completed: completed.clone(),
+                        seeders: 0,
+                        leechers: 0,
+                    },
+                    "persistent": false
+                }));
                 self.add_torrent(*info_hash, TorrentEntryItem {
                     completed: *completed,
                     seeders: 0,
@@ -960,16 +992,11 @@ impl TorrentTracker {
 
     pub async fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntryItem, persistent: bool)
     {
-        self.channel_torrents_request("add_multi", json!({
-            "hashes": vec![(info_hash.clone(), torrent_entry.clone())],
+        self.channel_torrents_request("add_single", json!({
+            "info_hash": info_hash,
+            "entry": torrent_entry,
             "persistent": persistent.clone()
         })).await;
-
-        // self.channel_torrents_request("add_single", json!({
-        //     "info_hash": info_hash,
-        //     "entry": torrent_entry,
-        //     "persistent": persistent.clone()
-        // })).await;
 
         let torrents_arc = self.map_torrents.clone();
         let mut torrents_lock = torrents_arc.write().await;
