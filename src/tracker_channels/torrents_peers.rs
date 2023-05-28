@@ -403,7 +403,7 @@ impl TorrentTracker {
             Err(_) => { panic!("Unable to obtain data from database!"); }
         };
         info!("Loaded {} torrents with {} completes.", torrents, completes);
-        self.set_stats(StatsEvent::Completed, completes as i64).await;
+        self.update_stats(StatsEvent::Completed, completes as i64).await;
     }
 
     pub async fn save_torrents(&self) -> bool
@@ -426,7 +426,7 @@ impl TorrentTracker {
         ).await;
         let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        self.set_stats(StatsEvent::Torrents, torrent_count).await;
+        self.update_stats(StatsEvent::Torrents, torrent_count).await;
         if persistent {
             self.add_update(info_hash, torrent_entry_item.completed).await;
         }
@@ -443,7 +443,7 @@ impl TorrentTracker {
         let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         let updates = serde_json::from_value::<Vec<(InfoHash, i64)>>(data["updates"].clone()).unwrap();
-        self.set_stats(StatsEvent::Torrents, torrent_count).await;
+        self.update_stats(StatsEvent::Torrents, torrent_count).await;
         if persistent {
             for (info_hash, completed) in updates.iter() {
                 self.add_update(info_hash.clone(), completed.clone()).await;
@@ -459,12 +459,12 @@ impl TorrentTracker {
                 "info_hash": info_hash
             })
         ).await;
-        let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+        let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
         let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
         let removed_torrent = serde_json::from_value::<bool>(data["removed_torrent"].clone()).unwrap();
         let removed_seed_count = serde_json::from_value::<u64>(data["removed_seed_count"].clone()).unwrap();
         let removed_peer_count = serde_json::from_value::<u64>(data["removed_peer_count"].clone()).unwrap();
-        if removed_torrent { self.set_stats(StatsEvent::Torrents, torrent_count).await; }
+        if removed_torrent { self.update_stats(StatsEvent::Torrents, -1).await; }
         if removed_seed_count != 0 { self.update_stats(StatsEvent::Seeds, 0 - removed_seed_count as i64).await; }
         if removed_peer_count != 0 { self.update_stats(StatsEvent::Peers, 0 - removed_peer_count as i64).await; }
         if persistent { self.remove_update(info_hash).await; }
@@ -479,12 +479,12 @@ impl TorrentTracker {
                     "info_hash": *info_hash
                 })
             ).await;
-            let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+            let _torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
             let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
             let removed_torrent = serde_json::from_value::<bool>(data["removed_torrent"].clone()).unwrap();
             let removed_seed_count = serde_json::from_value::<u64>(data["removed_seed_count"].clone()).unwrap();
             let removed_peer_count = serde_json::from_value::<u64>(data["removed_peer_count"].clone()).unwrap();
-            if removed_torrent { self.set_stats(StatsEvent::Torrents, torrent_count).await; }
+            if removed_torrent { self.update_stats(StatsEvent::Torrents, -1).await; }
             if removed_seed_count != 0 { self.update_stats(StatsEvent::Seeds, 0 - removed_seed_count as i64).await; }
             if removed_peer_count != 0 { self.update_stats(StatsEvent::Peers, 0 - removed_peer_count as i64).await; }
             if persistent { self.remove_update(*info_hash).await; }
