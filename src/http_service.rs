@@ -11,9 +11,6 @@ use std::io::{BufReader, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
-use actix_extensible_rate_limit::backend::memory::InMemoryBackend;
-use actix_extensible_rate_limit::backend::SimpleInputFunctionBuilder;
-use actix_extensible_rate_limit::RateLimiter;
 use bip_bencode::{ben_map, ben_bytes, ben_list, ben_int, BMutAccess};
 use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
@@ -50,11 +47,7 @@ pub async fn http_service(addr: SocketAddr, data: Arc<TorrentTracker>) -> (Serve
     info!("[SERVICE] Starting server listener on {}", addr);
     let data_cloned = data;
     let server = HttpServer::new(move || {
-        let backend = InMemoryBackend::builder().build();
-        let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
-        let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
         App::new()
-            .wrap(middleware)
             .wrap(http_service_cors())
             .configure(http_service_routes(data_cloned.clone()))
     })
@@ -73,13 +66,11 @@ pub async fn https_service(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key:
 {
     info!("[SERVICE] Starting server listener with SSL on {}", addr);
     let data_cloned = data;
+
     let config = https_service_config(ssl_key, ssl_cert);
+
     let server = HttpServer::new(move || {
-        let backend = InMemoryBackend::builder().build();
-        let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
-        let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
         App::new()
-            .wrap(middleware)
             .wrap(http_service_cors())
             .configure(http_service_routes(data_cloned.clone()))
     })
