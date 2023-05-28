@@ -85,23 +85,6 @@ impl TorrentTracker {
                                     "peer_count": peers_count
                                 }).to_string()).unwrap();
                             }
-                            "torrents_add" => {
-                                let mut return_data = Vec::new();
-                                let torrent_list = serde_json::from_value::<Vec<(InfoHash, TorrentEntryItem)>>(data["data"]["torrents"].clone()).unwrap();
-                                for (info_hash, torrent_entry_item) in torrent_list.iter() {
-                                    torrents.insert(info_hash.clone(), torrent_entry_item.clone());
-                                    return_data.push((info_hash.clone(), torrent_entry_item.completed.clone()));
-                                }
-                                torrents_count = torrents.len() as u64;
-                                channel_right.send(json!({
-                                    "action": "torrents_add",
-                                    "data": {
-                                        "updates": return_data
-                                    },
-                                    "torrent_count": torrents_count,
-                                    "peer_count": peers_count
-                                }).to_string()).unwrap();
-                            }
                             "torrent_remove" => {
                                 let mut removed_torrent = false;
                                 let mut removed_seed_count = 0u64;
@@ -434,19 +417,19 @@ impl TorrentTracker {
 
     pub async fn add_torrents(&self, torrents: Vec<(InfoHash, TorrentEntryItem)>, persistent: bool)
     {
-        let (_action, data, torrent_count, peer_count) = self.channel_torrents_peers_request(
-            "torrents_add",
-            json!({
-                "torrents": torrents
-            })
-        ).await;
-        let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
-        let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
-        let updates = serde_json::from_value::<Vec<(InfoHash, i64)>>(data["updates"].clone()).unwrap();
-        self.update_stats(StatsEvent::Torrents, torrent_count).await;
-        if persistent {
-            for (info_hash, completed) in updates.iter() {
-                self.add_update(info_hash.clone(), completed.clone()).await;
+        for (info_hash, torrent_entry_item) in torrents.iter() {
+            let (_action, _data, torrent_count, peer_count) = self.channel_torrents_peers_request(
+                "torrent_add",
+                json!({
+                    "info_hash": *info_hash,
+                    "torrent_entry_item": *torrent_entry_item
+                })
+            ).await;
+            let torrent_count = serde_json::from_value::<i64>(torrent_count).unwrap();
+            let _peer_count = serde_json::from_value::<i64>(peer_count).unwrap();
+            self.update_stats(StatsEvent::Torrents, torrent_count).await;
+            if persistent {
+                self.add_update(*info_hash, torrent_entry_item.completed).await;
             }
         }
     }
