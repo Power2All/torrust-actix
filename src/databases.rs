@@ -14,8 +14,6 @@ use std::time::Duration;
 
 use crate::common::InfoHash;
 use crate::config::Configuration;
-use crate::tracker::TorrentTracker;
-use crate::tracker_channels::torrents_peers::TorrentEntryItem;
 
 #[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -460,11 +458,11 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error>
+    pub async fn load_torrents(&self) -> Result<Vec<(InfoHash, i64)>, Error>
     {
+        let mut return_data_torrents = vec![];
         let mut counter = 0u64;
         let mut total_torrents = 0u64;
-        let mut total_completes = 0u64;
 
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
@@ -489,18 +487,13 @@ impl DatabaseConnector {
                         let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-                        tracker.add_torrent(InfoHash(info_hash), TorrentEntryItem {
-                            completed: completed_data.clone(),
-                            seeders: 0,
-                            leechers: 0,
-                        }, false).await;
+                        return_data_torrents.push((InfoHash(info_hash), completed_data));
                         counter += 1;
                         total_torrents += 1;
-                        total_completes += completed_data as u64;
                     }
 
                     info!("[SQLite3] Loaded {} torrents...", total_torrents);
-                    Ok((total_torrents, total_completes))
+                    Ok(return_data_torrents)
                 }
                 DatabaseDrivers::mysql => {
                     let pool = &self.mysql.clone().unwrap().pool;
@@ -523,18 +516,13 @@ impl DatabaseConnector {
                         let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-                        tracker.add_torrent(InfoHash(info_hash), TorrentEntryItem {
-                            completed: completed_data.clone(),
-                            seeders: 0,
-                            leechers: 0,
-                        }, false).await;
+                        return_data_torrents.push((InfoHash(info_hash), completed_data));
                         counter += 1;
                         total_torrents += 1;
-                        total_completes += completed_data as u64;
                     }
 
                     info!("[MySQL] Loaded {} torrents...", total_torrents);
-                    Ok((total_torrents, total_completes))
+                    Ok(return_data_torrents)
                 }
                 DatabaseDrivers::pgsql => {
                     let pool = &self.pgsql.clone().unwrap().pool;
@@ -557,18 +545,13 @@ impl DatabaseConnector {
                         let info_hash_decoded = hex::decode(info_hash_data).unwrap();
                         let completed_data: i64 = result.get(self.config.db_structure.table_torrents_completed.clone().as_str());
                         let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-                        tracker.add_torrent(InfoHash(info_hash), TorrentEntryItem {
-                            completed: completed_data.clone(),
-                            seeders: 0,
-                            leechers: 0,
-                        }, false).await;
+                        return_data_torrents.push((InfoHash(info_hash), completed_data));
                         counter += 1;
                         total_torrents += 1;
-                        total_completes += completed_data as u64;
                     }
 
                     info!("[PgSQL] Loaded {} torrents...", total_torrents);
-                    Ok((total_torrents, total_completes))
+                    Ok(return_data_torrents)
                 }
             };
         }
