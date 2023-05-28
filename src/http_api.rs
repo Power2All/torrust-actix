@@ -82,11 +82,14 @@ pub async fn http_api(addr: SocketAddr, data: Arc<TorrentTracker>) -> (ServerHan
     info!("[API] Starting server listener on {}", addr);
     let data_cloned = data;
     let server = HttpServer::new(move || {
+        // let backend = InMemoryBackend::builder().build();
+        // let input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
+        // let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
         App::new()
             .wrap(http_api_cors())
             .configure(http_api_routes(data_cloned.clone()))
     })
-        .keep_alive(Duration::from_secs(30))
+        .keep_alive(Duration::from_secs(10))
         .client_request_timeout(Duration::from_secs(5))
         .client_disconnect_timeout(Duration::from_secs(5))
         .bind((addr.ip(), addr.port()))
@@ -103,11 +106,14 @@ pub async fn https_api(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: Str
     let data_cloned = data;
     let config = https_api_config(ssl_key, ssl_cert);
     let server = HttpServer::new(move || {
+        // let _backend = InMemoryBackend::builder().build();
+        // let _input = SimpleInputFunctionBuilder::new(Duration::from_secs(1), 10000).build();
+        // let middleware = RateLimiter::builder(backend.clone(), input).add_headers().build();
         App::new()
             .wrap(http_api_cors())
             .configure(http_api_routes(data_cloned.clone()))
     })
-        .keep_alive(Duration::from_secs(30))
+        .keep_alive(Duration::from_secs(10))
         .client_request_timeout(Duration::from_secs(5))
         .client_disconnect_timeout(Duration::from_secs(5))
         .bind_rustls((addr.ip(), addr.port()), config)
