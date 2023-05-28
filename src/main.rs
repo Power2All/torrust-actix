@@ -180,7 +180,7 @@ async fn main() -> std::io::Result<()>
             start = start + amount;
         }
 
-        tracker_send.save_torrents().await;
+        let _ = tracker_send.save_torrents().await;
 
         exit(0);
     }
@@ -328,12 +328,16 @@ async fn main() -> std::io::Result<()>
                         info!("[SAVING] Moving Updates to Shadow...");
                         tracker_clone_clone.transfer_updates_to_shadow().await;
                         info!("[SAVING] Saving data from Shadow to database...");
-                        if tracker_clone_clone.save_torrents().await {
-                            info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                            tracker_clone_clone.clear_shadow().await;
-                            info!("[SAVING] Torrents saved.");
+                        if let Ok(save_stat) = tracker_clone_clone.save_torrents().await {
+                            if save_stat {
+                                info!("[SAVING] Clearing shadow, saving procedure finishing...");
+                                tracker_clone_clone.clear_shadow().await;
+                                info!("[SAVING] Torrents saved.");
+                            } else {
+                                error!("[SAVING] An error occurred while saving data...");
+                            }
                         } else {
-                            error!("[SAVING] An error occurred while saving data...");
+                            error!("[SAVING] An error occurred while saving data, lock issue...");
                         }
                         if tracker_clone_clone.config.whitelist {
                             info!("[SAVING] Saving data from Whitelist to database...");
@@ -408,13 +412,17 @@ async fn main() -> std::io::Result<()>
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");
                 tracker.clone().transfer_updates_to_shadow().await;
-                    info!("[SAVING] Saving data from Torrents to database...");
-                if tracker.clone().save_torrents().await {
-                    info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                    tracker.clone().clear_shadow().await;
-                    info!("[SAVING] Torrents saved.");
+                info!("[SAVING] Saving data from Torrents to database...");
+                if let Ok(save_stat) = tracker.clone().save_torrents().await {
+                    if save_stat {
+                        info!("[SAVING] Clearing shadow, saving procedure finishing...");
+                        tracker.clone().clear_shadow().await;
+                        info!("[SAVING] Torrents saved.");
+                    } else {
+                        error!("[SAVING] An error occurred while saving data...");
+                    }
                 } else {
-                    error!("[SAVING] An error occurred while saving data...");
+                    error!("[SAVING] An error occurred while saving data, lock issue...");
                 }
                 if config.whitelist {
                     info!("[SAVING] Saving data from Whitelist to database...");

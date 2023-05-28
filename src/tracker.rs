@@ -423,13 +423,15 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_torrents(&self) -> bool
+    pub async fn save_torrents(&self) -> Result<bool, ()>
     {
-        let shadow = self.get_shadow().await;
-        if self.sqlx.save_torrents(shadow).await.is_ok() {
-            return true;
+        if let Ok(shadow) = self.get_shadow().await {
+            if self.sqlx.save_torrents(shadow).await.is_ok() {
+                return Ok(true);
+            }
+            return Ok(false);
         }
-        false
+        Err(())
     }
 
     pub async fn save_whitelists(&self) -> bool
@@ -664,7 +666,10 @@ impl TorrentTracker {
                 torrent_option
             }).await {
                 Ok(data) => { data }
-                Err(_) => { return Err(()); }
+                Err(_) => {
+                    error!("[REMOVE_TORRENTS] Read Lock (torrents) request timed out!");
+                    return Err(());
+                }
             };
 
             if torrent_option.is_some() {
@@ -691,7 +696,10 @@ impl TorrentTracker {
             torrent_input
         }).await {
             Ok(data) => { data }
-            Err(_) => { return Err(()); }
+            Err(_) => {
+                error!("[ADD_PEER] Read Lock (torrents) request timed out!");
+                return Err(());
+            }
         };
 
         let torrent = match torrent_input {
@@ -705,7 +713,10 @@ impl TorrentTracker {
                     peer
                 }).await {
                     Ok(data) => { data }
-                    Err(_) => {return Err(()); }
+                    Err(_) => {
+                        error!("[ADD_PEER] Read Lock (peers) request timed out!");
+                        return Err(());
+                    }
                 };
 
                 let mut peers = match peer {
@@ -796,7 +807,10 @@ impl TorrentTracker {
             torrent_input
         }).await {
             Ok(data) => { data }
-            Err(_) => { return Err(()); }
+            Err(_) => {
+                error!("[REMOVE_PEER] Read Lock (torrents) request timed out!");
+                return Err(());
+            }
         };
 
         let torrent = match torrent_input {
@@ -810,7 +824,10 @@ impl TorrentTracker {
                     peer
                 }).await {
                     Ok(data) => { data }
-                    Err(_) => {return Err(()); }
+                    Err(_) => {
+                        error!("[REMOVE_PEER] Read Lock (peers) request timed out!");
+                        return Err(());
+                    }
                 };
 
                 let mut peers = match peer {
@@ -878,7 +895,10 @@ impl TorrentTracker {
                 torrent
             }).await {
                 Ok(data) => { data }
-                Err(_) => { return Err(()); }
+                Err(_) => {
+                    error!("[REMOVE_PEERS] Read Lock (torrents) request timed out!");
+                    return Err(());
+                }
             };
 
             if let Some(mut data_torrent) = torrent {
@@ -890,7 +910,10 @@ impl TorrentTracker {
                     peer
                 }).await {
                     Ok(data) => { data }
-                    Err(_) => {return Err(()); }
+                    Err(_) => {
+                        error!("[REMOVE_PEERS] Read Lock (peers) request timed out!");
+                        return Err(());
+                    }
                 };
 
                 let mut peers = match peer {
@@ -962,7 +985,7 @@ impl TorrentTracker {
             let mut peers = vec![];
             let torrents = match self.get_torrents(torrent_index.clone()).await {
                 Ok(data_request) => { data_request }
-                Err(_) => { error!("[GET_TORRENTS] Read Lock (torrents) request timed out!"); continue; }
+                Err(_) => { continue; }
             };
             for (info_hash, torrent_entry) in torrents.iter() {
                 if torrent_entry.is_some() {
@@ -979,7 +1002,6 @@ impl TorrentTracker {
             if let Ok(data_request) = self.remove_peers(peers.clone(), self.config.clone().persistence).await {
                 removed_peers += data_request.len() as u64;
             } else {
-                error!("[REMOVE_PEERS] Read Lock (peers) request timed out!");
                 continue;
             }
 
@@ -1019,14 +1041,23 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64).await;
     }
 
-    pub async fn get_update(&self) -> HashMap<InfoHash, i64>
+    pub async fn get_update(&self) -> Result<HashMap<InfoHash, i64>, ()>
     {
-        let updates_arc = self.updates.clone();
-        let updates_lock = updates_arc.read().await;
-        let updates = updates_lock.clone();
-        drop(updates_lock);
+        let updates = match timeout(Duration::from_secs(5), async move {
+            let updates_arc = self.updates.clone();
+            let updates_lock = updates_arc.read().await;
+            let updates = updates_lock.clone();
+            drop(updates_lock);
+            updates
+        }).await {
+            Ok(data) => { data }
+            Err(_) => {
+                error!("[GET_UPDATE] Read Lock (updates) request timed out!");
+                return Err(());
+            }
+        };
 
-        updates
+        Ok(updates)
     }
 
     pub async fn remove_update(&self, info_hash: InfoHash)
@@ -1108,14 +1139,23 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
     }
 
-    pub async fn get_shadow(&self) -> HashMap<InfoHash, i64>
+    pub async fn get_shadow(&self) -> Result<HashMap<InfoHash, i64>, ()>
     {
-        let shadow_arc = self.shadow.clone();
-        let shadow_lock = shadow_arc.read().await;
-        let shadow = shadow_lock.clone();
-        drop(shadow_lock);
+        let shadow = match timeout(Duration::from_secs(5), async move {
+            let shadow_arc = self.shadow.clone();
+            let shadow_lock = shadow_arc.read().await;
+            let shadow = shadow_lock.clone();
+            drop(shadow_lock);
+            shadow
+        }).await {
+            Ok(data) => { data }
+            Err(_) => {
+                error!("[GET_SHADOW] Read Lock (shadow) request timed out!");
+                return Err(());
+            }
+        };
 
-        shadow
+        Ok(shadow)
     }
 
     pub async fn clear_shadow(&self)
