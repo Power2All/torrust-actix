@@ -27,7 +27,6 @@ actix-extensible-rate-limit = "0.2.1"
 actix-remote-ip = "0.1.0"
 actix-web = { version = "4", features = ["rustls"] }
 async-std = "1.12.0"
-bichannel = { version = "0.0.4", features = ["crossbeam", "crossbeam-channel"] }
 binascii = "0.1.4"
 bip_bencode = "0.4.4"
 byteorder = "1.4.3"

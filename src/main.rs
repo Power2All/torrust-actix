@@ -1,15 +1,13 @@
 use async_std::task;
 use clap::Parser;
 use futures::future::try_join_all;
-use log::{debug, error, info};
+use log::{error, info};
 use scc::ebr::Arc;
 use std::alloc::System;
 use std::env;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
-use actix_extensible_rate_limit::backend::memory::InMemoryBackend;
-use serde_json::json;
 use tokio::time::timeout;
 use torrust_axum::common::{tcp_check_host_and_port_used, udp_check_host_and_port_used};
 use torrust_axum::config::{Configuration, DatabaseStructureConfig};
@@ -184,15 +182,6 @@ async fn main() -> std::io::Result<()>
     }
 
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
-
-    tracker.channel_torrents_init();
-    tracker.channel_peers_init();
-    tracker.channel_updates_init();
-    tracker.channel_shadow_init();
-    tracker.channel_whitelist_init();
-    tracker.channel_blacklist_init();
-    tracker.channel_keys_init();
-    tracker.channel_stats_init();
 
     // Load torrents
     if config.persistence {
@@ -443,14 +432,6 @@ async fn main() -> std::io::Result<()>
                     }
                 }
             }
-            let _ = tracker.channel_torrents_request("shutdown", json!({})).await;
-            let _ = tracker.channel_peers_request("shutdown", json!({})).await;
-            let _ = tracker.channel_updates_request("shutdown", json!({})).await;
-            let _ = tracker.channel_shadow_request("shutdown", json!({})).await;
-            let _ = tracker.channel_whitelist_request("shutdown", json!({})).await;
-            let _ = tracker.channel_blacklist_request("shutdown", json!({})).await;
-            let _ = tracker.channel_keys_request("shutdown", json!({})).await;
-            let _ = tracker.channel_stats_request("shutdown", json!({})).await;
             info!("Server shutting down completed");
             Ok(())
         }
