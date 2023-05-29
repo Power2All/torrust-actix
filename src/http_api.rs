@@ -170,11 +170,7 @@ pub async fn http_api_stats_get(request: HttpRequest, remote_ip: RemoteIP, data:
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
     if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
-    return if let Ok(stats) = data.get_stats().await {
-        HttpResponse::Ok().content_type(ContentType::json()).json(stats)
-    } else {
-        HttpResponse::InternalServerError().content_type(ContentType::json()).json(())
-    };
+    HttpResponse::Ok().content_type(ContentType::json()).json(data.get_stats().await)
 }
 
 pub async fn http_api_torrent_get(request: HttpRequest, remote_ip: RemoteIP, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse

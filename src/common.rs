@@ -468,14 +468,11 @@ fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
 }
 
-pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> Result<bool, ()>
+pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> bool
 {
-    let stats = match tracker.clone().get_stats().await {
-        Ok(timeout_check) => { timeout_check }
-        Err(_) => { return Err(()); }
-    };
+    let stats = tracker.clone().get_stats().await;
     if stats.maintenance_mode != 0 {
-        return Ok(true);
+        return true;
     }
-    Ok(false)
+    false
 }

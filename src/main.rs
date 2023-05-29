@@ -299,76 +299,70 @@ async fn main() -> std::io::Result<()>
 
             // Check if we need to run the keys cleanup.
             let tracker_clone_clone = tracker_clone.clone();
-            if let Ok(stats) = tracker_clone.get_stats().await {
-                if tracker_clone.config.keys && chrono::Utc::now().timestamp() > stats.timestamp_run_keys_timeout {
-                    info!("[KEYS] Checking now for old keys, and remove them.");
-                    tracker_clone_clone.clean_keys().await;
-                    tracker_clone_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone_clone.config.keys_cleanup_interval.unwrap() as i64).await;
-                    info!("[KEYS] Keys cleaned up.");
-                }
+            if tracker_clone.config.keys && chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_keys_timeout {
+                info!("[KEYS] Checking now for old keys, and remove them.");
+                tracker_clone_clone.clean_keys().await;
+                tracker_clone_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone_clone.config.keys_cleanup_interval.unwrap() as i64).await;
+                info!("[KEYS] Keys cleaned up.");
             }
 
             // Check if we need to run the Peers cleanup.
             let tracker_clone_clone = tracker_clone.clone();
-            if let Ok(stats) = tracker_clone.get_stats().await {
-                if chrono::Utc::now().timestamp() > stats.timestamp_run_timeout {
-                    tokio::spawn(timeout(Duration::from_secs(tracker_clone.config.interval_cleanup.unwrap_or(30)), async move {
-                        info!("[PEERS] Checking now for dead peers.");
-                        tracker_clone_clone.clean_peers(Duration::from_secs(tracker_clone_clone.config.clone().peer_timeout.unwrap())).await;
-                        tracker_clone_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone_clone.config.interval_cleanup.unwrap() as i64).await;
-                        info!("[PEERS] Peers cleaned up.");
-                    }));
-                }
+            if chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_timeout {
+                tokio::spawn(timeout(Duration::from_secs(tracker_clone.config.interval_cleanup.unwrap_or(30)), async move {
+                    info!("[PEERS] Checking now for dead peers.");
+                    tracker_clone_clone.clean_peers(Duration::from_secs(tracker_clone_clone.config.clone().peer_timeout.unwrap())).await;
+                    tracker_clone_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone_clone.config.interval_cleanup.unwrap() as i64).await;
+                    info!("[PEERS] Peers cleaned up.");
+                }));
             }
 
             // Check if we need to run the Save Data code.
             let tracker_clone_clone = tracker_clone.clone();
-            if let Ok(stats) = tracker_clone.get_stats().await {
-                if tracker_clone.config.persistence && chrono::Utc::now().timestamp() > stats.timestamp_run_save {
-                    tokio::spawn(timeout(Duration::from_secs(tracker_clone.config.persistence_interval.unwrap_or(30)), async move {
-                        info!("[SAVING] Starting persistence saving procedure.");
-                        info!("[SAVING] Moving Updates to Shadow...");
-                        tracker_clone_clone.transfer_updates_to_shadow().await;
-                        info!("[SAVING] Saving data from Shadow to database...");
-                        if let Ok(save_stat) = tracker_clone_clone.save_torrents().await {
-                            if save_stat {
-                                info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                                tracker_clone_clone.clear_shadow().await;
-                                info!("[SAVING] Torrents saved.");
-                            } else {
-                                error!("[SAVING] An error occurred while saving data...");
-                            }
+            if tracker_clone.config.persistence && chrono::Utc::now().timestamp() > tracker_clone.get_stats().await.timestamp_run_save {
+                tokio::spawn(timeout(Duration::from_secs(tracker_clone.config.persistence_interval.unwrap_or(30)), async move {
+                    info!("[SAVING] Starting persistence saving procedure.");
+                    info!("[SAVING] Moving Updates to Shadow...");
+                    tracker_clone_clone.transfer_updates_to_shadow().await;
+                    info!("[SAVING] Saving data from Shadow to database...");
+                    if let Ok(save_stat) = tracker_clone_clone.save_torrents().await {
+                        if save_stat {
+                            info!("[SAVING] Clearing shadow, saving procedure finishing...");
+                            tracker_clone_clone.clear_shadow().await;
+                            info!("[SAVING] Torrents saved.");
                         } else {
-                            error!("[SAVING] An error occurred while saving data, lock issue...");
+                            error!("[SAVING] An error occurred while saving data...");
                         }
-                        if tracker_clone_clone.config.whitelist {
-                            info!("[SAVING] Saving data from Whitelist to database...");
-                            if tracker_clone_clone.save_whitelists().await {
-                                info!("[SAVING] Whitelists saved.");
-                            } else {
-                                error!("[SAVING] An error occurred while saving data...");
-                            }
+                    } else {
+                        error!("[SAVING] An error occurred while saving data, lock issue...");
+                    }
+                    if tracker_clone_clone.config.whitelist {
+                        info!("[SAVING] Saving data from Whitelist to database...");
+                        if tracker_clone_clone.save_whitelists().await {
+                            info!("[SAVING] Whitelists saved.");
+                        } else {
+                            error!("[SAVING] An error occurred while saving data...");
                         }
-                        if tracker_clone_clone.config.blacklist {
-                            info!("[SAVING] Saving data from Blacklist to database...");
-                            if tracker_clone_clone.save_blacklists().await {
-                                info!("[SAVING] Blacklists saved.");
-                            } else {
-                                error!("[SAVING] An error occurred while saving data...");
-                            }
+                    }
+                    if tracker_clone_clone.config.blacklist {
+                        info!("[SAVING] Saving data from Blacklist to database...");
+                        if tracker_clone_clone.save_blacklists().await {
+                            info!("[SAVING] Blacklists saved.");
+                        } else {
+                            error!("[SAVING] An error occurred while saving data...");
                         }
-                        if tracker_clone_clone.config.keys {
-                            info!("[SAVING] Saving data from Keys to database...");
-                            if tracker_clone_clone.save_keys().await {
-                                info!("[SAVING] Keys saved.");
-                            } else {
-                                error!("[SAVING] An error occurred while saving data...");
-                            }
+                    }
+                    if tracker_clone_clone.config.keys {
+                        info!("[SAVING] Saving data from Keys to database...");
+                        if tracker_clone_clone.save_keys().await {
+                            info!("[SAVING] Keys saved.");
+                        } else {
+                            error!("[SAVING] An error occurred while saving data...");
                         }
-                        tracker_clone_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone_clone.config.persistence_interval.unwrap() as i64).await;
-                        info!("[SAVING] Saving persistent data procedure done.");
-                    }));
-                }
+                    }
+                    tracker_clone_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone_clone.config.persistence_interval.unwrap() as i64).await;
+                    info!("[SAVING] Saving persistent data procedure done.");
+                }));
             }
         }
     });
@@ -379,16 +373,13 @@ async fn main() -> std::io::Result<()>
             loop {
                 tracker_clone.set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() + tracker_clone.config.log_console_interval.unwrap() as i64).await;
                 task::sleep(Duration::from_secs(tracker_clone.config.log_console_interval.unwrap_or(30))).await;
-                if let Ok(stats) = tracker_clone.clone().get_stats().await {
-                    info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
-                    info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
-                    info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
-                    info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
-                    info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
-                    info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
-                } else {
-                    info!("[STATS] Unable to get a read lock in time, skipping");
-                }
+                let stats = tracker_clone.clone().get_stats().await;
+                info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
+                info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
+                info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
+                info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
+                info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
+                info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
             }
         });
     }

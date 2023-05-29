@@ -169,12 +169,8 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         udp_common::AnnounceEvent::None => { AnnounceEvent::None }
     };
 
-    if let Ok(maintenance_mode_check) = maintenance_mode(tracker.clone()).await {
-        if maintenance_mode_check {
-            return Err(ServerError::MaintenanceMode);
-        }
-    } else {
-        return Err(ServerError::InternalServerError);
+    if maintenance_mode(tracker.clone()).await {
+        return Err(ServerError::MaintenanceMode);
     }
 
     if let Ok(data_request) = tracker.get_torrent(InfoHash(request.info_hash.0)).await {
@@ -297,12 +293,8 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
 }
 
 pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
-    if let Ok(maintenance_mode_check) = maintenance_mode(tracker.clone()).await {
-        if maintenance_mode_check {
-            return Err(ServerError::MaintenanceMode);
-        }
-    } else {
-        return Err(ServerError::InternalServerError);
+    if maintenance_mode(tracker.clone()).await {
+        return Err(ServerError::MaintenanceMode);
     }
 
     let mut torrent_stats: Vec<TorrentScrapeStatistics> = Vec::new();

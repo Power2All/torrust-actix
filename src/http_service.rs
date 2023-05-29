@@ -412,16 +412,11 @@ pub fn http_service_query_hashing(query_map_result: Result<HttpServiceQueryHashi
 
 pub async fn http_service_maintenance_mode_check(data: Arc<TorrentTracker>) -> Option<HttpResponse>
 {
-    return if let Ok(maintenance_mode_check) = maintenance_mode(data).await {
-        if maintenance_mode_check {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
-            Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string))
-        } else {
-            None
-        }
-    } else {
-        let return_string = (ben_map! {"failure reason" => ben_bytes!("system too busy, try again later")}).encode();
+    if maintenance_mode(data).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
         Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string))
+    } else {
+        None
     }
 }
 
