@@ -2,7 +2,7 @@ use chrono::Utc;
 use scc::ebr::Arc;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicI64};
-use tokio::sync::Mutex;
+use async_std::sync::RwLock;
 
 use crate::common::{InfoHash, PeerId, TorrentPeer};
 use crate::config::Configuration;
@@ -13,15 +13,15 @@ use crate::tracker_objects::users::UserEntryItem;
 
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
-    pub map_torrents: Arc<Mutex<BTreeMap<InfoHash, TorrentEntryItem>>>,
-    pub map_peers: Arc<Mutex<BTreeMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>>>,
-    pub updates: Arc<Mutex<HashMap<InfoHash, i64>>>,
-    pub shadow: Arc<Mutex<HashMap<InfoHash, i64>>>,
+    pub map_torrents: Arc<RwLock<BTreeMap<InfoHash, TorrentEntryItem>>>,
+    pub map_peers: Arc<RwLock<BTreeMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>>>,
+    pub updates: Arc<RwLock<HashMap<InfoHash, i64>>>,
+    pub shadow: Arc<RwLock<HashMap<InfoHash, i64>>>,
     pub stats: Arc<StatsAtomics>,
-    pub whitelist: Arc<Mutex<HashMap<InfoHash, i64>>>,
-    pub blacklist: Arc<Mutex<HashMap<InfoHash, i64>>>,
-    pub keys: Arc<Mutex<HashMap<InfoHash, i64>>>,
-    pub users: Arc<Mutex<HashMap<String, UserEntryItem>>>,
+    pub whitelist: Arc<RwLock<HashMap<InfoHash, i64>>>,
+    pub blacklist: Arc<RwLock<HashMap<InfoHash, i64>>>,
+    pub keys: Arc<RwLock<HashMap<InfoHash, i64>>>,
+    pub users: Arc<RwLock<HashMap<String, UserEntryItem>>>,
     pub sqlx: DatabaseConnector,
 }
 
@@ -30,10 +30,10 @@ impl TorrentTracker {
     {
         TorrentTracker {
             config: config.clone(),
-            map_torrents: Arc::new(Mutex::new(BTreeMap::new())),
-            map_peers: Arc::new(Mutex::new(BTreeMap::new())),
-            updates: Arc::new(Mutex::new(HashMap::new())),
-            shadow: Arc::new(Mutex::new(HashMap::new())),
+            map_torrents: Arc::new(RwLock::new(BTreeMap::new())),
+            map_peers: Arc::new(RwLock::new(BTreeMap::new())),
+            updates: Arc::new(RwLock::new(HashMap::new())),
+            shadow: Arc::new(RwLock::new(HashMap::new())),
             stats: Arc::new(StatsAtomics {
                 started: AtomicI64::new(Utc::now().timestamp()),
                 timestamp_run_save: AtomicI64::new(0),
@@ -71,10 +71,10 @@ impl TorrentTracker {
                 udp6_announces_handled: AtomicI64::new(0),
                 udp6_scrapes_handled: AtomicI64::new(0),
             }),
-            whitelist: Arc::new(Mutex::new(HashMap::new())),
-            blacklist: Arc::new(Mutex::new(HashMap::new())),
-            keys: Arc::new(Mutex::new(HashMap::new())),
-            users: Arc::new(Mutex::new(HashMap::new())),
+            whitelist: Arc::new(RwLock::new(HashMap::new())),
+            blacklist: Arc::new(RwLock::new(HashMap::new())),
+            keys: Arc::new(RwLock::new(HashMap::new())),
+            users: Arc::new(RwLock::new(HashMap::new())),
             sqlx: DatabaseConnector::new(config.clone()).await,
         }
     }

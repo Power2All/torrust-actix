@@ -31,7 +31,7 @@ impl TorrentTracker {
     pub async fn add_blacklist(&self, info_hash: InfoHash, on_load: bool)
     {
         let blacklist_arc = self.blacklist.clone();
-        let mut blacklist_lock = blacklist_arc.lock().await;
+        let mut blacklist_lock = blacklist_arc.write().await;
         if on_load {
             blacklist_lock.insert(info_hash, 1i64);
         } else {
@@ -47,7 +47,7 @@ impl TorrentTracker {
         let mut return_list = vec![];
 
         let blacklist_arc = self.blacklist.clone();
-        let blacklist_lock = blacklist_arc.lock().await;
+        let blacklist_lock = blacklist_arc.read().await;
         for (info_hash, _) in blacklist_lock.iter() {
             return_list.push(*info_hash);
         }
@@ -59,7 +59,7 @@ impl TorrentTracker {
     pub async fn remove_flag_blacklist(&self, info_hash: InfoHash)
     {
         let blacklist_arc = self.blacklist.clone();
-        let mut blacklist_lock = blacklist_arc.lock().await;
+        let mut blacklist_lock = blacklist_arc.write().await;
         if blacklist_lock.get(&info_hash).is_some() {
             blacklist_lock.insert(info_hash, 0i64);
         }
@@ -79,7 +79,7 @@ impl TorrentTracker {
     pub async fn remove_blacklist(&self, info_hash: InfoHash)
     {
         let blacklist_arc = self.blacklist.clone();
-        let mut blacklist_lock = blacklist_arc.lock().await;
+        let mut blacklist_lock = blacklist_arc.write().await;
         blacklist_lock.remove(&info_hash);
         let blacklists = blacklist_lock.clone();
         drop(blacklist_lock);
@@ -97,7 +97,7 @@ impl TorrentTracker {
     pub async fn check_blacklist(&self, info_hash: InfoHash) -> bool
     {
         let blacklist_arc = self.blacklist.clone();
-        let blacklist_lock = blacklist_arc.lock().await;
+        let blacklist_lock = blacklist_arc.read().await;
         let blacklist = blacklist_lock.get(&info_hash).cloned();
         drop(blacklist_lock);
 
@@ -111,7 +111,7 @@ impl TorrentTracker {
     pub async fn clear_blacklist(&self)
     {
         let blacklist_arc = self.blacklist.clone();
-        let mut blacklist_lock = blacklist_arc.lock().await;
+        let mut blacklist_lock = blacklist_arc.write().await;
         blacklist_lock.clear();
         drop(blacklist_lock);
 

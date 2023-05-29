@@ -191,40 +191,38 @@ pub async fn http_api_torrent_get(request: HttpRequest, remote_ip: RemoteIP, pat
         Err(data_returned) => { return data_returned; }
     };
 
-    if let Ok(data_request) = data.get_torrent(info_hash_decoded).await {
-        if data_request.is_some() {
-            let mut return_data = GetTorrentApi {
-                info_hash: info_hash_decoded.to_string(),
-                completed: data_request.clone().unwrap().completed,
-                seeders: data_request.clone().unwrap().seeders,
-                leechers: data_request.clone().unwrap().leechers,
-                peers: vec![],
-            };
-            let mut peer_block = vec![];
-            for (peer_id, torrent_peer) in data_request.unwrap().peers.iter() {
-                peer_block.push(json!([
-                    {
-                        "id": peer_id.to_string(),
-                        "client": "".to_string()
-                    },
-                    {
-                        "ip": torrent_peer.peer_addr.to_string(),
-                        "updated": torrent_peer.updated.elapsed().as_secs() as i64,
-                        "uploaded": torrent_peer.uploaded.0,
-                        "downloaded": torrent_peer.downloaded.0,
-                        "left": torrent_peer.left.0,
-                        "event": match torrent_peer.event {
-                            AnnounceEvent::Started => { "Started".to_string() }
-                            AnnounceEvent::Stopped => { "Stopped".to_string() }
-                            AnnounceEvent::Completed => { "Completed".to_string() }
-                            AnnounceEvent::None => { "None".to_string() }
-                        }
+    if let Some(data_request) = data.get_torrent(info_hash_decoded).await {
+        let mut return_data = GetTorrentApi {
+            info_hash: info_hash_decoded.to_string(),
+            completed: data_request.completed.clone(),
+            seeders: data_request.seeders.clone(),
+            leechers: data_request.leechers.clone(),
+            peers: vec![],
+        };
+        let mut peer_block = vec![];
+        for (peer_id, torrent_peer) in data_request.peers.iter() {
+            peer_block.push(json!([
+                {
+                    "id": peer_id.to_string(),
+                    "client": "".to_string()
+                },
+                {
+                    "ip": torrent_peer.peer_addr.to_string(),
+                    "updated": torrent_peer.updated.elapsed().as_secs() as i64,
+                    "uploaded": torrent_peer.uploaded.0,
+                    "downloaded": torrent_peer.downloaded.0,
+                    "left": torrent_peer.left.0,
+                    "event": match torrent_peer.event {
+                        AnnounceEvent::Started => { "Started".to_string() }
+                        AnnounceEvent::Stopped => { "Stopped".to_string() }
+                        AnnounceEvent::Completed => { "Completed".to_string() }
+                        AnnounceEvent::None => { "None".to_string() }
                     }
-                ]));
-            }
-            return_data.peers = peer_block;
-            return HttpResponse::Ok().content_type(ContentType::json()).json(json!(&return_data));
+                }
+            ]));
         }
+        return_data.peers = peer_block;
+        return HttpResponse::Ok().content_type(ContentType::json()).json(json!(&return_data));
     }
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"}))
@@ -269,15 +267,13 @@ pub async fn http_api_torrents_get(request: HttpRequest, remote_ip: RemoteIP, bo
             Ok(data_returned) => { data_returned }
             Err(data_returned) => { return data_returned; }
         };
-        if let Ok(data_request) = data.get_torrent(hash_decoded).await {
-            if data_request.is_some() {
-                torrents.push(json!({
-                    "info_hash": hash_decoded.to_string(),
-                    "completed": data_request.clone().unwrap().completed,
-                    "seeders": data_request.clone().unwrap().seeders,
-                    "leechers": data_request.clone().unwrap().leechers,
-                }));
-            }
+        if let Some(data_request) = data.get_torrent(hash_decoded).await {
+            torrents.push(json!({
+                "info_hash": hash_decoded.to_string(),
+                "completed": data_request.completed.clone(),
+                "seeders": data_request.seeders.clone(),
+                "leechers": data_request.leechers.clone(),
+            }));
         }
     }
 

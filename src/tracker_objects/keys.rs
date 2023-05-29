@@ -33,7 +33,7 @@ impl TorrentTracker {
     pub async fn add_key(&self, hash: InfoHash, timeout: i64)
     {
         let keys_arc = self.keys.clone();
-        let mut keys_lock = keys_arc.lock().await;
+        let mut keys_lock = keys_arc.write().await;
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let timeout_unix = timestamp.as_secs() as i64 + timeout;
         keys_lock.insert(hash, timeout_unix);
@@ -45,7 +45,7 @@ impl TorrentTracker {
     pub async fn add_key_raw(&self, hash: InfoHash, timeout: i64)
     {
         let keys_arc = self.keys.clone();
-        let mut keys_lock = keys_arc.lock().await;
+        let mut keys_lock = keys_arc.write().await;
         let time = SystemTime::from(Utc.timestamp_opt(timeout, 0).unwrap());
         match time.duration_since(SystemTime::now()) {
             Ok(_) => {
@@ -64,7 +64,7 @@ impl TorrentTracker {
     pub async fn get_keys(&self) -> Vec<(InfoHash, i64)>
     {
         let keys_arc = self.keys.clone();
-        let keys_lock = keys_arc.lock().await;
+        let keys_lock = keys_arc.read().await;
         let keys = keys_lock.clone();
         drop(keys_lock);
 
@@ -79,7 +79,7 @@ impl TorrentTracker {
     pub async fn remove_key(&self, hash: InfoHash)
     {
         let keys_arc = self.keys.clone();
-        let mut keys_lock = keys_arc.lock().await;
+        let mut keys_lock = keys_arc.write().await;
         keys_lock.remove(&hash);
         let key_count = keys_lock.len();
         drop(keys_lock);
@@ -90,7 +90,7 @@ impl TorrentTracker {
     pub async fn check_key(&self, hash: InfoHash) -> bool
     {
         let keys_arc = self.keys.clone();
-        let keys_lock = keys_arc.lock().await;
+        let keys_lock = keys_arc.read().await;
         let key = keys_lock.get(&hash).cloned();
         drop(keys_lock);
 
@@ -104,7 +104,7 @@ impl TorrentTracker {
     pub async fn clear_keys(&self)
     {
         let keys_arc = self.keys.clone();
-        let mut keys_lock = keys_arc.lock().await;
+        let mut keys_lock = keys_arc.write().await;
         keys_lock.clear();
         drop(keys_lock);
 
@@ -114,7 +114,7 @@ impl TorrentTracker {
     pub async fn clean_keys(&self)
     {
         let keys_arc = self.keys.clone();
-        let keys_lock = keys_arc.lock().await;
+        let keys_lock = keys_arc.read().await;
         let keys = keys_lock.clone();
         drop(keys_lock);
 

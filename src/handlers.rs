@@ -207,16 +207,12 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
 pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest) -> Result<(TorrentPeer, TorrentEntry), CustomError>
 {
-    if let Ok(data_request) = data.get_torrent(announce_query.info_hash).await {
-        if data_request.is_none() {
-            if data.config.persistence {
-                data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), true).await;
-            } else {
-                data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), false).await;
-            }
+    if let None = data.get_torrent(announce_query.info_hash).await {
+        if data.config.persistence {
+            data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), true).await;
+        } else {
+            data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), false).await;
         }
-    } else {
-        return Err(CustomError{ message: "unable to handle announce, try again later".to_string() });
     }
 
     let mut torrent_peer = TorrentPeer {
@@ -233,16 +229,13 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         AnnounceEvent::Started => {
             torrent_peer.event = AnnounceEvent::Started;
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = match data.add_peer(
+            let torrent_entry = data.add_peer(
                 announce_query.info_hash,
                 announce_query.peer_id,
                 torrent_peer,
                 false,
                 data.config.persistence,
-            ).await {
-                Ok(data_request) => { data_request }
-                Err(_) => { return Err(CustomError{ message: "unable to add peer".to_string() }); }
-            };
+            ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
@@ -259,33 +252,24 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         AnnounceEvent::Stopped => {
             torrent_peer.event = AnnounceEvent::Stopped;
             debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            return match data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await {
-                Ok(data_request) => {
-                    Ok((torrent_peer, TorrentEntry {
-                        peers: BTreeMap::new(),
-                        completed: data_request.completed,
-                        seeders: data_request.seeders,
-                        leechers: data_request.leechers,
-                    }))
-                }
-                Err(_) => {
-                    Err(CustomError { message: "unable to remove peer".to_string() })
-                }
-            }
+            let torrent = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await;
+            Ok((torrent_peer, TorrentEntry {
+                peers: BTreeMap::new(),
+                completed: torrent.completed,
+                seeders: torrent.seeders,
+                leechers: torrent.leechers,
+            }))
         }
         AnnounceEvent::Completed => {
             torrent_peer.event = AnnounceEvent::Completed;
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = match data.add_peer(
+            let torrent_entry = data.add_peer(
                 announce_query.info_hash,
                 announce_query.peer_id,
                 torrent_peer,
                 true,
                 data.config.persistence,
-            ).await {
-                Ok(data_request) => { data_request }
-                Err(_) => { return Err(CustomError{ message: "unable to add peer".to_string() }); }
-            };
+            ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
@@ -301,16 +285,13 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         }
         AnnounceEvent::None => {
             debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = match data.add_peer(
+            let torrent_entry = data.add_peer(
                 announce_query.info_hash,
                 announce_query.peer_id,
                 torrent_peer,
                 false,
                 data.config.persistence,
-            ).await {
-                Ok(data_request) => { data_request }
-                Err(_) => { return Err(CustomError{ message: "unable to add peer".to_string() }); }
-            };
+            ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
@@ -361,24 +342,22 @@ pub async fn handle_scrape(data: Arc<TorrentTracker>, scrape_query: ScrapeQueryR
     // We generate the output and return it, even if it's empty...
     let mut return_data = BTreeMap::new();
     for hash in scrape_query.info_hash.iter() {
-        if let Ok(data_request) = data.get_torrent(*hash).await {
-            match data_request {
-                None => {
-                    return_data.insert(*hash, TorrentEntry {
-                        peers: BTreeMap::new(),
-                        completed: 0,
-                        seeders: 0,
-                        leechers: 0,
-                    });
-                }
-                Some(result) => {
-                    return_data.insert(*hash, TorrentEntry {
-                        peers: BTreeMap::new(),
-                        completed: result.completed,
-                        seeders: result.seeders,
-                        leechers: result.leechers,
-                    });
-                }
+        match data.get_torrent(*hash).await {
+            None => {
+                return_data.insert(*hash, TorrentEntry {
+                    peers: BTreeMap::new(),
+                    completed: 0,
+                    seeders: 0,
+                    leechers: 0,
+                });
+            }
+            Some(result) => {
+                return_data.insert(*hash, TorrentEntry {
+                    peers: BTreeMap::new(),
+                    completed: result.completed,
+                    seeders: result.seeders,
+                    leechers: result.leechers,
+                });
             }
         }
     }

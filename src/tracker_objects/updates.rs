@@ -11,7 +11,7 @@ impl TorrentTracker {
     pub async fn add_update(&self, info_hash: InfoHash, completed: i64)
     {
         let updates_arc = self.updates.clone();
-        let mut updates_lock = updates_arc.lock().await;
+        let mut updates_lock = updates_arc.write().await;
         updates_lock.insert(info_hash, completed);
         let update_count = updates_lock.len();
         drop(updates_lock);
@@ -25,7 +25,7 @@ impl TorrentTracker {
 
         for (info_hash, completed) in updates.iter() {
             let updates_arc = self.updates.clone();
-            let mut updates_lock = updates_arc.lock().await;
+            let mut updates_lock = updates_arc.write().await;
             updates_lock.insert(*info_hash, *completed);
             update_count = updates_lock.len();
             drop(updates_lock);
@@ -38,7 +38,7 @@ impl TorrentTracker {
     {
         let updates = match timeout(Duration::from_secs(30), async move {
             let updates_arc = self.updates.clone();
-            let updates_lock = updates_arc.lock().await;
+            let updates_lock = updates_arc.read().await;
             let updates = updates_lock.clone();
             drop(updates_lock);
             updates
@@ -56,7 +56,7 @@ impl TorrentTracker {
     pub async fn remove_update(&self, info_hash: InfoHash)
     {
         let updates_arc = self.updates.clone();
-        let mut updates_lock = updates_arc.lock().await;
+        let mut updates_lock = updates_arc.write().await;
         updates_lock.remove(&info_hash);
         let update_count = updates_lock.len();
         drop(updates_lock);
@@ -70,7 +70,7 @@ impl TorrentTracker {
 
         for info_hash in hashes.iter() {
             let updates_arc = self.updates.clone();
-            let mut updates_lock = updates_arc.lock().await;
+            let mut updates_lock = updates_arc.write().await;
             updates_lock.remove(info_hash);
             update_count = updates_lock.len();
             drop(updates_lock);
@@ -82,7 +82,7 @@ impl TorrentTracker {
     pub async fn transfer_updates_to_shadow(&self)
     {
         let updates_arc = self.updates.clone();
-        let mut updates_lock = updates_arc.lock().await;
+        let mut updates_lock = updates_arc.write().await;
         let updates = updates_lock.clone();
         updates_lock.clear();
         drop(updates_lock);

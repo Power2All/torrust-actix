@@ -167,10 +167,7 @@ async fn main() -> std::io::Result<()>
         let mut start: u64 = 0;
         let amount: u64 = 100000;
         loop {
-            let torrents_block = match tracker_receive.get_torrents_chunk(start, amount).await {
-                Ok(data_request) => { data_request }
-                Err(_) => { continue; }
-            };
+            let torrents_block = tracker_receive.get_torrents_chunk(start, amount).await;
             if torrents_block.is_empty() {
                 break;
             }

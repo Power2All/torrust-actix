@@ -40,7 +40,7 @@ impl TorrentTracker {
     pub async fn add_whitelist(&self, info_hash: InfoHash, on_load: bool)
     {
         let whitelist_arc = self.whitelist.clone();
-        let mut whitelist_lock = whitelist_arc.lock().await;
+        let mut whitelist_lock = whitelist_arc.write().await;
         if on_load {
             whitelist_lock.insert(info_hash, 1i64);
         } else {
@@ -56,7 +56,7 @@ impl TorrentTracker {
         let mut return_list = HashMap::new();
 
         let whitelist_arc = self.whitelist.clone();
-        let whitelist_lock = whitelist_arc.lock().await;
+        let whitelist_lock = whitelist_arc.read().await;
         for (info_hash, value) in whitelist_lock.iter() {
             return_list.insert(*info_hash, *value);
         }
@@ -68,7 +68,7 @@ impl TorrentTracker {
     pub async fn remove_flag_whitelist(&self, info_hash: InfoHash)
     {
         let whitelist_arc = self.whitelist.clone();
-        let mut whitelist_lock = whitelist_arc.lock().await;
+        let mut whitelist_lock = whitelist_arc.write().await;
         if whitelist_lock.get(&info_hash).is_some() {
             whitelist_lock.insert(info_hash, 0i64);
         }
@@ -88,7 +88,7 @@ impl TorrentTracker {
     pub async fn remove_whitelist(&self, info_hash: InfoHash)
     {
         let whitelist_arc = self.whitelist.clone();
-        let mut whitelist_lock = whitelist_arc.lock().await;
+        let mut whitelist_lock = whitelist_arc.write().await;
         whitelist_lock.remove(&info_hash);
         let whitelists = whitelist_lock.clone();
         drop(whitelist_lock);
@@ -106,7 +106,7 @@ impl TorrentTracker {
     pub async fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let whitelist_arc = self.whitelist.clone();
-        let whitelist_lock = whitelist_arc.lock().await;
+        let whitelist_lock = whitelist_arc.read().await;
         let whitelist = whitelist_lock.get(&info_hash).cloned();
         drop(whitelist_lock);
 
@@ -120,7 +120,7 @@ impl TorrentTracker {
     pub async fn clear_whitelist(&self)
     {
         let whitelist_arc = self.whitelist.clone();
-        let mut whitelist_lock = whitelist_arc.lock().await;
+        let mut whitelist_lock = whitelist_arc.write().await;
         whitelist_lock.clear();
         drop(whitelist_lock);
 

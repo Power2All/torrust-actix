@@ -173,16 +173,12 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         return Err(ServerError::MaintenanceMode);
     }
 
-    if let Ok(data_request) = tracker.get_torrent(InfoHash(request.info_hash.0)).await {
-        if data_request.is_none() {
-            if tracker.config.persistence {
-                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), true).await;
-            } else {
-                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), false).await;
-            }
+    if tracker.get_torrent(InfoHash(request.info_hash.0)).await.is_none() {
+        if tracker.config.persistence {
+            tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), true).await;
+        } else {
+            tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntryItem::new(), false).await;
         }
-    } else {
-        return Err(ServerError::InternalServerError);
     }
 
     // Check if whitelist is enabled, and if so, check if the torrent hash is known, and if not, show error.
@@ -235,17 +231,10 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
     };
 
     // get all peers excluding the client_addr
-    let peers = match tracker.get_torrent(InfoHash(request.info_hash.0)).await {
-        Ok(data_request) => {
-            if data_request.is_none() {
-                return Err(ServerError::UnknownInfoHash);
-            }
-            data_request
-        }
-        Err(_) => {
-            return Err(ServerError::InternalServerError);
-        }
-    };
+    let peers = tracker.get_torrent(InfoHash(request.info_hash.0)).await;
+    if peers.is_none() {
+        return Err(ServerError::UnknownInfoHash);
+    }
 
     // Build the response data.
     let announce_response = if remote_addr.is_ipv4() {
@@ -301,26 +290,19 @@ pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest,
     for info_hash in request.info_hashes.iter() {
         let info_hash = InfoHash(info_hash.0);
         let scrape_entry = match tracker.get_torrent(InfoHash(info_hash.0)).await {
-            Ok(data_request) => {
-                match data_request {
-                    None => {
-                        TorrentScrapeStatistics {
-                            seeders: NumberOfPeers(0),
-                            completed: NumberOfDownloads(0),
-                            leechers: NumberOfPeers(0),
-                        }
-                    }
-                    Some(torrent_info) => {
-                        TorrentScrapeStatistics {
-                            seeders: NumberOfPeers(torrent_info.seeders as i32),
-                            completed: NumberOfDownloads(torrent_info.completed as i32),
-                            leechers: NumberOfPeers(torrent_info.leechers as i32),
-                        }
-                    }
+            None => {
+                TorrentScrapeStatistics {
+                    seeders: NumberOfPeers(0),
+                    completed: NumberOfDownloads(0),
+                    leechers: NumberOfPeers(0),
                 }
             }
-            Err(_) => {
-                return Err(ServerError::InternalServerError);
+            Some(torrent_info) => {
+                TorrentScrapeStatistics {
+                    seeders: NumberOfPeers(torrent_info.seeders as i32),
+                    completed: NumberOfDownloads(torrent_info.completed as i32),
+                    leechers: NumberOfPeers(torrent_info.leechers as i32),
+                }
             }
         };
         torrent_stats.push(scrape_entry);
