@@ -2,7 +2,7 @@ use chrono::Utc;
 use scc::ebr::Arc;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicI64};
-use crossbeam_skiplist::SkipMap;
+use dashmap::DashMap;
 
 use crate::common::{InfoHash, PeerId, TorrentPeer};
 use crate::config::Configuration;
@@ -13,15 +13,15 @@ use crate::tracker_objects::users::UserEntryItem;
 
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
-    pub map_torrents: Arc<SkipMap<InfoHash, TorrentEntryItem>>,
-    pub map_peers: Arc<SkipMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>>,
-    pub updates: Arc<SkipMap<InfoHash, i64>>,
-    pub shadow: Arc<SkipMap<InfoHash, i64>>,
+    pub map_torrents: Arc<DashMap<InfoHash, TorrentEntryItem>>,
+    pub map_peers: Arc<DashMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>>,
+    pub updates: Arc<DashMap<InfoHash, i64>>,
+    pub shadow: Arc<DashMap<InfoHash, i64>>,
     pub stats: Arc<StatsAtomics>,
-    pub whitelist: Arc<SkipMap<InfoHash, i64>>,
-    pub blacklist: Arc<SkipMap<InfoHash, i64>>,
-    pub keys: Arc<SkipMap<InfoHash, i64>>,
-    pub users: Arc<SkipMap<String, UserEntryItem>>,
+    pub whitelist: Arc<DashMap<InfoHash, i64>>,
+    pub blacklist: Arc<DashMap<InfoHash, i64>>,
+    pub keys: Arc<DashMap<InfoHash, i64>>,
+    pub users: Arc<DashMap<String, UserEntryItem>>,
     pub sqlx: DatabaseConnector,
 }
 
@@ -30,10 +30,10 @@ impl TorrentTracker {
     {
         TorrentTracker {
             config: config.clone(),
-            map_torrents: Arc::new(SkipMap::new()),
-            map_peers: Arc::new(SkipMap::new()),
-            updates: Arc::new(SkipMap::new()),
-            shadow: Arc::new(SkipMap::new()),
+            map_torrents: Arc::new(DashMap::new()),
+            map_peers: Arc::new(DashMap::new()),
+            updates: Arc::new(DashMap::new()),
+            shadow: Arc::new(DashMap::new()),
             stats: Arc::new(StatsAtomics {
                 started: AtomicI64::new(Utc::now().timestamp()),
                 timestamp_run_save: AtomicI64::new(0),
@@ -71,10 +71,10 @@ impl TorrentTracker {
                 udp6_announces_handled: AtomicI64::new(0),
                 udp6_scrapes_handled: AtomicI64::new(0),
             }),
-            whitelist: Arc::new(SkipMap::new()),
-            blacklist: Arc::new(SkipMap::new()),
-            keys: Arc::new(SkipMap::new()),
-            users: Arc::new(SkipMap::new()),
+            whitelist: Arc::new(DashMap::new()),
+            blacklist: Arc::new(DashMap::new()),
+            keys: Arc::new(DashMap::new()),
+            users: Arc::new(DashMap::new()),
             sqlx: DatabaseConnector::new(config.clone()).await,
         }
     }

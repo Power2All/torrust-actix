@@ -31,7 +31,7 @@ bip_bencode = "0.4.4"
 byteorder = "1.4.3"
 chrono = "0.4.19"
 clap = { version = "4.1.1", features = ["derive"] }
-crossbeam-skiplist = "0.1.1"
+dashmap = "5.4.0"
 either = "1.7.0"
 fern = { version = "0.6.1", features = ["colored"] }
 futures = "0.3.21"
