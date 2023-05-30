@@ -194,9 +194,9 @@ pub async fn http_api_torrent_get(request: HttpRequest, remote_ip: RemoteIP, pat
     if let Some(data_request) = data.get_torrent(info_hash_decoded).await {
         let mut return_data = GetTorrentApi {
             info_hash: info_hash_decoded.to_string(),
-            completed: data_request.completed.clone(),
-            seeders: data_request.seeders.clone(),
-            leechers: data_request.leechers.clone(),
+            completed: data_request.completed,
+            seeders: data_request.seeders,
+            leechers: data_request.leechers,
             peers: vec![],
         };
         let mut peer_block = vec![];

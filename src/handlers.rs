@@ -207,7 +207,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
 pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest) -> Result<(TorrentPeer, TorrentEntry), CustomError>
 {
-    if let None = data.get_torrent(announce_query.info_hash).await {
+    if (data.get_torrent(announce_query.info_hash).await).is_none() {
         if data.config.persistence {
             data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), true).await;
         } else {

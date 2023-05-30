@@ -17,24 +17,18 @@ impl TorrentTracker {
         let mut completed_applied = false;
 
         let torrents_arc = self.map_torrents.clone();
-        let torrents_lock = torrents_arc.read().await;
-        let torrent_input = torrents_lock.get(&info_hash).cloned();
-        drop(torrents_lock);
+        let peers_arc = self.map_peers.clone();
 
-        let torrent = match torrent_input {
+        let torrent = match torrents_arc.get(&info_hash) {
             None => { TorrentEntry::new() }
-            Some(mut data_torrent) => {
-                let peers_arc = self.map_peers.clone();
-                let peers_lock = peers_arc.read().await;
-                let peer = peers_lock.get(&info_hash).cloned();
-                drop(peers_lock);
-
-                let mut peers = match peer {
+            Some(data) => {
+                let mut peers = match peers_arc.get(&info_hash) {
                     None => { BTreeMap::new() }
-                    Some(data_peers) => { data_peers }
+                    Some(data_peers) => { data_peers.value().clone() }
                 };
+                let mut data_torrent = data.value().clone();
 
-                match peers.get(&peer_id).cloned() {
+                match peers.get(&peer_id) {
                     None => {
                         if peer_entry.left == NumberOfBytes(0) {
                             data_torrent.seeders += 1;
@@ -69,15 +63,8 @@ impl TorrentTracker {
                     }
                 };
 
-                let torrents_arc = self.map_torrents.clone();
-                let mut torrents_lock = torrents_arc.write().await;
-                torrents_lock.insert(info_hash, data_torrent.clone());
-                drop(torrents_lock);
-
-                let peers_arc = self.map_peers.clone();
-                let mut peers_lock = peers_arc.write().await;
-                peers_lock.insert(info_hash, peers.clone());
-                drop(peers_lock);
+                torrents_arc.insert(info_hash, data_torrent.clone());
+                peers_arc.insert(info_hash, peers.clone());
 
                 TorrentEntry {
                     peers,
@@ -88,13 +75,7 @@ impl TorrentTracker {
             }
         };
 
-        if persistent && completed {
-            self.add_update(
-                info_hash,
-                torrent.completed,
-            ).await;
-        }
-
+        if persistent && completed { self.add_update(info_hash, torrent.completed).await; }
         if added_seeder { self.update_stats(StatsEvent::Seeds, 1).await; }
         if added_leecher { self.update_stats(StatsEvent::Peers, 1).await; }
         if removed_seeder { self.update_stats(StatsEvent::Seeds, -1).await; }
@@ -110,22 +91,16 @@ impl TorrentTracker {
         let mut removed_leecher = false;
 
         let torrents_arc = self.map_torrents.clone();
-        let torrents_lock = torrents_arc.read().await;
-        let torrent_input = torrents_lock.get(&info_hash).cloned();
-        drop(torrents_lock);
+        let peers_arc = self.map_peers.clone();
 
-        let torrent = match torrent_input {
+        let torrent = match torrents_arc.get(&info_hash) {
             None => { TorrentEntry::new() }
-            Some(mut data_torrent) => {
-                let peers_arc = self.map_peers.clone();
-                let peers_lock = peers_arc.read().await;
-                let peer = peers_lock.get(&info_hash).cloned();
-                drop(peers_lock);
-
-                let mut peers = match peer {
+            Some(data) => {
+                let mut peers = match peers_arc.get(&info_hash) {
                     None => { BTreeMap::new() }
-                    Some(data_peers) => { data_peers }
+                    Some(data_peers) => { data_peers.value().clone() }
                 };
+                let mut data_torrent = data.value().clone();
                 let peer_option = peers.get(&peer_id);
                 if peer_option.is_some() {
                     let peer = *peer_option.unwrap();
@@ -140,22 +115,8 @@ impl TorrentTracker {
                     }
                 }
 
-                let torrents_arc = self.map_torrents.clone();
-                let mut torrents_lock = torrents_arc.write().await;
-                torrents_lock.insert(info_hash, data_torrent.clone());
-                drop(torrents_lock);
-
-                if peers.is_empty() {
-                    let peers_arc = self.map_peers.clone();
-                    let mut peers_lock = peers_arc.write().await;
-                    peers_lock.remove(&info_hash);
-                    drop(peers_lock);
-                } else {
-                    let peers_arc = self.map_peers.clone();
-                    let mut peers_lock = peers_arc.write().await;
-                    peers_lock.insert(info_hash, peers.clone());
-                    drop(peers_lock);
-                }
+                torrents_arc.insert(info_hash, data_torrent.clone());
+                if peers.is_empty() { peers_arc.remove(&info_hash); } else { peers_arc.insert(info_hash, peers.clone()); }
 
                 TorrentEntry {
                     peers,
@@ -178,21 +139,15 @@ impl TorrentTracker {
         let mut removed_leecher = 0i64;
         let mut return_torrententries = Vec::new();
 
+        let torrents_arc = self.map_torrents.clone();
+        let peers_arc = self.map_peers.clone();
+
         for (info_hash, peer_id) in peers.iter() {
-            let torrents_arc = self.map_torrents.clone();
-            let torrents_lock = torrents_arc.read().await;
-            let torrent = torrents_lock.get(info_hash).cloned();
-            drop(torrents_lock);
-
-            if let Some(mut data_torrent) = torrent {
-                let peers_arc = self.map_peers.clone();
-                let peers_lock = peers_arc.read().await;
-                let peer = peers_lock.get(info_hash).cloned();
-                drop(peers_lock);
-
-                let mut peers = match peer {
+            if let Some(data) = torrents_arc.get(info_hash) {
+                let mut data_torrent = data.value().clone();
+                let mut peers = match peers_arc.get(info_hash) {
                     None => { BTreeMap::new() }
-                    Some(data_peers) => { data_peers }
+                    Some(data_peers) => { data_peers.value().clone() }
                 };
 
                 let peer_option = peers.get(peer_id);
@@ -210,22 +165,8 @@ impl TorrentTracker {
                     return_torrententries.push((*info_hash, *peer_id));
                 }
 
-                let torrents_arc = self.map_torrents.clone();
-                let mut torrents_lock = torrents_arc.write().await;
-                torrents_lock.insert(*info_hash, data_torrent.clone());
-                drop(torrents_lock);
-
-                if peers.is_empty() {
-                    let peers_arc = self.map_peers.clone();
-                    let mut peers_lock = peers_arc.write().await;
-                    peers_lock.remove(info_hash);
-                    drop(peers_lock);
-                } else {
-                    let peers_arc = self.map_peers.clone();
-                    let mut peers_lock = peers_arc.write().await;
-                    peers_lock.insert(*info_hash, peers.clone());
-                    drop(peers_lock);
-                }
+                torrents_arc.insert(*info_hash, data_torrent.clone());
+                if peers.is_empty() { peers_arc.remove(info_hash); } else { peers_arc.insert(*info_hash, peers.clone()); }
             };
         }
 
@@ -238,6 +179,8 @@ impl TorrentTracker {
     pub async fn clean_peers(&self, peer_timeout: Duration)
     {
         // Cleaning up peers in chunks, to prevent slow behavior.
+        let peers_arc = self.map_peers.clone();
+
         let mut start: usize = 0;
         let size: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
         let mut removed_peers = 0u64;
@@ -245,16 +188,11 @@ impl TorrentTracker {
         loop {
             info!("[PEERS] Scanning peers {} to {}", start, (start + size));
 
-            let peers_arc = self.map_peers.clone();
-            let peers_lock = peers_arc.read().await;
             let mut torrent_index = vec![];
-            for (info_hash, _) in peers_lock.iter().skip(start) {
-                torrent_index.push(*info_hash);
-                if torrent_index.len() == size {
-                    break;
-                }
+            for item in peers_arc.iter().skip(start) {
+                torrent_index.push(*item.key());
+                if torrent_index.len() == size { break; }
             }
-            drop(peers_lock);
 
             let mut peers = vec![];
             let torrents = self.get_torrents(torrent_index.clone()).await;
@@ -262,13 +200,9 @@ impl TorrentTracker {
                 if torrent_entry.is_some() {
                     let torrent = torrent_entry.clone().unwrap().clone();
                     for (peer_id, torrent_peer) in torrent.peers.iter() {
-                        if torrent_peer.updated.elapsed() > peer_timeout {
-                            peers.push((*info_hash, *peer_id));
-                        }
+                        if torrent_peer.updated.elapsed() > peer_timeout { peers.push((*info_hash, *peer_id)); }
                     }
-                } else {
-                    continue;
-                }
+                } else { continue; }
             }
             let response = self.remove_peers(peers.clone(), self.config.clone().persistence).await;
             removed_peers += response.len() as u64;

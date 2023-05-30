@@ -3,10 +3,8 @@ use scc::ebr::Arc;
 use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::process::exit;
-use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
 
 use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, maintenance_mode, PeerId};
 use crate::handlers::handle_announce;
@@ -59,10 +57,8 @@ impl UdpServer {
                     let payload_cloned = payload.clone();
                     let tracker_cloned = tracker.clone();
                     let socket_cloned = socket.clone();
-                    tokio::spawn(timeout(Duration::from_secs(30), async move {
-                        let response = handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
-                        UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
-                    }));
+                    let response = handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
+                    UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
                 }
             }
         }

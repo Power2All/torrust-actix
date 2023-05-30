@@ -600,7 +600,7 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn save_whitelist(&self, whitelists: HashMap<InfoHash, i64>) -> Result<(), Error>
+    pub async fn save_whitelist(&self, whitelists: Vec<(InfoHash, i64)>) -> Result<(), Error>
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
