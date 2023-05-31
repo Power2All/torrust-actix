@@ -67,9 +67,13 @@ impl TorrentTracker {
     {
         let updates_arc = self.updates.clone();
 
+        let mut remove_list = Vec::new();
         for item in updates_arc.iter() {
             self.add_shadow(*item.key(), *item.value()).await;
-            updates_arc.remove(item.key());
+            remove_list.push(*item.key());
+        }
+        for info_hash in remove_list.iter() {
+            updates_arc.remove(info_hash);
         }
 
         self.set_stats(StatsEvent::TorrentsUpdates, 0).await;
