@@ -79,6 +79,7 @@ pub struct Configuration {
     pub blacklist: bool,
     pub keys: bool,
     pub keys_cleanup_interval: Option<u64>,
+    pub users: bool,
 
     pub maintenance_mode_enabled: bool,
     pub interval: Option<u64>,
@@ -139,6 +140,7 @@ impl Configuration {
             blacklist: false,
             keys: false,
             keys_cleanup_interval: Some(60),
+            users: false,
 
             maintenance_mode_enabled: false,
             interval: Some(1800),

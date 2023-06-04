@@ -1,3 +1,4 @@
+use scc::ebr::Arc;
 use std::collections::HashMap;
 
 use crate::common::InfoHash;
@@ -5,9 +6,9 @@ use crate::tracker::TorrentTracker;
 use crate::tracker_objects::stats::StatsEvent;
 
 impl TorrentTracker {
-    pub async fn save_torrents(&self) -> Result<bool, ()>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<bool, ()>
     {
-        if self.sqlx.save_torrents(self.get_shadow().await).await.is_ok() {
+        if self.sqlx.save_torrents(tracker.clone(), self.get_shadow().await).await.is_ok() {
             return Ok(true);
         }
 

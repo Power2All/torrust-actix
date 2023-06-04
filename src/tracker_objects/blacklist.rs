@@ -1,13 +1,14 @@
 use log::info;
+use scc::ebr::Arc;
 
 use crate::common::InfoHash;
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::stats::StatsEvent;
 
 impl TorrentTracker {
-    pub async fn load_blacklists(&self)
+    pub async fn load_blacklists(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(blacklists) = self.sqlx.load_blacklist().await {
+        if let Ok(blacklists) = self.sqlx.load_blacklist(tracker.clone()).await {
             let mut blacklist_count = 0i64;
 
             for info_hash in blacklists.iter() {
@@ -19,11 +20,11 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_blacklists(&self) -> bool
+    pub async fn save_blacklists(&self, tracker: Arc<TorrentTracker>) -> bool
     {
         let blacklist = self.get_blacklist().await;
 
-        if self.sqlx.save_blacklist(blacklist).await.is_ok() { return true; }
+        if self.sqlx.save_blacklist(tracker.clone(), blacklist).await.is_ok() { return true; }
 
         false
     }

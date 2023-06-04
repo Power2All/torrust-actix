@@ -100,6 +100,7 @@ async fn main() -> std::io::Result<()>
             blacklist: config.blacklist,
             keys: config.keys,
             keys_cleanup_interval: None,
+            users: config.users,
             maintenance_mode_enabled: false,
             interval: None,
             interval_minimum: None,
@@ -139,6 +140,7 @@ async fn main() -> std::io::Result<()>
             blacklist: config.blacklist,
             keys: config.keys,
             keys_cleanup_interval: None,
+            users: config.users,
             maintenance_mode_enabled: false,
             interval: None,
             interval_minimum: None,
@@ -178,7 +180,7 @@ async fn main() -> std::io::Result<()>
             start += amount;
         }
 
-        let _ = tracker_send.save_torrents().await;
+        let _ = tracker_send.save_torrents(tracker_send.clone()).await;
 
         exit(0);
     }
@@ -189,13 +191,13 @@ async fn main() -> std::io::Result<()>
     if config.persistence {
         tracker.clone().load_torrents(tracker.clone()).await;
         if config.whitelist {
-            tracker.clone().load_whitelists().await;
+            tracker.clone().load_whitelists(tracker.clone()).await;
         }
         if config.blacklist {
-            tracker.clone().load_blacklists().await;
+            tracker.clone().load_blacklists(tracker.clone()).await;
         }
         if config.keys {
-            tracker.clone().load_keys().await;
+            tracker.clone().load_keys(tracker.clone()).await;
         }
     }
 
@@ -318,7 +320,7 @@ async fn main() -> std::io::Result<()>
             info!("[SAVING] Moving Updates to Shadow...");
             tracker_clone.transfer_updates_to_shadow().await;
             info!("[SAVING] Saving data from Shadow to database...");
-            if let Ok(save_stat) = tracker_clone.save_torrents().await {
+            if let Ok(save_stat) = tracker_clone.save_torrents(tracker_clone.clone()).await {
                 if save_stat {
                     info!("[SAVING] Clearing shadow, saving procedure finishing...");
                     tracker_clone.clear_shadow().await;
@@ -331,7 +333,7 @@ async fn main() -> std::io::Result<()>
             }
             if tracker_clone.config.whitelist {
                 info!("[SAVING] Saving data from Whitelist to database...");
-                if tracker_clone.save_whitelists().await {
+                if tracker_clone.save_whitelists(tracker_clone.clone()).await {
                     info!("[SAVING] Whitelists saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
@@ -339,7 +341,7 @@ async fn main() -> std::io::Result<()>
             }
             if tracker_clone.config.blacklist {
                 info!("[SAVING] Saving data from Blacklist to database...");
-                if tracker_clone.save_blacklists().await {
+                if tracker_clone.save_blacklists(tracker_clone.clone()).await {
                     info!("[SAVING] Blacklists saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
@@ -347,7 +349,7 @@ async fn main() -> std::io::Result<()>
             }
             if tracker_clone.config.keys {
                 info!("[SAVING] Saving data from Keys to database...");
-                if tracker_clone.save_keys().await {
+                if tracker_clone.save_keys(tracker_clone.clone()).await {
                     info!("[SAVING] Keys saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
@@ -396,7 +398,7 @@ async fn main() -> std::io::Result<()>
                 info!("[SAVING] Moving Updates to Shadow...");
                 tracker.clone().transfer_updates_to_shadow().await;
                 info!("[SAVING] Saving data from Torrents to database...");
-                if let Ok(save_stat) = tracker.clone().save_torrents().await {
+                if let Ok(save_stat) = tracker.clone().save_torrents(tracker.clone()).await {
                     if save_stat {
                         info!("[SAVING] Clearing shadow, saving procedure finishing...");
                         tracker.clone().clear_shadow().await;
@@ -409,7 +411,7 @@ async fn main() -> std::io::Result<()>
                 }
                 if config.whitelist {
                     info!("[SAVING] Saving data from Whitelist to database...");
-                    if tracker.clone().save_whitelists().await {
+                    if tracker.clone().save_whitelists(tracker.clone()).await {
                         info!("[SAVING] Whitelists saved.");
                     } else {
                         error!("[SAVING] An error occurred while saving data...");
@@ -417,7 +419,7 @@ async fn main() -> std::io::Result<()>
                 }
                 if config.blacklist {
                     info!("[SAVING] Saving data from Blacklist to database...");
-                    if tracker.clone().save_blacklists().await {
+                    if tracker.clone().save_blacklists(tracker.clone()).await {
                         info!("[SAVING] Blacklists saved.");
                     } else {
                         error!("[SAVING] An error occurred while saving data...");
@@ -425,7 +427,7 @@ async fn main() -> std::io::Result<()>
                 }
                 if config.keys {
                     info!("[SAVING] Saving data from Keys to database...");
-                    if tracker.clone().save_keys().await {
+                    if tracker.clone().save_keys(tracker.clone()).await {
                         info!("[SAVING] Keys saved.");
                     } else {
                         error!("[SAVING] An error occurred while saving data...");

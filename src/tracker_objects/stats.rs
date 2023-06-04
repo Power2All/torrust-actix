@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 
 use crate::tracker::TorrentTracker;
 

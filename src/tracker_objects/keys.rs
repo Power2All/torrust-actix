@@ -1,15 +1,16 @@
 use chrono::{TimeZone, Utc};
 use log::info;
 use std::time::{SystemTime, UNIX_EPOCH};
+use scc::ebr::Arc;
 
 use crate::common::InfoHash;
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::stats::StatsEvent;
 
 impl TorrentTracker {
-    pub async fn load_keys(&self)
+    pub async fn load_keys(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(keys) = self.sqlx.load_keys().await {
+        if let Ok(keys) = self.sqlx.load_keys(tracker.clone()).await {
             let mut keys_count = 0i64;
 
             for (hash, timeout) in keys.iter() {
@@ -21,11 +22,11 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_keys(&self) -> bool
+    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>) -> bool
     {
         let keys = self.get_keys().await;
 
-        if self.sqlx.save_keys(keys).await.is_ok() { return true; }
+        if self.sqlx.save_keys(tracker.clone(), keys).await.is_ok() { return true; }
 
         false
     }

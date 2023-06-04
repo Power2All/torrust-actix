@@ -302,7 +302,7 @@ pub async fn http_api_whitelist_reload(request: HttpRequest, remote_ip: RemoteIP
     if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     data.clear_whitelist().await;
-    data.load_whitelists().await;
+    data.load_whitelists(data.as_ref().clone()).await;
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
 }
@@ -400,7 +400,7 @@ pub async fn http_api_blacklist_reload(request: HttpRequest, remote_ip: RemoteIP
     if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     data.clear_blacklist().await;
-    data.load_blacklists().await;
+    data.load_blacklists(data.as_ref().clone()).await;
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
 }
@@ -497,7 +497,7 @@ pub async fn http_api_keys_reload(request: HttpRequest, remote_ip: RemoteIP, dat
     if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
     data.clear_keys().await;
-    data.load_keys().await;
+    data.load_keys(data.as_ref().clone()).await;
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
 }

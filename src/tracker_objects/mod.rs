@@ -1,9 +1,9 @@
-pub mod stats;
 pub mod blacklist;
 pub mod keys;
 pub mod peers;
 pub mod shadow;
+pub mod stats;
 pub mod torrents;
 pub mod updates;
-pub mod whitelist;
 pub mod users;
+pub mod whitelist;

@@ -1,8 +1,8 @@
 use chrono::Utc;
+use crossbeam_skiplist::SkipMap;
 use scc::ebr::Arc;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicI64};
-use crossbeam_skiplist::SkipMap;
 
 use crate::common::{InfoHash, PeerId, TorrentPeer};
 use crate::config::Configuration;
@@ -21,7 +21,7 @@ pub struct TorrentTracker {
     pub whitelist: Arc<SkipMap<InfoHash, i64>>,
     pub blacklist: Arc<SkipMap<InfoHash, i64>>,
     pub keys: Arc<SkipMap<InfoHash, i64>>,
-    pub users: Arc<SkipMap<String, UserEntryItem>>,
+    pub users: Arc<SkipMap<InfoHash, UserEntryItem>>,
     pub sqlx: DatabaseConnector,
 }
 

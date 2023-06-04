@@ -206,6 +206,31 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         }
     }
 
+    if tracker.config.users {
+        let user_key_path_extract: &str = if tracker.config.keys {
+            if request.path.len() < 91 {
+                return Err(ServerError::PeerKeyNotValid);
+            }
+            &request.path[51..91]
+        } else {
+            if request.path.len() < 50 {
+                return Err(ServerError::PeerKeyNotValid);
+            }
+            &request.path[10..50]
+        };
+        match hex::decode(user_key_path_extract) {
+            Ok(result) => {
+                let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
+                if !tracker.check_user_key(InfoHash::from(key)).await {
+                    return Err(ServerError::PeerKeyNotValid);
+                }
+            }
+            Err(_) => {
+                return Err(ServerError::PeerKeyNotValid);
+            }
+        }
+    }
+
     // Handle the request data.
     match handle_announce(tracker.clone(), AnnounceQueryRequest {
         info_hash: InfoHash(request.info_hash.0),

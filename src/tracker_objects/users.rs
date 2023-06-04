@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 
+use crate::common::InfoHash;
+use crate::tracker::TorrentTracker;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserEntryItem {
     pub uuid: String,
-    pub key: String,
+    pub key: InfoHash,
     pub uploaded: i64,
     pub downloaded: i64,
     pub completed: i64,
@@ -11,22 +14,13 @@ pub struct UserEntryItem {
     pub active: i64,
 }
 
-impl UserEntryItem {
-    pub fn new() -> UserEntryItem {
-        UserEntryItem {
-            uuid: "".to_string(),
-            key: "".to_string(),
-            uploaded: 0,
-            downloaded: 0,
-            completed: 0,
-            updated: 0,
-            active: 0,
-        }
-    }
-}
+impl TorrentTracker {
+    pub async fn check_user_key(&self, hash: InfoHash) -> bool
+    {
+        let users_arc = self.users.clone();
 
-impl Default for UserEntryItem {
-    fn default() -> Self {
-        Self::new()
+        if users_arc.get(&hash).is_some() { return true; }
+
+        false
     }
 }
