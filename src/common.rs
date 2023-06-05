@@ -440,6 +440,88 @@ impl TorrentPeer {
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
+pub struct UserId(pub [u8; 20]);
+
+impl fmt::Display for UserId {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        bin2hex(&self.0, f)
+    }
+}
+
+impl std::str::FromStr for UserId {
+    type Err = binascii::ConvertError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut i = Self([0u8; 20]);
+        if s.len() != 40 {
+            return Err(binascii::ConvertError::InvalidInputLength);
+        }
+        binascii::hex2bin(s.as_bytes(), &mut i.0)?;
+        Ok(i)
+    }
+}
+
+impl From<&[u8]> for UserId {
+    fn from(data: &[u8]) -> UserId {
+        assert_eq!(data.len(), 20);
+        let mut ret = UserId([0u8; 20]);
+        ret.0.clone_from_slice(data);
+        ret
+    }
+}
+
+impl From<[u8; 20]> for UserId {
+    fn from(data: [u8; 20]) -> Self {
+        UserId(data)
+    }
+}
+
+impl serde::ser::Serialize for UserId {
+    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut buffer = [0u8; 40];
+        let bytes_out = binascii::bin2hex(&self.0, &mut buffer).ok().unwrap();
+        let str_out = std::str::from_utf8(bytes_out).unwrap();
+        serializer.serialize_str(str_out)
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for UserId {
+    fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
+        des.deserialize_str(UserIdVisitor)
+    }
+}
+
+struct UserIdVisitor;
+
+impl<'v> serde::de::Visitor<'v> for UserIdVisitor {
+    type Value = UserId;
+
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "a 40 character long hash")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        if v.len() != 40 {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(v),
+                &"expected a 40 character long string",
+            ));
+        }
+
+        let mut res = UserId([0u8; 20]);
+
+        if binascii::hex2bin(v.as_bytes(), &mut res.0).is_err() {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(v),
+                &"expected a hexadecimal string",
+            ));
+        } else {
+            Ok(res)
+        }
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[allow(dead_code)]
 pub struct AnnounceQueryRequest {
@@ -462,7 +544,7 @@ pub struct ScrapeQueryRequest {
     pub(crate) info_hash: Vec<InfoHash>,
 }
 
-fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
+pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     let mut chars = [0u8; 40];
     binascii::bin2hex(data, &mut chars).expect("failed to hexlify");
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())

@@ -6,7 +6,7 @@ use std::process::exit;
 use tokio::net::UdpSocket;
 use tokio::task::JoinHandle;
 
-use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, maintenance_mode, PeerId};
+use crate::common::{AnnounceEvent, AnnounceQueryRequest, InfoHash, maintenance_mode, PeerId, UserId};
 use crate::handlers::handle_announce;
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::stats::StatsEvent;
@@ -221,7 +221,7 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         match hex::decode(user_key_path_extract) {
             Ok(result) => {
                 let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
-                if !tracker.check_user_key(InfoHash::from(key)).await {
+                if !tracker.check_user_key(UserId::from(key)).await {
                     return Err(ServerError::PeerKeyNotValid);
                 }
             }

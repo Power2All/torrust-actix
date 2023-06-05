@@ -17,7 +17,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
 
-use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
+use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query, UserId};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::stats::StatsEvent;
@@ -38,6 +38,7 @@ pub fn http_service_routes(data: Arc<TorrentTracker>) -> Box<dyn Fn(&mut Service
         cfg.app_data(web::Data::new(data.clone()));
         cfg.service(web::resource("announce").route(web::get().to(http_service_announce)));
         cfg.service(web::resource("announce/{key}").route(web::get().to(http_service_announce_key)));
+        cfg.service(web::resource("announce/{key}/{userkey}").route(web::get().to(http_service_announce_userkey)));
         cfg.service(web::resource("scrape").route(web::get().to(http_service_scrape)));
         cfg.service(web::resource("scrape/{key}").route(web::get().to(http_service_scrape_key)));
         cfg.default_service(web::route().to(http_service_not_found));
@@ -132,16 +133,56 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
 
     if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
 
-    // We check if the path is set, and retrieve the possible "key" to check.
     if data.config.keys {
-        let key = path.into_inner();
+        let key = path.clone();
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
         if key_check.is_some() {
             return key_check.unwrap();
         }
     }
 
-    http_service_announce_handler(request, ip, data.as_ref().clone()).await
+    if data.config.users && !data.config.keys {
+        let user_key = path.clone();
+        let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
+        if user_key_check.is_none() {
+            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_hash(user_key.clone()).await.unwrap())).await;
+        }
+    }
+
+    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
+}
+
+pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path<(String, String)>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    if data.config.keys {
+        let key = path.clone().0;
+        let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
+        if key_check.is_some() {
+            return key_check.unwrap();
+        }
+    }
+
+    if data.config.users {
+        let user_key = path.clone().1;
+        let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
+        if user_key_check.is_none() {
+            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_hash(user_key.clone()).await.unwrap())).await;
+        }
+    }
+
+    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
 }
 
 pub async fn http_service_announce(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
@@ -158,10 +199,15 @@ pub async fn http_service_announce(request: HttpRequest, data: web::Data<Arc<Tor
 
     if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
 
-    http_service_announce_handler(request, ip, data.as_ref().clone()).await
+    if data.config.keys {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+
+    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
 }
 
-pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
+pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>, _user_key: Option<InfoHash>) -> HttpResponse
 {
     let query_map_result = parse_query(Some(request.query_string().to_string()));
     let query_map = match http_service_query_hashing(query_map_result) {
@@ -394,6 +440,20 @@ pub async fn http_service_decode_hex_hash(hash: String) -> Result<InfoHash, Http
     };
 }
 
+pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, HttpResponse>
+{
+    return match hex::decode(hash) {
+        Ok(hash_result) => {
+            Ok(UserId(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap()))
+        }
+        Err(_) => {
+            let return_string = (ben_map! {"failure reason" => ben_bytes!("unable to decode hex string")}).encode();
+            let body = std::str::from_utf8(&return_string).unwrap().to_string();
+            return Err(HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(body));
+        }
+    };
+}
+
 type HttpServiceQueryHashingMapOk = HashIndex<String, Vec<Vec<u8>>>;
 type HttpServiceQueryHashingMapErr = HttpResponse;
 
@@ -436,6 +496,27 @@ pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: S
     };
     if !data.check_key(key_decoded).await {
         let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
+        return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string));
+    }
+    None
+}
+
+pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, user_key: String) -> Option<HttpResponse>
+{
+    if user_key.len() != 40 {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid user key")}).encode();
+        return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string));
+    }
+    let user_key_decoded: UserId = match http_service_decode_hex_user_id(user_key).await {
+        Ok(result) => {
+            result
+        }
+        Err(error) => {
+            return Some(error)
+        }
+    };
+    if !data.check_user_key(user_key_decoded).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown user key")}).encode();
         return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string));
     }
     None

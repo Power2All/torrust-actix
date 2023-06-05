@@ -4,7 +4,7 @@ use scc::ebr::Arc;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 
-use crate::common::{InfoHash, PeerId, TorrentPeer};
+use crate::common::{InfoHash, PeerId, TorrentPeer, UserId};
 use crate::config::Configuration;
 use crate::databases::DatabaseConnector;
 use crate::tracker_objects::stats::StatsAtomics;
@@ -21,7 +21,7 @@ pub struct TorrentTracker {
     pub whitelist: Arc<SkipMap<InfoHash, i64>>,
     pub blacklist: Arc<SkipMap<InfoHash, i64>>,
     pub keys: Arc<SkipMap<InfoHash, i64>>,
-    pub users: Arc<SkipMap<InfoHash, UserEntryItem>>,
+    pub users: Arc<SkipMap<UserId, UserEntryItem>>,
     pub sqlx: DatabaseConnector,
 }
 
