@@ -59,6 +59,14 @@ pub struct DatabaseStructureConfig {
     pub db_keys: String,
     pub table_keys_hash: String,
     pub table_keys_timeout: String,
+    pub db_users: String,
+    pub table_users_uuid: String,
+    pub table_users_key: String,
+    pub table_users_uploaded: String,
+    pub table_users_downloaded: String,
+    pub table_users_completed: String,
+    pub table_users_updated: String,
+    pub table_users_active: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -166,6 +174,14 @@ impl Configuration {
                 db_keys: String::from("keys"),
                 table_keys_hash: String::from("hash"),
                 table_keys_timeout: String::from("timeout"),
+                db_users: String::from("users"),
+                table_users_uuid: String::from("uuid"),
+                table_users_key: String::from("key"),
+                table_users_uploaded: String::from("uploaded"),
+                table_users_downloaded: String::from("downloaded"),
+                table_users_completed: String::from("completed"),
+                table_users_updated: String::from("updated"),
+                table_users_active: String::from("active"),
             },
         }
     }

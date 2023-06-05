@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Add;
+use log::info;
+use scc::ebr::Arc;
 
 use crate::common::UserId;
 use crate::tracker::TorrentTracker;
@@ -14,10 +16,17 @@ pub struct UserEntryItem {
     pub downloaded: i64,
     pub completed: i64,
     pub updated: i64,
-    pub active: i64,
+    pub active: u8,
 }
 
 impl TorrentTracker {
+    pub async fn load_users(&self, tracker: Arc<TorrentTracker>)
+    {
+        if let Ok(users) = self.sqlx.load_users(tracker.clone()).await {
+            info!("Loaded {} users.", users);
+        }
+    }
+
     pub async fn get_user(&self, user_key: UserId) -> Option<UserEntryItem>
     {
         let users_arc = self.users.clone();
@@ -52,6 +61,17 @@ impl TorrentTracker {
         let users_arc = self.users.clone();
 
         users_arc.insert(user_key, user_entry_item);
+
+        self.set_stats(StatsEvent::Users, users_arc.len() as i64).await;
+    }
+
+    pub async fn add_users(&self, users: HashMap<UserId, UserEntryItem>, persistent: bool)
+    {
+        let users_arc = self.users.clone();
+
+        for (user_id, user_entry_item) in users.iter() {
+            users_arc.insert(*user_id, user_entry_item.clone());
+        }
 
         self.set_stats(StatsEvent::Users, users_arc.len() as i64).await;
     }

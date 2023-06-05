@@ -7,12 +7,14 @@ use std::collections::HashMap;
 use std::process::exit;
 use std::str::FromStr;
 use std::time::Duration;
+use regex::Regex;
 
-use crate::common::InfoHash;
+use crate::common::{InfoHash, UserId};
 use crate::config::Configuration;
 use crate::databases::{DatabaseConnector, DatabaseDrivers};
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::torrents::TorrentEntryItem;
+use crate::tracker_objects::users::UserEntryItem;
 
 #[derive(Clone)]
 pub struct DatabaseConnectorMySQL {
@@ -346,5 +348,62 @@ impl DatabaseConnectorMySQL {
         };
 
         Ok(())
+    }
+
+    pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
+    {
+        let mut counter = 0u64;
+        let mut total_users = 0u64;
+
+        let query = format!(
+            "SELECT `{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}`",
+            tracker.config.db_structure.table_users_uuid,
+            tracker.config.db_structure.table_users_key,
+            tracker.config.db_structure.table_users_uploaded,
+            tracker.config.db_structure.table_users_downloaded,
+            tracker.config.db_structure.table_users_completed,
+            tracker.config.db_structure.table_users_updated,
+            tracker.config.db_structure.table_users_active,
+            tracker.config.db_structure.db_torrents
+        );
+        let mut rows = sqlx::query(query.as_str()).fetch(&self.pool);
+        let mut users_parsing = HashMap::new();
+        while let Some(result) = rows.try_next().await? {
+            if counter == 100000 {
+                tracker.add_users(users_parsing.clone(), false).await;
+                users_parsing.clear();
+                info!("[SQLite3] Loaded {} users...", total_users);
+                counter = 0;
+            }
+
+            let uuid_regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$").unwrap();
+            if !uuid_regex.is_match(result.get(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str())) {
+                info!("[SQLite3] Could not parse the user with ID: {}", result.get::<&str, _>(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str()));
+                continue;
+            }
+            let uuid: &str = result.get(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str());
+
+            let user_key_data: &str = result.get(tracker.config.db_structure.table_users_key.clone().as_str());
+            let user_key_decoded = hex::decode(user_key_data).unwrap();
+            let user_key = <[u8; 20]>::try_from(user_key_decoded[0..20].as_ref()).unwrap();
+
+            let uploaded: i64 = result.get(tracker.config.db_structure.table_users_uploaded.clone().as_str());
+            let downloaded: i64 = result.get(tracker.config.db_structure.table_users_uploaded.clone().as_str());
+            let completed: i64 = result.get(tracker.config.db_structure.table_users_completed.clone().as_str());
+            let updated: i64 = result.get(tracker.config.db_structure.table_users_updated.clone().as_str());
+            let active: i64 = result.get(tracker.config.db_structure.table_users_active.clone().as_str());
+
+            users_parsing.insert(UserId(user_key), UserEntryItem { uuid: uuid.to_string(), key: UserId(user_key), uploaded, downloaded, completed, updated, active: active as u8 });
+            counter += 1;
+            total_users += 1;
+        }
+
+        if counter != 0 {
+            tracker.add_users(users_parsing.clone(), false).await;
+            users_parsing.clear();
+        }
+
+        info!("[SQLite3] Loaded {} users...", total_users);
+        Ok(total_users)
     }
 }

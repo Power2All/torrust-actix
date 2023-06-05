@@ -122,9 +122,18 @@ async fn main() -> std::io::Result<()>
                 db_keys: config_retrieve_db_structure.db_keys,
                 table_keys_hash: config_retrieve_db_structure.table_keys_hash,
                 table_keys_timeout: config_retrieve_db_structure.table_keys_timeout,
+                db_users: config_retrieve_db_structure.db_users,
+                table_users_uuid: config_retrieve_db_structure.table_users_uuid,
+                table_users_key: config_retrieve_db_structure.table_users_key,
+                table_users_uploaded: config_retrieve_db_structure.table_users_uploaded,
+                table_users_downloaded: config_retrieve_db_structure.table_users_downloaded,
+                table_users_completed: config_retrieve_db_structure.table_users_completed,
+                table_users_updated: config_retrieve_db_structure.table_users_updated,
+                table_users_active: config_retrieve_db_structure.table_users_active,
             },
         }).clone()).await);
         tracker_receive.clone().load_torrents(tracker_receive.clone()).await;
+        tracker_receive.clone().load_users(tracker_receive.clone()).await;
 
         let tracker_send = Arc::new(TorrentTracker::new(Arc::new(Configuration {
             log_level: "".to_string(),
@@ -162,6 +171,14 @@ async fn main() -> std::io::Result<()>
                 db_keys: config_send_db_structure.db_keys,
                 table_keys_hash: config_send_db_structure.table_keys_hash,
                 table_keys_timeout: config_send_db_structure.table_keys_timeout,
+                db_users: config_send_db_structure.db_users,
+                table_users_uuid: config_send_db_structure.table_users_uuid,
+                table_users_key: config_send_db_structure.table_users_key,
+                table_users_uploaded: config_send_db_structure.table_users_uploaded,
+                table_users_downloaded: config_send_db_structure.table_users_downloaded,
+                table_users_completed: config_send_db_structure.table_users_completed,
+                table_users_updated: config_send_db_structure.table_users_updated,
+                table_users_active: config_send_db_structure.table_users_active,
             },
         }).clone()).await);
 
@@ -198,6 +215,9 @@ async fn main() -> std::io::Result<()>
         }
         if config.keys {
             tracker.clone().load_keys(tracker.clone()).await;
+        }
+        if config.users {
+            tracker.clone().load_users(tracker.clone()).await;
         }
     }
 
