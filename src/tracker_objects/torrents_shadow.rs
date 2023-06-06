@@ -17,7 +17,7 @@ impl TorrentTracker {
 
     pub async fn add_shadow(&self, info_hash: InfoHash, completed: i64)
     {
-        let shadow_arc = self.shadow.clone();
+        let shadow_arc = self.torrents_shadow.clone();
 
         shadow_arc.insert(info_hash, completed);
         let shadow_count = shadow_arc.len();
@@ -27,7 +27,7 @@ impl TorrentTracker {
 
     pub async fn remove_shadow(&self, info_hash: InfoHash)
     {
-        let shadow_arc = self.shadow.clone();
+        let shadow_arc = self.torrents_shadow.clone();
 
         shadow_arc.remove(&info_hash);
         let shadow_count = shadow_arc.len();
@@ -37,7 +37,7 @@ impl TorrentTracker {
 
     pub async fn remove_shadows(&self, hashes: Vec<InfoHash>)
     {
-        let shadow_arc = self.shadow.clone();
+        let shadow_arc = self.torrents_shadow.clone();
 
         let mut shadow_count = 0;
         for info_hash in hashes.iter() {
@@ -50,7 +50,7 @@ impl TorrentTracker {
 
     pub async fn get_shadow(&self) -> HashMap<InfoHash, i64>
     {
-        let shadow_arc = self.shadow.clone();
+        let shadow_arc = self.torrents_shadow.clone();
 
         let mut shadow = HashMap::new();
         for item in shadow_arc.iter() { shadow.insert(*item.key(), *item.value()); }
@@ -60,7 +60,7 @@ impl TorrentTracker {
 
     pub async fn clear_shadow(&self)
     {
-        let shadow_arc = self.shadow.clone();
+        let shadow_arc = self.torrents_shadow.clone();
 
         shadow_arc.clear();
 

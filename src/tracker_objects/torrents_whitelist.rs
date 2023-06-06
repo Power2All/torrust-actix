@@ -31,7 +31,7 @@ impl TorrentTracker {
 
     pub async fn add_whitelist(&self, info_hash: InfoHash, on_load: bool)
     {
-        let whitelist_arc = self.whitelist.clone();
+        let whitelist_arc = self.torrents_whitelist.clone();
 
         if on_load { whitelist_arc.insert(info_hash, 1i64); } else { whitelist_arc.insert(info_hash, 2i64); }
 
@@ -40,7 +40,7 @@ impl TorrentTracker {
 
     pub async fn get_whitelist(&self) -> Vec<(InfoHash, i64)>
     {
-        let whitelist_arc = self.whitelist.clone();
+        let whitelist_arc = self.torrents_whitelist.clone();
 
         let mut return_list = vec![];
         for item in whitelist_arc.iter() { return_list.push((*item.key(), *item.value())); }
@@ -50,7 +50,7 @@ impl TorrentTracker {
 
     pub async fn remove_flag_whitelist(&self, info_hash: InfoHash)
     {
-        let whitelist_arc = self.whitelist.clone();
+        let whitelist_arc = self.torrents_whitelist.clone();
 
         if whitelist_arc.get(&info_hash).is_some() { whitelist_arc.insert(info_hash, 0i64); }
         let mut whitelist_count = 0i64;
@@ -61,7 +61,7 @@ impl TorrentTracker {
 
     pub async fn remove_whitelist(&self, info_hash: InfoHash)
     {
-        let whitelist_arc = self.whitelist.clone();
+        let whitelist_arc = self.torrents_whitelist.clone();
 
         whitelist_arc.remove(&info_hash);
         let mut whitelist_count = 0i64;
@@ -72,7 +72,7 @@ impl TorrentTracker {
 
     pub async fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
-        let whitelist_arc = self.whitelist.clone();
+        let whitelist_arc = self.torrents_whitelist.clone();
 
         if whitelist_arc.get(&info_hash).is_some() { return true; }
 
@@ -81,7 +81,7 @@ impl TorrentTracker {
 
     pub async fn clear_whitelist(&self)
     {
-        let whitelist_arc = self.whitelist.clone();
+        let whitelist_arc = self.torrents_whitelist.clone();
 
         whitelist_arc.clear();
 

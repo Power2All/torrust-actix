@@ -86,7 +86,7 @@ impl TorrentTracker {
 
     pub async fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntryItem, persistent: bool)
     {
-        let torrents_arc = self.map_torrents.clone();
+        let torrents_arc = self.torrents.clone();
 
         torrents_arc.insert(info_hash, torrent_entry.clone());
 
@@ -97,7 +97,7 @@ impl TorrentTracker {
 
     pub async fn add_torrents(&self, torrents: HashMap<InfoHash, TorrentEntryItem>, persistent: bool)
     {
-        let torrents_arc = self.map_torrents.clone();
+        let torrents_arc = self.torrents.clone();
 
         let mut updates = HashMap::new();
         for (info_hash, torrent_entry) in torrents.iter() {
@@ -112,8 +112,8 @@ impl TorrentTracker {
 
     pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let torrents_arc = self.map_torrents.clone();
-        let peers_arc = self.map_peers.clone();
+        let torrents_arc = self.torrents.clone();
+        let peers_arc = self.peers.clone();
 
         let torrent = match torrents_arc.get(&info_hash) {
             None => { None }
@@ -136,8 +136,8 @@ impl TorrentTracker {
 
     pub async fn get_torrents(&self, hashes: Vec<InfoHash>) -> HashMap<InfoHash, Option<TorrentEntry>>
     {
-        let torrents_arc = self.map_torrents.clone();
-        let peers_arc = self.map_peers.clone();
+        let torrents_arc = self.torrents.clone();
+        let peers_arc = self.peers.clone();
 
         let mut return_torrents = HashMap::new();
 
@@ -165,7 +165,7 @@ impl TorrentTracker {
 
     pub async fn get_torrents_chunk(&self, skip: u64, amount: u64) -> HashMap<InfoHash, i64>
     {
-        let torrents_arc = self.map_torrents.clone();
+        let torrents_arc = self.torrents.clone();
 
         let mut torrents_return: HashMap<InfoHash, i64> = HashMap::new();
         let mut current_count: u64 = 0;
@@ -186,8 +186,8 @@ impl TorrentTracker {
 
     pub async fn remove_torrent(&self, info_hash: InfoHash, persistent: bool)
     {
-        let torrents_arc = self.map_torrents.clone();
-        let peers_arc = self.map_peers.clone();
+        let torrents_arc = self.torrents.clone();
+        let peers_arc = self.peers.clone();
 
         let mut removed_torrent = false;
         let mut remove_seeders = 0i64;
@@ -218,7 +218,7 @@ impl TorrentTracker {
 
     pub async fn remove_torrents(&self, hashes: Vec<InfoHash>, persistent: bool)
     {
-        let torrents_arc = self.map_torrents.clone();
+        let torrents_arc = self.torrents.clone();
 
         for info_hash in hashes.iter() { if torrents_arc.get(info_hash).is_some() { self.remove_torrent(*info_hash, persistent).await; } }
     }

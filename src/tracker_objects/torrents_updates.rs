@@ -7,7 +7,7 @@ use crate::tracker_objects::stats::StatsEvent;
 impl TorrentTracker {
     pub async fn add_update(&self, info_hash: InfoHash, completed: i64)
     {
-        let updates_arc = self.updates.clone();
+        let updates_arc = self.torrents_updates.clone();
 
         updates_arc.insert(info_hash, completed);
         let update_count = updates_arc.len() as i64;
@@ -17,7 +17,7 @@ impl TorrentTracker {
 
     pub async fn add_updates(&self, updates: HashMap<InfoHash, i64>)
     {
-        let updates_arc = self.updates.clone();
+        let updates_arc = self.torrents_updates.clone();
 
         let mut update_count = 0;
 
@@ -31,7 +31,7 @@ impl TorrentTracker {
 
     pub async fn get_update(&self) -> HashMap<InfoHash, i64>
     {
-        let updates_arc = self.updates.clone();
+        let updates_arc = self.torrents_updates.clone();
 
         let mut updates = HashMap::new();
         for item in updates_arc.iter() { updates.insert(*item.key(), *item.value()); }
@@ -41,7 +41,7 @@ impl TorrentTracker {
 
     pub async fn remove_update(&self, info_hash: InfoHash)
     {
-        let updates_arc = self.updates.clone();
+        let updates_arc = self.torrents_updates.clone();
 
         updates_arc.remove(&info_hash);
         let update_count = updates_arc.len();
@@ -51,7 +51,7 @@ impl TorrentTracker {
 
     pub async fn remove_updates(&self, hashes: Vec<InfoHash>)
     {
-        let updates_arc = self.updates.clone();
+        let updates_arc = self.torrents_updates.clone();
 
         let mut update_count = 0;
 
@@ -65,7 +65,7 @@ impl TorrentTracker {
 
     pub async fn transfer_updates_to_shadow(&self)
     {
-        let updates_arc = self.updates.clone();
+        let updates_arc = self.torrents_updates.clone();
 
         for item in updates_arc.iter() {
             self.add_shadow(*item.key(), *item.value()).await;

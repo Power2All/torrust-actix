@@ -16,8 +16,8 @@ impl TorrentTracker {
         let mut removed_leecher = false;
         let mut completed_applied = false;
 
-        let torrents_arc = self.map_torrents.clone();
-        let peers_arc = self.map_peers.clone();
+        let torrents_arc = self.torrents.clone();
+        let peers_arc = self.peers.clone();
 
         let torrent = match torrents_arc.get(&info_hash) {
             None => { TorrentEntry::new() }
@@ -90,8 +90,8 @@ impl TorrentTracker {
         let mut removed_seeder = false;
         let mut removed_leecher = false;
 
-        let torrents_arc = self.map_torrents.clone();
-        let peers_arc = self.map_peers.clone();
+        let torrents_arc = self.torrents.clone();
+        let peers_arc = self.peers.clone();
 
         let torrent = match torrents_arc.get(&info_hash) {
             None => { TorrentEntry::new() }
@@ -139,8 +139,8 @@ impl TorrentTracker {
         let mut removed_leecher = 0i64;
         let mut return_torrententries = Vec::new();
 
-        let torrents_arc = self.map_torrents.clone();
-        let peers_arc = self.map_peers.clone();
+        let torrents_arc = self.torrents.clone();
+        let peers_arc = self.peers.clone();
 
         for (info_hash, peer_id) in peers.iter() {
             if let Some(data) = torrents_arc.get(info_hash) {
@@ -179,7 +179,7 @@ impl TorrentTracker {
     pub async fn clean_peers(&self, peer_timeout: Duration)
     {
         // Cleaning up peers in chunks, to prevent slow behavior.
-        let peers_arc = self.map_peers.clone();
+        let peers_arc = self.peers.clone();
 
         let mut start: usize = 0;
         let size: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;

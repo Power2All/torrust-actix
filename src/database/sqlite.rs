@@ -457,4 +457,60 @@ impl DatabaseConnectorSQLite {
         info!("[SQLite3] Loaded {} users...", total_users);
         Ok(total_users)
     }
+
+    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: HashMap<UserId, UserEntryItem>) -> Result<(), Error>
+    {
+        let mut users_transaction = self.pool.begin().await?;
+        let mut users_handled_entries = 0u64;
+        for (_, user_entry_item) in users.iter() {
+            match sqlx::query(&format!(
+                "INSERT OR REPLACE INTO {} ('{}','{}',{},{},{},{},{}) VALUES ('{}','{}',{},{},{},{},{})",
+                tracker.config.db_structure.db_users,
+                tracker.config.db_structure.table_users_uuid,
+                tracker.config.db_structure.table_users_key,
+                tracker.config.db_structure.table_users_uploaded,
+                tracker.config.db_structure.table_users_downloaded,
+                tracker.config.db_structure.table_users_completed,
+                tracker.config.db_structure.table_users_updated,
+                tracker.config.db_structure.table_users_active,
+                user_entry_item.uuid,
+                user_entry_item.key,
+                user_entry_item.uploaded,
+                user_entry_item.downloaded,
+                user_entry_item.completed,
+                user_entry_item.updated,
+                user_entry_item.active
+            ))
+                .execute(&mut users_transaction)
+                .await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("[SQLite3] Error: {}", e.to_string());
+                    return Err(e);
+                }
+            }
+            users_handled_entries += 1;
+
+            if (users_handled_entries as f64 / 10000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
+                match users_transaction.commit().await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("[SQLite3] Error: {}", e.to_string());
+                        return Err(e);
+                    }
+                };
+                info!("[SQLite3] Handled {} torrents", users_handled_entries);
+                users_transaction = self.pool.begin().await?
+            }
+        }
+        match users_transaction.commit().await {
+            Ok(_) => {}
+            Err(e) => {
+                error!("[SQLite3] Error: {}", e.to_string());
+                return Err(e);
+            }
+        };
+
+        Ok(())
+    }
 }

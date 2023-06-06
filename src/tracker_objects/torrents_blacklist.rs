@@ -31,7 +31,7 @@ impl TorrentTracker {
 
     pub async fn add_blacklist(&self, info_hash: InfoHash, on_load: bool)
     {
-        let blacklist_arc = self.blacklist.clone();
+        let blacklist_arc = self.torrents_blacklist.clone();
 
         if on_load { blacklist_arc.insert(info_hash, 1i64); } else { blacklist_arc.insert(info_hash, 2i64); }
 
@@ -40,7 +40,7 @@ impl TorrentTracker {
 
     pub async fn get_blacklist(&self) -> Vec<InfoHash>
     {
-        let blacklist_arc = self.blacklist.clone();
+        let blacklist_arc = self.torrents_blacklist.clone();
 
         let mut return_list = vec![];
         for item in blacklist_arc.iter() { return_list.push(*item.key()); }
@@ -50,7 +50,7 @@ impl TorrentTracker {
 
     pub async fn remove_flag_blacklist(&self, info_hash: InfoHash)
     {
-        let blacklist_arc = self.blacklist.clone();
+        let blacklist_arc = self.torrents_blacklist.clone();
 
         if blacklist_arc.get(&info_hash).is_some() { blacklist_arc.insert(info_hash, 0i64); }
 
@@ -62,7 +62,7 @@ impl TorrentTracker {
 
     pub async fn remove_blacklist(&self, info_hash: InfoHash)
     {
-        let blacklist_arc = self.blacklist.clone();
+        let blacklist_arc = self.torrents_blacklist.clone();
 
         blacklist_arc.remove(&info_hash);
 
@@ -74,7 +74,7 @@ impl TorrentTracker {
 
     pub async fn check_blacklist(&self, info_hash: InfoHash) -> bool
     {
-        let blacklist_arc = self.blacklist.clone();
+        let blacklist_arc = self.torrents_blacklist.clone();
 
         if blacklist_arc.get(&info_hash).is_some() { return true; }
 
@@ -83,7 +83,7 @@ impl TorrentTracker {
 
     pub async fn clear_blacklist(&self)
     {
-        let blacklist_arc = self.blacklist.clone();
+        let blacklist_arc = self.torrents_blacklist.clone();
 
         blacklist_arc.clear();
 

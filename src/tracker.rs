@@ -13,15 +13,17 @@ use crate::tracker_objects::users::UserEntryItem;
 
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
-    pub map_torrents: Arc<SkipMap<InfoHash, TorrentEntryItem>>,
-    pub map_peers: Arc<SkipMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>>,
-    pub updates: Arc<SkipMap<InfoHash, i64>>,
-    pub shadow: Arc<SkipMap<InfoHash, i64>>,
+    pub torrents: Arc<SkipMap<InfoHash, TorrentEntryItem>>,
+    pub peers: Arc<SkipMap<InfoHash, BTreeMap<PeerId, TorrentPeer>>>,
+    pub torrents_updates: Arc<SkipMap<InfoHash, i64>>,
+    pub torrents_shadow: Arc<SkipMap<InfoHash, i64>>,
     pub stats: Arc<StatsAtomics>,
-    pub whitelist: Arc<SkipMap<InfoHash, i64>>,
-    pub blacklist: Arc<SkipMap<InfoHash, i64>>,
+    pub torrents_whitelist: Arc<SkipMap<InfoHash, i64>>,
+    pub torrents_blacklist: Arc<SkipMap<InfoHash, i64>>,
     pub keys: Arc<SkipMap<InfoHash, i64>>,
     pub users: Arc<SkipMap<UserId, UserEntryItem>>,
+    pub users_updates: Arc<SkipMap<UserId, UserEntryItem>>,
+    pub users_shadow: Arc<SkipMap<UserId, UserEntryItem>>,
     pub sqlx: DatabaseConnector,
 }
 
@@ -30,10 +32,10 @@ impl TorrentTracker {
     {
         TorrentTracker {
             config: config.clone(),
-            map_torrents: Arc::new(SkipMap::new()),
-            map_peers: Arc::new(SkipMap::new()),
-            updates: Arc::new(SkipMap::new()),
-            shadow: Arc::new(SkipMap::new()),
+            torrents: Arc::new(SkipMap::new()),
+            peers: Arc::new(SkipMap::new()),
+            torrents_updates: Arc::new(SkipMap::new()),
+            torrents_shadow: Arc::new(SkipMap::new()),
             stats: Arc::new(StatsAtomics {
                 started: AtomicI64::new(Utc::now().timestamp()),
                 timestamp_run_save: AtomicI64::new(0),
@@ -71,10 +73,12 @@ impl TorrentTracker {
                 udp6_announces_handled: AtomicI64::new(0),
                 udp6_scrapes_handled: AtomicI64::new(0),
             }),
-            whitelist: Arc::new(SkipMap::new()),
-            blacklist: Arc::new(SkipMap::new()),
+            torrents_whitelist: Arc::new(SkipMap::new()),
+            torrents_blacklist: Arc::new(SkipMap::new()),
             keys: Arc::new(SkipMap::new()),
             users: Arc::new(SkipMap::new()),
+            users_updates: Arc::new(SkipMap::new()),
+            users_shadow: Arc::new(SkipMap::new()),
             sqlx: DatabaseConnector::new(config.clone()).await,
         }
     }
