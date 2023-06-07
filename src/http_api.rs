@@ -18,11 +18,12 @@ use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
-use crate::common::{InfoHash, AnnounceEvent};
+use crate::common::{InfoHash, AnnounceEvent, UserId};
 use crate::config::Configuration;
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::stats::StatsEvent;
 use crate::tracker_objects::torrents::GetTorrentApi;
+use crate::tracker_objects::users::UserEntryItem;
 
 static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/webgui");
 
@@ -55,6 +56,8 @@ pub fn http_api_routes(data: Arc<TorrentTracker>) -> Box<dyn Fn(&mut ServiceConf
         cfg.service(web::resource("api/keys/reload").route(web::get().to(http_api_keys_reload)));
         cfg.service(web::resource("api/keys/{key}").route(web::get().to(http_api_keys_get)).route(web::delete().to(http_api_keys_delete)));
         cfg.service(web::resource("api/keys/{key}/{seconds_valid}").route(web::post().to(http_api_keys_post)).route(web::patch().to(http_api_keys_patch)));
+        cfg.service(web::resource("api/users").route(web::get().to(http_api_users_get)));
+        cfg.service(web::resource("api/user/{user_key}").route(web::get().to(http_api_user_get)).route(web::post().to(http_api_user_post)).route(web::delete().to(http_api_user_delete)));
         cfg.service(web::resource("api/maintenance/enable").route(web::get().to(http_api_maintenance_enable)));
         cfg.service(web::resource("api/maintenance/disable").route(web::get().to(http_api_maintenance_disable)));
         cfg.default_service(web::route().to(http_api_not_found));
@@ -186,7 +189,7 @@ pub async fn http_api_torrent_get(request: HttpRequest, remote_ip: RemoteIP, pat
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_info_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -241,7 +244,7 @@ pub async fn http_api_torrent_delete(request: HttpRequest, remote_ip: RemoteIP, 
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_info_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -263,7 +266,7 @@ pub async fn http_api_torrents_get(request: HttpRequest, remote_ip: RemoteIP, bo
     let mut torrents = vec![];
     for hash in body.iter() {
         if hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
-        let hash_decoded = match http_api_decode_hex_hash(hash.to_string()).await {
+        let hash_decoded = match http_api_decode_info_hash(hash.to_string()).await {
             Ok(data_returned) => { data_returned }
             Err(data_returned) => { return data_returned; }
         };
@@ -320,7 +323,7 @@ pub async fn http_api_whitelist_get(request: HttpRequest, remote_ip: RemoteIP, p
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_info_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -345,7 +348,7 @@ pub async fn http_api_whitelist_post(request: HttpRequest, remote_ip: RemoteIP, 
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_info_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -368,7 +371,7 @@ pub async fn http_api_whitelist_delete(request: HttpRequest, remote_ip: RemoteIP
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_info_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -418,7 +421,7 @@ pub async fn http_api_blacklist_get(request: HttpRequest, remote_ip: RemoteIP, p
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_info_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -443,7 +446,7 @@ pub async fn http_api_blacklist_post(request: HttpRequest, remote_ip: RemoteIP, 
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_info_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -466,7 +469,7 @@ pub async fn http_api_blacklist_delete(request: HttpRequest, remote_ip: RemoteIP
     if info_hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid info_hash size (HEX 40 characters)"})); }
 
     // Decode info_hash into a InfoHash string or give error
-    let info_hash_decoded = match http_api_decode_hex_hash(info_hash).await {
+    let info_hash_decoded = match http_api_decode_info_hash(info_hash).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -515,7 +518,7 @@ pub async fn http_api_keys_get(request: HttpRequest, remote_ip: RemoteIP, path: 
     if key.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid key size (HEX 40 characters)"})); }
 
     // Decode key into a InfoHash string or give error
-    let key_decoded = match http_api_decode_hex_hash(key).await {
+    let key_decoded = match http_api_decode_info_hash(key).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -541,7 +544,7 @@ pub async fn http_api_keys_post(request: HttpRequest, remote_ip: RemoteIP, path:
     if valid < 0 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid seconds_valid, should be 0 or higher"})); }
 
     // Decode key into a InfoHash string or give error
-    let key_decoded = match http_api_decode_hex_hash(key).await {
+    let key_decoded = match http_api_decode_info_hash(key).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -565,7 +568,7 @@ pub async fn http_api_keys_patch(request: HttpRequest, remote_ip: RemoteIP, path
     if valid < 0 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid seconds_valid, should be 0 or higher"})); }
 
     // Decode key into a InfoHash string or give error
-    let key_decoded = match http_api_decode_hex_hash(key).await {
+    let key_decoded = match http_api_decode_info_hash(key).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
@@ -589,12 +592,127 @@ pub async fn http_api_keys_delete(request: HttpRequest, remote_ip: RemoteIP, pat
     if key.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid key size (HEX 40 characters)"})); }
 
     // Decode key into a InfoHash string or give error
-    let key_decoded = match http_api_decode_hex_hash(key).await {
+    let key_decoded = match http_api_decode_info_hash(key).await {
         Ok(data_returned) => { data_returned }
         Err(data_returned) => { return data_returned; }
     };
 
     data.remove_key(key_decoded).await;
+
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+}
+
+pub async fn http_api_user_get(request: HttpRequest, remote_ip: RemoteIP, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    http_api_stats_log(remote_ip.0, data.clone()).await;
+
+    // Validate token
+    let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
+
+    // Validate info_hash
+    let user_id = path.into_inner();
+    if user_id.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid user_id size (HEX 40 characters)"})); }
+
+    // Decode info_hash into a InfoHash string or give error
+    let user_id_decoded = match http_api_decode_user_id(user_id).await {
+        Ok(data_returned) => { data_returned }
+        Err(data_returned) => { return data_returned; }
+    };
+
+    if let Some(user) = data.get_user(user_id_decoded).await {
+        return HttpResponse::Ok().content_type(ContentType::json()).json(json!(&user));
+    }
+
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "not found"}))
+}
+
+pub async fn http_api_users_get(request: HttpRequest, remote_ip: RemoteIP, body: web::Json<Vec<String>>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    http_api_stats_log(remote_ip.0, data.clone()).await;
+
+    // Validate token
+    let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
+
+    // Validate info_hash vector
+    let mut users = vec![];
+    for hash in body.iter() {
+        if hash.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid user_id size (HEX 40 characters)"})); }
+        let hash_decoded = match http_api_decode_user_id(hash.to_string()).await {
+            Ok(data_returned) => { data_returned }
+            Err(data_returned) => { return data_returned; }
+        };
+        if let Some(data_request) = data.get_user(hash_decoded).await {
+            users.push(json!(data_request));
+        }
+    }
+
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!(&users))
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct HttpApiUserPost {
+    pub uuid: String,
+    pub key: UserId,
+    pub uploaded: u64,
+    pub downloaded: u64,
+    pub completed: u64,
+    pub updated: u64,
+    pub active: u8,
+}
+
+pub async fn http_api_user_post(request: HttpRequest, remote_ip: RemoteIP, path: web::Path<String>, body: web::Json<HttpApiUserPost>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    http_api_stats_log(remote_ip.0, data.clone()).await;
+
+    // Validate token
+    let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
+
+    // Validate info_hash
+    let user_id = path.into_inner();
+    if user_id.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid user_id size (HEX 40 characters)"})); }
+
+    // Decode info_hash into a InfoHash string or give error
+    let user_id_decoded = match http_api_decode_user_id(user_id).await {
+        Ok(data_returned) => { data_returned }
+        Err(data_returned) => { return data_returned; }
+    };
+
+    data.add_user(user_id_decoded, UserEntryItem {
+        uuid: body.uuid.clone(),
+        key: body.key.clone(),
+        uploaded: body.uploaded.clone(),
+        downloaded: body.downloaded.clone(),
+        completed: body.completed.clone(),
+        updated: body.updated.clone(),
+        active: body.active.clone(),
+        torrents_active: Default::default(),
+    }).await;
+
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+}
+
+pub async fn http_api_user_delete(request: HttpRequest, remote_ip: RemoteIP, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    http_api_stats_log(remote_ip.0, data.clone()).await;
+
+    // Validate token
+    let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
+    if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
+
+    // Validate info_hash
+    let user_id = path.into_inner();
+    if user_id.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid user_id size (HEX 40 characters)"})); }
+
+    // Decode user_id into a UserId string or give error
+    let user_id_decoded = match http_api_decode_user_id(user_id).await {
+        Ok(data_returned) => { data_returned }
+        Err(data_returned) => { return data_returned; }
+    };
+
+    data.remove_user(user_id_decoded).await;
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
 }
@@ -660,11 +778,21 @@ pub async fn http_api_token(token: Option<String>, config: Arc<Configuration>) -
     }
 }
 
-pub async fn http_api_decode_hex_hash(hash: String) -> Result<InfoHash, HttpResponse>
+pub async fn http_api_decode_info_hash(hash: String) -> Result<InfoHash, HttpResponse>
 {
     return match hex::decode(hash) {
         Ok(hash_result) => {
             Ok(InfoHash(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap()))
+        }
+        Err(_) => { return Err(HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "unable to decode hex string"}))); }
+    };
+}
+
+pub async fn http_api_decode_user_id(hash: String) -> Result<UserId, HttpResponse>
+{
+    return match hex::decode(hash) {
+        Ok(hash_result) => {
+            Ok(UserId(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap()))
         }
         Err(_) => { return Err(HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "unable to decode hex string"}))); }
     };

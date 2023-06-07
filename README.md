@@ -364,11 +364,11 @@ This will disable the maintenance mode.
 * Bumped library versions.
 * Modified the way scheduling was done through threads, it could lock up and slow down public trackers with heavy activity.
 * Tweaking the SQLite3 database usage and database space consumption.
-* Adding optional user tracking as a separate plugin, by default this is disabled.
-* Adding optional torrent tracking extension, will save a peer info when a completed download is tracked for any purposes.
+* Full overhaul on how torrents and peers are used in memory. Using crossbeam skipmap for thread safe non-locking memory sharing.
 * Some various improvement on coding performance, readability and linting the files.
-* Replaced Tokio Axum web framework for Actix, reasons: Memory leaks, deadlocks and missing basic functions a web services should have.
+* Replaced Tokio Axum web framework for Actix, reason: Missing critical things like a timeout on connect, disconnect, read and write, and support was lackluster.
 * Renamed the github repository from torrust-axum to torrust-actix.
+* Adding user tracking support with an extra key.
 
 #### v3.1.2
 * Bumped library versions.
