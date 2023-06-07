@@ -444,7 +444,7 @@ impl DatabaseConnectorSQLite {
             let updated: i64 = result.get(tracker.config.db_structure.table_users_updated.clone().as_str());
             let active: i64 = result.get(tracker.config.db_structure.table_users_active.clone().as_str());
 
-            users_parsing.insert(UserId(user_key), UserEntryItem { uuid: uuid.to_string(), key: UserId(user_key), uploaded, downloaded, completed, updated, active: active as u8 });
+            users_parsing.insert(UserId(user_key), UserEntryItem { uuid: uuid.to_string(), key: UserId(user_key), uploaded: uploaded as u64, downloaded: downloaded as u64, completed: completed as u64, updated: updated as u64, active: active as u8, torrents_active: HashMap::new() });
             counter += 1;
             total_users += 1;
         }

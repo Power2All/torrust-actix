@@ -145,7 +145,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
         let user_key = path.clone();
         let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
         if user_key_check.is_none() {
-            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_hash(user_key.clone()).await.unwrap())).await;
+            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap())).await;
         }
     }
 
@@ -178,7 +178,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
         let user_key = path.clone().1;
         let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
         if user_key_check.is_none() {
-            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_hash(user_key.clone()).await.unwrap())).await;
+            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap())).await;
         }
     }
 
@@ -207,7 +207,7 @@ pub async fn http_service_announce(request: HttpRequest, data: web::Data<Arc<Tor
     http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
 }
 
-pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>, _user_key: Option<InfoHash>) -> HttpResponse
+pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>, user_key: Option<UserId>) -> HttpResponse
 {
     let query_map_result = parse_query(Some(request.query_string().to_string()));
     let query_map = match http_service_query_hashing(query_map_result) {
@@ -236,7 +236,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
 
-    let (_torrent_peer, torrent_entry) = match handle_announce(data.clone(), announce_unwrapped.clone()).await {
+    let (_torrent_peer, torrent_entry) = match handle_announce(data.clone(), announce_unwrapped.clone(), user_key).await {
         Ok(result) => { result }
         Err(e) => {
             let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();

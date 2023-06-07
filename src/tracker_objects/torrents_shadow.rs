@@ -8,14 +8,14 @@ use crate::tracker_objects::stats::StatsEvent;
 impl TorrentTracker {
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<bool, ()>
     {
-        if self.sqlx.save_torrents(tracker.clone(), self.get_shadow().await).await.is_ok() {
+        if self.sqlx.save_torrents(tracker.clone(), self.get_torrents_shadow().await).await.is_ok() {
             return Ok(true);
         }
 
         Ok(false)
     }
 
-    pub async fn add_shadow(&self, info_hash: InfoHash, completed: i64)
+    pub async fn add_torrents_shadow(&self, info_hash: InfoHash, completed: i64)
     {
         let shadow_arc = self.torrents_shadow.clone();
 
@@ -25,7 +25,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
     }
 
-    pub async fn remove_shadow(&self, info_hash: InfoHash)
+    pub async fn remove_torrents_shadow(&self, info_hash: InfoHash)
     {
         let shadow_arc = self.torrents_shadow.clone();
 
@@ -35,7 +35,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
     }
 
-    pub async fn remove_shadows(&self, hashes: Vec<InfoHash>)
+    pub async fn remove_torrents_shadows(&self, hashes: Vec<InfoHash>)
     {
         let shadow_arc = self.torrents_shadow.clone();
 
@@ -48,7 +48,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
     }
 
-    pub async fn get_shadow(&self) -> HashMap<InfoHash, i64>
+    pub async fn get_torrents_shadow(&self) -> HashMap<InfoHash, i64>
     {
         let shadow_arc = self.torrents_shadow.clone();
 
@@ -58,7 +58,7 @@ impl TorrentTracker {
         shadow
     }
 
-    pub async fn clear_shadow(&self)
+    pub async fn clear_torrents_shadow(&self)
     {
         let shadow_arc = self.torrents_shadow.clone();
 

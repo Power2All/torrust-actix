@@ -4,12 +4,13 @@ use serde::{Deserialize, Serialize};
 use sqlx::Error;
 use std::collections::HashMap;
 
-use crate::common::InfoHash;
+use crate::common::{InfoHash, UserId};
 use crate::config::Configuration;
 use crate::database::mysql::DatabaseConnectorMySQL;
 use crate::database::postgresql::DatabaseConnectorPgSQL;
 use crate::database::sqlite::DatabaseConnectorSQLite;
 use crate::tracker::TorrentTracker;
+use crate::tracker_objects::users::UserEntryItem;
 
 #[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -149,6 +150,19 @@ impl DatabaseConnector {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
                 DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
+            };
+        }
+
+        Err(Error::RowNotFound)
+    }
+
+    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: HashMap<UserId, UserEntryItem>) -> Result<(), Error>
+    {
+        if self.engine.is_some() {
+            return match self.engine.clone().unwrap() {
+                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_users(tracker.clone(), users).await }
+                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_users(tracker.clone(), users).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_users(tracker.clone(), users).await }
             };
         }
 

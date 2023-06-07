@@ -206,6 +206,7 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         }
     }
 
+    let mut user_key: Option<UserId> = None;
     if tracker.config.users {
         let user_key_path_extract: &str = if tracker.config.keys {
             if request.path.len() < 91 {
@@ -224,6 +225,7 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
                 if !tracker.check_user_key(UserId::from(key)).await {
                     return Err(ServerError::PeerKeyNotValid);
                 }
+                user_key = Some(UserId::from(key));
             }
             Err(_) => {
                 return Err(ServerError::PeerKeyNotValid);
@@ -244,7 +246,7 @@ pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequ
         event,
         remote_addr: remote_addr.ip(),
         numwant: request.peers_wanted.0 as u64,
-    }).await {
+    }, user_key).await {
         Ok(result) => { result }
         Err(_) => {
             return Err(ServerError::InternalServerError);

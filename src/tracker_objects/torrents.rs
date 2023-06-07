@@ -90,7 +90,7 @@ impl TorrentTracker {
 
         torrents_arc.insert(info_hash, torrent_entry.clone());
 
-        if persistent { self.add_update(info_hash, torrent_entry.completed).await; }
+        if persistent { self.add_torrents_update(info_hash, torrent_entry.completed).await; }
 
         self.update_stats(StatsEvent::Torrents, 1).await;
     }
@@ -105,7 +105,7 @@ impl TorrentTracker {
             updates.insert(*info_hash, torrent_entry.completed);
         }
 
-        if persistent { self.add_updates(updates).await; }
+        if persistent { self.add_torrents_updates(updates).await; }
 
         self.update_stats(StatsEvent::Torrents, torrents.len() as i64).await;
     }
@@ -207,8 +207,8 @@ impl TorrentTracker {
         peers_arc.remove(&info_hash);
 
         if persistent {
-            self.remove_update(info_hash).await;
-            self.remove_shadow(info_hash).await;
+            self.remove_torrents_update(info_hash).await;
+            self.remove_torrents_shadow(info_hash).await;
         }
 
         if removed_torrent { self.update_stats(StatsEvent::Torrents, -1).await; }

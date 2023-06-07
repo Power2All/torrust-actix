@@ -225,7 +225,7 @@ impl<'v> serde::de::Visitor<'v> for InfoHashVisitor {
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct PeerId(pub [u8; 20]);
 
-fn ser_instant<S: serde::Serializer>(inst: &std::time::Instant, ser: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn ser_instant<S: serde::Serializer>(inst: &std::time::Instant, ser: S) -> Result<S::Ok, S::Error> {
     ser.serialize_u64(inst.elapsed().as_millis() as u64)
 }
 

@@ -3,8 +3,9 @@ use scc::ebr::Arc;
 use scc::HashIndex;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
+use std::time::SystemTime;
 
-use crate::common::{AnnounceEvent, AnnounceQueryRequest, CustomError, InfoHash, NumberOfBytes, PeerId, ScrapeQueryRequest, TorrentPeer};
+use crate::common::{AnnounceEvent, AnnounceQueryRequest, CustomError, InfoHash, NumberOfBytes, PeerId, ScrapeQueryRequest, TorrentPeer, UserId};
 use crate::config::Configuration;
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::torrents::{TorrentEntry, TorrentEntryItem};
@@ -205,7 +206,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     Ok(announce_data)
 }
 
-pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest) -> Result<(TorrentPeer, TorrentEntry), CustomError>
+pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
 {
     if (data.get_torrent(announce_query.info_hash).await).is_none() {
         if data.config.persistence {
@@ -242,6 +243,15 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.remote_addr,
                 torrent_peer.peer_addr,
             );
+            if data.config.users && user_key.is_some(){
+                if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let mut torrents_active = user.torrents_active.clone();
+                    torrents_active.insert(announce_query.info_hash, std::time::Instant::now());
+                    user.torrents_active = torrents_active;
+                    data.add_user(user_key.unwrap(), user).await;
+                }
+            }
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,
@@ -253,6 +263,18 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
             torrent_peer.event = AnnounceEvent::Stopped;
             debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
             let torrent = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await;
+            if data.config.users && user_key.is_some(){
+                if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                    user.uploaded += announce_query.uploaded;
+                    user.downloaded += announce_query.downloaded;
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let mut torrents_active = user.torrents_active.clone();
+                    torrents_active.remove(&announce_query.info_hash);
+                    user.torrents_active = torrents_active;
+                    data.add_user(user_key.unwrap(), user.clone()).await;
+                    data.add_users_update(user_key.unwrap(), user).await;
+                }
+            }
             Ok((torrent_peer, TorrentEntry {
                 peers: BTreeMap::new(),
                 completed: torrent.completed,
@@ -276,6 +298,13 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.remote_addr,
                 torrent_peer.peer_addr,
             );
+            if data.config.users && user_key.is_some(){
+                if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                    user.completed += 1;
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    data.add_user(user_key.unwrap(), user).await;
+                }
+            }
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,
@@ -298,6 +327,15 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.remote_addr,
                 torrent_peer.peer_addr,
             );
+            if data.config.users && user_key.is_some(){
+                if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let mut torrents_active = user.torrents_active.clone();
+                    torrents_active.insert(announce_query.info_hash, std::time::Instant::now());
+                    user.torrents_active = torrents_active;
+                    data.add_user(user_key.unwrap(), user).await;
+                }
+            }
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,

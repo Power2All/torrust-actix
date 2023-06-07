@@ -82,25 +82,4 @@ impl TorrentTracker {
             sqlx: DatabaseConnector::new(config.clone()).await,
         }
     }
-
-    // pub async fn load_users(&self)
-    // {
-    //     if let Ok(users) = self.sqlx.load_users().await {
-    //         let mut user_count = 0i64;
-    //
-    //         for (info_hash, completed) in torrents.iter() {
-    //             self.add_torrent(*info_hash, TorrentEntryItem {
-    //                 completed: *completed,
-    //                 seeders: 0,
-    //                 leechers: 0,
-    //             }, false).await;
-    //             torrent_count += 1;
-    //             completed_count += *completed;
-    //         }
-    //
-    //         info!("Loaded {} torrents with {} completes.", torrent_count, completed_count);
-    //         self.update_stats(StatsEvent::Completed, completed_count).await;
-    //     }
-    // }
-
 }

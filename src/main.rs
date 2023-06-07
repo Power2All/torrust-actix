@@ -191,7 +191,7 @@ async fn main() -> std::io::Result<()>
                 break;
             }
             for (info_hash, completed) in torrents_block.iter() {
-                tracker_send.add_shadow(*info_hash, *completed).await;
+                tracker_send.add_torrents_shadow(*info_hash, *completed).await;
                 tracker_receive.remove_torrent(*info_hash, false).await;
             }
             start += amount;
@@ -311,6 +311,12 @@ async fn main() -> std::io::Result<()>
             info!("[PEERS] Checking now for dead peers.");
             tracker_clone.clean_peers(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
             info!("[PEERS] Peers cleaned up.");
+
+            if tracker_clone.config.users {
+                info!("[USERS] Checking now for inactive torrents in users.");
+                tracker_clone.clean_users_active_torrents(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
+                info!("[USERS] Inactive torrents in users cleaned up.");
+            }
         }
     });
 
@@ -338,12 +344,12 @@ async fn main() -> std::io::Result<()>
 
             info!("[SAVING] Starting persistence saving procedure.");
             info!("[SAVING] Moving Updates to Shadow...");
-            tracker_clone.transfer_updates_to_shadow().await;
+            tracker_clone.transfer_torrents_updates_to_torrents_shadow().await;
             info!("[SAVING] Saving data from Shadow to database...");
             if let Ok(save_stat) = tracker_clone.save_torrents(tracker_clone.clone()).await {
                 if save_stat {
                     info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                    tracker_clone.clear_shadow().await;
+                    tracker_clone.clear_torrents_shadow().await;
                     info!("[SAVING] Torrents saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
@@ -371,6 +377,14 @@ async fn main() -> std::io::Result<()>
                 info!("[SAVING] Saving data from Keys to database...");
                 if tracker_clone.save_keys(tracker_clone.clone()).await {
                     info!("[SAVING] Keys saved.");
+                } else {
+                    error!("[SAVING] An error occurred while saving data...");
+                }
+            }
+            if tracker_clone.config.users {
+                info!("[SAVING] Saving data from Users to database...");
+                if tracker_clone.save_users(tracker_clone.clone()).await {
+                    info!("[SAVING] Users saved.");
                 } else {
                     error!("[SAVING] An error occurred while saving data...");
                 }
@@ -416,12 +430,12 @@ async fn main() -> std::io::Result<()>
             if tracker.clone().config.persistence {
                 info!("[SAVING] Starting persistence saving procedure.");
                 info!("[SAVING] Moving Updates to Shadow...");
-                tracker.clone().transfer_updates_to_shadow().await;
+                tracker.clone().transfer_torrents_updates_to_torrents_shadow().await;
                 info!("[SAVING] Saving data from Torrents to database...");
                 if let Ok(save_stat) = tracker.clone().save_torrents(tracker.clone()).await {
                     if save_stat {
                         info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                        tracker.clone().clear_shadow().await;
+                        tracker.clone().clear_torrents_shadow().await;
                         info!("[SAVING] Torrents saved.");
                     } else {
                         error!("[SAVING] An error occurred while saving data...");

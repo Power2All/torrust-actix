@@ -75,7 +75,7 @@ impl TorrentTracker {
             }
         };
 
-        if persistent && completed { self.add_update(info_hash, torrent.completed).await; }
+        if persistent && completed { self.add_torrents_update(info_hash, torrent.completed).await; }
         if added_seeder { self.update_stats(StatsEvent::Seeds, 1).await; }
         if added_leecher { self.update_stats(StatsEvent::Peers, 1).await; }
         if removed_seeder { self.update_stats(StatsEvent::Seeds, -1).await; }

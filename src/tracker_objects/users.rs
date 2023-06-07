@@ -1,10 +1,11 @@
+use log::info;
+use scc::ebr::Arc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Add;
-use log::info;
-use scc::ebr::Arc;
+use std::time::Duration;
 
-use crate::common::UserId;
+use crate::common::{InfoHash, UserId};
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::stats::StatsEvent;
 
@@ -12,11 +13,13 @@ use crate::tracker_objects::stats::StatsEvent;
 pub struct UserEntryItem {
     pub uuid: String,
     pub key: UserId,
-    pub uploaded: i64,
-    pub downloaded: i64,
-    pub completed: i64,
-    pub updated: i64,
+    pub uploaded: u64,
+    pub downloaded: u64,
+    pub completed: u64,
+    pub updated: u64,
     pub active: u8,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub torrents_active: HashMap<InfoHash, std::time::Instant>
 }
 
 impl TorrentTracker {
@@ -33,6 +36,18 @@ impl TorrentTracker {
         let user = users_arc.get(&user_key).map(|data| data.value().clone());
 
         user
+    }
+
+    pub async fn get_users(&self, users: Vec<UserId>) -> HashMap<UserId, Option<UserEntryItem>>
+    {
+        let mut return_users = HashMap::new();
+
+        let users_arc = self.users.clone();
+        for user_id in users.iter() {
+            return_users.insert(*user_id, users_arc.get(user_id).map(|data| data.value().clone()));
+        }
+
+        return_users
     }
 
     pub async fn get_users_chunk(&self, skip: u64, amount: u64) -> HashMap<UserId, UserEntryItem>
@@ -65,7 +80,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::Users, users_arc.len() as i64).await;
     }
 
-    pub async fn add_users(&self, users: HashMap<UserId, UserEntryItem>, persistent: bool)
+    pub async fn add_users(&self, users: HashMap<UserId, UserEntryItem>, _persistent: bool)
     {
         let users_arc = self.users.clone();
 
@@ -92,5 +107,48 @@ impl TorrentTracker {
         if users_arc.get(&hash).is_some() { return true; }
 
         false
+    }
+
+    pub async fn clean_users_active_torrents(&self, peer_timeout: Duration)
+    {
+        // Cleaning up active torrents in chunks, to prevent slow behavior.
+        let users_arc = self.users.clone();
+
+        let mut start: usize = 0;
+        let size: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
+        let mut removed_active_torrents = 0u64;
+
+        loop {
+            info!("[USERS] Scanning active torrents in users {} to {}", start, (start + size));
+
+            let mut user_index = vec![];
+            for item in users_arc.iter().skip(start) {
+                user_index.push(*item.key());
+                if user_index.len() == size { break; }
+            }
+
+            let users = self.get_users(user_index.clone()).await;
+            for (user_id, user_entry_item) in users.iter() {
+                if user_entry_item.is_some() {
+                    let mut user = user_entry_item.clone().unwrap().clone();
+                    let mut torrents_active = user.torrents_active.clone();
+                    for (info_hash, timestamp) in user.torrents_active.iter() {
+                        if timestamp.elapsed() > peer_timeout {
+                            torrents_active.remove(info_hash);
+                            removed_active_torrents += 1;
+                        }
+                    }
+                    user.torrents_active = torrents_active;
+                    self.add_user(*user_id, user).await;
+                } else { continue; }
+            }
+
+            if user_index.len() != size {
+                break;
+            }
+
+            start += size;
+        }
+        info!("[USERS] Removed {} active torrents in users", removed_active_torrents);
     }
 }
