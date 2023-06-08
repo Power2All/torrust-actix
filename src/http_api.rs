@@ -682,12 +682,12 @@ pub async fn http_api_user_post(request: HttpRequest, remote_ip: RemoteIP, path:
 
     data.add_user(user_id_decoded, UserEntryItem {
         uuid: body.uuid.clone(),
-        key: body.key.clone(),
-        uploaded: body.uploaded.clone(),
-        downloaded: body.downloaded.clone(),
-        completed: body.completed.clone(),
-        updated: body.updated.clone(),
-        active: body.active.clone(),
+        key: body.key,
+        uploaded: body.uploaded,
+        downloaded: body.downloaded,
+        completed: body.completed,
+        updated: body.updated,
+        active: body.active,
         torrents_active: Default::default(),
     }).await;
 

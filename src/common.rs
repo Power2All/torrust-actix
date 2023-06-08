@@ -1,5 +1,5 @@
+use std::collections::HashMap;
 use scc::ebr::Arc;
-use scc::HashIndex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -10,8 +10,8 @@ use crate::tracker::TorrentTracker;
 use crate::udp_common;
 use crate::udp_common::AnnounceRequest;
 
-pub fn parse_query(query: Option<String>) -> Result<HashIndex<String, Vec<Vec<u8>>>, CustomError> {
-    let queries: HashIndex<String, Vec<Vec<u8>>> = HashIndex::new();
+pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>>, CustomError> {
+    let mut queries: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
     match query {
         None => {}
         Some(result) => {
@@ -26,32 +26,30 @@ pub fn parse_query(query: Option<String>) -> Result<HashIndex<String, Vec<Vec<u8
                         if !key_name.is_empty() {
                             let value_data_raw = query_item.split('=').collect::<Vec<&str>>()[1];
                             let value_data = percent_encoding::percent_decode_str(value_data_raw).collect::<Vec<u8>>();
-                            match queries.read(&key_name, |_, v| v.clone()) {
+                            match queries.get(&key_name) {
                                 None => {
                                     let query: Vec<Vec<u8>> = vec![value_data];
                                     let _ = queries.insert(key_name, query);
                                 }
                                 Some(result) => {
-                                    let mut result_copy = result;
-                                    result_copy.push(value_data);
-                                    queries.remove(&key_name);
-                                    let _ = queries.insert(key_name, result_copy);
+                                    let mut result_mut = result.clone();
+                                    result_mut.push(value_data);
+                                    let _ = queries.insert(key_name, result_mut);
                                 }
                             }
                         }
                     } else {
-                        let key_name_raw = query_item.split("").collect::<Vec<&str>>()[0];
-                        let key_name = percent_encoding::percent_decode_str(key_name_raw).decode_utf8_lossy().to_lowercase();
+                        let key_name = percent_encoding::percent_decode_str(query_item).decode_utf8_lossy().to_lowercase();
                         if !key_name.is_empty() {
-                            match queries.read(&key_name, |_, v| v.clone()) {
+                            match queries.get(&key_name) {
                                 None => {
-                                    let query = vec![vec![]];
+                                    let query: Vec<Vec<u8>> = vec![];
                                     let _ = queries.insert(key_name, query);
                                 }
-                                Some(_) => {
-                                    let query = vec![vec![]];
-                                    queries.remove(&key_name);
-                                    let _ = queries.insert(key_name, query);
+                                Some(result) => {
+                                    let mut result_mut = result.clone();
+                                    result_mut.push(vec![]);
+                                    let _ = queries.insert(key_name, result.clone());
                                 }
                             }
                         }

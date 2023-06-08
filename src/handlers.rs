@@ -1,7 +1,6 @@
 use log::debug;
 use scc::ebr::Arc;
-use scc::HashIndex;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::net::{IpAddr, SocketAddr};
 use std::time::SystemTime;
 
@@ -10,10 +9,10 @@ use crate::config::Configuration;
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::torrents::{TorrentEntry, TorrentEntryItem};
 
-pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
+pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, query: HashMap<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
 {
     // Validate info_hash
-    let info_hash: Vec<Vec<u8>> = match query.read("info_hash", |_, v| v.clone()) {
+    let info_hash: Vec<Vec<u8>> = match query.get("info_hash") {
         None => {
             return Err(CustomError::new("missing info_hash"));
         }
@@ -26,12 +25,12 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
                 return Err(CustomError::new("invalid info_hash size"));
             }
 
-            result
+            result.clone()
         }
     };
 
     // Validate peer_id
-    let peer_id: Vec<Vec<u8>> = match query.read("peer_id", |_, v| v.clone()) {
+    let peer_id: Vec<Vec<u8>> = match query.get("peer_id") {
         None => {
             return Err(CustomError::new("missing peer_id"));
         }
@@ -44,12 +43,12 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
                 return Err(CustomError::new("invalid peer_id size"));
             }
 
-            result
+            result.clone()
         }
     };
 
     // Validate port
-    let port_integer = match query.read("port", |_, v| v.clone()) {
+    let port_integer = match query.get("port") {
         None => {
             return Err(CustomError::new("missing port"));
         }
@@ -66,7 +65,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     };
 
     // Validate uploaded
-    let uploaded_integer = match query.read("uploaded", |_, v| v.clone()) {
+    let uploaded_integer = match query.get("uploaded") {
         None => {
             return Err(CustomError::new("missing uploaded"));
         }
@@ -83,7 +82,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     };
 
     // Validate downloaded
-    let downloaded_integer = match query.read("downloaded", |_, v| v.clone()) {
+    let downloaded_integer = match query.get("downloaded") {
         None => {
             return Err(CustomError::new("missing downloaded"));
         }
@@ -100,7 +99,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     };
 
     // Validate left
-    let left_integer = match query.read("left", |_, v| v.clone()) {
+    let left_integer = match query.get("left") {
         None => {
             return Err(CustomError::new("missing left"));
         }
@@ -118,7 +117,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
     // Validate compact
     let mut compact_bool = false;
-    match query.read("compact", |_, v| v.clone()) {
+    match query.get("compact") {
         None => {}
         Some(result) => {
             let compact = match String::from_utf8(result[0].to_vec()) {
@@ -137,7 +136,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
     // Validate event
     let mut event_integer: AnnounceEvent = AnnounceEvent::Started;
-    match query.read("event", |_, v| v.clone()) {
+    match query.get("event") {
         None => {}
         Some(result) => {
             let event = match String::from_utf8(result[0].to_vec()) {
@@ -163,7 +162,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
     // Validate no_peer_id
     let mut no_peer_id_bool = false;
-    match query.read("no_peer_id", |_, v| v.clone()) {
+    match query.get("no_peer_id") {
         None => {}
         Some(_) => {
             no_peer_id_bool = true;
@@ -172,7 +171,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
     // Validate numwant
     let mut numwant_integer = config.peers_returned.unwrap();
-    match query.read("numwant", |_, v| v.clone()) {
+    match query.get("numwant") {
         None => {}
         Some(result) => {
             let numwant = match String::from_utf8(result[0].to_vec()) {
@@ -346,11 +345,11 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
     }
 }
 
-pub async fn validate_scrape(_config: Arc<Configuration>, _remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
+pub async fn validate_scrape(_config: Arc<Configuration>, _remote_addr: IpAddr, query: HashMap<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
 {
     // Validate info_hash
     let mut info_hash: Vec<InfoHash> = Vec::new();
-    match query.read("info_hash", |_, v| v.clone()) {
+    match query.get("info_hash") {
         None => {
             Err(CustomError::new("missing info_hash"))
         }

@@ -2522,6 +2522,7 @@ dependencies = [
  "futures-util",
  "hex",
  "include_dir",
+ "itertools",
  "log",
  "mime_guess",
  "percent-encoding",

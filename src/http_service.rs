@@ -8,8 +8,8 @@ use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use scc::ebr::Arc;
-use scc::HashIndex;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fs::File;
 use std::future::Future;
 use std::io::{BufReader, Write};
@@ -454,7 +454,7 @@ pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, Htt
     };
 }
 
-type HttpServiceQueryHashingMapOk = HashIndex<String, Vec<Vec<u8>>>;
+type HttpServiceQueryHashingMapOk = HashMap<String, Vec<Vec<u8>>>;
 type HttpServiceQueryHashingMapErr = HttpResponse;
 
 pub fn http_service_query_hashing(query_map_result: Result<HttpServiceQueryHashingMapOk, CustomError>) -> Result<HttpServiceQueryHashingMapOk, HttpServiceQueryHashingMapErr>
