@@ -92,15 +92,28 @@ ARG DB_STRUCTURE_TABLE_KEYS_HASH="hash"
 ARG DB_STRUCTURE_TABLE_KEYS_TIMEOUT="timeout"
 ENV DB_STRUCTURE_DB_KEYS=$DB_STRUCTURE_DB_KEYS DB_STRUCTURE_TABLE_KEYS_HASH=$DB_STRUCTURE_TABLE_KEYS_HASH DB_STRUCTURE_TABLE_KEYS_TIMEOUT=$DB_STRUCTURE_TABLE_KEYS_TIMEOUT
 
+ARG USERS="false"
+ENV USERS=$USERS
+
+ARG DB_STRUCTURE_DB_USERS="users"
+ARG DB_STRUCTURE_TABLE_USERS_UUID="uuid"
+ARG DB_STRUCTURE_TABLE_USERS_KEY="key"
+ARG DB_STRUCTURE_TABLE_USERS_UPLOADED="uploaded"
+ARG DB_STRUCTURE_TABLE_USERS_DOWNLOADED="downloaded"
+ARG DB_STRUCTURE_TABLE_USERS_COMPLETED="completed"
+ARG DB_STRUCTURE_TABLE_USERS_UPDATED="updated"
+ARG DB_STRUCTURE_TABLE_USERS_ACTIVE="active"
+ENV DB_STRUCTURE_DB_USERS=$DB_STRUCTURE_DB_USERS DB_STRUCTURE_TABLE_USERS_UUID=$DB_STRUCTURE_TABLE_USERS_UUID DB_STRUCTURE_TABLE_USERS_KEY=$DB_STRUCTURE_TABLE_USERS_KEY DB_STRUCTURE_TABLE_USERS_UPLOADED=$DB_STRUCTURE_TABLE_USERS_UPLOADED DB_STRUCTURE_TABLE_USERS_DOWNLOADED=$DB_STRUCTURE_TABLE_USERS_DOWNLOADED DB_STRUCTURE_TABLE_USERS_COMPLETED=$DB_STRUCTURE_TABLE_USERS_COMPLETED DB_STRUCTURE_TABLE_USERS_UPDATED=$DB_STRUCTURE_TABLE_USERS_UPDATED DB_STRUCTURE_TABLE_USERS_ACTIVE=$DB_STRUCTURE_TABLE_USERS_ACTIVE
+
 RUN apk add git musl-dev
-RUN git clone https://github.com/Power2All/torrust-axum.git /root/torrust-axum
-RUN cd /root/torrust-axum && git checkout tags/v3.1.2
-WORKDIR /root/torrust-axum
-RUN cd /root/torrust-axum
+RUN git clone https://github.com/Power2All/torrust-actix.git /root/torrust-actix
+RUN cd /root/torrust-actix && git checkout tags/v3.2.0
+WORKDIR /root/torrust-actix
+RUN cd /root/torrust-actix
 RUN cargo build --release && rm -Rf target/release/.fingerprint target/release/build target/release/deps target/release/examples target/release/incremental
-COPY init.sh /root/torrust-axum/target/release/init.sh
-RUN chmod +x /root/torrust-axum/target/release/init.sh
+COPY init.sh /root/torrust-actix/target/release/init.sh
+RUN chmod +x /root/torrust-actix/target/release/init.sh
 EXPOSE 8080/tcp
 EXPOSE 6969/tcp
 EXPOSE 6969/udp
-CMD cd /root/torrust-axum/target/release/ && ./init.sh && ./torrust-axum
+CMD cd /root/torrust-actix/target/release/ && ./init.sh && ./torrust-actix

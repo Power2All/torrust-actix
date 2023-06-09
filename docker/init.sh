@@ -2,11 +2,11 @@
 
 if [ ! -z "${FULL_CONFIG}" ]
 then
-  cat << EOF > /root/torrust-axum/target/release/config.toml
+  cat << EOF > /root/torrust-actix/target/release/config.toml
 ${FULL_CONFIG}
 EOF
 else
-  cat << EOF > /root/torrust-axum/target/release/config.toml
+  cat << EOF > /root/torrust-actix/target/release/config.toml
 log_level = "${LOG_LEVEL}"
 log_console_interval = ${LOG_CONSOLE_INTERVAL}
 statistics_enabled = ${STATISTICS_ENABLED}
@@ -19,6 +19,7 @@ whitelist = ${WHITELIST}
 blacklist = ${BLACKLIST}
 keys = ${KEYS}
 keys_cleanup_interval = ${KEYS_CLEANUP_INTERVAL}
+users = ${USERS}
 interval = ${INTERVAL}
 interval_minimum = ${INTERVAL_MINIMUM}
 interval_cleanup = ${INTERVAL_CLEANUP}
@@ -72,10 +73,18 @@ table_blacklist_info_hash = "${DB_STRUCTURE_TABLE_BLACKLIST_INFO_HASH}"
 db_keys = "${DB_STRUCTURE_DB_KEYS}"
 table_keys_hash = "${DB_STRUCTURE_TABLE_KEYS_HASH}"
 table_keys_timeout = "${DB_STRUCTURE_TABLE_KEYS_TIMEOUT}"
+db_users = "${DB_STRUCTURE_DB_USERS}"
+table_users_uuid = "${DB_STRUCTURE_TABLE_USERS_UUID}"
+table_users_key = "${DB_STRUCTURE_TABLE_USERS_KEY}"
+table_users_uploaded = "${DB_STRUCTURE_TABLE_USERS_UPLOADED}"
+table_users_downloaded = "${DB_STRUCTURE_TABLE_USERS_DOWNLOADED}"
+table_users_completed = "${DB_STRUCTURE_TABLE_USERS_COMPLETED}"
+table_users_updated = "${DB_STRUCTURE_TABLE_USERS_UPDATED}"
+table_users_active = "${DB_STRUCTURE_TABLE_USERS_ACTIVE}"
 EOF
 fi
 
 echo "Configuration:"
 echo ""
-cat /root/torrust-axum/target/release/config.toml
+cat /root/torrust-actix/target/release/config.toml
 echo ""
