@@ -1,16 +1,18 @@
-use std::collections::BTreeMap;
-use std::net::{IpAddr, SocketAddr};
 use log::debug;
 use scc::ebr::Arc;
-use scc::HashIndex;
-use crate::common::{AnnounceEvent, AnnounceQueryRequest, CustomError, InfoHash, NumberOfBytes, PeerId, ScrapeQueryRequest, TorrentPeer};
-use crate::config::Configuration;
-use crate::tracker::{TorrentEntry, TorrentEntryItem, TorrentTracker};
+use std::collections::{BTreeMap, HashMap};
+use std::net::{IpAddr, SocketAddr};
+use std::time::SystemTime;
 
-pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
+use crate::common::{AnnounceEvent, AnnounceQueryRequest, CustomError, InfoHash, NumberOfBytes, PeerId, ScrapeQueryRequest, TorrentPeer, UserId};
+use crate::config::Configuration;
+use crate::tracker::TorrentTracker;
+use crate::tracker_objects::torrents::{TorrentEntry, TorrentEntryItem};
+
+pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, query: HashMap<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
 {
     // Validate info_hash
-    let info_hash: Vec<Vec<u8>> = match query.read("info_hash", |_, v| v.clone()) {
+    let info_hash: Vec<Vec<u8>> = match query.get("info_hash") {
         None => {
             return Err(CustomError::new("missing info_hash"));
         }
@@ -20,82 +22,112 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             }
 
             if result[0].len() != 20 {
-                return Err(CustomError::new("invalid info_hash size"))
+                return Err(CustomError::new("invalid info_hash size"));
             }
 
-            result
+            result.clone()
         }
     };
 
     // Validate peer_id
-    let peer_id: Vec<Vec<u8>> = match query.read("peer_id", |_, v| v.clone()) {
+    let peer_id: Vec<Vec<u8>> = match query.get("peer_id") {
         None => {
             return Err(CustomError::new("missing peer_id"));
         }
         Some(result) => {
             if result.is_empty() {
-                return Err(CustomError::new("no peer_id given"))
+                return Err(CustomError::new("no peer_id given"));
             }
 
             if result[0].len() != 20 {
-                return Err(CustomError::new("invalid peer_id size"))
+                return Err(CustomError::new("invalid peer_id size"));
             }
 
-            result
+            result.clone()
         }
     };
 
     // Validate port
-    let port_integer = match query.read("port", |_, v| v.clone()) {
+    let port_integer = match query.get("port") {
         None => {
             return Err(CustomError::new("missing port"));
         }
         Some(result) => {
-            let port = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid port")) };
-            match port.parse::<u16>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid port")) }
+            let port = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid port"))
+            };
+            match port.parse::<u16>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid port"))
+            }
         }
     };
 
     // Validate uploaded
-    let uploaded_integer = match query.read("uploaded", |_, v| v.clone()) {
+    let uploaded_integer = match query.get("uploaded") {
         None => {
             return Err(CustomError::new("missing uploaded"));
         }
         Some(result) => {
-            let uploaded = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid uploaded")) };
-            match uploaded.parse::<u64>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid uploaded")) }
+            let uploaded = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid uploaded"))
+            };
+            match uploaded.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid uploaded"))
+            }
         }
     };
 
     // Validate downloaded
-    let downloaded_integer = match query.read("downloaded", |_, v| v.clone()) {
+    let downloaded_integer = match query.get("downloaded") {
         None => {
             return Err(CustomError::new("missing downloaded"));
         }
         Some(result) => {
-            let downloaded = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid downloaded")) };
-            match downloaded.parse::<u64>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid downloaded")) }
+            let downloaded = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid downloaded"))
+            };
+            match downloaded.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid downloaded"))
+            }
         }
     };
 
     // Validate left
-    let left_integer = match query.read("left", |_, v| v.clone()) {
+    let left_integer = match query.get("left") {
         None => {
             return Err(CustomError::new("missing left"));
         }
         Some(result) => {
-            let left = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid left")) };
-            match left.parse::<u64>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid left")) }
+            let left = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid left"))
+            };
+            match left.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid left"))
+            }
         }
     };
 
     // Validate compact
     let mut compact_bool = false;
-    match query.read("compact", |_, v| v.clone()) {
+    match query.get("compact") {
         None => {}
         Some(result) => {
-            let compact = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid compact")) };
-            let compact_integer = match compact.parse::<u8>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid compact")) };
+            let compact = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid compact"))
+            };
+            let compact_integer = match compact.parse::<u8>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid compact"))
+            };
             if compact_integer == 1 {
                 compact_bool = true;
             }
@@ -104,10 +136,13 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
     // Validate event
     let mut event_integer: AnnounceEvent = AnnounceEvent::Started;
-    match query.read("event", |_, v| v.clone()) {
+    match query.get("event") {
         None => {}
         Some(result) => {
-            let event = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid event")) };
+            let event = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid event"))
+            };
             match event.as_str().to_lowercase().as_str() {
                 "started" => {
                     event_integer = AnnounceEvent::Started;
@@ -127,7 +162,7 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
     // Validate no_peer_id
     let mut no_peer_id_bool = false;
-    match query.read("no_peer_id", |_, v| v.clone()) {
+    match query.get("no_peer_id") {
         None => {}
         Some(_) => {
             no_peer_id_bool = true;
@@ -136,11 +171,17 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
 
     // Validate numwant
     let mut numwant_integer = config.peers_returned.unwrap();
-    match query.read("numwant", |_, v| v.clone()) {
+    match query.get("numwant") {
         None => {}
         Some(result) => {
-            let numwant = match String::from_utf8(result[0].to_vec()) { Ok(v) => v, Err(_) => return Err(CustomError::new("invalid numwant")) };
-            numwant_integer = match numwant.parse::<u64>() { Ok(v) => v, Err(_) => return Err(CustomError::new("missing or invalid numwant")) };
+            let numwant = match String::from_utf8(result[0].to_vec()) {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("invalid numwant"))
+            };
+            numwant_integer = match numwant.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => return Err(CustomError::new("missing or invalid numwant"))
+            };
             if numwant_integer == 0 || numwant_integer > config.peers_returned.unwrap() {
                 numwant_integer = config.peers_returned.unwrap();
             }
@@ -158,25 +199,21 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
         no_peer_id: no_peer_id_bool,
         event: event_integer,
         remote_addr,
-        numwant: numwant_integer
+        numwant: numwant_integer,
     };
 
     Ok(announce_data)
 }
 
-pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest) -> Result<(TorrentPeer, TorrentEntry), CustomError>
+pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
 {
-    let _ = match data.get_torrent(announce_query.info_hash).await {
-        None => {
-            if data.config.persistence {
-                data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), true).await;
-            } else {
-                data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), false).await;
-            }
-            TorrentEntry::new()
+    if (data.get_torrent(announce_query.info_hash).await).is_none() {
+        if data.config.persistence {
+            data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), true).await;
+        } else {
+            data.add_torrent(announce_query.info_hash, TorrentEntryItem::new(), false).await;
         }
-        Some(result) => { result }
-    };
+    }
 
     let mut torrent_peer = TorrentPeer {
         peer_id: announce_query.peer_id,
@@ -185,7 +222,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
         uploaded: NumberOfBytes(announce_query.uploaded as i64),
         downloaded: NumberOfBytes(announce_query.downloaded as i64),
         left: NumberOfBytes(announce_query.left as i64),
-        event: AnnounceEvent::None
+        event: AnnounceEvent::None,
     };
 
     match announce_query.event {
@@ -197,30 +234,51 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.peer_id,
                 torrent_peer,
                 false,
-                data.config.persistence
+                data.config.persistence,
             ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
                 announce_query.remote_addr,
-                torrent_peer.peer_addr
+                torrent_peer.peer_addr,
             );
+            if data.config.users && user_key.is_some(){
+                if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let mut torrents_active = user.torrents_active.clone();
+                    torrents_active.insert(announce_query.info_hash, std::time::Instant::now());
+                    user.torrents_active = torrents_active;
+                    data.add_user(user_key.unwrap(), user).await;
+                }
+            }
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,
                 seeders: torrent_entry.seeders,
-                leechers: torrent_entry.leechers
+                leechers: torrent_entry.leechers,
             }))
         }
         AnnounceEvent::Stopped => {
             torrent_peer.event = AnnounceEvent::Stopped;
             debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
-            let torrent_entry = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await;
-            Ok((torrent_peer, TorrentEntry{
+            let torrent = data.remove_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await;
+            if data.config.users && user_key.is_some(){
+                if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                    user.uploaded += announce_query.uploaded;
+                    user.downloaded += announce_query.downloaded;
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let mut torrents_active = user.torrents_active.clone();
+                    torrents_active.remove(&announce_query.info_hash);
+                    user.torrents_active = torrents_active;
+                    data.add_user(user_key.unwrap(), user.clone()).await;
+                    data.add_users_update(user_key.unwrap(), user).await;
+                }
+            }
+            Ok((torrent_peer, TorrentEntry {
                 peers: BTreeMap::new(),
-                completed: torrent_entry.completed,
-                seeders: torrent_entry.seeders,
-                leechers: torrent_entry.leechers
+                completed: torrent.completed,
+                seeders: torrent.seeders,
+                leechers: torrent.leechers,
             }))
         }
         AnnounceEvent::Completed => {
@@ -231,19 +289,26 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.peer_id,
                 torrent_peer,
                 true,
-                data.config.persistence
+                data.config.persistence,
             ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
                 announce_query.remote_addr,
-                torrent_peer.peer_addr
+                torrent_peer.peer_addr,
             );
+            if data.config.users && user_key.is_some(){
+                if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                    user.completed += 1;
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    data.add_user(user_key.unwrap(), user).await;
+                }
+            }
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,
                 seeders: torrent_entry.seeders,
-                leechers: torrent_entry.leechers
+                leechers: torrent_entry.leechers,
             }))
         }
         AnnounceEvent::None => {
@@ -253,29 +318,38 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
                 announce_query.peer_id,
                 torrent_peer,
                 false,
-                data.config.persistence
+                data.config.persistence,
             ).await;
             let peer_list = parse_ip_format(
                 torrent_entry.peers.clone(),
                 data.config.clone(),
                 announce_query.remote_addr,
-                torrent_peer.peer_addr
+                torrent_peer.peer_addr,
             );
+            if data.config.users && user_key.is_some(){
+                if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let mut torrents_active = user.torrents_active.clone();
+                    torrents_active.insert(announce_query.info_hash, std::time::Instant::now());
+                    user.torrents_active = torrents_active;
+                    data.add_user(user_key.unwrap(), user).await;
+                }
+            }
             Ok((torrent_peer, TorrentEntry {
                 peers: peer_list,
                 completed: torrent_entry.completed,
                 seeders: torrent_entry.seeders,
-                leechers: torrent_entry.leechers
+                leechers: torrent_entry.leechers,
             }))
         }
     }
 }
 
-pub async fn validate_scrape(_config: Arc<Configuration>, _remote_addr: IpAddr, query: HashIndex<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
+pub async fn validate_scrape(_config: Arc<Configuration>, _remote_addr: IpAddr, query: HashMap<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
 {
     // Validate info_hash
     let mut info_hash: Vec<InfoHash> = Vec::new();
-    match query.read("info_hash", |_, v| v.clone()) {
+    match query.get("info_hash") {
         None => {
             Err(CustomError::new("missing info_hash"))
         }
@@ -311,7 +385,7 @@ pub async fn handle_scrape(data: Arc<TorrentTracker>, scrape_query: ScrapeQueryR
                     peers: BTreeMap::new(),
                     completed: 0,
                     seeders: 0,
-                    leechers: 0
+                    leechers: 0,
                 });
             }
             Some(result) => {
@@ -319,7 +393,7 @@ pub async fn handle_scrape(data: Arc<TorrentTracker>, scrape_query: ScrapeQueryR
                     peers: BTreeMap::new(),
                     completed: result.completed,
                     seeders: result.seeders,
-                    leechers: result.leechers
+                    leechers: result.leechers,
                 });
             }
         }

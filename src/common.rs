@@ -1,16 +1,17 @@
+use std::collections::HashMap;
+use scc::ebr::Arc;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
 use std::net::{IpAddr, SocketAddr};
-use scc::ebr::Arc;
-use scc::HashIndex;
-use serde::{Deserialize, Serialize};
+
 use crate::tracker::TorrentTracker;
 use crate::udp_common;
 use crate::udp_common::AnnounceRequest;
 
-pub fn parse_query(query: Option<String>) -> Result<HashIndex<String, Vec<Vec<u8>>>, CustomError> {
-    let queries: HashIndex<String, Vec<Vec<u8>>> = HashIndex::new();
+pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>>, CustomError> {
+    let mut queries: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
     match query {
         None => {}
         Some(result) => {
@@ -25,32 +26,30 @@ pub fn parse_query(query: Option<String>) -> Result<HashIndex<String, Vec<Vec<u8
                         if !key_name.is_empty() {
                             let value_data_raw = query_item.split('=').collect::<Vec<&str>>()[1];
                             let value_data = percent_encoding::percent_decode_str(value_data_raw).collect::<Vec<u8>>();
-                            match queries.read(&key_name, |_, v| v.clone()) {
+                            match queries.get(&key_name) {
                                 None => {
                                     let query: Vec<Vec<u8>> = vec![value_data];
                                     let _ = queries.insert(key_name, query);
                                 }
                                 Some(result) => {
-                                    let mut result_copy = result;
-                                    result_copy.push(value_data);
-                                    queries.remove(&key_name);
-                                    let _ = queries.insert(key_name, result_copy);
+                                    let mut result_mut = result.clone();
+                                    result_mut.push(value_data);
+                                    let _ = queries.insert(key_name, result_mut);
                                 }
                             }
                         }
                     } else {
-                        let key_name_raw = query_item.split("").collect::<Vec<&str>>()[0];
-                        let key_name = percent_encoding::percent_decode_str(key_name_raw).decode_utf8_lossy().to_lowercase();
+                        let key_name = percent_encoding::percent_decode_str(query_item).decode_utf8_lossy().to_lowercase();
                         if !key_name.is_empty() {
-                            match queries.read(&key_name, |_, v| v.clone()) {
+                            match queries.get(&key_name) {
                                 None => {
-                                    let query = vec![vec![]];
+                                    let query: Vec<Vec<u8>> = vec![];
                                     let _ = queries.insert(key_name, query);
                                 }
-                                Some(_) => {
-                                    let query = vec![vec![]];
-                                    queries.remove(&key_name);
-                                    let _ = queries.insert(key_name, query);
+                                Some(result) => {
+                                    let mut result_mut = result.clone();
+                                    result_mut.push(vec![]);
+                                    let _ = queries.insert(key_name, result.clone());
                                 }
                             }
                         }
@@ -63,16 +62,9 @@ pub fn parse_query(query: Option<String>) -> Result<HashIndex<String, Vec<Vec<u8
     Ok(queries)
 }
 
-pub fn calculate_count(src_count: u64, calc: i64) -> u64
-{
-    let begin_count = src_count as i64;
-    let new_count = begin_count + calc;
-    new_count as u64
-}
-
 #[derive(Debug)]
 pub struct CustomError {
-    message: String,
+    pub(crate) message: String,
 }
 
 impl CustomError {
@@ -224,7 +216,7 @@ impl<'v> serde::de::Visitor<'v> for InfoHashVisitor {
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct PeerId(pub [u8; 20]);
 
-fn ser_instant<S: serde::Serializer>(inst: &std::time::Instant, ser: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn ser_instant<S: serde::Serializer>(inst: &std::time::Instant, ser: S) -> Result<S::Ok, S::Error> {
     ser.serialize_u64(inst.elapsed().as_millis() as u64)
 }
 
@@ -279,6 +271,7 @@ impl PeerId {
                 b"MT" => "MoonlightTorrent",
                 b"NX" => "Net Transport",
                 b"PD" => "Pando",
+                b"PI" => "PicoTorrent",
                 b"qB" => "qBittorrent",
                 b"QD" => "QQDownload",
                 b"QT" => "Qt 4 Torrent example",
@@ -438,6 +431,88 @@ impl TorrentPeer {
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
+pub struct UserId(pub [u8; 20]);
+
+impl fmt::Display for UserId {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        bin2hex(&self.0, f)
+    }
+}
+
+impl std::str::FromStr for UserId {
+    type Err = binascii::ConvertError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut i = Self([0u8; 20]);
+        if s.len() != 40 {
+            return Err(binascii::ConvertError::InvalidInputLength);
+        }
+        binascii::hex2bin(s.as_bytes(), &mut i.0)?;
+        Ok(i)
+    }
+}
+
+impl From<&[u8]> for UserId {
+    fn from(data: &[u8]) -> UserId {
+        assert_eq!(data.len(), 20);
+        let mut ret = UserId([0u8; 20]);
+        ret.0.clone_from_slice(data);
+        ret
+    }
+}
+
+impl From<[u8; 20]> for UserId {
+    fn from(data: [u8; 20]) -> Self {
+        UserId(data)
+    }
+}
+
+impl serde::ser::Serialize for UserId {
+    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut buffer = [0u8; 40];
+        let bytes_out = binascii::bin2hex(&self.0, &mut buffer).ok().unwrap();
+        let str_out = std::str::from_utf8(bytes_out).unwrap();
+        serializer.serialize_str(str_out)
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for UserId {
+    fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
+        des.deserialize_str(UserIdVisitor)
+    }
+}
+
+struct UserIdVisitor;
+
+impl<'v> serde::de::Visitor<'v> for UserIdVisitor {
+    type Value = UserId;
+
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "a 40 character long hash")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        if v.len() != 40 {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(v),
+                &"expected a 40 character long string",
+            ));
+        }
+
+        let mut res = UserId([0u8; 20]);
+
+        if binascii::hex2bin(v.as_bytes(), &mut res.0).is_err() {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(v),
+                &"expected a hexadecimal string",
+            ));
+        } else {
+            Ok(res)
+        }
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[allow(dead_code)]
 pub struct AnnounceQueryRequest {
@@ -451,16 +526,16 @@ pub struct AnnounceQueryRequest {
     pub(crate) no_peer_id: bool,
     pub(crate) event: AnnounceEvent,
     pub(crate) remote_addr: IpAddr,
-    pub(crate) numwant: u64
+    pub(crate) numwant: u64,
 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[allow(dead_code)]
 pub struct ScrapeQueryRequest {
-    pub(crate) info_hash: Vec<InfoHash>
+    pub(crate) info_hash: Vec<InfoHash>,
 }
 
-fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
+pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     let mut chars = [0u8; 40];
     binascii::bin2hex(data, &mut chars).expect("failed to hexlify");
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())

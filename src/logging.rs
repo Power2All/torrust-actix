@@ -1,5 +1,6 @@
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
+
 use crate::config::Configuration;
 
 pub fn setup_logging(config: &Configuration)
@@ -31,7 +32,7 @@ pub fn setup_logging(config: &Configuration)
                 colors.color(record.level()),
                 record.target(),
                 message,
-                width=5
+                width = 5
             ))
         })
         .level(level)

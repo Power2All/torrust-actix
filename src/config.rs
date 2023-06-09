@@ -1,15 +1,17 @@
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
-use serde::{Deserialize, Serialize};
 use toml;
+
 use crate::common::CustomError;
 use crate::databases::DatabaseDrivers;
 
 #[derive(Debug)]
 pub enum ConfigurationError {
     IOError(std::io::Error),
-    ParseError(toml::de::Error)
+    ParseError(toml::de::Error),
 }
+
 impl std::fmt::Display for ConfigurationError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -18,12 +20,13 @@ impl std::fmt::Display for ConfigurationError {
         }
     }
 }
+
 impl std::error::Error for ConfigurationError {}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UdpTrackersConfig {
     pub enabled: bool,
-    pub bind_address: String
+    pub bind_address: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -32,7 +35,7 @@ pub struct HttpTrackersConfig {
     pub bind_address: String,
     pub ssl: bool,
     pub ssl_key: String,
-    pub ssl_cert: String
+    pub ssl_cert: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -41,7 +44,7 @@ pub struct ApiTrackersConfig {
     pub bind_address: String,
     pub ssl: bool,
     pub ssl_key: String,
-    pub ssl_cert: String
+    pub ssl_cert: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -55,7 +58,15 @@ pub struct DatabaseStructureConfig {
     pub table_blacklist_info_hash: String,
     pub db_keys: String,
     pub table_keys_hash: String,
-    pub table_keys_timeout: String
+    pub table_keys_timeout: String,
+    pub db_users: String,
+    pub table_users_uuid: String,
+    pub table_users_key: String,
+    pub table_users_uploaded: String,
+    pub table_users_downloaded: String,
+    pub table_users_completed: String,
+    pub table_users_updated: String,
+    pub table_users_active: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -63,6 +74,7 @@ pub struct Configuration {
     pub log_level: String,
     pub log_console_interval: Option<u64>,
     pub statistics_enabled: bool,
+    pub global_check_interval: Option<u64>,
 
     pub db_driver: DatabaseDrivers,
     pub db_path: String,
@@ -75,26 +87,30 @@ pub struct Configuration {
     pub blacklist: bool,
     pub keys: bool,
     pub keys_cleanup_interval: Option<u64>,
+    pub users: bool,
 
     pub maintenance_mode_enabled: bool,
     pub interval: Option<u64>,
     pub interval_minimum: Option<u64>,
-    pub interval_cleanup: Option<u64>,
     pub peer_timeout: Option<u64>,
     pub peers_returned: Option<u64>,
+
+    pub interval_cleanup: Option<u64>,
+    pub cleanup_chunks: Option<u64>,
 
     pub udp_server: Vec<UdpTrackersConfig>,
     pub http_server: Vec<HttpTrackersConfig>,
     pub api_server: Vec<ApiTrackersConfig>,
 
-    pub db_structure: DatabaseStructureConfig
+    pub db_structure: DatabaseStructureConfig,
 }
+
 impl Configuration {
-    pub fn default() -> Configuration {
+    pub fn init() -> Configuration {
         let udp_server = vec!(
             UdpTrackersConfig {
                 enabled: false,
-                bind_address: String::from("0.0.0.0:6969")
+                bind_address: String::from("0.0.0.0:6969"),
             }
         );
         let http_server = vec!(
@@ -103,7 +119,7 @@ impl Configuration {
                 bind_address: String::from("0.0.0.0:6969"),
                 ssl: false,
                 ssl_key: String::from(""),
-                ssl_cert: String::from("")
+                ssl_cert: String::from(""),
             }
         );
         let api_server = vec!(
@@ -112,15 +128,16 @@ impl Configuration {
                 bind_address: String::from("0.0.0.0:8080"),
                 ssl: false,
                 ssl_key: String::from(""),
-                ssl_cert: String::from("")
+                ssl_cert: String::from(""),
             }
         );
         Configuration {
             log_level: String::from("info"),
             log_console_interval: Some(60),
             statistics_enabled: true,
+            global_check_interval: Some(10),
 
-            db_driver: DatabaseDrivers::SQLite3,
+            db_driver: DatabaseDrivers::sqlite3,
             db_path: String::from("sqlite://:memory:"),
             persistence: false,
             persistence_interval: Some(60),
@@ -131,19 +148,22 @@ impl Configuration {
             blacklist: false,
             keys: false,
             keys_cleanup_interval: Some(60),
+            users: false,
 
             maintenance_mode_enabled: false,
             interval: Some(1800),
             interval_minimum: Some(1800),
-            interval_cleanup: Some(900),
             peer_timeout: Some(2700),
             peers_returned: Some(200),
+
+            interval_cleanup: Some(900),
+            cleanup_chunks: Some(100000),
 
             udp_server,
             http_server,
             api_server,
 
-            db_structure: DatabaseStructureConfig{
+            db_structure: DatabaseStructureConfig {
                 db_torrents: String::from("torrents"),
                 table_torrents_info_hash: String::from("info_hash"),
                 table_torrents_completed: String::from("completed"),
@@ -153,13 +173,21 @@ impl Configuration {
                 table_blacklist_info_hash: String::from("info_hash"),
                 db_keys: String::from("keys"),
                 table_keys_hash: String::from("hash"),
-                table_keys_timeout: String::from("timeout")
-            }
+                table_keys_timeout: String::from("timeout"),
+                db_users: String::from("users"),
+                table_users_uuid: String::from("uuid"),
+                table_users_key: String::from("key"),
+                table_users_uploaded: String::from("uploaded"),
+                table_users_downloaded: String::from("downloaded"),
+                table_users_completed: String::from("completed"),
+                table_users_updated: String::from("updated"),
+                table_users_active: String::from("active"),
+            },
         }
     }
 
     pub fn load(data: &[u8]) -> Result<Configuration, toml::de::Error> {
-        toml::from_slice(data)
+        toml::from_str(&String::from_utf8_lossy(data))
     }
 
     pub fn load_file(path: &str) -> Result<Configuration, ConfigurationError> {
@@ -189,11 +217,11 @@ impl Configuration {
     }
 
     pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
-        let mut config = Configuration::default();
+        let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
             Ok(c) => { config = c; }
             Err(_) => {
-                eprintln!("No config file found.");
+                eprintln!("No config file found or corrupt.");
 
                 if !create {
                     eprintln!("You can either create your own config.toml file, or start this app using '--create-config' as parameter.");
@@ -210,10 +238,10 @@ impl Configuration {
                     }
                     Err(e) => {
                         eprintln!("config.toml file could not be created, check permissions...");
-                        eprintln!("{}", e);
+                        eprintln!("{e}");
                         Err(CustomError::new("could not create config.toml file"))
                     }
-                }
+                };
             }
         };
         Ok(config)

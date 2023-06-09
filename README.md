@@ -1,13 +1,13 @@
-# Torrust-Axum Tracker
-![Test](https://github.com/Power2All/torrust-axum/actions/workflows/rust.yml/badge.svg)
-[<img src="https://img.shields.io/badge/DockerHub-link-blue.svg">](<https://hub.docker.com/r/power2all/torrust-axum>)
+# Torrust-Actix Tracker
+![Test](https://github.com/Power2All/torrust-actix/actions/workflows/rust.yml/badge.svg)
+[<img src="https://img.shields.io/badge/DockerHub-link-blue.svg">](<https://hub.docker.com/r/power2all/torrust-actix>)
 
 ## Project Description
-Torrust-Axum Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
+Torrust-Actix Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
 
-Currently, it's being actively used at https://www.gbitt.info/ which as of current writing has 100 million torrent hashes loaded and hitting 5 million peers.
+Currently, it's being actively used at https://www.gbitt.info/ which as of current writing has 200+ million torrent hashes loaded and hitting 5+ million peers.
 
-This project originated from Torrust Tracker code originally developed by Mick van Dijke, further developed by Power2All as alternative for OpenTracker and other tracker code available on GitHub.
+This project originated from Torrust-Tracker code originally developed by Mick van Dijke, further developed by Power2All as alternative for OpenTracker and other tracker code available on GitHub.
 
 ## Features
 * [X] Multiple UDP server and HTTP(S) server blocks for socket binding possibilities
@@ -20,6 +20,7 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [X] Blacklist system, to block and ban hashes
 * [X] Web Interface (through API) to control the tracker software
 * [X] Torrent key support, for private tracking support
+* [X] Optional: User account tracking support, will push updates to database of individual users
 * [X] Dockerfile to build an image for Docker, and pushed to Docker Hub
 
 ## Implemented BEPs
@@ -31,13 +32,13 @@ This project originated from Torrust Tracker code originally developed by Mick v
 * [BEP 48](https://www.bittorrent.org/beps/bep_0048.html): Tracker Protocol Extension: Scrape
 
 ## Getting Started
-You can get the latest binaries from [releases](https://github.com/Power2All/torrust-axum/releases) or follow the install from scratch instructions below.
+You can get the latest binaries from [releases](https://github.com/Power2All/torrust-actix/releases) or follow the install from scratch instructions below.
 
 ### Install From Scratch
 1. Clone the repository:
 ```bash
-git clone https://github.com/Power2All/torrust-axum.git
-cd torrust-axum
+git clone https://github.com/Power2All/torrust-actix.git
+cd torrust-actix
 ```
 
 2. Build the source code using Rust (make sure you have installed rustup with stable branch)
@@ -54,7 +55,7 @@ cargo build --release
 ### Usage
 * Running the code will create a `config.toml` file when it doesn't exist yet. The configuration will be filled with default values, and will use SQLite3 in memory as default persistence. Persistence is turned OFF by default, so you need to activate that manually:
 ```bash
-./target/release/torrust-axum
+./target/release/torrust-actix
 ```
 
 * Modify the newly created `config.toml` file according to your liking. (ToDo: Create extended documentation)
@@ -109,9 +110,9 @@ table_keys_hash = "hash"
 table_keys_timeout = "timeout"
 ```
 
-* Run the torrust-axum again after finishing the configuration:
+* Run the torrust-actix again after finishing the configuration:
 ```bash
-./target/release/torrust-axum
+./target/release/torrust-actix
 ```
 
 ## Tracker URL
@@ -339,6 +340,85 @@ This will remove a key from the keys list, and returns status if successful or f
 }
 ```
 
+### Users
+
+#### GET `http(s)://127.0.0.1:8080/api/users?token=[TOKENID]`
+This will return all the users in an array, including which torrents are being used actively by the user.
+
+```json
+[
+  {
+    "uuid": "cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
+    "key": "1234567890123456789012345678901234567890",
+    "uploaded": 0,
+    "downloaded": 0,
+    "completed": 0,
+    "updated": 1686302997,
+    "active": 1,
+    "torrents_active": [
+      [
+        "1234567890123456789012345678901234567890",
+        1686302997
+      ]
+    ]
+  }
+]
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/user/[USER_HASH]?token=[TOKENID]`
+This will return the user containing hashed key (not the uuid) in an array, including which torrents are being used actively by the user.
+
+```json
+{
+  "uuid":"cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
+  "key":"1234567890123456789012345678901234567890",
+  "uploaded":0,
+  "downloaded":0,
+  "completed":0,
+  "updated":1686302997,
+  "active":1,
+  "torrents_active":[
+    [
+      "1234567890123456789012345678901234567890",
+      1686302997
+    ]
+  ]
+}
+```
+
+#### POST `http(s)://127.0.0.1:8080/api/user?token=[TOKENID]`
+This will insert a user in the user memory database, and returns status if successful.
+Body data must be in valid JSON as shown below, otherwise it will return a error.
+
+Send:
+```json
+{
+  "uuid":"cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
+  "key":"1234567890123456789012345678901234567890",
+  "uploaded":0,
+  "downloaded":0,
+  "completed":0,
+  "updated":1686302997,
+  "active":1
+}
+```
+
+Response:
+```json
+{
+  "status":"ok"
+}
+```
+
+#### DELETE `http(s)://127.0.0.1:8080/api/user/[USER_HASH]?token=[TOKENID]`
+This will remove the user from the memory.
+
+```json
+{
+  "status":"ok"
+}
+```
+
 #### GET `http(s)://127.0.0.1:8080/api/maintenance/enable?token=[TOKENID]`
 This will enable the maintenance mode.
 
@@ -358,6 +438,16 @@ This will disable the maintenance mode.
 ```
 
 ### ChangeLog
+
+#### v3.2.0
+* Bumped library versions.
+* Modified the way scheduling was done through threads, it could lock up and slow down public trackers with heavy activity.
+* Tweaking the SQLite3 database usage and database space consumption.
+* Full overhaul on how torrents and peers are used in memory. Using crossbeam skipmap for thread safe non-locking memory sharing.
+* Some various improvement on coding performance, readability and linting the files.
+* Replaced Tokio Axum web framework for Actix, reason: Missing critical things like a timeout on connect, disconnect, read and write, and support was lackluster.
+* Renamed the github repository from torrust-axum to torrust-actix.
+* Adding user tracking support with an extra key.
 
 #### v3.1.2
 * Bumped library versions.
@@ -393,4 +483,4 @@ Initial version of Torrust-Axum.
 ### Credits
 This Torrust-Tracker was a joint effort by [Nautilus Cyberneering GmbH](https://nautilus-cyberneering.de/), [Dutch Bits](https://dutchbits.nl) and [Power2All](https://power2all.com).
 Also thanks to [Naim A.](https://github.com/naim94a/udpt) and [greatest-ape](https://github.com/greatest-ape/aquatic) for some parts in the Torrust-Tracker code.
-This project (Torrust-Axum) is built from scratch by [Power2All](https://power2all.com).
+This project (Torrust-Actix) is built from scratch by [Power2All](https://power2all.com).

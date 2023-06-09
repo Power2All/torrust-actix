@@ -1,134 +1,246 @@
+use actix_cors::Cors;
+use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
+use actix_web::dev::ServerHandle;
+use actix_web::http::header::ContentType;
+use actix_web::web::ServiceConfig;
+use bip_bencode::{ben_map, ben_bytes, ben_list, ben_int, BMutAccess};
+use log::info;
+use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls_pemfile::{certs, pkcs8_private_keys};
+use scc::ebr::Arc;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fs::File;
 use std::future::Future;
-use std::io::Write;
+use std::io::{BufReader, Write};
 use std::net::{IpAddr, SocketAddr};
-use axum::{Extension, Router};
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::http::header::HeaderName;
-use axum::response::IntoResponse;
-use axum_client_ip::ClientIp;
-use axum::routing::get;
-use axum_server::Handle;
-use axum_server::tls_rustls::RustlsConfig;
-use log::{debug, info};
-use scc::ebr::Arc;
-use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
-use scc::HashIndex;
-use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query};
+use std::str::FromStr;
+use std::time::Duration;
+
+use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query, UserId};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
-use crate::tracker::{StatsEvent, TorrentTracker};
+use crate::tracker::TorrentTracker;
+use crate::tracker_objects::stats::StatsEvent;
 
-pub async fn http_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>) -> impl Future<Output = Result<(), std::io::Error>>
+pub fn http_service_cors() -> Cors
 {
-    info!("[HTTP] Starting server listener on {}", addr);
-    axum_server::bind(addr)
-        .handle(handle)
-        .serve(Router::new()
-            .route("/announce", get(http_service_announce))
-            .route("/announce/:key", get(http_service_announce))
-            .route("/scrape", get(http_service_scrape))
-            .route("/scrape/:key", get(http_service_scrape))
-            .fallback(http_service_404)
-            .layer(Extension(data))
-            .into_make_service_with_connect_info::<SocketAddr>()
-        )
+    Cors::default()
+        .send_wildcard()
+        .allowed_methods(vec!["GET"])
+        .allowed_headers(vec![http::header::X_FORWARDED_FOR, http::header::ACCEPT])
+        .allowed_header(http::header::CONTENT_TYPE)
+        .max_age(1)
 }
 
-pub async fn https_service(handle: Handle, addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> impl Future<Output = Result<(), std::io::Error>>
+pub fn http_service_routes(data: Arc<TorrentTracker>) -> Box<dyn Fn(&mut ServiceConfig)>
 {
-    let ssl_config = RustlsConfig::from_pem_file(
-        ssl_cert.clone(),
-        ssl_key.clone()
-    ).await.unwrap();
-
-    info!("[HTTPS] Starting server listener on {}", addr);
-    axum_server::bind_rustls(addr, ssl_config)
-        .handle(handle)
-        .serve(Router::new()
-            .route("/announce", get(http_service_announce))
-            .route("/announce/:key", get(http_service_announce))
-            .route("/scrape", get(http_service_scrape))
-            .route("/scrape/:key", get(http_service_scrape))
-            .fallback(http_service_404)
-            .layer(Extension(data))
-            .into_make_service_with_connect_info::<SocketAddr>()
-        )
+    Box::new(move |cfg: &mut ServiceConfig| {
+        cfg.app_data(web::Data::new(data.clone()));
+        cfg.service(web::resource("announce").route(web::get().to(http_service_announce)));
+        cfg.service(web::resource("announce/{key}").route(web::get().to(http_service_announce_key)));
+        cfg.service(web::resource("announce/{key}/{userkey}").route(web::get().to(http_service_announce_userkey)));
+        cfg.service(web::resource("scrape").route(web::get().to(http_service_scrape)));
+        cfg.service(web::resource("scrape/{key}").route(web::get().to(http_service_scrape_key)));
+        cfg.default_service(web::route().to(http_service_not_found));
+    })
 }
 
-pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
+pub async fn http_service(addr: SocketAddr, data: Arc<TorrentTracker>) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
-    http_service_announce_log(ip, state.clone()).await;
-    let mut headers = HeaderMap::new();
-    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
+    info!("[SERVICE] Starting server listener on {}", addr);
+    let data_cloned = data;
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(http_service_cors())
+            .configure(http_service_routes(data_cloned.clone()))
+    })
+        .keep_alive(Duration::from_secs(900))
+        .client_request_timeout(Duration::from_secs(15))
+        .client_disconnect_timeout(Duration::from_secs(15))
+        .bind((addr.ip(), addr.port()))
+        .unwrap()
+        .disable_signals()
+        .run();
+    let handle = server.handle();
+    (handle, server)
+}
 
-    if maintenance_mode(state.clone()).await {
-        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
-        return (StatusCode::OK, headers, return_string);
+pub async fn https_service(addr: SocketAddr, data: Arc<TorrentTracker>, ssl_key: String, ssl_cert: String) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
+{
+    info!("[SERVICE] Starting server listener with SSL on {}", addr);
+    let data_cloned = data;
+
+    let config = https_service_config(ssl_key, ssl_cert);
+
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(http_service_cors())
+            .configure(http_service_routes(data_cloned.clone()))
+    })
+        .keep_alive(Duration::from_secs(900))
+        .client_request_timeout(Duration::from_secs(15))
+        .client_disconnect_timeout(Duration::from_secs(15))
+        .bind_rustls((addr.ip(), addr.port()), config)
+        .unwrap()
+        .disable_signals()
+        .run();
+    let handle = server.handle();
+    (handle, server)
+}
+
+fn https_service_config(ssl_key: String, ssl_cert: String) -> ServerConfig {
+    // init server config builder with safe defaults
+    let config = ServerConfig::builder()
+        .with_safe_defaults()
+        .with_no_client_auth();
+
+    // load TLS key/cert files
+    let cert_file = &mut BufReader::new(File::open(ssl_cert).unwrap());
+    let key_file = &mut BufReader::new(File::open(ssl_key).unwrap());
+
+    // convert files to key/cert objects
+    let cert_chain = certs(cert_file)
+        .unwrap()
+        .into_iter()
+        .map(Certificate)
+        .collect();
+    let mut keys: Vec<PrivateKey> = pkcs8_private_keys(key_file)
+        .unwrap()
+        .into_iter()
+        .map(PrivateKey)
+        .collect();
+
+    // exit if no keys could be parsed
+    if keys.is_empty() {
+        eprintln!("Could not locate PKCS 8 private keys.");
+        std::process::exit(1);
     }
 
-    let query_map_result = parse_query(params);
-    let query_map = match http_query_hashing(query_map_result, headers.clone()) {
+    config.with_single_cert(cert_chain, keys.remove(0)).unwrap()
+}
+
+pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    if data.config.keys {
+        let key = path.clone();
+        let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
+        if key_check.is_some() {
+            return key_check.unwrap();
+        }
+    }
+
+    if data.config.users && !data.config.keys {
+        let user_key = path.clone();
+        let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
+        if user_key_check.is_none() {
+            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap())).await;
+        }
+    }
+
+    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
+}
+
+pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path<(String, String)>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    if data.config.keys {
+        let key = path.clone().0;
+        let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
+        if key_check.is_some() {
+            return key_check.unwrap();
+        }
+    }
+
+    if data.config.users {
+        let user_key = path.clone().1;
+        let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
+        if user_key_check.is_none() {
+            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap())).await;
+        }
+    }
+
+    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
+}
+
+pub async fn http_service_announce(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    if data.config.keys {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+
+    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
+}
+
+pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>, user_key: Option<UserId>) -> HttpResponse
+{
+    let query_map_result = parse_query(Some(request.query_string().to_string()));
+    let query_map = match http_service_query_hashing(query_map_result) {
         Ok(result) => { result }
         Err(err) => { return err; }
     };
 
-    let announce = validate_announce(state.clone().config.clone(), ip, query_map).await;
+    let announce = validate_announce(data.clone().config.clone(), ip, query_map).await;
     let announce_unwrapped = match announce {
         Ok(result) => { result }
         Err(e) => {
             let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
-            return (StatusCode::OK, headers, return_string);
+            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
         }
     };
 
     // Check if whitelist is enabled, and if so, check if the torrent hash is known, and if not, show error.
-    if state.config.whitelist && !state.check_whitelist(announce_unwrapped.info_hash).await {
+    if data.config.whitelist && !data.check_whitelist(announce_unwrapped.info_hash).await {
         let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown info_hash")}).encode();
-        return (StatusCode::OK, headers, return_string);
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
 
     // Check if blacklist is enabled, and if so, check if the torrent hash is known, and if so, show error.
-    if state.config.blacklist && state.check_blacklist(announce_unwrapped.info_hash).await {
+    if data.config.blacklist && data.check_blacklist(announce_unwrapped.info_hash).await {
         let return_string = (ben_map! {"failure reason" => ben_bytes!("forbidden info_hash")}).encode();
-        return (StatusCode::OK, headers, return_string);
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
 
-    // We check if the path is set, and retrieve the possible "key" to check.
-    if state.config.keys {
-        let key: InfoHash = match path_params.get("key") {
-            None => {
-                let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
-                return (StatusCode::OK, headers, return_string);
-            }
-            Some(result) => {
-                if result.len() != 40 {
-                    let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
-                    return (StatusCode::OK, headers, return_string);
-                }
-                match hex::decode(result) {
-                    Ok(result) => {
-                        let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
-                        InfoHash(key)
-                    }
-                    Err(_) => {
-                        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
-                        return (StatusCode::OK, headers, return_string);
-                    }
-                }
-            }
-        };
-        if !state.check_key(key).await {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
-            return (StatusCode::OK, headers, return_string);
-        }
-    }
-
-    let (_torrent_peer, torrent_entry) = match handle_announce(state.clone(), announce_unwrapped.clone()).await {
+    let (_torrent_peer, torrent_entry) = match handle_announce(data.clone(), announce_unwrapped.clone(), user_key).await {
         Ok(result) => { result }
         Err(e) => {
             let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
-            return (StatusCode::OK, headers, return_string);
+            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
         }
     };
 
@@ -143,25 +255,25 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
         }
         return if announce_unwrapped.clone().remote_addr.is_ipv4() {
             let return_string = (ben_map! {
-                "interval" => ben_int!(state.config.interval.unwrap() as i64),
-                "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
-                "complete" => ben_int!(torrent_entry.seeders as i64),
-                "incomplete" => ben_int!(torrent_entry.leechers as i64),
-                "downloaded" => ben_int!(torrent_entry.completed as i64),
+                "interval" => ben_int!(data.config.interval.unwrap() as i64),
+                "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
+                "complete" => ben_int!(torrent_entry.seeders),
+                "incomplete" => ben_int!(torrent_entry.leechers),
+                "downloaded" => ben_int!(torrent_entry.completed),
                 "peers" => ben_bytes!(peers.clone())
             }).encode();
-            (StatusCode::OK, headers, return_string)
+            HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string)
         } else {
             let return_string = (ben_map! {
-                "interval" => ben_int!(state.config.interval.unwrap() as i64),
-                "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
-                "complete" => ben_int!(torrent_entry.seeders as i64),
-                "incomplete" => ben_int!(torrent_entry.leechers as i64),
-                "downloaded" => ben_int!(torrent_entry.completed as i64),
+                "interval" => ben_int!(data.config.interval.unwrap() as i64),
+                "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
+                "complete" => ben_int!(torrent_entry.seeders),
+                "incomplete" => ben_int!(torrent_entry.leechers),
+                "downloaded" => ben_int!(torrent_entry.completed),
                 "peers6" => ben_bytes!(peers.clone())
             }).encode();
-            (StatusCode::OK, headers, return_string)
-        }
+            HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string)
+        };
     }
 
     let mut peers_list = ben_list!();
@@ -174,7 +286,7 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
                     "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                     "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
                 });
-            },
+            }
             IpAddr::V6(_) => {
                 peers_list_mut.push(ben_map! {
                     "peer id" => ben_bytes!(peer_id.clone().to_string()),
@@ -186,145 +298,166 @@ pub async fn http_service_announce(ClientIp(ip): ClientIp, axum::extract::RawQue
     }
     if announce_unwrapped.clone().remote_addr.is_ipv4() {
         let return_string = (ben_map! {
-            "interval" => ben_int!(state.config.interval.unwrap() as i64),
-            "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
-            "complete" => ben_int!(torrent_entry.seeders as i64),
-            "incomplete" => ben_int!(torrent_entry.leechers as i64),
-            "downloaded" => ben_int!(torrent_entry.completed as i64),
+            "interval" => ben_int!(data.config.interval.unwrap() as i64),
+            "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
+            "complete" => ben_int!(torrent_entry.seeders),
+            "incomplete" => ben_int!(torrent_entry.leechers),
+            "downloaded" => ben_int!(torrent_entry.completed),
             "peers" => peers_list.clone()
         }).encode();
-        (StatusCode::OK, headers, return_string)
+        HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string)
     } else {
         let return_string = (ben_map! {
-            "interval" => ben_int!(state.config.interval.unwrap() as i64),
-            "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
-            "complete" => ben_int!(torrent_entry.seeders as i64),
-            "incomplete" => ben_int!(torrent_entry.leechers as i64),
-            "downloaded" => ben_int!(torrent_entry.completed as i64),
+            "interval" => ben_int!(data.config.interval.unwrap() as i64),
+            "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
+            "complete" => ben_int!(torrent_entry.seeders),
+            "incomplete" => ben_int!(torrent_entry.leechers),
+            "downloaded" => ben_int!(torrent_entry.completed),
             "peers6" => peers_list.clone()
         }).encode();
-        (StatusCode::OK, headers, return_string)
+        HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string)
     }
 }
 
-pub async fn http_service_announce_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
+pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    if ip.is_ipv4() {
-        debug!("[HTTP REQUEST] TCPv4 Announcement received from {}", ip.to_string());
-        tracker.clone().update_stats(StatsEvent::Tcp4ConnectionsHandled, 1).await;
-        tracker.clone().update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await;
-    } else {
-        debug!("[HTTP REQUEST] TCPv6 Announcement received from {}", ip.to_string());
-        tracker.clone().update_stats(StatsEvent::Tcp6ConnectionsHandled, 1).await;
-        tracker.clone().update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await;
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    // We check if the path is set, and retrieve the possible "key" to check.
+    if data.config.keys {
+        let key = path.into_inner();
+        let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
+        if key_check.is_some() {
+            return key_check.unwrap();
+        }
+    }
+
+    http_service_scrape_handler(request, ip, data.as_ref().clone()).await
 }
 
-pub async fn http_service_scrape(ClientIp(ip): ClientIp, axum::extract::RawQuery(params): axum::extract::RawQuery, axum::extract::Path(path_params): axum::extract::Path<HashMap<String, String>>, Extension(state): Extension<Arc<TorrentTracker>>) -> (StatusCode, HeaderMap, Vec<u8>)
+pub async fn http_service_scrape(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
-    http_service_scrape_log(ip, state.clone()).await;
-    let mut headers = HeaderMap::new();
-    headers.insert(HeaderName::from_static("content-type"), HeaderValue::from_static("text/plain"));
-
-    if maintenance_mode(state.clone()).await {
-        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
-        return (StatusCode::OK, headers, return_string);
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
 
-    let query_map_result = parse_query(params);
-    let query_map = match http_query_hashing(query_map_result, headers.clone()) {
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    http_service_scrape_handler(request, ip, data.as_ref().clone()).await
+}
+
+pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
+{
+    let query_map_result = parse_query(Some(request.query_string().to_string()));
+    let query_map = match http_service_query_hashing(query_map_result) {
         Ok(result) => { result }
         Err(err) => { return err; }
     };
 
-    // We check if the path is set, and retrieve the possible "key" to check.
-    if state.config.keys {
-        let key: InfoHash = match path_params.get("key") {
-            None => {
-                let return_string = (ben_map! {"failure reason" => ben_bytes!("missing key")}).encode();
-                return (StatusCode::OK, headers, return_string);
-            }
-            Some(result) => {
-                if result.len() != 40 {
-                    let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
-                    return (StatusCode::OK, headers, return_string);
-                }
-                match hex::decode(result) {
-                    Ok(result) => {
-                        let key = <[u8; 20]>::try_from(result[0 .. 20].as_ref()).unwrap();
-                        InfoHash(key)
-                    }
-                    Err(_) => {
-                        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
-                        return (StatusCode::OK, headers, return_string);
-                    }
-                }
-            }
-        };
-        if !state.check_key(key).await {
-            let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
-            return (StatusCode::OK, headers, return_string);
-        }
+    let scrape = validate_scrape(data.clone().config.clone(), ip, query_map).await;
+    if scrape.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!(scrape.unwrap_err().to_string())}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
     }
 
-    let scrape = validate_scrape(state.clone().config.clone(), ip, query_map).await;
-    return match scrape {
+    match scrape.as_ref() {
         Ok(e) => {
-            let data_scrape = handle_scrape(state.clone(), e.clone()).await;
+            let data_scrape = handle_scrape(data.clone(), e.clone()).await;
             let mut scrape_list = ben_map!();
             let scrape_list_mut = scrape_list.dict_mut().unwrap();
             for (key, value) in data_scrape.iter() {
                 scrape_list_mut.insert(Cow::from(key.0.to_vec()), ben_map! {
-                    "complete" => ben_int!(value.seeders as i64),
-                    "downloaded" => ben_int!(value.completed as i64),
-                    "incomplete" => ben_int!(value.leechers as i64)
+                    "complete" => ben_int!(value.seeders),
+                    "downloaded" => ben_int!(value.completed),
+                    "incomplete" => ben_int!(value.leechers)
                 });
             }
             let return_string = (ben_map! {
-                "interval" => ben_int!(state.config.interval.unwrap() as i64),
-                "min interval" => ben_int!(state.config.interval_minimum.unwrap() as i64),
+                "interval" => ben_int!(data.config.interval.unwrap() as i64),
+                "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
                 "files" => scrape_list
             }).encode();
-            (StatusCode::OK, headers, return_string)
+            HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string)
         }
         Err(e) => {
             let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
-            (StatusCode::OK, headers, return_string)
+            HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string)
+        }
+    }
+}
+
+async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+{
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown request")}).encode();
+    let body = std::str::from_utf8(&return_string).unwrap().to_string();
+    HttpResponse::NotFound().content_type(ContentType::plaintext()).body(body)
+}
+
+pub async fn http_service_stats_log(ip: IpAddr, tracker: web::Data<Arc<TorrentTracker>>)
+{
+    if ip.is_ipv4() {
+        tracker.update_stats(StatsEvent::Tcp4ConnectionsHandled, 1).await;
+    } else {
+        tracker.update_stats(StatsEvent::Tcp6ConnectionsHandled, 1).await;
+    }
+}
+
+pub async fn http_service_decode_hex_hash(hash: String) -> Result<InfoHash, HttpResponse>
+{
+    return match hex::decode(hash) {
+        Ok(hash_result) => {
+            Ok(InfoHash(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap()))
+        }
+        Err(_) => {
+            let return_string = (ben_map! {"failure reason" => ben_bytes!("unable to decode hex string")}).encode();
+            let body = std::str::from_utf8(&return_string).unwrap().to_string();
+            return Err(HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(body));
         }
     };
 }
 
-pub async fn http_service_scrape_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
+pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, HttpResponse>
 {
-    if ip.is_ipv4() {
-        debug!("[HTTP REQUEST] TCPv4 Scrape received from {}", ip.to_string());
-        tracker.clone().update_stats(StatsEvent::Tcp4ConnectionsHandled, 1).await;
-        tracker.clone().update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await;
-    } else {
-        debug!("[HTTP REQUEST] TCPv6 Scrape received from {}", ip.to_string());
-        tracker.clone().update_stats(StatsEvent::Tcp6ConnectionsHandled, 1).await;
-        tracker.clone().update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await;
-    }
+    return match hex::decode(hash) {
+        Ok(hash_result) => {
+            Ok(UserId(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap()))
+        }
+        Err(_) => {
+            let return_string = (ben_map! {"failure reason" => ben_bytes!("unable to decode hex string")}).encode();
+            let body = std::str::from_utf8(&return_string).unwrap().to_string();
+            return Err(HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(body));
+        }
+    };
 }
 
-pub async fn http_service_404(ClientIp(ip): ClientIp, axum::extract::RawQuery(_params): axum::extract::RawQuery, Extension(state): Extension<Arc<TorrentTracker>>) -> impl IntoResponse
-{
-    http_service_404_log(ip, state.clone()).await;
-    let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown request")}).encode();
-    let body = std::str::from_utf8(&return_string).unwrap().to_string();
-    (StatusCode::NOT_FOUND, body)
-}
+type HttpServiceQueryHashingMapOk = HashMap<String, Vec<Vec<u8>>>;
+type HttpServiceQueryHashingMapErr = HttpResponse;
 
-pub async fn http_service_404_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
-{
-    if ip.is_ipv4() {
-        tracker.clone().update_stats(StatsEvent::Tcp4ConnectionsHandled, 1).await;
-    } else {
-        tracker.clone().update_stats(StatsEvent::Tcp6ConnectionsHandled, 1).await;
-    }
-}
-
-pub fn http_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>>>, CustomError>, headers: HeaderMap) -> Result<HashIndex<String, Vec<Vec<u8>>>, (StatusCode, HeaderMap, Vec<u8>)>
+pub fn http_service_query_hashing(query_map_result: Result<HttpServiceQueryHashingMapOk, CustomError>) -> Result<HttpServiceQueryHashingMapOk, HttpServiceQueryHashingMapErr>
 {
     match query_map_result {
         Ok(e) => {
@@ -332,7 +465,83 @@ pub fn http_query_hashing(query_map_result: Result<HashIndex<String, Vec<Vec<u8>
         }
         Err(e) => {
             let return_string = (ben_map! {"failure reason" => ben_bytes!(e.to_string())}).encode();
-            Err((StatusCode::OK, headers, return_string))
+            Err(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string))
         }
     }
+}
+
+pub async fn http_service_maintenance_mode_check(data: Arc<TorrentTracker>) -> Option<HttpResponse>
+{
+    if maintenance_mode(data).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("maintenance mode enabled, please try again later")}).encode();
+        Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string))
+    } else {
+        None
+    }
+}
+
+pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: String) -> Option<HttpResponse>
+{
+    if key.len() != 40 {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid key")}).encode();
+        return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string));
+    }
+    let key_decoded: InfoHash = match http_service_decode_hex_hash(key).await {
+        Ok(result) => {
+            result
+        }
+        Err(error) => {
+            return Some(error)
+        }
+    };
+    if !data.check_key(key_decoded).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown key")}).encode();
+        return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string));
+    }
+    None
+}
+
+pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, user_key: String) -> Option<HttpResponse>
+{
+    if user_key.len() != 40 {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("invalid user key")}).encode();
+        return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string));
+    }
+    let user_key_decoded: UserId = match http_service_decode_hex_user_id(user_key).await {
+        Ok(result) => {
+            result
+        }
+        Err(error) => {
+            return Some(error)
+        }
+    };
+    if !data.check_user_key(user_key_decoded).await {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown user key")}).encode();
+        return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string));
+    }
+    None
+}
+
+pub async fn http_service_retrieve_remote_ip(request: HttpRequest) -> Result<IpAddr, ()>
+{
+    let origin_ip = match request.peer_addr() {
+        None => { return Err(()); }
+        Some(ip) => { ip.ip() }
+    };
+    let cloudflare_ip = request.headers().get("CF-Connecting-IP");
+    let xreal_ip = request.headers().get("X-Real-IP");
+
+    // Check if IP is from Cloudflare
+    if cloudflare_ip.is_some() && cloudflare_ip.unwrap().to_str().is_ok() {
+        let check = IpAddr::from_str(cloudflare_ip.unwrap().to_str().unwrap());
+        if check.is_ok() { return Ok(check.unwrap()); }
+    };
+
+    // Check if IP is from X-Real-IP
+    if xreal_ip.is_some() && xreal_ip.unwrap().to_str().is_ok() {
+        let check = IpAddr::from_str(xreal_ip.unwrap().to_str().unwrap());
+        if check.is_ok() { return Ok(check.unwrap()); }
+    };
+
+    Ok(origin_ip)
 }

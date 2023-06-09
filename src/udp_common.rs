@@ -1,8 +1,8 @@
+use byteorder::{NetworkEndian, BigEndian, ReadBytesExt, WriteBytesExt};
+use either::Either;
 use std::borrow::Cow;
 use std::convert::TryInto;
 use std::io::{self, Cursor, Read, Write};
-use byteorder::{NetworkEndian, BigEndian, ReadBytesExt, WriteBytesExt};
-use either::Either;
 use std::fmt::Debug;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::time::SystemTime;
@@ -59,7 +59,7 @@ pub struct AnnounceRequest {
     pub key: PeerKey,
     pub peers_wanted: NumberOfPeers,
     pub port: Port,
-    pub path: String
+    pub path: String,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -256,19 +256,23 @@ impl Request {
                 let mut path: &str = "";
                 let mut path_array = vec![];
 
-                if option_byte.is_ok() && option_size.is_ok() {
-                    let option_byte_value = option_byte.unwrap();
-                    let option_size_value = option_size.unwrap();
-                    if option_byte_value == 2 {
-                        path_array.resize(option_size_value as usize, 0u8);
-                        cursor.read_exact(&mut path_array).map_err(|err| {
-                            RequestParseError::sendable_io(err, connection_id, transaction_id)
-                        })?;
-                        path = match std::str::from_utf8(&path_array) {
-                            Ok(result) => { result }
-                            Err(_) => { "" }
-                        };
-                    }
+                let option_byte_value = match option_byte {
+                    Ok(value) => { value }
+                    Err(_) => { 0 }
+                };
+                let option_size_value = match option_size {
+                    Ok(value) => { value }
+                    Err(_) => { 0 }
+                };
+                if option_byte_value == 2 {
+                    path_array.resize(option_size_value as usize, 0u8);
+                    cursor.read_exact(&mut path_array).map_err(|err| {
+                        RequestParseError::sendable_io(err, connection_id, transaction_id)
+                    })?;
+                    path = match std::str::from_utf8(&path_array) {
+                        Ok(result) => { result }
+                        Err(_) => { "" }
+                    };
                 }
 
                 Ok((AnnounceRequest {
@@ -294,7 +298,7 @@ impl Request {
                 let position = cursor.position() as usize;
                 let inner = cursor.into_inner();
 
-                let info_hashes: Vec<InfoHash> = (&inner[position..])
+                let info_hashes: Vec<InfoHash> = inner[position..]
                     .chunks_exact(20)
                     .take(max_scrape_torrents as usize)
                     .map(|chunk| InfoHash(chunk.try_into().unwrap()))
@@ -586,6 +590,7 @@ impl Response {
 pub trait Ip: Clone + Copy + Debug + PartialEq + Eq {}
 
 impl Ip for Ipv4Addr {}
+
 impl Ip for Ipv6Addr {}
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
