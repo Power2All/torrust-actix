@@ -62,13 +62,6 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>
     Ok(queries)
 }
 
-pub fn calculate_count(src_count: u64, calc: i64) -> u64
-{
-    let begin_count = src_count as i64;
-    let new_count = begin_count + calc;
-    new_count as u64
-}
-
 #[derive(Debug)]
 pub struct CustomError {
     pub(crate) message: String,

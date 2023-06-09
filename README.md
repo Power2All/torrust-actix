@@ -340,6 +340,85 @@ This will remove a key from the keys list, and returns status if successful or f
 }
 ```
 
+### Users
+
+#### GET `http(s)://127.0.0.1:8080/api/users?token=[TOKENID]`
+This will return all the users in an array, including which torrents are being used actively by the user.
+
+```json
+[
+  {
+    "uuid": "cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
+    "key": "1234567890123456789012345678901234567890",
+    "uploaded": 0,
+    "downloaded": 0,
+    "completed": 0,
+    "updated": 1686302997,
+    "active": 1,
+    "torrents_active": [
+      [
+        "1234567890123456789012345678901234567890",
+        1686302997
+      ]
+    ]
+  }
+]
+```
+
+#### GET `http(s)://127.0.0.1:8080/api/user/[USER_HASH]?token=[TOKENID]`
+This will return the user containing hashed key (not the uuid) in an array, including which torrents are being used actively by the user.
+
+```json
+{
+  "uuid":"cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
+  "key":"1234567890123456789012345678901234567890",
+  "uploaded":0,
+  "downloaded":0,
+  "completed":0,
+  "updated":1686302997,
+  "active":1,
+  "torrents_active":[
+    [
+      "1234567890123456789012345678901234567890",
+      1686302997
+    ]
+  ]
+}
+```
+
+#### POST `http(s)://127.0.0.1:8080/api/user?token=[TOKENID]`
+This will insert a user in the user memory database, and returns status if successful.
+Body data must be in valid JSON as shown below, otherwise it will return a error.
+
+Send:
+```json
+{
+  "uuid":"cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
+  "key":"1234567890123456789012345678901234567890",
+  "uploaded":0,
+  "downloaded":0,
+  "completed":0,
+  "updated":1686302997,
+  "active":1
+}
+```
+
+Response:
+```json
+{
+  "status":"ok"
+}
+```
+
+#### DELETE `http(s)://127.0.0.1:8080/api/user/[USER_HASH]?token=[TOKENID]`
+This will remove the user from the memory.
+
+```json
+{
+  "status":"ok"
+}
+```
+
 #### GET `http(s)://127.0.0.1:8080/api/maintenance/enable?token=[TOKENID]`
 This will enable the maintenance mode.
 

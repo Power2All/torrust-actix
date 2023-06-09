@@ -16,7 +16,7 @@ use std::fs::File;
 use std::future::Future;
 use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::common::{InfoHash, AnnounceEvent, UserId};
 use crate::config::Configuration;
@@ -57,7 +57,8 @@ pub fn http_api_routes(data: Arc<TorrentTracker>) -> Box<dyn Fn(&mut ServiceConf
         cfg.service(web::resource("api/keys/{key}").route(web::get().to(http_api_keys_get)).route(web::delete().to(http_api_keys_delete)));
         cfg.service(web::resource("api/keys/{key}/{seconds_valid}").route(web::post().to(http_api_keys_post)).route(web::patch().to(http_api_keys_patch)));
         cfg.service(web::resource("api/users").route(web::get().to(http_api_users_get)));
-        cfg.service(web::resource("api/user/{user_key}").route(web::get().to(http_api_user_get)).route(web::post().to(http_api_user_post)).route(web::delete().to(http_api_user_delete)));
+        cfg.service(web::resource("api/user").route(web::post().to(http_api_user_post)));
+        cfg.service(web::resource("api/user/{user_key}").route(web::get().to(http_api_user_get)).route(web::post().to(http_api_user_post)));
         cfg.service(web::resource("api/maintenance/enable").route(web::get().to(http_api_maintenance_enable)));
         cfg.service(web::resource("api/maintenance/disable").route(web::get().to(http_api_maintenance_disable)));
         cfg.default_service(web::route().to(http_api_not_found));
@@ -621,7 +622,23 @@ pub async fn http_api_user_get(request: HttpRequest, remote_ip: RemoteIP, path: 
     };
 
     if let Some(user) = data.get_user(user_id_decoded).await {
-        return HttpResponse::Ok().content_type(ContentType::json()).json(json!(&user));
+        let mut torrents_active = Vec::new();
+        let system_now = SystemTime::now();
+        for (info_hash, time) in user.torrents_active.iter() {
+            let instant_now = Instant::now();
+            let approx = system_now - (instant_now - *time);
+            torrents_active.push((info_hash, approx.duration_since(UNIX_EPOCH).unwrap().as_secs()))
+        }
+        return HttpResponse::Ok().content_type(ContentType::json()).json(json!({
+            "uuid": user.uuid,
+            "key": user.key,
+            "uploaded": user.uploaded,
+            "downloaded": user.downloaded,
+            "completed": user.completed,
+            "updated": user.updated,
+            "active": user.active,
+            "torrents_active": torrents_active
+        }));
     }
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "not found"}))
@@ -644,7 +661,23 @@ pub async fn http_api_users_get(request: HttpRequest, remote_ip: RemoteIP, body:
             Err(data_returned) => { return data_returned; }
         };
         if let Some(data_request) = data.get_user(hash_decoded).await {
-            users.push(json!(data_request));
+            let mut torrents_active = Vec::new();
+            let system_now = SystemTime::now();
+            for (info_hash, time) in data_request.torrents_active.iter() {
+                let instant_now = Instant::now();
+                let approx = system_now - (instant_now - *time);
+                torrents_active.push((info_hash, approx.duration_since(UNIX_EPOCH).unwrap().as_secs()))
+            }
+            users.push(json!({
+                "uuid": data_request.uuid,
+                "key": data_request.key,
+                "uploaded": data_request.uploaded,
+                "downloaded": data_request.downloaded,
+                "completed": data_request.completed,
+                "updated": data_request.updated,
+                "active": data_request.active,
+                "torrents_active": torrents_active
+            }));
         }
     }
 
@@ -662,7 +695,7 @@ pub struct HttpApiUserPost {
     pub active: u8,
 }
 
-pub async fn http_api_user_post(request: HttpRequest, remote_ip: RemoteIP, path: web::Path<String>, body: web::Json<HttpApiUserPost>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
+pub async fn http_api_user_post(request: HttpRequest, remote_ip: RemoteIP, body: web::Json<HttpApiUserPost>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
     http_api_stats_log(remote_ip.0, data.clone()).await;
 
@@ -670,17 +703,7 @@ pub async fn http_api_user_post(request: HttpRequest, remote_ip: RemoteIP, path:
     let params = web::Query::<HttpApiTokenCheck>::from_query(request.query_string()).unwrap();
     if let Some(response) = http_api_token(params.token.clone(), data.config.clone()).await { return response; }
 
-    // Validate info_hash
-    let user_id = path.into_inner();
-    if user_id.len() != 40 { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "invalid user_id size (HEX 40 characters)"})); }
-
-    // Decode info_hash into a InfoHash string or give error
-    let user_id_decoded = match http_api_decode_user_id(user_id).await {
-        Ok(data_returned) => { data_returned }
-        Err(data_returned) => { return data_returned; }
-    };
-
-    data.add_user(user_id_decoded, UserEntryItem {
+    data.add_user(body.key, UserEntryItem {
         uuid: body.uuid.clone(),
         key: body.key,
         uploaded: body.uploaded,

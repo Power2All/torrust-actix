@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use crate::common::parse_query;
+
+    use crate::common::{parse_query};
 
     #[test]
     fn test_parse_query() {
