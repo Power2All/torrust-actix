@@ -1,6 +1,7 @@
 # Torrust-Actix Tracker
 ![Test](https://github.com/Power2All/torrust-actix/actions/workflows/rust.yml/badge.svg)
 [<img src="https://img.shields.io/badge/DockerHub-link-blue.svg">](<https://hub.docker.com/r/power2all/torrust-actix>)
+[<img src="https://img.shields.io/discord/272362779157987328?label=Discord">](<https://discord.gg/ys9pb4w>)
 
 ## Project Description
 Torrust-Actix Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
