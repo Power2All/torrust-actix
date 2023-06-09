@@ -70,8 +70,9 @@ persistence_interval = 60
 api_key = "MyAccessToken"
 whitelist = false
 blacklist = false
-keys = true
+keys = false
 keys_cleanup_interval = 10
+users = false
 maintenance_mode_enabled = false
 interval = 1800
 interval_minimum = 1800
@@ -108,6 +109,14 @@ table_blacklist_info_hash = "info_hash"
 db_keys = "keys"
 table_keys_hash = "hash"
 table_keys_timeout = "timeout"
+db_users = "users"
+table_users_uuid = "uuid"
+table_users_key = "key"
+table_users_uploaded = "uploaded"
+table_users_downloaded = "downloaded"
+table_users_completed = "completed"
+table_users_updated = "updated"
+table_users_active = "active"
 ```
 
 * Run the torrust-actix again after finishing the configuration:
