@@ -39,7 +39,7 @@ impl DatabaseConnectorPgSQL {
 
         let mut structure = DatabaseConnector { mysql: None, sqlite: None, pgsql: None, engine: None };
         structure.pgsql = Some(DatabaseConnectorPgSQL { pool: pgsql_connect.unwrap() });
-        structure.engine = Some(DatabaseDrivers::mysql);
+        structure.engine = Some(DatabaseDrivers::pgsql);
 
         structure
     }

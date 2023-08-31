@@ -1,4 +1,4 @@
-FROM rust:alpine3.17
+FROM rust:alpine3.18
 
 ARG FULL_CONFIG=""
 ENV FULL_CONFIG=$FULL_CONFIG
@@ -97,7 +97,7 @@ ENV USERS=$USERS
 
 ARG DB_STRUCTURE_DB_USERS="users"
 ARG DB_STRUCTURE_TABLE_USERS_UUID="uuid"
-ARG DB_STRUCTURE_TABLE_USERS_KEY="key"
+ARG DB_STRUCTURE_TABLE_USERS_KEY="keyhash"
 ARG DB_STRUCTURE_TABLE_USERS_UPLOADED="uploaded"
 ARG DB_STRUCTURE_TABLE_USERS_DOWNLOADED="downloaded"
 ARG DB_STRUCTURE_TABLE_USERS_COMPLETED="completed"
@@ -107,7 +107,7 @@ ENV DB_STRUCTURE_DB_USERS=$DB_STRUCTURE_DB_USERS DB_STRUCTURE_TABLE_USERS_UUID=$
 
 RUN apk add git musl-dev
 RUN git clone https://github.com/Power2All/torrust-actix.git /root/torrust-actix
-RUN cd /root/torrust-actix && git checkout tags/v3.2.0
+RUN cd /root/torrust-actix && git checkout tags/v3.2.1
 WORKDIR /root/torrust-actix
 RUN cd /root/torrust-actix
 RUN cargo build --release && rm -Rf target/release/.fingerprint target/release/build target/release/deps target/release/examples target/release/incremental

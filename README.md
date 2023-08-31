@@ -449,6 +449,11 @@ This will disable the maintenance mode.
 
 ### ChangeLog
 
+#### v3.2.1
+* Bumped library versions, including security patches.
+* Fixed a bug in the PostgreSQL handler.
+* Some forgotten naming from Torrust-Axum to Torrust-Actix.
+
 #### v3.2.0
 * Bumped library versions.
 * Modified the way scheduling was done through threads, it could lock up and slow down public trackers with heavy activity.
