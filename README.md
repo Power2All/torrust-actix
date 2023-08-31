@@ -449,6 +449,10 @@ This will disable the maintenance mode.
 
 ### ChangeLog
 
+#### v3.2.1
+* Bumped library versions (security issue too).
+* Fixed a bug in the PostgreSQL database engine.
+
 #### v3.2.0
 * Bumped library versions.
 * Modified the way scheduling was done through threads, it could lock up and slow down public trackers with heavy activity.

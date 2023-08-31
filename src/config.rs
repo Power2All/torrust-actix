@@ -176,7 +176,7 @@ impl Configuration {
                 table_keys_timeout: String::from("timeout"),
                 db_users: String::from("users"),
                 table_users_uuid: String::from("uuid"),
-                table_users_key: String::from("key"),
+                table_users_key: String::from("keyhash"),
                 table_users_uploaded: String::from("uploaded"),
                 table_users_downloaded: String::from("downloaded"),
                 table_users_completed: String::from("completed"),
