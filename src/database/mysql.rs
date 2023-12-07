@@ -25,9 +25,11 @@ impl DatabaseConnectorMySQL {
     pub async fn create(dsl: &str) -> Result<Pool<MySql>, Error>
     {
         let mut options = MySqlConnectOptions::from_str(dsl)?;
-        options
+        options = options
             .log_statements(log::LevelFilter::Debug)
-            .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
+            .clone()
+            .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1))
+            .clone();
         MySqlPoolOptions::new().connect_with(options).await
     }
 
@@ -106,7 +108,7 @@ impl DatabaseConnectorMySQL {
                 tracker.config.db_structure.table_torrents_completed,
                 tracker.config.db_structure.table_torrents_completed
             ))
-                .execute(&mut torrents_transaction)
+                .execute(&mut *torrents_transaction)
                 .await {
                 Ok(_) => {}
                 Err(e) => {
@@ -172,7 +174,7 @@ impl DatabaseConnectorMySQL {
                     tracker.config.db_structure.table_whitelist_info_hash,
                     info_hash
                 ))
-                    .execute(&mut whitelist_transaction)
+                    .execute(&mut *whitelist_transaction)
                     .await {
                     Ok(_) => {}
                     Err(e) => {
@@ -192,7 +194,7 @@ impl DatabaseConnectorMySQL {
                     tracker.config.db_structure.table_whitelist_info_hash,
                     info_hash
                 ))
-                    .execute(&mut whitelist_transaction)
+                    .execute(&mut *whitelist_transaction)
                     .await {
                     Ok(_) => {}
                     Err(e) => {
@@ -246,7 +248,7 @@ impl DatabaseConnectorMySQL {
     {
         let mut blacklist_transaction = self.pool.begin().await?;
         let mut blacklist_handled_entries = 0u64;
-        let _ = sqlx::query(&format!("TRUNCATE TABLE {}", tracker.config.db_structure.db_blacklist)).execute(&mut blacklist_transaction).await?;
+        let _ = sqlx::query(&format!("TRUNCATE TABLE {}", tracker.config.db_structure.db_blacklist)).execute(&mut *blacklist_transaction).await?;
         for info_hash in blacklists.iter() {
             blacklist_handled_entries += 1;
             match sqlx::query(&format!(
@@ -255,7 +257,7 @@ impl DatabaseConnectorMySQL {
                 tracker.config.db_structure.table_blacklist_info_hash,
                 info_hash
             ))
-                .execute(&mut blacklist_transaction)
+                .execute(&mut *blacklist_transaction)
                 .await {
                 Ok(_) => {}
                 Err(e) => {
@@ -326,7 +328,7 @@ impl DatabaseConnectorMySQL {
                 tracker.config.db_structure.table_keys_timeout,
                 tracker.config.db_structure.table_keys_timeout
             ))
-                .execute(&mut keys_transaction)
+                .execute(&mut *keys_transaction)
                 .await {
                 Ok(_) => {}
                 Err(e) => {
@@ -444,7 +446,7 @@ impl DatabaseConnectorMySQL {
                 tracker.config.db_structure.table_users_active,
                 tracker.config.db_structure.table_users_active
             ))
-                .execute(&mut users_transaction)
+                .execute(&mut *users_transaction)
                 .await {
                 Ok(_) => {}
                 Err(e) => {

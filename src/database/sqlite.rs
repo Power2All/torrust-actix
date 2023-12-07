@@ -25,9 +25,11 @@ impl DatabaseConnectorSQLite {
     pub async fn create(dsl: &str) -> Result<Pool<Sqlite>, Error>
     {
         let mut options = SqliteConnectOptions::from_str(dsl)?;
-        options
+        options = options
             .log_statements(log::LevelFilter::Debug)
-            .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
+            .clone()
+            .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1))
+            .clone();
         SqlitePoolOptions::new().connect_with(options.create_if_missing(true)).await
     }
 
@@ -152,7 +154,7 @@ impl DatabaseConnectorSQLite {
                 info_hash,
                 completed.clone()
             ))
-                .execute(&mut torrents_transaction)
+                .execute(&mut *torrents_transaction)
                 .await {
                 Ok(_) => {}
                 Err(e) => {
@@ -226,7 +228,7 @@ impl DatabaseConnectorSQLite {
                     tracker.config.db_structure.table_whitelist_info_hash,
                     info_hash
                 ))
-                    .execute(&mut whitelist_transaction)
+                    .execute(&mut *whitelist_transaction)
                     .await {
                     Ok(_) => {}
                     Err(e) => {
@@ -246,7 +248,7 @@ impl DatabaseConnectorSQLite {
                     tracker.config.db_structure.table_whitelist_info_hash,
                     info_hash
                 ))
-                    .execute(&mut whitelist_transaction)
+                    .execute(&mut *whitelist_transaction)
                     .await {
                     Ok(_) => {}
                     Err(e) => {
@@ -308,7 +310,7 @@ impl DatabaseConnectorSQLite {
                 tracker.config.db_structure.table_blacklist_info_hash,
                 info_hash
             ))
-                .execute(&mut blacklist_transaction)
+                .execute(&mut *blacklist_transaction)
                 .await {
                 Ok(_) => {}
                 Err(e) => {
@@ -377,7 +379,7 @@ impl DatabaseConnectorSQLite {
                 hash,
                 timeout.clone()
             ))
-                .execute(&mut keys_transaction)
+                .execute(&mut *keys_transaction)
                 .await {
                 Ok(_) => {}
                 Err(e) => {
@@ -481,7 +483,7 @@ impl DatabaseConnectorSQLite {
                 user_entry_item.updated,
                 user_entry_item.active
             ))
-                .execute(&mut users_transaction)
+                .execute(&mut *users_transaction)
                 .await {
                 Ok(_) => {}
                 Err(e) => {
