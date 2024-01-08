@@ -95,6 +95,7 @@ async fn main() -> std::io::Result<()>
             db_path: source,
             persistence: true,
             persistence_interval: None,
+            total_downloads: 0,
             api_key: "".to_string(),
             whitelist: config.whitelist,
             blacklist: config.blacklist,
@@ -144,6 +145,7 @@ async fn main() -> std::io::Result<()>
             db_path: destination,
             persistence: true,
             persistence_interval: None,
+            total_downloads: 0,
             api_key: "".to_string(),
             whitelist: config.whitelist,
             blacklist: config.blacklist,
@@ -219,6 +221,7 @@ async fn main() -> std::io::Result<()>
         if config.users {
             tracker.clone().load_users(tracker.clone()).await;
         }
+        tracker.clone().set_stats(StatsEvent::Completed, config.total_downloads as i64).await;
     }
 
     let mut api_handlers = Vec::new();
@@ -343,6 +346,29 @@ async fn main() -> std::io::Result<()>
             task::sleep(Duration::from_secs(tracker_clone.config.persistence_interval.unwrap_or(60))).await;
 
             info!("[SAVING] Starting persistence saving procedure.");
+
+            match Configuration::load_from_file(create_config) {
+                Ok(config) => {
+                    let mut config_load = config;
+                    config_load.total_downloads = tracker_clone.get_stats().await.completed as u64;
+                    let config_toml = toml::to_string(&config_load).unwrap();
+                    let save_file = Configuration::save_file("config.toml", config_toml);
+                    match save_file {
+                        Ok(_) => {
+                            info!("[SAVING] Saved config.toml.");
+                        }
+                        Err(e) => {
+                            error!("[SAVING] Unable to save config.toml.");
+                            error!("{e}");
+                        }
+                    };
+                },
+                Err(_) => {
+                    error!("[SAVING] Unable to load config file!");
+                }
+            };
+
+
             info!("[SAVING] Moving Updates to Shadow...");
             tracker_clone.transfer_torrents_updates_to_torrents_shadow().await;
             info!("[SAVING] Saving data from Shadow to database...");

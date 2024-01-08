@@ -80,6 +80,7 @@ pub struct Configuration {
     pub db_path: String,
     pub persistence: bool,
     pub persistence_interval: Option<u64>,
+    pub total_downloads: u64,
 
     pub api_key: String,
 
@@ -141,6 +142,7 @@ impl Configuration {
             db_path: String::from("sqlite://:memory:"),
             persistence: false,
             persistence_interval: Some(60),
+            total_downloads: 0,
 
             api_key: String::from("MyAccessToken"),
 
