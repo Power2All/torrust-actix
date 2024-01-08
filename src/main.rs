@@ -455,6 +455,28 @@ async fn main() -> std::io::Result<()>
             }
             if tracker.clone().config.persistence {
                 info!("[SAVING] Starting persistence saving procedure.");
+
+                match Configuration::load_from_file(create_config) {
+                    Ok(config) => {
+                        let mut config_load = config;
+                        config_load.total_downloads = tracker.get_stats().await.completed as u64;
+                        let config_toml = toml::to_string(&config_load).unwrap();
+                        let save_file = Configuration::save_file("config.toml", config_toml);
+                        match save_file {
+                            Ok(_) => {
+                                info!("[SAVING] Saved config.toml.");
+                            }
+                            Err(e) => {
+                                error!("[SAVING] Unable to save config.toml.");
+                                error!("{e}");
+                            }
+                        };
+                    },
+                    Err(_) => {
+                        error!("[SAVING] Unable to load config file!");
+                    }
+                };
+
                 info!("[SAVING] Moving Updates to Shadow...");
                 tracker.clone().transfer_torrents_updates_to_torrents_shadow().await;
                 info!("[SAVING] Saving data from Torrents to database...");
