@@ -126,7 +126,10 @@ impl TorrentTracker {
 
                 torrents_arc.insert(info_hash, data_torrent.clone());
                 if peers.is_empty() { peers_arc.remove(&info_hash); } else { peers_arc.insert(info_hash, peers.clone()); }
-                if !persistent { torrents_arc.remove(&info_hash); }
+                if !persistent {
+                    torrents_arc.remove(&info_hash);
+                    self.update_stats(StatsEvent::Torrents, -1).await;
+                }
 
                 TorrentEntry {
                     peers,
@@ -177,7 +180,10 @@ impl TorrentTracker {
 
                 torrents_arc.insert(*info_hash, data_torrent.clone());
                 if peers.is_empty() { peers_arc.remove(info_hash); } else { peers_arc.insert(*info_hash, peers.clone()); }
-                if !persistent { torrents_arc.remove(info_hash); }
+                if !persistent {
+                    torrents_arc.remove(info_hash);
+                    self.update_stats(StatsEvent::Torrents, -1).await;
+                }
             };
         }
 
