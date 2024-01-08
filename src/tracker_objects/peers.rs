@@ -94,7 +94,7 @@ impl TorrentTracker {
         torrent
     }
 
-    pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, _persistent: bool) -> TorrentEntry
+    pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> TorrentEntry
     {
         let mut removed_seeder = false;
         let mut removed_leecher = false;
@@ -126,6 +126,7 @@ impl TorrentTracker {
 
                 torrents_arc.insert(info_hash, data_torrent.clone());
                 if peers.is_empty() { peers_arc.remove(&info_hash); } else { peers_arc.insert(info_hash, peers.clone()); }
+                if !persistent { torrents_arc.remove(&info_hash); }
 
                 TorrentEntry {
                     peers,
@@ -142,7 +143,7 @@ impl TorrentTracker {
         torrent
     }
 
-    pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, _persistent: bool) -> Vec<(InfoHash, PeerId)>
+    pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, persistent: bool) -> Vec<(InfoHash, PeerId)>
     {
         let mut removed_seeder = 0i64;
         let mut removed_leecher = 0i64;
@@ -176,6 +177,7 @@ impl TorrentTracker {
 
                 torrents_arc.insert(*info_hash, data_torrent.clone());
                 if peers.is_empty() { peers_arc.remove(info_hash); } else { peers_arc.insert(*info_hash, peers.clone()); }
+                if !persistent { torrents_arc.remove(info_hash); }
             };
         }
 
