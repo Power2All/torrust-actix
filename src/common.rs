@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;

@@ -1,5 +1,5 @@
 use log::info;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};

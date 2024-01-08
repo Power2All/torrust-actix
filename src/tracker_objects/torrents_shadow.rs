@@ -1,4 +1,4 @@
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use std::collections::HashMap;
 
 use crate::common::InfoHash;

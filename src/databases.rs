@@ -1,5 +1,5 @@
 use clap::ValueEnum;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use sqlx::Error;
 use std::collections::HashMap;

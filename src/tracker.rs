@@ -1,6 +1,6 @@
 use chrono::Utc;
 use crossbeam_skiplist::SkipMap;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 

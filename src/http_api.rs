@@ -9,7 +9,7 @@ use include_dir::{Dir, include_dir};
 use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 use std::fs::File;

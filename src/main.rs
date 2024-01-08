@@ -2,7 +2,7 @@ use async_std::task;
 use clap::Parser;
 use futures::future::try_join_all;
 use log::{error, info};
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use std::alloc::System;
 use std::env;
 use std::net::SocketAddr;

@@ -1,7 +1,7 @@
 use futures_util::TryStreamExt;
 use log::{error, info};
 use regex::Regex;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use sqlx::{ConnectOptions, Error, MySql, Pool, Row};
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use std::collections::HashMap;

@@ -1,7 +1,7 @@
 use chrono::{TimeZone, Utc};
 use log::info;
 use std::time::{SystemTime, UNIX_EPOCH};
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 
 use crate::common::InfoHash;
 use crate::tracker::TorrentTracker;

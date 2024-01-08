@@ -1,6 +1,6 @@
 use futures_util::TryStreamExt;
 use log::{error, info};
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use sqlx::{ConnectOptions, Error, Pool, Row, Sqlite};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::collections::HashMap;

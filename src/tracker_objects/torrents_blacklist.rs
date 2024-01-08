@@ -1,5 +1,5 @@
 use log::info;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 
 use crate::common::InfoHash;
 use crate::tracker::TorrentTracker;

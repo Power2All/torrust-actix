@@ -1,5 +1,5 @@
 use log::debug;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use std::collections::{BTreeMap, HashMap};
 use std::net::{IpAddr, SocketAddr};
 use std::time::SystemTime;

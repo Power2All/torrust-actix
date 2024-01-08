@@ -7,7 +7,7 @@ use bip_bencode::{ben_map, ben_bytes, ben_list, ben_int, BMutAccess};
 use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
@@ -136,8 +136,8 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
     if data.config.keys {
         let key = path.clone();
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
-        if key_check.is_some() {
-            return key_check.unwrap();
+        if let Some(value) = key_check {
+            return value;
         }
     }
 
@@ -169,8 +169,8 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
     if data.config.keys {
         let key = path.clone().0;
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
-        if key_check.is_some() {
-            return key_check.unwrap();
+        if let Some(value) = key_check {
+            return value;
         }
     }
 
@@ -337,8 +337,8 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
     if data.config.keys {
         let key = path.into_inner();
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
-        if key_check.is_some() {
-            return key_check.unwrap();
+        if let Some(value) = key_check {
+            return value;
         }
     }
 
@@ -534,13 +534,13 @@ pub async fn http_service_retrieve_remote_ip(request: HttpRequest) -> Result<IpA
     // Check if IP is from Cloudflare
     if cloudflare_ip.is_some() && cloudflare_ip.unwrap().to_str().is_ok() {
         let check = IpAddr::from_str(cloudflare_ip.unwrap().to_str().unwrap());
-        if check.is_ok() { return Ok(check.unwrap()); }
+        if let Ok(value) = check { return Ok(value); }
     };
 
     // Check if IP is from X-Real-IP
     if xreal_ip.is_some() && xreal_ip.unwrap().to_str().is_ok() {
         let check = IpAddr::from_str(xreal_ip.unwrap().to_str().unwrap());
-        if check.is_ok() { return Ok(check.unwrap()); }
+        if let Ok(value) = check { return Ok(value); }
     };
 
     Ok(origin_ip)

@@ -1,5 +1,5 @@
 use log::{error, info, debug};
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::process::exit;

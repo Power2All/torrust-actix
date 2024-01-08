@@ -66,11 +66,20 @@ impl TorrentTracker {
                 torrents_arc.insert(info_hash, data_torrent.clone());
                 peers_arc.insert(info_hash, peers.clone());
 
-                TorrentEntry {
-                    peers,
-                    completed: data_torrent.completed,
-                    seeders: data_torrent.seeders,
-                    leechers: data_torrent.leechers,
+                if !persistent {
+                    TorrentEntry {
+                        peers,
+                        completed: 0,
+                        seeders: data_torrent.seeders,
+                        leechers: data_torrent.leechers,
+                    }
+                } else {
+                    TorrentEntry {
+                        peers,
+                        completed: data_torrent.completed,
+                        seeders: data_torrent.seeders,
+                        leechers: data_torrent.leechers,
+                    }
                 }
             }
         };

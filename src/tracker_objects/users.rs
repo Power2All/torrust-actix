@@ -1,5 +1,5 @@
 use log::info;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Add;

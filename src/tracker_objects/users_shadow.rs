@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use scc::ebr::Arc;
+use async_std::sync::Arc;
 use crate::common::UserId;
 use crate::tracker::TorrentTracker;
 use crate::tracker_objects::stats::StatsEvent;

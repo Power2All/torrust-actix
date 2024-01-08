@@ -449,6 +449,11 @@ This will disable the maintenance mode.
 
 ### ChangeLog
 
+#### v3.2.2
+* Bumped library versions significantly, including security patches.
+* Fixed changes in libraries to work properly.
+* Tuned the non-persistence code to use less memory.
+
 #### v3.2.1
 * Bumped library versions, including security patches.
 * Fixed a bug in the PostgreSQL handler.
