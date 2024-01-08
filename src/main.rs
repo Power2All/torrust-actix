@@ -221,8 +221,8 @@ async fn main() -> std::io::Result<()>
         if config.users {
             tracker.clone().load_users(tracker.clone()).await;
         }
-        tracker.clone().set_stats(StatsEvent::Completed, config.total_downloads as i64).await;
     }
+    tracker.clone().set_stats(StatsEvent::Completed, config.total_downloads as i64).await;
 
     let mut api_handlers = Vec::new();
     let mut api_futures = Vec::new();
