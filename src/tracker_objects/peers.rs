@@ -96,9 +96,6 @@ impl TorrentTracker {
 
     pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> TorrentEntry
     {
-        let mut removed_seeder = false;
-        let mut removed_leecher = false;
-
         let torrents_arc = self.torrents.clone();
         let peers_arc = self.peers.clone();
 
@@ -116,19 +113,23 @@ impl TorrentTracker {
                     if peer.left == NumberOfBytes(0) {
                         peers.remove(&peer_id);
                         data_torrent.seeders -= 1;
-                        removed_seeder = true;
+                        self.update_stats(StatsEvent::Seeds, -1).await;
                     } else {
                         peers.remove(&peer_id);
                         data_torrent.leechers -= 1;
-                        removed_leecher = true;
+                        self.update_stats(StatsEvent::Peers, -1).await;
                     }
                 }
 
                 torrents_arc.insert(info_hash, data_torrent.clone());
-                if peers.is_empty() { peers_arc.remove(&info_hash); } else { peers_arc.insert(info_hash, peers.clone()); }
-                if !persistent {
-                    torrents_arc.remove(&info_hash);
-                    self.update_stats(StatsEvent::Torrents, -1).await;
+                if peers.is_empty() {
+                    peers_arc.remove(&info_hash);
+                    if !persistent {
+                        torrents_arc.remove(&info_hash);
+                        self.update_stats(StatsEvent::Torrents, -1).await;
+                    }
+                } else {
+                    peers_arc.insert(info_hash, peers.clone());
                 }
 
                 TorrentEntry {
@@ -140,16 +141,11 @@ impl TorrentTracker {
             }
         };
 
-        if removed_seeder { self.update_stats(StatsEvent::Seeds, -1).await; }
-        if removed_leecher { self.update_stats(StatsEvent::Peers, -1).await; }
-
         torrent
     }
 
     pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, persistent: bool) -> Vec<(InfoHash, PeerId)>
     {
-        let mut removed_seeder = 0i64;
-        let mut removed_leecher = 0i64;
         let mut return_torrententries = Vec::new();
 
         let torrents_arc = self.torrents.clone();
@@ -169,26 +165,27 @@ impl TorrentTracker {
                     if peer.left == NumberOfBytes(0) {
                         peers.remove(peer_id);
                         data_torrent.seeders -= 1;
-                        removed_seeder -= 1;
+                        self.update_stats(StatsEvent::Seeds, -1).await;
                     } else {
                         peers.remove(peer_id);
                         data_torrent.leechers -= 1;
-                        removed_leecher -= 1;
+                        self.update_stats(StatsEvent::Peers, -1).await;
                     }
                     return_torrententries.push((*info_hash, *peer_id));
                 }
 
                 torrents_arc.insert(*info_hash, data_torrent.clone());
-                if peers.is_empty() { peers_arc.remove(info_hash); } else { peers_arc.insert(*info_hash, peers.clone()); }
-                if !persistent {
-                    torrents_arc.remove(info_hash);
-                    self.update_stats(StatsEvent::Torrents, -1).await;
+                if peers.is_empty() {
+                    peers_arc.remove(info_hash);
+                    if !persistent {
+                        torrents_arc.remove(info_hash);
+                        self.update_stats(StatsEvent::Torrents, -1).await;
+                    }
+                } else {
+                    peers_arc.insert(*info_hash, peers.clone());
                 }
             };
         }
-
-        if removed_seeder != 0 { self.update_stats(StatsEvent::Seeds, removed_seeder).await; }
-        if removed_leecher != 0 { self.update_stats(StatsEvent::Peers, removed_leecher).await; }
 
         return_torrententries
     }
