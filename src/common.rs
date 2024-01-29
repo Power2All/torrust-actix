@@ -388,10 +388,12 @@ impl<'v> serde::de::Visitor<'v> for PeerIdVisitor {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Copy)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize)]
 pub struct TorrentPeer {
     pub peer_id: PeerId,
     pub peer_addr: SocketAddr,
+    pub peer_offer_id: Option<String>,
+    pub peer_offer: Option<String>,
     #[serde(serialize_with = "ser_instant")]
     pub updated: std::time::Instant,
     #[serde(with = "NumberOfBytesDef")]
@@ -417,6 +419,8 @@ impl TorrentPeer {
         TorrentPeer {
             peer_id: PeerId(announce_request.peer_id.0),
             peer_addr,
+            peer_offer_id: None,
+            peer_offer: None,
             updated: std::time::Instant::now(),
             uploaded: NumberOfBytes(announce_request.bytes_uploaded.0),
             downloaded: NumberOfBytes(announce_request.bytes_downloaded.0),

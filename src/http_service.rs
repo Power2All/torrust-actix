@@ -1,8 +1,10 @@
+use actix::{Actor, StreamHandler};
 use actix_cors::Cors;
-use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
+use actix_web::{App, Error, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
 use actix_web::web::ServiceConfig;
+use actix_web_actors::ws;
 use bip_bencode::{ben_map, ben_bytes, ben_list, ben_int, BMutAccess};
 use log::info;
 use rustls::{Certificate, PrivateKey, ServerConfig};
@@ -16,6 +18,7 @@ use std::io::{BufReader, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
+use actix_web::error::ErrorBadRequest;
 
 use crate::common::{CustomError, InfoHash, maintenance_mode, parse_query, UserId};
 use crate::handlers::{handle_announce, handle_scrape, validate_announce, validate_scrape};
@@ -36,11 +39,13 @@ pub fn http_service_routes(data: Arc<TorrentTracker>) -> Box<dyn Fn(&mut Service
 {
     Box::new(move |cfg: &mut ServiceConfig| {
         cfg.app_data(web::Data::new(data.clone()));
-        cfg.service(web::resource("announce").route(web::get().to(http_service_announce)));
-        cfg.service(web::resource("announce/{key}").route(web::get().to(http_service_announce_key)));
-        cfg.service(web::resource("announce/{key}/{userkey}").route(web::get().to(http_service_announce_userkey)));
-        cfg.service(web::resource("scrape").route(web::get().to(http_service_scrape)));
-        cfg.service(web::resource("scrape/{key}").route(web::get().to(http_service_scrape_key)));
+        cfg.service(web::resource("/webtorrent").route(web::get().to(websocket_service_announce)));
+        cfg.service(web::resource("/webtorrent/{key}").route(web::get().to(websocket_service_announce_key)));
+        cfg.service(web::resource("/announce").route(web::get().to(http_service_announce)));
+        cfg.service(web::resource("/announce/{key}").route(web::get().to(http_service_announce_key)));
+        cfg.service(web::resource("/announce/{key}/{userkey}").route(web::get().to(http_service_announce_userkey)));
+        cfg.service(web::resource("/scrape").route(web::get().to(http_service_scrape)));
+        cfg.service(web::resource("/scrape/{key}").route(web::get().to(http_service_scrape_key)));
         cfg.default_service(web::route().to(http_service_not_found));
     })
 }
@@ -117,6 +122,87 @@ fn https_service_config(ssl_key: String, ssl_cert: String) -> ServerConfig {
     }
 
     config.with_single_cert(cert_chain, keys.remove(0)).unwrap()
+}
+
+struct WebsocketServiceAnnounce;
+impl Actor for WebsocketServiceAnnounce {
+    type Context = ws::WebsocketContext<Self>;
+}
+
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketServiceAnnounce {
+    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        match msg {
+            Ok(ws::Message::Ping(msg)) => {
+                println!("PING!");
+                println!("{:?}", msg);
+                ctx.pong(&msg)
+            },
+            Ok(ws::Message::Text(text)) => {
+                println!("TEXT");
+                println!("{:?}", text);
+                ctx.text(text)
+            },
+            Ok(ws::Message::Binary(bin)) => {
+                println!("BIN");
+                println!("{:?}", bin);
+                ctx.binary(bin)
+            },
+            _ => (),
+        }
+    }
+}
+
+pub async fn websocket_service_announce(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>, stream: web::Payload) -> Result<HttpResponse, Error>
+{
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        return Err(ErrorBadRequest("Invalid IP"));
+    }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+
+    // if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    let response = ws::start(WebsocketServiceAnnounce {}, &request, stream);
+    println!("{:?}", response);
+    return response;
+}
+
+pub async fn websocket_service_announce_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>, stream: web::Payload) -> HttpResponse
+{
+    let ip_check = http_service_retrieve_remote_ip(request.clone()).await;
+    if ip_check.is_err() {
+        let return_string = (ben_map! {"failure reason" => ben_bytes!("unknown origin ip")}).encode();
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(return_string);
+    }
+    let ip = ip_check.unwrap();
+    http_service_stats_log(ip, data.clone()).await;
+
+    if ip.is_ipv4() { data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await; } else { data.update_stats(StatsEvent::Tcp6AnnouncesHandled, 1).await; }
+
+    if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
+
+    if data.config.keys {
+        let key = path.clone();
+        let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
+        if let Some(value) = key_check {
+            return value;
+        }
+    }
+
+    if data.config.users && !data.config.keys {
+        let user_key = path.clone();
+        let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
+        if user_key_check.is_none() {
+            return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap())).await;
+        }
+    }
+
+    let response = ws::start(WebsocketServiceAnnounce {}, &request, stream);
+    println!("{:?}", response);
+    return HttpResponse::Ok().content_type(ContentType::plaintext()).body("");
 }
 
 pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse

@@ -109,7 +109,7 @@ impl TorrentTracker {
                 let mut data_torrent = data.value().clone();
                 let peer_option = peers.get(&peer_id);
                 if peer_option.is_some() {
-                    let peer = *peer_option.unwrap();
+                    let peer = peer_option.clone().unwrap();
                     if peer.left == NumberOfBytes(0) {
                         peers.remove(&peer_id);
                         data_torrent.seeders -= 1;
@@ -161,7 +161,7 @@ impl TorrentTracker {
 
                 let peer_option = peers.get(peer_id);
                 if peer_option.is_some() {
-                    let peer = *peer_option.unwrap();
+                    let peer = peer_option.clone().unwrap();
                     if peer.left == NumberOfBytes(0) {
                         peers.remove(peer_id);
                         data_torrent.seeders -= 1;

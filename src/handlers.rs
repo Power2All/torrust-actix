@@ -218,6 +218,8 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
     let mut torrent_peer = TorrentPeer {
         peer_id: announce_query.peer_id,
         peer_addr: SocketAddr::new(announce_query.remote_addr, announce_query.port),
+        peer_offer_id: None,
+        peer_offer: None,
         updated: std::time::Instant::now(),
         uploaded: NumberOfBytes(announce_query.uploaded as i64),
         downloaded: NumberOfBytes(announce_query.downloaded as i64),
@@ -232,7 +234,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
             let torrent_entry = data.add_peer(
                 announce_query.info_hash,
                 announce_query.peer_id,
-                torrent_peer,
+                torrent_peer.clone(),
                 false,
                 data.config.persistence,
             ).await;
@@ -287,7 +289,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
             let torrent_entry = data.add_peer(
                 announce_query.info_hash,
                 announce_query.peer_id,
-                torrent_peer,
+                torrent_peer.clone(),
                 true,
                 data.config.persistence,
             ).await;
@@ -316,7 +318,7 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
             let torrent_entry = data.add_peer(
                 announce_query.info_hash,
                 announce_query.peer_id,
-                torrent_peer,
+                torrent_peer.clone(),
                 false,
                 data.config.persistence,
             ).await;
@@ -410,11 +412,11 @@ fn parse_ip_format(peers: BTreeMap<PeerId, TorrentPeer>, config: Arc<Configurati
             break;
         }
         if remote_addr.is_ipv4() && peer_addr.is_ipv4() {
-            peer_list.insert(*peer_id, *torrent_peer);
+            peer_list.insert(*peer_id, torrent_peer.clone());
             peers_parsed += 1;
         }
         if remote_addr.is_ipv6() && peer_addr.is_ipv6() {
-            peer_list.insert(*peer_id, *torrent_peer);
+            peer_list.insert(*peer_id, torrent_peer.clone());
             peers_parsed += 1;
         }
     }
