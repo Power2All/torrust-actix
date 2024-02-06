@@ -374,13 +374,13 @@ impl DatabaseConnectorMySQL {
             if counter == 100000 {
                 tracker.add_users(users_parsing.clone(), false).await;
                 users_parsing.clear();
-                info!("[SQLite3] Loaded {} users...", total_users);
+                info!("[MySQL] Loaded {} users...", total_users);
                 counter = 0;
             }
 
             let uuid_regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$").unwrap();
             if !uuid_regex.is_match(result.get(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str())) {
-                info!("[SQLite3] Could not parse the user with ID: {}", result.get::<&str, _>(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str()));
+                info!("[MySQL] Could not parse the user with ID: {}", result.get::<&str, _>(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str()));
                 continue;
             }
             let uuid: &str = result.get(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str());
@@ -405,7 +405,7 @@ impl DatabaseConnectorMySQL {
             users_parsing.clear();
         }
 
-        info!("[SQLite3] Loaded {} users...", total_users);
+        info!("[MySQL] Loaded {} users...", total_users);
         Ok(total_users)
     }
 
@@ -450,7 +450,7 @@ impl DatabaseConnectorMySQL {
                 .await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[SQLite3] Error: {}", e.to_string());
+                    error!("[MySQL] Error: {}", e.to_string());
                     return Err(e);
                 }
             }
@@ -460,18 +460,18 @@ impl DatabaseConnectorMySQL {
                 match users_transaction.commit().await {
                     Ok(_) => {}
                     Err(e) => {
-                        error!("[SQLite3] Error: {}", e.to_string());
+                        error!("[MySQL] Error: {}", e.to_string());
                         return Err(e);
                     }
                 };
-                info!("[SQLite3] Handled {} torrents", users_handled_entries);
+                info!("[MySQL] Handled {} torrents", users_handled_entries);
                 users_transaction = self.pool.begin().await?
             }
         }
         match users_transaction.commit().await {
             Ok(_) => {}
             Err(e) => {
-                error!("[SQLite3] Error: {}", e.to_string());
+                error!("[MySQL] Error: {}", e.to_string());
                 return Err(e);
             }
         };
