@@ -54,13 +54,13 @@ ALTER TABLE IF EXISTS public.keys
 CREATE TABLE IF NOT EXISTS public.users
 (
     uuid bytea NOT NULL,
-    keyhash bytea NOT NULL,
+    keyhash bytea NULL,
     uploaded bigint NOT NULL DEFAULT 0,
     downloaded bigint NOT NULL DEFAULT 0,
     completed bigint NOT NULL DEFAULT 0,
     updated bigint NOT NULL DEFAULT 0,
     active bigint NOT NULL DEFAULT 0,
-    CONSTRAINT users_puuid_keyhash PRIMARY KEY (uuid, keyhash)
+    CONSTRAINT users_puuid_keyhash PRIMARY KEY (uuid)
     )
 
     TABLESPACE pg_default;

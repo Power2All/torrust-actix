@@ -85,7 +85,7 @@ impl DatabaseConnectorSQLite {
         ).execute(pool).await;
         let _ = sqlx::query(
             format!(
-                "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(36) PRIMARY KEY, {} VARCHAR(40) TYPE UNIQUE, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(36) PRIMARY KEY, {} VARCHAR(40) NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL)",
                 config.db_structure.db_users,
                 config.db_structure.table_users_uuid,
                 config.db_structure.table_users_key,
