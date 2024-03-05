@@ -139,22 +139,26 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     match query.get("event") {
         None => {}
         Some(result) => {
-            let event = match String::from_utf8(result[0].to_vec()) {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("invalid event"))
-            };
-            match event.as_str().to_lowercase().as_str() {
-                "started" => {
-                    event_integer = AnnounceEvent::Started;
-                }
-                "stopped" => {
-                    event_integer = AnnounceEvent::Stopped;
-                }
-                "completed" => {
-                    event_integer = AnnounceEvent::Completed;
-                }
-                _ => {
-                    event_integer = AnnounceEvent::Started;
+            if result.is_empty() {
+                event_integer = AnnounceEvent::Started;
+            } else {
+                let event = match String::from_utf8(result[0].to_vec()) {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("invalid event"))
+                };
+                match event.as_str().to_lowercase().as_str() {
+                    "started" => {
+                        event_integer = AnnounceEvent::Started;
+                    }
+                    "stopped" => {
+                        event_integer = AnnounceEvent::Stopped;
+                    }
+                    "completed" => {
+                        event_integer = AnnounceEvent::Completed;
+                    }
+                    _ => {
+                        event_integer = AnnounceEvent::Started;
+                    }
                 }
             }
         }
