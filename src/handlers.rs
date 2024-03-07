@@ -20,12 +20,14 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             if result.is_empty() {
                 return Err(CustomError::new("no info_hash given"));
             }
-
-            if result[0].len() != 20 {
-                return Err(CustomError::new("invalid info_hash size"));
+            if let Some(result_array) = result.get(0) {
+                if result_array.len() != 20 {
+                    return Err(CustomError::new("invalid info_hash size"));
+                }
+                result.clone()
+            } else {
+                return Err(CustomError::new("no info_hash given"));
             }
-
-            result.clone()
         }
     };
 
@@ -38,12 +40,14 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             if result.is_empty() {
                 return Err(CustomError::new("no peer_id given"));
             }
-
-            if result[0].len() != 20 {
-                return Err(CustomError::new("invalid peer_id size"));
+            if let Some(result_array) = result.get(0) {
+                if result_array.len() != 20 {
+                    return Err(CustomError::new("invalid peer_id size"));
+                }
+                result.clone()
+            } else {
+                return Err(CustomError::new("no peer_id given"));
             }
-
-            result.clone()
         }
     };
 
@@ -53,13 +57,17 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             return Err(CustomError::new("missing port"));
         }
         Some(result) => {
-            let port = match String::from_utf8(result[0].to_vec()) {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("invalid port"))
-            };
-            match port.parse::<u16>() {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("missing or invalid port"))
+            if let Some(result_array) = result.get(0) {
+                let port = match String::from_utf8(result_array.to_vec()) {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("invalid port"))
+                };
+                match port.parse::<u16>() {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("missing or invalid port"))
+                }
+            } else {
+                return Err(CustomError::new("missing port"));
             }
         }
     };
@@ -70,13 +78,17 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             return Err(CustomError::new("missing uploaded"));
         }
         Some(result) => {
-            let uploaded = match String::from_utf8(result[0].to_vec()) {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("invalid uploaded"))
-            };
-            match uploaded.parse::<u64>() {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("missing or invalid uploaded"))
+            if let Some(result_array) = result.get(0) {
+                let uploaded = match String::from_utf8(result_array.to_vec()) {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("invalid uploaded"))
+                };
+                match uploaded.parse::<u64>() {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("missing or invalid uploaded"))
+                }
+            } else {
+                return Err(CustomError::new("missing uploaded"));
             }
         }
     };
@@ -87,13 +99,17 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             return Err(CustomError::new("missing downloaded"));
         }
         Some(result) => {
-            let downloaded = match String::from_utf8(result[0].to_vec()) {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("invalid downloaded"))
-            };
-            match downloaded.parse::<u64>() {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("missing or invalid downloaded"))
+            if let Some(result_array) = result.get(0) {
+                let downloaded = match String::from_utf8(result_array.to_vec()) {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("invalid downloaded"))
+                };
+                match downloaded.parse::<u64>() {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("missing or invalid downloaded"))
+                }
+            } else {
+                return Err(CustomError::new("missing downloaded"));
             }
         }
     };
@@ -104,13 +120,17 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
             return Err(CustomError::new("missing left"));
         }
         Some(result) => {
-            let left = match String::from_utf8(result[0].to_vec()) {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("invalid left"))
-            };
-            match left.parse::<u64>() {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("missing or invalid left"))
+            if let Some(result_array) = result.get(0) {
+                let left = match String::from_utf8(result_array.to_vec()) {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("invalid left"))
+                };
+                match left.parse::<u64>() {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("missing or invalid left"))
+                }
+            } else {
+                return Err(CustomError::new("missing left"));
             }
         }
     };
@@ -120,16 +140,18 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     match query.get("compact") {
         None => {}
         Some(result) => {
-            let compact = match String::from_utf8(result[0].to_vec()) {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("invalid compact"))
-            };
-            let compact_integer = match compact.parse::<u8>() {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("missing or invalid compact"))
-            };
-            if compact_integer == 1 {
-                compact_bool = true;
+            if let Some(result_array) = result.get(0) {
+                let compact = match String::from_utf8(result_array.to_vec()) {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("invalid compact"))
+                };
+                let compact_integer = match compact.parse::<u8>() {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("missing or invalid compact"))
+                };
+                if compact_integer == 1 {
+                    compact_bool = true;
+                }
             }
         }
     }
@@ -178,16 +200,18 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     match query.get("numwant") {
         None => {}
         Some(result) => {
-            let numwant = match String::from_utf8(result[0].to_vec()) {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("invalid numwant"))
-            };
-            numwant_integer = match numwant.parse::<u64>() {
-                Ok(v) => v,
-                Err(_) => return Err(CustomError::new("missing or invalid numwant"))
-            };
-            if numwant_integer == 0 || numwant_integer > config.peers_returned.unwrap() {
-                numwant_integer = config.peers_returned.unwrap();
+            if let Some(result_array) = result.get(0) {
+                let numwant = match String::from_utf8(result_array.to_vec()) {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("invalid numwant"))
+                };
+                numwant_integer = match numwant.parse::<u64>() {
+                    Ok(v) => v,
+                    Err(_) => return Err(CustomError::new("missing or invalid numwant"))
+                };
+                if numwant_integer == 0 || numwant_integer > config.peers_returned.unwrap() {
+                    numwant_integer = config.peers_returned.unwrap();
+                }
             }
         }
     }
