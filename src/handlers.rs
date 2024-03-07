@@ -139,10 +139,8 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
     match query.get("event") {
         None => {}
         Some(result) => {
-            if result.is_empty() {
-                event_integer = AnnounceEvent::Started;
-            } else {
-                let event = match String::from_utf8(result[0].to_vec()) {
+            if let Some(result_array) = result.get(0) {
+                let event = match String::from_utf8(result_array.to_vec()) {
                     Ok(v) => v,
                     Err(_) => return Err(CustomError::new("invalid event"))
                 };
@@ -160,6 +158,8 @@ pub async fn validate_announce(config: Arc<Configuration>, remote_addr: IpAddr, 
                         event_integer = AnnounceEvent::Started;
                     }
                 }
+            } else {
+                event_integer = AnnounceEvent::Started;
             }
         }
     }
