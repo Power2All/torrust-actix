@@ -111,13 +111,15 @@ impl TorrentTracker {
                 if peer_option.is_some() {
                     let peer = peer_option.unwrap();
                     if peer.left == NumberOfBytes(0) {
-                        peers.remove(&peer_id);
-                        data_torrent.seeders -= 1;
-                        self.update_stats(StatsEvent::Seeds, -1).await;
+                        if peers.remove(&peer_id).is_some() {
+                            data_torrent.seeders -= 1;
+                            self.update_stats(StatsEvent::Seeds, -1).await;
+                        }
                     } else {
-                        peers.remove(&peer_id);
-                        data_torrent.leechers -= 1;
-                        self.update_stats(StatsEvent::Peers, -1).await;
+                        if peers.remove(&peer_id).is_some() {
+                            data_torrent.leechers -= 1;
+                            self.update_stats(StatsEvent::Peers, -1).await;
+                        }
                     }
                 }
 
@@ -125,8 +127,9 @@ impl TorrentTracker {
                 if peers.is_empty() {
                     peers_arc.remove(&info_hash);
                     if !persistent {
-                        torrents_arc.remove(&info_hash);
-                        self.update_stats(StatsEvent::Torrents, -1).await;
+                        if torrents_arc.remove(&info_hash).is_some() {
+                            self.update_stats(StatsEvent::Torrents, -1).await;
+                        }
                     }
                 } else {
                     peers_arc.insert(info_hash, peers.clone());
@@ -163,13 +166,15 @@ impl TorrentTracker {
                 if peer_option.is_some() {
                     let peer = peer_option.unwrap();
                     if peer.left == NumberOfBytes(0) {
-                        peers.remove(peer_id);
-                        data_torrent.seeders -= 1;
-                        self.update_stats(StatsEvent::Seeds, -1).await;
+                        if peers.remove(peer_id).is_some() {
+                            data_torrent.seeders -= 1;
+                            self.update_stats(StatsEvent::Seeds, -1).await;
+                        }
                     } else {
-                        peers.remove(peer_id);
-                        data_torrent.leechers -= 1;
-                        self.update_stats(StatsEvent::Peers, -1).await;
+                        if peers.remove(peer_id).is_some() {
+                            data_torrent.leechers -= 1;
+                            self.update_stats(StatsEvent::Peers, -1).await;
+                        }
                     }
                     return_torrententries.push((*info_hash, *peer_id));
                 }
@@ -178,8 +183,9 @@ impl TorrentTracker {
                 if peers.is_empty() {
                     peers_arc.remove(info_hash);
                     if !persistent {
-                        torrents_arc.remove(info_hash);
-                        self.update_stats(StatsEvent::Torrents, -1).await;
+                        if torrents_arc.remove(info_hash).is_some() {
+                            self.update_stats(StatsEvent::Torrents, -1).await;
+                        }
                     }
                 } else {
                     peers_arc.insert(*info_hash, peers.clone());
