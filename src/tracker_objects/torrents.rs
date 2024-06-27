@@ -188,23 +188,23 @@ impl TorrentTracker {
     {
         let torrents_arc = self.torrents.clone();
         let peers_arc = self.peers.clone();
+        let locker = self.locker.clone();
 
         let mut removed_torrent = false;
         let mut remove_seeders = 0i64;
         let mut remove_leechers = 0i64;
 
-        match torrents_arc.get(&info_hash) {
+        let locked = locker.lock().await;
+        match torrents_arc.remove(&info_hash) {
             None => {}
             Some(data) => {
-                let data_torrent = data.value().clone();
                 removed_torrent = true;
-                remove_seeders -= data_torrent.seeders;
-                remove_leechers -= data_torrent.leechers;
-                torrents_arc.remove(&info_hash);
+                remove_seeders -= data.value().seeders;
+                remove_leechers -= data.value().leechers;
             }
         }
-
         peers_arc.remove(&info_hash);
+        drop(locked);
 
         if persistent {
             self.remove_torrents_update(info_hash).await;

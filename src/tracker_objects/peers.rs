@@ -18,7 +18,9 @@ impl TorrentTracker {
 
         let torrents_arc = self.torrents.clone();
         let peers_arc = self.peers.clone();
+        let locker = self.locker.clone();
 
+        let locked = locker.lock().await;
         let torrent = match torrents_arc.get(&info_hash) {
             None => { TorrentEntry::new() }
             Some(data) => {
@@ -83,6 +85,7 @@ impl TorrentTracker {
                 }
             }
         };
+        drop(locked);
 
         if persistent && completed { self.add_torrents_update(info_hash, torrent.completed).await; }
         if added_seeder { self.update_stats(StatsEvent::Seeds, 1).await; }
@@ -94,11 +97,14 @@ impl TorrentTracker {
         torrent
     }
 
-    pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> TorrentEntry
+    pub async fn remove_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> (TorrentEntry, bool)
     {
         let torrents_arc = self.torrents.clone();
         let peers_arc = self.peers.clone();
+        let locker = self.locker.clone();
+        let mut removed = false;
 
+        let locked = locker.lock().await;
         let torrent = match torrents_arc.get(&info_hash) {
             None => { TorrentEntry::new() }
             Some(data) => {
@@ -112,11 +118,13 @@ impl TorrentTracker {
                     let peer = peer_option.unwrap();
                     if peer.left == NumberOfBytes(0) {
                         if peers.remove(&peer_id).is_some() {
+                            removed = true;
                             data_torrent.seeders -= 1;
                             self.update_stats(StatsEvent::Seeds, -1).await;
                         }
                     } else {
                         if peers.remove(&peer_id).is_some() {
+                            removed = true;
                             data_torrent.leechers -= 1;
                             self.update_stats(StatsEvent::Peers, -1).await;
                         }
@@ -128,6 +136,7 @@ impl TorrentTracker {
                     peers_arc.remove(&info_hash);
                     if !persistent {
                         if torrents_arc.remove(&info_hash).is_some() {
+                            removed = true;
                             self.update_stats(StatsEvent::Torrents, -1).await;
                         }
                     }
@@ -143,53 +152,18 @@ impl TorrentTracker {
                 }
             }
         };
+        drop(locked);
 
-        torrent
+        (torrent, removed)
     }
 
     pub async fn remove_peers(&self, peers: Vec<(InfoHash, PeerId)>, persistent: bool) -> Vec<(InfoHash, PeerId)>
     {
         let mut return_torrententries = Vec::new();
 
-        let torrents_arc = self.torrents.clone();
-        let peers_arc = self.peers.clone();
-
         for (info_hash, peer_id) in peers.iter() {
-            if let Some(data) = torrents_arc.get(info_hash) {
-                let mut data_torrent = data.value().clone();
-                let mut peers = match peers_arc.get(info_hash) {
-                    None => { BTreeMap::new() }
-                    Some(data_peers) => { data_peers.value().clone() }
-                };
-
-                let peer_option = peers.get(peer_id);
-                if peer_option.is_some() {
-                    let peer = peer_option.unwrap();
-                    if peer.left == NumberOfBytes(0) {
-                        if peers.remove(peer_id).is_some() {
-                            data_torrent.seeders -= 1;
-                            self.update_stats(StatsEvent::Seeds, -1).await;
-                        }
-                    } else {
-                        if peers.remove(peer_id).is_some() {
-                            data_torrent.leechers -= 1;
-                            self.update_stats(StatsEvent::Peers, -1).await;
-                        }
-                    }
-                    return_torrententries.push((*info_hash, *peer_id));
-                }
-
-                torrents_arc.insert(*info_hash, data_torrent.clone());
-                if peers.is_empty() {
-                    peers_arc.remove(info_hash);
-                    if !persistent {
-                        if torrents_arc.remove(info_hash).is_some() {
-                            self.update_stats(StatsEvent::Torrents, -1).await;
-                        }
-                    }
-                } else {
-                    peers_arc.insert(*info_hash, peers.clone());
-                }
+            if self.remove_peer(*info_hash, *peer_id, persistent).await.1 {
+                return_torrententries.push((*info_hash, *peer_id));
             };
         }
 

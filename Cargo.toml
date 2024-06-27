@@ -46,7 +46,7 @@ log = "0.4.20"
 mime_guess = "2.0.4"
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.13"
-regex = "1.10.2"
+regex = "1.10.3"
 rustls = "0.20.9"
 rustls-pemfile = "1.0.4"
 serde = { version = "1.0.196", features = ["derive"] }

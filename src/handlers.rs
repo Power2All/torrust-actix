@@ -306,9 +306,9 @@ pub async fn handle_announce(data: Arc<TorrentTracker>, announce_query: Announce
             }
             Ok((torrent_peer, TorrentEntry {
                 peers: BTreeMap::new(),
-                completed: torrent.completed,
-                seeders: torrent.seeders,
-                leechers: torrent.leechers,
+                completed: torrent.0.completed,
+                seeders: torrent.0.seeders,
+                leechers: torrent.0.leechers,
             }))
         }
         AnnounceEvent::Completed => {

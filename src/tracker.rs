@@ -1,6 +1,6 @@
 use chrono::Utc;
 use crossbeam_skiplist::SkipMap;
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 
@@ -24,6 +24,7 @@ pub struct TorrentTracker {
     pub users: Arc<SkipMap<UserId, UserEntryItem>>,
     pub users_updates: Arc<SkipMap<UserId, UserEntryItem>>,
     pub users_shadow: Arc<SkipMap<UserId, UserEntryItem>>,
+    pub locker: Arc<Mutex<i8>>,
     pub sqlx: DatabaseConnector,
 }
 
@@ -79,6 +80,7 @@ impl TorrentTracker {
             users: Arc::new(SkipMap::new()),
             users_updates: Arc::new(SkipMap::new()),
             users_shadow: Arc::new(SkipMap::new()),
+            locker: Arc::new(Mutex::new(0)),
             sqlx: DatabaseConnector::new(config.clone()).await,
         }
     }
