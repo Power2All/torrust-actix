@@ -188,13 +188,11 @@ impl TorrentTracker {
     {
         let torrents_arc = self.torrents.clone();
         let peers_arc = self.peers.clone();
-        let locker = self.locker.clone();
 
         let mut removed_torrent = false;
         let mut remove_seeders = 0i64;
         let mut remove_leechers = 0i64;
 
-        let locked = locker.lock().await;
         match torrents_arc.remove(&info_hash) {
             None => {}
             Some(data) => {
@@ -204,7 +202,6 @@ impl TorrentTracker {
             }
         }
         peers_arc.remove(&info_hash);
-        drop(locked);
 
         if persistent {
             self.remove_torrents_update(info_hash).await;
