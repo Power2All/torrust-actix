@@ -18,7 +18,9 @@ impl TorrentTracker {
 
         let torrents_arc = self.torrents.clone();
         let peers_arc = self.peers.clone();
+        let locker = self.locker.clone();
 
+        let locked = locker.lock().await;
         let torrent = match torrents_arc.get(&info_hash) {
             None => { TorrentEntry::new() }
             Some(data) => {
@@ -83,6 +85,7 @@ impl TorrentTracker {
                 }
             }
         };
+        drop(locked);
 
         if persistent && completed { self.add_torrents_update(info_hash, torrent.completed).await; }
         if added_seeder { self.update_stats(StatsEvent::Seeds, 1).await; }
@@ -98,8 +101,10 @@ impl TorrentTracker {
     {
         let torrents_arc = self.torrents.clone();
         let peers_arc = self.peers.clone();
+        let locker = self.locker.clone();
         let mut removed = false;
 
+        let locked = locker.lock().await;
         let torrent = match torrents_arc.get(&info_hash) {
             None => { TorrentEntry::new() }
             Some(data) => {
@@ -147,6 +152,7 @@ impl TorrentTracker {
                 }
             }
         };
+        drop(locked);
 
         (torrent, removed)
     }
