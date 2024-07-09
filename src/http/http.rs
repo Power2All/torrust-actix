@@ -6,7 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use actix_cors::Cors;
 use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
@@ -118,6 +118,7 @@ pub async fn http_service(
 
 pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: Data<Arc<TorrentTracker>>) -> HttpResponse
 {
+    let start = Instant::now();
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
@@ -151,11 +152,14 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
         }
     }
 
-    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
+    let response = http_service_announce_handler(request, ip, data.as_ref().clone(), None).await;
+    info!("[TIMER] Announce Key: {:?}", start.elapsed());
+    response
 }
 
 pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path<(String, String)>, data: Data<Arc<TorrentTracker>>) -> HttpResponse
 {
+    let start = Instant::now();
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
@@ -189,11 +193,14 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
         }
     }
 
-    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
+    let response = http_service_announce_handler(request, ip, data.as_ref().clone(), None).await;
+    info!("[TIMER] Announce Userkey: {:?}", start.elapsed());
+    response
 }
 
 pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentTracker>>) -> HttpResponse
 {
+    let start = Instant::now();
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
@@ -219,7 +226,9 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentT
             }.encode());
     }
 
-    http_service_announce_handler(request, ip, data.as_ref().clone(), None).await
+    let response = http_service_announce_handler(request, ip, data.as_ref().clone(), None).await;
+    info!("[TIMER] Announce: {:?}", start.elapsed());
+    response
 }
 
 pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>, user_key: Option<UserId>) -> HttpResponse
@@ -329,6 +338,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
 pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<String>, data: Data<Arc<TorrentTracker>>) -> HttpResponse
 {
+    let start = Instant::now();
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
@@ -352,7 +362,9 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
         if let Some(value) = key_check { return value; }
     }
 
-    http_service_scrape_handler(request, data.as_ref().clone()).await
+    let response = http_service_scrape_handler(request, data.as_ref().clone()).await;
+    info!("[TIMER] Scrape Key: {:?}", start.elapsed());
+    response
 }
 
 pub async fn http_service_scrape_handler(request: HttpRequest, data: Arc<TorrentTracker>) -> HttpResponse
@@ -398,6 +410,7 @@ pub async fn http_service_scrape_handler(request: HttpRequest, data: Arc<Torrent
 
 pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<TorrentTracker>>) -> HttpResponse
 {
+    let start = Instant::now();
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
@@ -411,11 +424,14 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<TorrentTra
 
     if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await { return result; }
 
-    http_service_scrape_handler(request, data.as_ref().clone()).await
+    let response = http_service_scrape_handler(request, data.as_ref().clone()).await;
+    info!("[TIMER] Scrape: {:?}", start.elapsed());
+    response
 }
 
 pub async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
+    let start = Instant::now();
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
@@ -425,9 +441,11 @@ pub async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<To
 
     debug!("[DEBUG] Request from {}: 404 Not Found", ip);
 
-    HttpResponse::NotFound().content_type(ContentType::plaintext()).body(std::str::from_utf8(&ben_map! {
+    let response = HttpResponse::NotFound().content_type(ContentType::plaintext()).body(std::str::from_utf8(&ben_map! {
             "failure reason" => ben_bytes!("unknown request")
-        }.encode()).unwrap().to_string())
+        }.encode()).unwrap().to_string());
+    info!("[TIMER] Not Found: {:?}", start.elapsed());
+    response
 }
 
 pub async fn http_service_stats_log(ip: IpAddr, tracker: web::Data<Arc<TorrentTracker>>)
