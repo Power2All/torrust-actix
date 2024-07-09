@@ -1,53 +1,25 @@
-use async_std::task;
-use clap::Parser;
-use futures::future::try_join_all;
-use log::{error, info};
-use async_std::sync::Arc;
-use std::alloc::System;
-use std::env;
 use std::net::SocketAddr;
 use std::process::exit;
+use std::sync::Arc;
 use std::time::Duration;
-
-use torrust_actix::common::{tcp_check_host_and_port_used, udp_check_host_and_port_used};
-use torrust_actix::config::{Configuration, DatabaseStructureConfig};
-use torrust_actix::databases::DatabaseDrivers;
-use torrust_actix::http_api::{http_api, https_api};
-use torrust_actix::http_service::{http_service, https_service};
-use torrust_actix::logging::setup_logging;
-use torrust_actix::tracker::TorrentTracker;
-use torrust_actix::tracker_objects::stats::StatsEvent;
-use torrust_actix::udp_service::udp_service;
-
-#[global_allocator]
-static A: System = System;
+use async_std::task;
+use clap::Parser;
+use futures_util::future::{try_join_all, TryJoinAll};
+use log::info;
+use torrust_actix::api::api::api_service;
+use torrust_actix::common::common::{setup_logging, udp_check_host_and_port_used};
+use torrust_actix::config::structs::configuration::Configuration;
+use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
+use torrust_actix::stats::enums::stats_event::StatsEvent;
+use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+use torrust_actix::udp::udp::udp_service;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
     /// Create config.toml file if not exists or is broken.
     #[arg(long)]
-    create_config: bool,
-
-    /// Convert SQLite3, MySQL or PgSQL database to any of the other.
-    #[arg(long)]
-    convert_database: bool,
-
-    /// Which source engine to use.
-    #[arg(long, value_enum, required = false)]
-    source_engine: Option<DatabaseDrivers>,
-
-    /// Source database: 'sqlite://...', 'mysql://...', 'pgsql://...'.
-    #[arg(long, required = false)]
-    source: Option<String>,
-
-    /// Which destination engine to use.
-    #[arg(long, value_enum, required = false)]
-    destination_engine: Option<DatabaseDrivers>,
-
-    /// Destination database: 'sqlite://...', 'mysql://...', 'pgsql://...'.
-    #[arg(long, required = false)]
-    destination: Option<String>,
+    create_config: bool
 }
 
 #[tokio::main]
@@ -55,218 +27,121 @@ async fn main() -> std::io::Result<()>
 {
     let args = Cli::parse();
 
-    let mut create_config: bool = false;
-    if args.create_config {
-        create_config = true;
-    }
-
-    let config = match Configuration::load_from_file(create_config) {
+    let config = match Configuration::load_from_file(args.create_config) {
         Ok(config) => Arc::new(config),
         Err(_) => exit(101)
     };
 
-    setup_logging(&config.clone());
+    setup_logging(&config);
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    if args.convert_database {
-        info!("Database Conversion execute.");
-
-        if args.source_engine.clone().is_none() || args.source.clone().is_none() || args.destination_engine.clone().is_none() || args.destination.clone().is_none() {
-            error!("Need Source/Destination Engine and URI to execute!");
-            exit(1);
-        }
-
-        info!("[RETRIEVE] [Engine: {:?}] [URI: {}]", args.source_engine.clone().unwrap(), args.source.clone().unwrap());
-
-        let source_engine = args.source_engine.clone().unwrap();
-        let source = args.source.clone().unwrap();
-        let destination_engine = args.destination_engine.clone().unwrap();
-        let destination = args.destination.clone().unwrap();
-        let config_retrieve_db_structure = config.db_structure.clone();
-        let config_send_db_structure = config.db_structure.clone();
-
-        let tracker_receive = Arc::new(TorrentTracker::new(Arc::new(Configuration {
-            log_level: "".to_string(),
-            log_console_interval: None,
-            statistics_enabled: false,
-            global_check_interval: None,
-            db_driver: source_engine,
-            db_path: source,
-            persistence: true,
-            persistence_interval: None,
-            total_downloads: 0,
-            api_key: "".to_string(),
-            whitelist: config.whitelist,
-            blacklist: config.blacklist,
-            keys: config.keys,
-            keys_cleanup_interval: None,
-            users: config.users,
-            maintenance_mode_enabled: false,
-            interval: None,
-            interval_minimum: None,
-            peer_timeout: None,
-            peers_returned: None,
-            interval_cleanup: None,
-            cleanup_chunks: None,
-            udp_server: vec![],
-            http_server: vec![],
-            api_server: vec![],
-            db_structure: DatabaseStructureConfig {
-                db_torrents: config_retrieve_db_structure.db_torrents,
-                table_torrents_info_hash: config_retrieve_db_structure.table_torrents_info_hash,
-                table_torrents_completed: config_retrieve_db_structure.table_torrents_completed,
-                db_whitelist: config_retrieve_db_structure.db_whitelist,
-                table_whitelist_info_hash: config_retrieve_db_structure.table_whitelist_info_hash,
-                db_blacklist: config_retrieve_db_structure.db_blacklist,
-                table_blacklist_info_hash: config_retrieve_db_structure.table_blacklist_info_hash,
-                db_keys: config_retrieve_db_structure.db_keys,
-                table_keys_hash: config_retrieve_db_structure.table_keys_hash,
-                table_keys_timeout: config_retrieve_db_structure.table_keys_timeout,
-                db_users: config_retrieve_db_structure.db_users,
-                table_users_uuid: config_retrieve_db_structure.table_users_uuid,
-                table_users_key: config_retrieve_db_structure.table_users_key,
-                table_users_uploaded: config_retrieve_db_structure.table_users_uploaded,
-                table_users_downloaded: config_retrieve_db_structure.table_users_downloaded,
-                table_users_completed: config_retrieve_db_structure.table_users_completed,
-                table_users_updated: config_retrieve_db_structure.table_users_updated,
-                table_users_active: config_retrieve_db_structure.table_users_active,
-            },
-        }).clone()).await);
-        tracker_receive.clone().load_torrents(tracker_receive.clone()).await;
-        tracker_receive.clone().load_users(tracker_receive.clone()).await;
-
-        let tracker_send = Arc::new(TorrentTracker::new(Arc::new(Configuration {
-            log_level: "".to_string(),
-            log_console_interval: None,
-            statistics_enabled: false,
-            global_check_interval: None,
-            db_driver: destination_engine,
-            db_path: destination,
-            persistence: true,
-            persistence_interval: None,
-            total_downloads: 0,
-            api_key: "".to_string(),
-            whitelist: config.whitelist,
-            blacklist: config.blacklist,
-            keys: config.keys,
-            keys_cleanup_interval: None,
-            users: config.users,
-            maintenance_mode_enabled: false,
-            interval: None,
-            interval_minimum: None,
-            peer_timeout: None,
-            peers_returned: None,
-            interval_cleanup: None,
-            cleanup_chunks: None,
-            udp_server: vec![],
-            http_server: vec![],
-            api_server: vec![],
-            db_structure: DatabaseStructureConfig {
-                db_torrents: config_send_db_structure.db_torrents,
-                table_torrents_info_hash: config_send_db_structure.table_torrents_info_hash,
-                table_torrents_completed: config_send_db_structure.table_torrents_completed,
-                db_whitelist: config_send_db_structure.db_whitelist,
-                table_whitelist_info_hash: config_send_db_structure.table_whitelist_info_hash,
-                db_blacklist: config_send_db_structure.db_blacklist,
-                table_blacklist_info_hash: config_send_db_structure.table_blacklist_info_hash,
-                db_keys: config_send_db_structure.db_keys,
-                table_keys_hash: config_send_db_structure.table_keys_hash,
-                table_keys_timeout: config_send_db_structure.table_keys_timeout,
-                db_users: config_send_db_structure.db_users,
-                table_users_uuid: config_send_db_structure.table_users_uuid,
-                table_users_key: config_send_db_structure.table_users_key,
-                table_users_uploaded: config_send_db_structure.table_users_uploaded,
-                table_users_downloaded: config_send_db_structure.table_users_downloaded,
-                table_users_completed: config_send_db_structure.table_users_completed,
-                table_users_updated: config_send_db_structure.table_users_updated,
-                table_users_active: config_send_db_structure.table_users_active,
-            },
-        }).clone()).await);
-
-        info!("[SEND] [Engine: {:?}] [URI: {}]", args.destination_engine.clone().unwrap(), args.destination.clone().unwrap());
-        let mut start: u64 = 0;
-        let amount: u64 = 100000;
-        loop {
-            let torrents_block = tracker_receive.get_torrents_chunk(start, amount).await;
-            if torrents_block.is_empty() {
-                break;
-            }
-            for (info_hash, completed) in torrents_block.iter() {
-                tracker_send.add_torrents_shadow(*info_hash, *completed).await;
-                tracker_receive.remove_torrent(*info_hash, false).await;
-            }
-            start += amount;
-        }
-
-        let _ = tracker_send.save_torrents(tracker_send.clone()).await;
-
-        exit(0);
-    }
-
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
 
-    // Load torrents
-    if config.persistence {
-        tracker.clone().load_torrents(tracker.clone()).await;
-        if config.whitelist {
-            tracker.clone().load_whitelists(tracker.clone()).await;
-        }
-        if config.blacklist {
-            tracker.clone().load_blacklists(tracker.clone()).await;
-        }
-        if config.keys {
-            tracker.clone().load_keys(tracker.clone()).await;
-        }
-        if config.users {
-            tracker.clone().load_users(tracker.clone()).await;
-        }
-    }
-    tracker.clone().set_stats(StatsEvent::Completed, config.total_downloads as i64).await;
+    tracker.set_stats(StatsEvent::Completed, config.total_downloads as i64).await;
 
     let mut api_handlers = Vec::new();
     let mut api_futures = Vec::new();
     let mut apis_handlers = Vec::new();
     let mut apis_futures = Vec::new();
-
-    // let mut apis_futures = Vec::new();
     for api_server_object in &config.api_server {
         if api_server_object.enabled {
-            tcp_check_host_and_port_used(api_server_object.bind_address.clone());
+            http_check_host_and_port_used(api_server_object.bind_address.clone());
             let address: SocketAddr = api_server_object.bind_address.parse().unwrap();
-            let tracker_clone = tracker.clone();
             if api_server_object.ssl {
-                let (handle, https_api) = https_api(address, tracker_clone, api_server_object.ssl_key.clone(), api_server_object.ssl_cert.clone()).await;
+                let (handle, https_api) = api_service(
+                    address,
+                    tracker.clone(),
+                    tracker.config.api_keep_alive,
+                    tracker.config.api_request_timeout,
+                    tracker.config.api_disconnect_timeout,
+                (
+                        api_server_object.ssl,
+                        Some(api_server_object.ssl_key.clone()),
+                        Some(api_server_object.ssl_cert.clone())
+                    )
+                ).await;
                 apis_handlers.push(handle);
                 apis_futures.push(https_api);
             } else {
-                let (handle, http_api) = http_api(address, tracker_clone).await;
+                let (handle, http_api) = api_service(
+                    address,
+                    tracker.clone(),
+                    tracker.config.api_keep_alive,
+                    tracker.config.api_request_timeout,
+                    tracker.config.api_disconnect_timeout,
+                    (
+                        api_server_object.ssl,
+                        None,
+                        None
+                    )
+                ).await;
                 api_handlers.push(handle);
                 api_futures.push(http_api);
             }
         }
+    }
+    if !api_futures.is_empty() {
+        tokio::spawn(async move {
+            let _ = try_join_all(api_futures).await;
+        });
+    }
+    if !apis_futures.is_empty() {
+        tokio::spawn(async move {
+            let _ = try_join_all(apis_futures).await;
+        });
     }
 
     let mut http_handlers = Vec::new();
     let mut http_futures = Vec::new();
     let mut https_handlers = Vec::new();
     let mut https_futures = Vec::new();
-
     for http_server_object in &config.http_server {
         if http_server_object.enabled {
-            tcp_check_host_and_port_used(http_server_object.bind_address.clone());
+            http_check_host_and_port_used(http_server_object.bind_address.clone());
             let address: SocketAddr = http_server_object.bind_address.parse().unwrap();
-            let tracker_clone = tracker.clone();
             if http_server_object.ssl {
-                let (handle, https_service) = https_service(address, tracker_clone, http_server_object.ssl_key.clone(), http_server_object.ssl_cert.clone()).await;
+                let (handle, https_service) = http_service(
+                    address,
+                    tracker.clone(),
+                    tracker.config.http_keep_alive,
+                    tracker.config.http_request_timeout,
+                    tracker.config.http_disconnect_timeout,
+                    (
+                        http_server_object.ssl,
+                        Some(http_server_object.ssl_key.clone()),
+                        Some(http_server_object.ssl_cert.clone())
+                    )
+                ).await;
                 https_handlers.push(handle);
                 https_futures.push(https_service);
             } else {
-                let (handle, http_service) = http_service(address, tracker_clone).await;
+                let (handle, http_service) = http_service(
+                    address,
+                    tracker.clone(),
+                    tracker.config.http_keep_alive,
+                    tracker.config.http_request_timeout,
+                    tracker.config.http_disconnect_timeout,
+                    (
+                        http_server_object.ssl,
+                        None,
+                        None
+                    )
+                ).await;
                 http_handlers.push(handle);
                 http_futures.push(http_service);
             }
         }
+    }
+    if !http_futures.is_empty() {
+        tokio::spawn(async move {
+            let _ = try_join_all(http_futures).await;
+        });
+    }
+    if !https_futures.is_empty() {
+        tokio::spawn(async move {
+            let _ = try_join_all(https_futures).await;
+        });
     }
 
     let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
@@ -280,167 +155,18 @@ async fn main() -> std::io::Result<()>
         }
     }
 
-    if !api_futures.is_empty() {
-        tokio::spawn(async move {
-            let _ = try_join_all(api_futures).await;
-        });
-    }
-
-    if !apis_futures.is_empty() {
-        tokio::spawn(async move {
-            let _ = try_join_all(apis_futures).await;
-        });
-    }
-
-    if !http_futures.is_empty() {
-        tokio::spawn(async move {
-            let _ = try_join_all(http_futures).await;
-        });
-    }
-
-    if !https_futures.is_empty() {
-        tokio::spawn(async move {
-            let _ = try_join_all(https_futures).await;
-        });
-    }
-
-    // Check if we need to run the Peers cleanup
-    let tracker_clone = tracker.clone();
+    let tracker_spawn = tracker.clone();
     tokio::spawn(async move {
         loop {
-            tracker_clone.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.interval_cleanup.unwrap() as i64).await;
-            task::sleep(Duration::from_secs(tracker_clone.config.interval_cleanup.unwrap_or(900))).await;
+            tracker_spawn.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn.config.persistence_interval.unwrap() as i64).await;
+            task::sleep(Duration::from_secs(tracker_spawn.config.persistence_interval.unwrap_or(60))).await;
 
-            info!("[PEERS] Checking now for dead peers.");
-            tracker_clone.clean_peers(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
-            info!("[PEERS] Peers cleaned up.");
-
-            if tracker_clone.config.users {
-                info!("[USERS] Checking now for inactive torrents in users.");
-                tracker_clone.clean_users_active_torrents(Duration::from_secs(tracker_clone.config.clone().peer_timeout.unwrap())).await;
-                info!("[USERS] Inactive torrents in users cleaned up.");
-            }
         }
     });
-
-    // Check if we need to run the keys cleanup
-    if tracker.config.keys {
-        let tracker_clone = tracker.clone();
-        tokio::spawn(async move {
-            loop {
-                tracker_clone.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_clone.config.keys_cleanup_interval.unwrap() as i64).await;
-                task::sleep(Duration::from_secs(tracker_clone.config.keys_cleanup_interval.unwrap_or(60))).await;
-
-                info!("[KEYS] Checking now for old keys, and remove them.");
-                tracker_clone.clean_keys().await;
-                info!("[KEYS] Keys cleaned up.");
-            }
-        });
-    }
-
-    // Check if we need to run the Save Data code
-    let tracker_clone = tracker.clone();
-    tokio::spawn(async move {
-        loop {
-            tracker_clone.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_clone.config.persistence_interval.unwrap() as i64).await;
-            task::sleep(Duration::from_secs(tracker_clone.config.persistence_interval.unwrap_or(60))).await;
-
-            info!("[SAVING] Starting persistence saving procedure.");
-
-            match Configuration::load_from_file(create_config) {
-                Ok(config) => {
-                    let mut config_load = config;
-                    config_load.total_downloads = tracker_clone.get_stats().await.completed as u64;
-                    let config_toml = toml::to_string(&config_load).unwrap();
-                    let save_file = Configuration::save_file("config.toml", config_toml);
-                    match save_file {
-                        Ok(_) => {
-                            info!("[SAVING] Saved config.toml.");
-                        }
-                        Err(e) => {
-                            error!("[SAVING] Unable to save config.toml.");
-                            error!("{e}");
-                        }
-                    };
-                },
-                Err(_) => {
-                    error!("[SAVING] Unable to load config file!");
-                }
-            };
-
-
-            info!("[SAVING] Moving Updates to Shadow...");
-            tracker_clone.transfer_torrents_updates_to_torrents_shadow().await;
-            info!("[SAVING] Saving data from Shadow to database...");
-            if let Ok(save_stat) = tracker_clone.save_torrents(tracker_clone.clone()).await {
-                if save_stat {
-                    info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                    tracker_clone.clear_torrents_shadow().await;
-                    info!("[SAVING] Torrents saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
-                }
-            } else {
-                error!("[SAVING] An error occurred while saving data, lock issue...");
-            }
-            if tracker_clone.config.whitelist {
-                info!("[SAVING] Saving data from Whitelist to database...");
-                if tracker_clone.save_whitelists(tracker_clone.clone()).await {
-                    info!("[SAVING] Whitelists saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
-                }
-            }
-            if tracker_clone.config.blacklist {
-                info!("[SAVING] Saving data from Blacklist to database...");
-                if tracker_clone.save_blacklists(tracker_clone.clone()).await {
-                    info!("[SAVING] Blacklists saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
-                }
-            }
-            if tracker_clone.config.keys {
-                info!("[SAVING] Saving data from Keys to database...");
-                if tracker_clone.save_keys(tracker_clone.clone()).await {
-                    info!("[SAVING] Keys saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
-                }
-            }
-            if tracker_clone.config.users {
-                info!("[SAVING] Saving data from Users to database...");
-                if tracker_clone.save_users(tracker_clone.clone()).await {
-                    info!("[SAVING] Users saved.");
-                } else {
-                    error!("[SAVING] An error occurred while saving data...");
-                }
-            }
-            info!("[SAVING] Saving persistent data procedure done.");
-        }
-    });
-
-    if config.statistics_enabled {
-        let tracker_clone = tracker.clone();
-        tokio::spawn(async move {
-            loop {
-                tracker_clone.set_stats(StatsEvent::TimestampConsole, chrono::Utc::now().timestamp() + tracker_clone.config.log_console_interval.unwrap() as i64).await;
-                task::sleep(Duration::from_secs(tracker_clone.config.log_console_interval.unwrap_or(30))).await;
-                let stats = tracker_clone.clone().get_stats().await;
-                info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
-                info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
-                info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
-                info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
-                info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
-                info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
-            }
-        });
-    }
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             info!("Shutdown request received, shutting down...");
-            let _ = udp_tx.send(true);
-            let _ = futures::future::join_all(udp_futures).await;
             for handle in api_handlers.iter() {
                 handle.stop(true).await;
             }
@@ -453,69 +179,10 @@ async fn main() -> std::io::Result<()>
             for handle in https_handlers.iter() {
                 handle.stop(true).await;
             }
-            if tracker.clone().config.persistence {
-                info!("[SAVING] Starting persistence saving procedure.");
-
-                match Configuration::load_from_file(create_config) {
-                    Ok(config) => {
-                        let mut config_load = config;
-                        config_load.total_downloads = tracker.get_stats().await.completed as u64;
-                        let config_toml = toml::to_string(&config_load).unwrap();
-                        let save_file = Configuration::save_file("config.toml", config_toml);
-                        match save_file {
-                            Ok(_) => {
-                                info!("[SAVING] Saved config.toml.");
-                            }
-                            Err(e) => {
-                                error!("[SAVING] Unable to save config.toml.");
-                                error!("{e}");
-                            }
-                        };
-                    },
-                    Err(_) => {
-                        error!("[SAVING] Unable to load config file!");
-                    }
-                };
-
-                info!("[SAVING] Moving Updates to Shadow...");
-                tracker.clone().transfer_torrents_updates_to_torrents_shadow().await;
-                info!("[SAVING] Saving data from Torrents to database...");
-                if let Ok(save_stat) = tracker.clone().save_torrents(tracker.clone()).await {
-                    if save_stat {
-                        info!("[SAVING] Clearing shadow, saving procedure finishing...");
-                        tracker.clone().clear_torrents_shadow().await;
-                        info!("[SAVING] Torrents saved.");
-                    } else {
-                        error!("[SAVING] An error occurred while saving data...");
-                    }
-                } else {
-                    error!("[SAVING] An error occurred while saving data, lock issue...");
-                }
-                if config.whitelist {
-                    info!("[SAVING] Saving data from Whitelist to database...");
-                    if tracker.clone().save_whitelists(tracker.clone()).await {
-                        info!("[SAVING] Whitelists saved.");
-                    } else {
-                        error!("[SAVING] An error occurred while saving data...");
-                    }
-                }
-                if config.blacklist {
-                    info!("[SAVING] Saving data from Blacklist to database...");
-                    if tracker.clone().save_blacklists(tracker.clone()).await {
-                        info!("[SAVING] Blacklists saved.");
-                    } else {
-                        error!("[SAVING] An error occurred while saving data...");
-                    }
-                }
-                if config.keys {
-                    info!("[SAVING] Saving data from Keys to database...");
-                    if tracker.clone().save_keys(tracker.clone()).await {
-                        info!("[SAVING] Keys saved.");
-                    } else {
-                        error!("[SAVING] An error occurred while saving data...");
-                    }
-                }
-            }
+            let _ = udp_tx.send(true);
+            let _ = udp_futures.into_iter()
+                .collect::<TryJoinAll<_>>()
+                .await;
             info!("Server shutting down completed");
             Ok(())
         }
