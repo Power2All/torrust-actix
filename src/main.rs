@@ -155,12 +155,35 @@ async fn main() -> std::io::Result<()>
         }
     }
 
-    let tracker_spawn = tracker.clone();
+    let tracker_spawn_stats = tracker.clone();
     tokio::spawn(async move {
         loop {
-            tracker_spawn.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn.config.persistence_interval.unwrap() as i64).await;
-            task::sleep(Duration::from_secs(tracker_spawn.config.persistence_interval.unwrap_or(60))).await;
+            tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64).await;
+            task::sleep(Duration::from_secs(60u64)).await;
+            let stats = tracker_spawn_stats.get_stats().await;
+            info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
+            info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
+            info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
+            info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);
+            info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
+            info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
+        }
+    });
 
+    let tracker_spawn_cleanup = tracker.clone();
+    tokio::spawn(async move {
+        loop {
+            tracker_spawn_cleanup.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn_cleanup.config.interval_cleanup.unwrap() as i64).await;
+            task::sleep(Duration::from_secs(tracker_spawn_cleanup.config.interval_cleanup.unwrap_or(60))).await;
+            info!("[PEERS] Checking now for dead peers.");
+            tracker_spawn_cleanup.clean_peers(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap())).await;
+            info!("[PEERS] Peers cleaned up.");
+
+            if tracker_spawn_cleanup.config.users {
+                info!("[USERS] Checking now for inactive torrents in users.");
+                tracker_spawn_cleanup.clean_users_active_torrents(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap())).await;
+                info!("[USERS] Inactive torrents in users cleaned up.");
+            }
         }
     });
 
