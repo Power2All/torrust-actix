@@ -161,7 +161,7 @@ impl UdpServer {
     }
 
     pub async fn handle_udp_announce(&self, remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
-        tracker.update_stats(StatsEvent::TestCounter, 1).await;
+        tracker.update_stats(StatsEvent::TestCounterUdp, 1).await;
         let stat_test_counter = tracker.get_stats().await.test_counter_udp;
         let start = Instant::now();
         if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
@@ -364,7 +364,7 @@ impl UdpServer {
     }
 
     pub async fn handle_udp_scrape(&self, remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
-        tracker.update_stats(StatsEvent::TestCounter, 1).await;
+        tracker.update_stats(StatsEvent::TestCounterUdp, 1).await;
         let stat_test_counter = tracker.get_stats().await.test_counter_udp;
         let start = Instant::now();
         if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
