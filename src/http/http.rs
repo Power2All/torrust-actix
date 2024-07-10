@@ -325,9 +325,30 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         }
     };
 
+    let mut peer_count = 0;
     if announce_unwrapped.clone().compact {
         let mut peers: Vec<u8> = Vec::new();
+        if announce_unwrapped.clone().left != 0 {
+            for (_peer_id, torrent_peer) in torrent_entry.seeds.iter() {
+                if peer_count == data.config.peers_returned.unwrap_or(72) {
+                    break;
+                }
+                let _ = match torrent_peer.peer_addr.ip() {
+                    IpAddr::V4(ip) => {
+                        peers.write(&u32::from(ip).to_be_bytes())
+                    },
+                    IpAddr::V6(ip) => {
+                        peers.write(&u128::from(ip).to_be_bytes())
+                    }
+                };
+                peers.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
+                peer_count += 1;
+            }
+        }
         for (_peer_id, torrent_peer) in torrent_entry.peers.iter() {
+            if peer_count == data.config.peers_returned.unwrap_or(72) {
+                break;
+            }
             let _ = match torrent_peer.peer_addr.ip() {
                 IpAddr::V4(ip) => {
                     peers.write(&u32::from(ip).to_be_bytes())
@@ -337,6 +358,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 }
             };
             peers.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
+            peer_count += 1;
         }
         return if announce_unwrapped.clone().remote_addr.is_ipv4() {
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -362,12 +384,30 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let mut peers_list = ben_list!();
     let peers_list_mut = peers_list.list_mut().unwrap();
     for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
-        if torrent_peer.peer_addr.ip().is_ipv4() || torrent_peer.peer_addr.ip().is_ipv6() {
-            peers_list_mut.push(ben_map! {
-                    "peer id" => ben_bytes!(peer_id.clone().to_string()),
-                    "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                    "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
-                });
+        if peer_count == data.config.peers_returned.unwrap_or(72) {
+            break;
+        }
+        match torrent_peer.peer_addr.ip() {
+            IpAddr::V4(_) => {
+                if announce_unwrapped.clone().remote_addr.is_ipv4() {
+                    peers_list_mut.push(ben_map! {
+                        "peer id" => ben_bytes!(peer_id.clone().to_string()),
+                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
+                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                    });
+                    peer_count += 1;
+                }
+            },
+            IpAddr::V6(_) => {
+                if announce_unwrapped.clone().remote_addr.is_ipv6() {
+                    peers_list_mut.push(ben_map! {
+                        "peer id" => ben_bytes!(peer_id.clone().to_string()),
+                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
+                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                    });
+                    peer_count += 1;
+                }
+            }
         }
     }
     if announce_unwrapped.clone().remote_addr.is_ipv4() {

@@ -67,7 +67,7 @@ impl TorrentTracker {
         if peer.is_some() {
             torrent.peers_count -= 1;
         }
-        if !persistent && torrent.seeds_count <= 0 && torrent.peers_count <= 0 {
+        if !persistent && torrent.seeds_count == 0 && torrent.peers_count == 0 {
             debug!("[DEBUG] Calling remove_torrent");
             self.remove_torrent(info_hash, persistent).await;
             return Some(torrent);
