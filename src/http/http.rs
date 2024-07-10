@@ -53,7 +53,7 @@ pub async fn http_service(
     keep_alive: u64,
     client_request_timeout: u64,
     client_disconnect_timeout: u64,
-    ssl: (bool, Option<String>, Option<String>) /* 0: ssl enabled, 1: cert, 2: key */
+    ssl: (bool, Option<String>, Option<String>) /* 0: ssl enabled, 1: key, 2: cert */
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
     if ssl.0 {
@@ -63,16 +63,20 @@ pub async fn http_service(
             exit(1);
         }
 
-        let certs_file = &mut BufReader::new(File::open(ssl.1.clone().unwrap()).unwrap());
-        let key_file = &mut BufReader::new(File::open(ssl.2.clone().unwrap()).unwrap());
+        let key_file = &mut BufReader::new(File::open(ssl.1.clone().unwrap()).unwrap());
+        let certs_file = &mut BufReader::new(File::open(ssl.2.clone().unwrap()).unwrap());
 
         let tls_certs = rustls_pemfile::certs(certs_file)
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        let tls_key = rustls_pemfile::pkcs8_private_keys(key_file)
-            .next()
-            .unwrap()
-            .unwrap();
+        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
+            Err(error) => {
+                exit(1);
+            }
+            Ok(data) => {
+                data
+            }
+        };
 
         let tls_config = rustls::ServerConfig::builder()
             .with_no_client_auth()
