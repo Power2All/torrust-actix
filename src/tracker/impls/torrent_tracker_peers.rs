@@ -22,8 +22,8 @@ impl TorrentTracker {
                 torrent
             }
         };
-        torrent.seeds.remove(&peer_id);
-        torrent.peers.remove(&peer_id);
+        let seed = torrent.seeds.remove(&peer_id);
+        let peer = torrent.peers.remove(&peer_id);
         if torrent_peer.left == NumberOfBytes(0) {
             if completed {
                 torrent.completed += 1;
@@ -31,6 +31,9 @@ impl TorrentTracker {
                 if persistent {
                     self.add_torrents_update(info_hash, torrent.completed).await;
                 }
+            }
+            if seed.is_none() && peer.is_none() {
+                torrent.seeds_count += 1;
             }
             torrent.seeds.insert(peer_id, torrent_peer);
         } else {
@@ -40,6 +43,9 @@ impl TorrentTracker {
                 if persistent {
                     self.add_torrents_update(info_hash, torrent.completed).await;
                 }
+            }
+            if seed.is_none() && peer.is_none() {
+                torrent.peers_count += 1;
             }
             torrent.peers.insert(peer_id, torrent_peer);
         }
@@ -55,9 +61,15 @@ impl TorrentTracker {
             None => { return None; }
             Some(torrent) => { torrent }
         };
-        torrent.seeds.remove(&peer_id);
-        torrent.peers.remove(&peer_id);
-        if !persistent && torrent.seeds.is_empty() && torrent.peers.is_empty() {
+        let seed = torrent.seeds.remove(&peer_id);
+        let peer = torrent.peers.remove(&peer_id);
+        if seed.is_some() {
+            torrent.seeds_count -= 1;
+        }
+        if peer.is_some() {
+            torrent.peers_count -= 1;
+        }
+        if !persistent && torrent.seeds_count <= 0 && torrent.peers_count <= 0 {
             debug!("[DEBUG] Calling remove_torrent");
             self.remove_torrent(info_hash, persistent).await;
             return Some(torrent);

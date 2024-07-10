@@ -99,9 +99,22 @@ impl TorrentTracker {
         let torrents = torrents_arc.len() as u64;
         let mut seeds = 0u64;
         let mut peers = 0u64;
-        for torrent in torrents_arc.iter() {
-            seeds += torrent.value().seeds.len() as u64;
-            peers += torrent.value().peers.len() as u64;
+        let mut start: usize = 0;
+        let mut count: u64 = 0;
+        let size: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
+        loop {
+            if start > torrents_arc.len() {
+                break;
+            }
+            for torrent in torrents_arc.iter().skip(start) {
+                count += 1;
+                seeds += torrent.value().seeds_count;
+                peers += torrent.value().peers_count;
+                if count == size as u64 {
+                    break;
+                }
+            }
+            start += size;
         }
         (torrents, seeds, peers)
     }

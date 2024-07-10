@@ -7,8 +7,10 @@ use crate::tracker::structs::torrent_peer::TorrentPeer;
 pub struct TorrentEntry {
     #[serde(skip)]
     pub peers: BTreeMap<PeerId, TorrentPeer>,
+    pub peers_count: u64,
     #[serde(skip)]
     pub seeds: BTreeMap<PeerId, TorrentPeer>,
+    pub seeds_count: u64,
     pub completed: i64,
     #[serde(with = "serde_millis")]
     pub updated: std::time::Instant

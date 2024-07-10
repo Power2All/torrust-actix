@@ -5,7 +5,9 @@ impl TorrentEntry {
     pub fn new() -> TorrentEntry {
         TorrentEntry {
             peers: BTreeMap::new(),
+            peers_count: 0,
             seeds: BTreeMap::new(),
+            seeds_count: 0,
             completed: 0,
             updated: std::time::Instant::now(),
         }

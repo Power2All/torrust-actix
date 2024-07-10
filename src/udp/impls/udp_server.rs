@@ -339,16 +339,16 @@ impl UdpServer {
         let mut announce_response = Response::from(AnnounceResponse {
             transaction_id: request.transaction_id,
             announce_interval: AnnounceInterval(tracker.config.interval.unwrap() as i32),
-            leechers: NumberOfPeers(torrent.peers.len() as i32),
-            seeders: NumberOfPeers(torrent.seeds.len() as i32),
+            leechers: NumberOfPeers(torrent.peers_count as i32),
+            seeders: NumberOfPeers(torrent.seeds_count as i32),
             peers,
         });
         if remote_addr.is_ipv6() {
             announce_response = Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
                 announce_interval: AnnounceInterval(tracker.config.interval.unwrap() as i32),
-                leechers: NumberOfPeers(torrent.peers.len() as i32),
-                seeders: NumberOfPeers(torrent.seeds.len() as i32),
+                leechers: NumberOfPeers(torrent.peers_count as i32),
+                seeders: NumberOfPeers(torrent.seeds_count as i32),
                 peers: peers6
             });
         }
@@ -384,9 +384,9 @@ impl UdpServer {
                 }
                 Some(torrent_info) => {
                     TorrentScrapeStatistics {
-                        seeders: NumberOfPeers(torrent_info.seeds.len() as i32),
+                        seeders: NumberOfPeers(torrent_info.seeds_count as i32),
                         completed: NumberOfDownloads(torrent_info.completed as i32),
-                        leechers: NumberOfPeers(torrent_info.peers.len() as i32),
+                        leechers: NumberOfPeers(torrent_info.peers_count as i32),
                     }
                 }
             };

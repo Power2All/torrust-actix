@@ -159,7 +159,7 @@ async fn main() -> std::io::Result<()>
     tokio::spawn(async move {
         loop {
             tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64).await;
-            task::sleep(Duration::from_secs(60u64)).await;
+            task::sleep(Duration::from_secs(tracker_spawn_stats.config.log_console_interval.unwrap_or(60u64))).await;
             let stats = tracker_spawn_stats.get_stats().await;
             let torrent_stats = tracker_spawn_stats.get_torrents_stats().await;
             info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", torrent_stats.0, stats.torrents_updates, stats.torrents_shadow, torrent_stats.1, torrent_stats.2, stats.completed);
