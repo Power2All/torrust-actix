@@ -33,4 +33,5 @@ pub enum StatsEvent {
     Udp6ConnectionsHandled,
     Udp6AnnouncesHandled,
     Udp6ScrapesHandled,
+    TestCounter,
 }

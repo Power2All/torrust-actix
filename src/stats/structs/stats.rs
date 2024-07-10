@@ -36,5 +36,6 @@ pub struct Stats {
     pub udp4_scrapes_handled: i64,
     pub udp6_connections_handled: i64,
     pub udp6_announces_handled: i64,
-    pub udp6_scrapes_handled: i64
+    pub udp6_scrapes_handled: i64,
+    pub test_counter: i64,
 }

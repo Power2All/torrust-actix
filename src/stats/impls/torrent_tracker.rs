@@ -6,22 +6,21 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 impl TorrentTracker {
     pub async fn get_stats(&self) -> Stats
     {
-        let torrent_stats = self.get_torrents_stats().await;
         Stats {
             started: self.stats.started.load(Ordering::SeqCst),
             timestamp_run_save: self.stats.timestamp_run_save.load(Ordering::SeqCst),
             timestamp_run_timeout: self.stats.timestamp_run_timeout.load(Ordering::SeqCst),
             timestamp_run_console: self.stats.timestamp_run_console.load(Ordering::SeqCst),
             timestamp_run_keys_timeout: self.stats.timestamp_run_keys_timeout.load(Ordering::SeqCst),
-            torrents: torrent_stats.0 as i64,
+            torrents: self.stats.torrents.load(Ordering::SeqCst),
             torrents_updates: self.stats.torrents_updates.load(Ordering::SeqCst),
             torrents_shadow: self.stats.torrents_shadow.load(Ordering::SeqCst),
             users: self.stats.users.load(Ordering::SeqCst),
             users_updates: self.stats.users_updates.load(Ordering::SeqCst),
             users_shadow: self.stats.users_shadow.load(Ordering::SeqCst),
             maintenance_mode: self.stats.maintenance_mode.load(Ordering::SeqCst),
-            seeds: torrent_stats.1 as i64,
-            peers: torrent_stats.2 as i64,
+            seeds: self.stats.seeds.load(Ordering::SeqCst),
+            peers: self.stats.peers.load(Ordering::SeqCst),
             completed: self.stats.completed.load(Ordering::SeqCst),
             whitelist_enabled: self.stats.whitelist_enabled.load(Ordering::SeqCst),
             whitelist: self.stats.whitelist.load(Ordering::SeqCst),
@@ -43,6 +42,7 @@ impl TorrentTracker {
             udp6_connections_handled: self.stats.udp6_connections_handled.load(Ordering::SeqCst),
             udp6_announces_handled: self.stats.udp6_announces_handled.load(Ordering::SeqCst),
             udp6_scrapes_handled: self.stats.udp6_scrapes_handled.load(Ordering::SeqCst),
+            test_counter: self.stats.test_counter.load(Ordering::SeqCst),
         }
     }
 
@@ -173,6 +173,10 @@ impl TorrentTracker {
                 if value > 0 { self.stats.udp6_scrapes_handled.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.udp6_scrapes_handled.fetch_sub(-value, Ordering::SeqCst); }
             }
+            StatsEvent::TestCounter => {
+                if value > 0 { self.stats.test_counter.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.test_counter.fetch_sub(-value, Ordering::SeqCst); }
+            }
         }
         self.get_stats().await
     }
@@ -272,6 +276,9 @@ impl TorrentTracker {
             }
             StatsEvent::Udp6ScrapesHandled => {
                 self.stats.udp6_scrapes_handled.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::TestCounter => {
+                self.stats.test_counter.store(value, Ordering::SeqCst);
             }
         }
         self.get_stats().await
