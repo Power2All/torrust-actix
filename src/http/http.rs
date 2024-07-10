@@ -70,7 +70,7 @@ pub async fn http_service(
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
-            Err(error) => {
+            Err(_) => {
                 exit(1);
             }
             Ok(data) => {

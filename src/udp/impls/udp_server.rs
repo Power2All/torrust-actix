@@ -164,7 +164,7 @@ impl UdpServer {
         tracker.update_stats(StatsEvent::TestCounter, 1).await;
         let stat_test_counter = tracker.get_stats().await.test_counter_udp;
         let start = Instant::now();
-        if stat_test_counter > tracker.config.log_perf_count_udp.unwrap_or(10000) as i64 {
+        if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
             tracker.set_stats(StatsEvent::TestCounterUdp, 0).await;
         }
 
@@ -367,7 +367,7 @@ impl UdpServer {
         tracker.update_stats(StatsEvent::TestCounter, 1).await;
         let stat_test_counter = tracker.get_stats().await.test_counter_udp;
         let start = Instant::now();
-        if stat_test_counter > tracker.config.log_perf_count_udp.unwrap_or(10000) as i64 {
+        if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
             tracker.set_stats(StatsEvent::TestCounterUdp, 0).await;
         }
 
