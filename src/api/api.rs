@@ -45,7 +45,12 @@ pub async fn api_service_stats_get(request: HttpRequest, remote_ip: RemoteIP, da
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.config.clone()).await { return response; }
 
-    HttpResponse::Ok().content_type(ContentType::json()).json(data.get_stats().await)
+    let mut stats = data.get_stats().await;
+    let torrent_stats = data.get_torrents_stats().await;
+    stats.torrents = torrent_stats.0 as i64;
+    stats.seeds = torrent_stats.1 as i64;
+    stats.peers = torrent_stats.2 as i64;
+    HttpResponse::Ok().content_type(ContentType::json()).json(stats)
 }
 
 pub async fn api_service(
