@@ -38,6 +38,7 @@ impl Configuration {
         Configuration {
             log_level: String::from("info"),
             log_console_interval: Some(60),
+            log_perf_count: Some(10000),
 
             db_driver: DatabaseDrivers::sqlite3,
             db_path: String::from("sqlite://:memory:"),

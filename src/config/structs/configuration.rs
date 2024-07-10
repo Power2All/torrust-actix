@@ -9,6 +9,7 @@ use crate::database::enums::database_drivers::DatabaseDrivers;
 pub struct Configuration {
     pub log_level: String,
     pub log_console_interval: Option<u64>,
+    pub log_perf_count: Option<u64>,
 
     pub db_driver: DatabaseDrivers,
     pub db_path: String,

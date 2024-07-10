@@ -39,4 +39,5 @@ pub struct StatsAtomics {
     pub udp6_announces_handled: AtomicI64,
     pub udp6_scrapes_handled: AtomicI64,
     pub test_counter: AtomicI64,
+    pub test_counter_udp: AtomicI64,
 }

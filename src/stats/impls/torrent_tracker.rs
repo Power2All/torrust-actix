@@ -43,6 +43,7 @@ impl TorrentTracker {
             udp6_announces_handled: self.stats.udp6_announces_handled.load(Ordering::SeqCst),
             udp6_scrapes_handled: self.stats.udp6_scrapes_handled.load(Ordering::SeqCst),
             test_counter: self.stats.test_counter.load(Ordering::SeqCst),
+            test_counter_udp: self.stats.test_counter_udp.load(Ordering::SeqCst),
         }
     }
 
@@ -177,6 +178,10 @@ impl TorrentTracker {
                 if value > 0 { self.stats.test_counter.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.test_counter.fetch_sub(-value, Ordering::SeqCst); }
             }
+            StatsEvent::TestCounterUdp => {
+                if value > 0 { self.stats.test_counter_udp.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.test_counter_udp.fetch_sub(-value, Ordering::SeqCst); }
+            }
         }
         self.get_stats().await
     }
@@ -279,6 +284,9 @@ impl TorrentTracker {
             }
             StatsEvent::TestCounter => {
                 self.stats.test_counter.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::TestCounterUdp => {
+                self.stats.test_counter_udp.store(value, Ordering::SeqCst);
             }
         }
         self.get_stats().await

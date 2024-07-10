@@ -1,7 +1,7 @@
 use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use log::{debug, info};
 use tokio::net::UdpSocket;
 use crate::stats::enums::stats_event::StatsEvent;
@@ -161,6 +161,13 @@ impl UdpServer {
     }
 
     pub async fn handle_udp_announce(&self, remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+        tracker.update_stats(StatsEvent::TestCounter, 1).await;
+        let stat_test_counter = tracker.get_stats().await.test_counter_udp;
+        let start = Instant::now();
+        if stat_test_counter > tracker.config.log_perf_count_udp.unwrap_or(10000) as i64 {
+            tracker.set_stats(StatsEvent::TestCounterUdp, 0).await;
+        }
+
         if tracker.get_torrent(InfoHash(request.info_hash.0)).await.is_none() {
             if tracker.config.persistence {
                 tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntry::new(), true).await;
@@ -170,15 +177,24 @@ impl UdpServer {
         }
         if tracker.config.whitelist && !tracker.check_whitelist(InfoHash(request.info_hash.0)).await {
             debug!("[UDP ERROR] Torrent Not Whitelisted");
+            if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+            }
             return Err(ServerError::TorrentNotWhitelisted);
         }
         if tracker.config.blacklist && tracker.check_blacklist(InfoHash(request.info_hash.0)).await {
             debug!("[UDP ERROR] Torrent Blacklisted");
+            if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+            }
             return Err(ServerError::TorrentBlacklisted);
         }
         if tracker.config.keys {
             if request.path.len() < 50 {
                 debug!("[UDP ERROR] Unknown Key");
+                if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                    info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                }
                 return Err(ServerError::UnknownKey);
             }
             let key_path_extract = &request.path[10..50];
@@ -187,11 +203,17 @@ impl UdpServer {
                     let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
                     if !tracker.check_key(InfoHash::from(key)).await {
                         debug!("[UDP ERROR] Unknown Key");
+                        if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                            info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                        }
                         return Err(ServerError::UnknownKey);
                     }
                 }
                 Err(_) => {
                     debug!("[UDP ERROR] Unknown Key");
+                    if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                        info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                    }
                     return Err(ServerError::UnknownKey);
                 }
             }
@@ -201,12 +223,18 @@ impl UdpServer {
             let user_key_path_extract: &str = if tracker.config.keys {
                 if request.path.len() < 91 {
                     debug!("[UDP ERROR] Peer Key Not Valid");
+                    if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                        info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                    }
                     return Err(ServerError::PeerKeyNotValid);
                 }
                 &request.path[51..91]
             } else {
                 if request.path.len() < 50 {
                     debug!("[UDP ERROR] Peer Key Not Valid");
+                    if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                        info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                    }
                     return Err(ServerError::PeerKeyNotValid);
                 }
                 &request.path[10..50]
@@ -216,6 +244,9 @@ impl UdpServer {
                     let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
                     if !tracker.check_user_key(UserId::from(key)).await {
                         debug!("[UDP ERROR] Peer Key Not Valid");
+                        if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                            info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                        }
                         return Err(ServerError::PeerKeyNotValid);
                     }
                     user_key = Some(UserId::from(key));
@@ -223,6 +254,9 @@ impl UdpServer {
                 Err(error) => {
                     debug!("[UDP ERROR] Hex Decode Error");
                     debug!("{:#?}", error);
+                    if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                        info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                    }
                     return Err(ServerError::PeerKeyNotValid);
                 }
             }
@@ -230,6 +264,9 @@ impl UdpServer {
         match tracker.get_torrent(InfoHash(request.info_hash.0)).await {
             None => {
                 debug!("[UDP ERROR] Unknown InfoHash");
+                if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                    info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                }
                 return Err(ServerError::UnknownInfoHash);
             }
             Some(_) => {}
@@ -251,6 +288,9 @@ impl UdpServer {
             Err(error) => {
                 debug!("[UDP ERROR] Handle Announce - Internal Server Error");
                 debug!("{:#?}", error);
+                if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+                    info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+                }
                 return Err(ServerError::InternalServerError);
             }
         };
@@ -317,10 +357,20 @@ impl UdpServer {
         } else {
             tracker.update_stats(StatsEvent::Udp6AnnouncesHandled, 1).await;
         }
+        if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+            info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
+        }
         Ok(announce_response)
     }
 
     pub async fn handle_udp_scrape(&self, remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+        tracker.update_stats(StatsEvent::TestCounter, 1).await;
+        let stat_test_counter = tracker.get_stats().await.test_counter_udp;
+        let start = Instant::now();
+        if stat_test_counter > tracker.config.log_perf_count_udp.unwrap_or(10000) as i64 {
+            tracker.set_stats(StatsEvent::TestCounterUdp, 0).await;
+        }
+
         let mut torrent_stats: Vec<TorrentScrapeStatistics> = Vec::new();
         for info_hash in request.info_hashes.iter() {
             let info_hash = InfoHash(info_hash.0);
@@ -346,6 +396,9 @@ impl UdpServer {
             tracker.update_stats(StatsEvent::Udp4ScrapesHandled, 1).await;
         } else {
             tracker.update_stats(StatsEvent::Udp6ScrapesHandled, 1).await;
+        }
+        if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
+            info!("[PERF UDP] handle_udp_scrape: {:?}", start.elapsed());
         }
         Ok(Response::from(ScrapeResponse {
             transaction_id: request.transaction_id,

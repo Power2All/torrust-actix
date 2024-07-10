@@ -121,14 +121,14 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
     data.update_stats(StatsEvent::TestCounter, 1).await;
     let stat_test_counter = data.get_stats().await.test_counter;
     let start = Instant::now();
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         data.set_stats(StatsEvent::TestCounter, 0).await;
     }
 
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_announce_key: {:?}", start.elapsed());
             }
             return result;
@@ -142,7 +142,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
     }
 
     if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        if stat_test_counter > 1000 {
+        if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
             info!("[PERF] http_service_announce_key: {:?}", start.elapsed());
         }
         return result;
@@ -152,7 +152,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
         let key = path.clone();
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
         if let Some(value) = key_check {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_announce_key: {:?}", start.elapsed());
             }
             return value;
@@ -163,7 +163,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
         let user_key = path.clone();
         let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
         if user_key_check.is_none() {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_announce_key: {:?}", start.elapsed());
             }
             return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap())).await;
@@ -171,7 +171,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
     }
 
     let response = http_service_announce_handler(request, ip, data.as_ref().clone(), None).await;
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         info!("[PERF] http_service_announce_key: {:?}", start.elapsed());
     }
     response
@@ -182,14 +182,14 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
     data.update_stats(StatsEvent::TestCounter, 1).await;
     let stat_test_counter = data.get_stats().await.test_counter;
     let start = Instant::now();
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         data.set_stats(StatsEvent::TestCounter, 0).await;
     }
 
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_announce_userkey: {:?}", start.elapsed());
             }
             return result;
@@ -203,7 +203,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
     }
 
     if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        if stat_test_counter > 1000 {
+        if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
             info!("[PERF] http_service_announce_userkey: {:?}", start.elapsed());
         }
         return result;
@@ -213,7 +213,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
         let key = path.clone().0;
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
         if let Some(value) = key_check {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_announce_userkey: {:?}", start.elapsed());
             }
             return value;
@@ -224,7 +224,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
         let user_key = path.clone().1;
         let user_key_check = http_service_check_user_key_validation(data.as_ref().clone(), user_key.clone()).await;
         if user_key_check.is_none() {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_announce_userkey: {:?}", start.elapsed());
             }
             return http_service_announce_handler(request, ip, data.as_ref().clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap())).await;
@@ -232,7 +232,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
     }
 
     let response = http_service_announce_handler(request, ip, data.as_ref().clone(), None).await;
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         info!("[PERF] http_service_announce_userkey: {:?}", start.elapsed());
     }
     response
@@ -243,14 +243,14 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentT
     data.update_stats(StatsEvent::TestCounter, 1).await;
     let stat_test_counter = data.get_stats().await.test_counter;
     let start = Instant::now();
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         data.set_stats(StatsEvent::TestCounter, 0).await;
     }
 
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_announce: {:?}", start.elapsed());
             }
             return result;
@@ -266,14 +266,14 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentT
     }
 
     if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        if stat_test_counter > 1000 {
+        if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
             info!("[PERF] http_service_announce: {:?}", start.elapsed());
         }
         return result;
     }
 
     if data.config.keys {
-        if stat_test_counter > 1000 {
+        if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
             info!("[PERF] http_service_announce: {:?}", start.elapsed());
         }
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -282,7 +282,7 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentT
     }
 
     let response = http_service_announce_handler(request, ip, data.as_ref().clone(), None).await;
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         info!("[PERF] http_service_announce: {:?}", start.elapsed());
     }
     response
@@ -398,14 +398,14 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
     data.update_stats(StatsEvent::TestCounter, 1).await;
     let stat_test_counter = data.get_stats().await.test_counter;
     let start = Instant::now();
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         data.set_stats(StatsEvent::TestCounter, 0).await;
     }
 
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_scrape_key: {:?}", start.elapsed());
             }
             return result;
@@ -421,7 +421,7 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
     }
 
     if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        if stat_test_counter > 1000 {
+        if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
             info!("[PERF] http_service_scrape_key: {:?}", start.elapsed());
         }
         return result;
@@ -431,7 +431,7 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
         let key = path.into_inner();
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
         if let Some(value) = key_check {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_scrape_key: {:?}", start.elapsed());
             }
             return value;
@@ -439,7 +439,7 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
     }
 
     let response = http_service_scrape_handler(request, data.as_ref().clone()).await;
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         info!("[PERF] http_service_scrape_key: {:?}", start.elapsed());
     }
     response
@@ -491,14 +491,14 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<TorrentTra
     data.update_stats(StatsEvent::TestCounter, 1).await;
     let stat_test_counter = data.get_stats().await.test_counter;
     let start = Instant::now();
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         data.set_stats(StatsEvent::TestCounter, 0).await;
     }
 
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_scrape: {:?}", start.elapsed());
             }
             return result;
@@ -514,14 +514,14 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<TorrentTra
     }
 
     if let Some(result) = http_service_maintenance_mode_check(data.as_ref().clone()).await {
-        if stat_test_counter > 1000 {
+        if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
             info!("[PERF] http_service_scrape: {:?}", start.elapsed());
         }
         return result;
     }
 
     let response = http_service_scrape_handler(request, data.as_ref().clone()).await;
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         info!("[PERF] http_service_scrape: {:?}", start.elapsed());
     }
     response
@@ -532,14 +532,14 @@ pub async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<To
     data.update_stats(StatsEvent::TestCounter, 1).await;
     let stat_test_counter = data.get_stats().await.test_counter;
     let start = Instant::now();
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         data.set_stats(StatsEvent::TestCounter, 0).await;
     }
 
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => ip,
         Err(result) => {
-            if stat_test_counter > 1000 {
+            if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
                 info!("[PERF] http_service_not_found: {:?}", start.elapsed());
             }
             return result;
@@ -551,7 +551,7 @@ pub async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<To
     let response = HttpResponse::NotFound().content_type(ContentType::plaintext()).body(std::str::from_utf8(&ben_map! {
             "failure reason" => ben_bytes!("unknown request")
         }.encode()).unwrap().to_string());
-    if stat_test_counter > 1000 {
+    if stat_test_counter > data.config.log_perf_count.unwrap_or(10000) as i64 {
         info!("[PERF] http_service_not_found: {:?}", start.elapsed());
     }
     response
