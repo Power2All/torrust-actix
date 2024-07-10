@@ -51,6 +51,7 @@ impl TorrentTracker {
                 udp6_connections_handled: AtomicI64::new(0),
                 udp6_announces_handled: AtomicI64::new(0),
                 udp6_scrapes_handled: AtomicI64::new(0),
+                test_counter: AtomicI64::new(0),
             }),
             torrents_whitelist: Arc::new(SkipMap::new()),
             torrents_blacklist: Arc::new(SkipMap::new()),
