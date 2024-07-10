@@ -14,8 +14,6 @@ impl TorrentTracker {
         debug!("[DEBUG] Calling get_torrent");
         let mut torrent = match self.get_torrent(info_hash).await {
             None => {
-                debug!("[DEBUG] Calling add_torrent");
-                self.add_torrent(info_hash, TorrentEntry::new(), persistent).await;
                 TorrentEntry::new()
             }
             Some(torrent) => {

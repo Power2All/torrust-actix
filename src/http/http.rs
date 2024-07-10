@@ -257,8 +257,6 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentT
         }
     };
 
-    debug!("[DEBUG] Request from {}: Announce", ip);
-
     if ip.is_ipv4() {
         data.update_stats(StatsEvent::Tcp4AnnouncesHandled, 1).await;
     } else {

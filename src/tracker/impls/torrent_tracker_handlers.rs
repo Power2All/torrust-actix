@@ -242,17 +242,6 @@ impl TorrentTracker {
 
     pub async fn handle_announce(&self, data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
     {
-        debug!("[DEBUG] Calling get_torrent");
-        if data.get_torrent(announce_query.info_hash).await.is_none() {
-            if data.config.persistence {
-                debug!("[DEBUG] Calling add_torrent");
-                data.add_torrent(announce_query.info_hash, TorrentEntry::new(), true).await;
-            } else {
-                debug!("[DEBUG] Calling add_torrent");
-                data.add_torrent(announce_query.info_hash, TorrentEntry::new(), false).await;
-            }
-        }
-
         let mut torrent_peer = TorrentPeer {
             peer_id: announce_query.peer_id,
             peer_addr: SocketAddr::new(announce_query.remote_addr, announce_query.port),
