@@ -13,7 +13,6 @@ impl TorrentSharding {
     {
         let output = SkipMap::new();
         for count in 0u8..255u8 {
-            info!("{:#?}", count);
             output.insert(count, BTreeMap::new());
         }
         output.insert(255u8, BTreeMap::new());
@@ -54,7 +53,6 @@ impl TorrentSharding {
                         shard_unpacked.insert(info_hash, torrent_entry);
                     }
                 }
-                info!("Inserting {} into shards", info_hash.0[0]);
                 self.shards.insert(info_hash.0[0], shard_unpacked);
             }
         }
