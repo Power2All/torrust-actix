@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
+use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use log::info;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -22,10 +23,12 @@ impl TorrentSharding {
     }
 
     pub fn get(&self, info_hash: &InfoHash) -> Option<TorrentEntry> {
-        info!("{:#?}", &info_hash.0[0]);
-        let binding = self.shards.get(&info_hash.0[0]).unwrap();
-        let shard = binding.value();
-        shard.get(info_hash).cloned()
+        match self.shards.get(&info_hash.0[0]) {
+            None => { None }
+            Some(shard) => {
+                shard.value().get(info_hash).cloned()
+            }
+        }
     }
 
     pub fn get_shard(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry>
@@ -35,18 +38,41 @@ impl TorrentSharding {
     }
 
     pub fn insert(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) {
-        let mut shard = self.shards.get(&info_hash.0[0]).unwrap().value().clone();
-        shard.insert(info_hash, torrent_entry);
-        self.shards.insert(info_hash.0[0], shard);
-        self.length.fetch_add(1i64, Ordering::SeqCst);
+        match self.shards.get(&info_hash.0[0]) {
+            None => {
+                panic!("Unable to get shard {}", &info_hash.0[0]);
+            }
+            Some(shard) => {
+                let mut shard_unpacked = shard.value().clone();
+                match shard_unpacked.get(&info_hash) {
+                    None => {
+                        shard_unpacked.insert(info_hash, torrent_entry);
+                        self.length.fetch_add(1i64, Ordering::SeqCst);
+                    }
+                    Some(_) => {
+                        shard_unpacked.insert(info_hash, torrent_entry);
+                    }
+                }
+                self.shards.insert(info_hash.0[0], shard_unpacked);
+            }
+        }
     }
 
     pub fn remove(&self, info_hash: InfoHash) -> Option<TorrentEntry> {
-        let mut shard = self.shards.get(&info_hash.0[0]).unwrap().value().clone();
-        let removed = shard.remove(&info_hash);
-        if removed.is_some() { self.length.fetch_sub(1i64, Ordering::SeqCst); }
-        self.shards.insert(info_hash.0[0], shard);
-        removed
+        match self.shards.get(&info_hash.0[0]) {
+            None => {
+                panic!("Unable to get shard {}", &info_hash.0[0]);
+            }
+            Some(shard) => {
+                let mut shard_unpacked = shard.value().clone();
+                let removed = shard_unpacked.remove(&info_hash);
+                if removed.is_some() {
+                    self.length.fetch_sub(1i64, Ordering::SeqCst);
+                }
+                self.shards.insert(info_hash.0[0], shard_unpacked);
+                removed
+            }
+        }
     }
 
     #[allow(clippy::len_without_is_empty)]
