@@ -53,6 +53,7 @@ pub async fn http_service(
     keep_alive: u64,
     client_request_timeout: u64,
     client_disconnect_timeout: u64,
+    threads: u64,
     ssl: (bool, Option<String>, Option<String>) /* 0: ssl enabled, 1: key, 2: cert */
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
@@ -91,6 +92,7 @@ pub async fn http_service(
             .keep_alive(Duration::from_secs(keep_alive))
             .client_request_timeout(Duration::from_secs(client_request_timeout))
             .client_disconnect_timeout(Duration::from_secs(client_disconnect_timeout))
+            .workers(threads as usize)
             .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
             .unwrap()
             .disable_signals()
@@ -108,6 +110,7 @@ pub async fn http_service(
         .keep_alive(Duration::from_secs(keep_alive))
         .client_request_timeout(Duration::from_secs(client_request_timeout))
         .client_disconnect_timeout(Duration::from_secs(client_disconnect_timeout))
+        .workers(threads as usize)
         .bind((addr.ip(), addr.port()))
         .unwrap()
         .disable_signals()
@@ -367,7 +370,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     "complete" => ben_int!(torrent_entry.seeds_count as i64),
                     "incomplete" => ben_int!(torrent_entry.peers_count as i64),
                     "downloaded" => ben_int!(torrent_entry.completed),
-                    "peers" => ben_bytes!(peers.clone())
+                    "peers" => ben_bytes!(peers)
                 }.encode())
         } else {
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -376,7 +379,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     "complete" => ben_int!(torrent_entry.seeds_count as i64),
                     "incomplete" => ben_int!(torrent_entry.peers_count as i64),
                     "downloaded" => ben_int!(torrent_entry.completed),
-                    "peers6" => ben_bytes!(peers.clone())
+                    "peers6" => ben_bytes!(peers)
                 }.encode())
         };
     }
@@ -417,7 +420,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 "complete" => ben_int!(torrent_entry.seeds_count as i64),
                 "incomplete" => ben_int!(torrent_entry.peers_count as i64),
                 "downloaded" => ben_int!(torrent_entry.completed),
-                "peers" => peers_list.clone()
+                "peers" => peers_list
             }.encode())
     } else {
         HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -426,7 +429,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 "complete" => ben_int!(torrent_entry.seeds_count as i64),
                 "incomplete" => ben_int!(torrent_entry.peers_count as i64),
                 "downloaded" => ben_int!(torrent_entry.completed),
-                "peers6" => peers_list.clone()
+                "peers6" => peers_list
             }.encode())
     }
 }

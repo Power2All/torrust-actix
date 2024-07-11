@@ -59,6 +59,7 @@ pub async fn api_service(
     keep_alive: u64,
     client_request_timeout: u64,
     client_disconnect_timeout: u64,
+    threads: u64,
     ssl: (bool, Option<String>, Option<String>) /* 0: ssl enabled, 1: cert, 2: key */
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
@@ -93,6 +94,7 @@ pub async fn api_service(
             .keep_alive(Duration::from_secs(keep_alive))
             .client_request_timeout(Duration::from_secs(client_request_timeout))
             .client_disconnect_timeout(Duration::from_secs(client_disconnect_timeout))
+            .workers(threads as usize)
             .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
             .unwrap()
             .disable_signals()
@@ -110,6 +112,7 @@ pub async fn api_service(
         .keep_alive(Duration::from_secs(keep_alive))
         .client_request_timeout(Duration::from_secs(client_request_timeout))
         .client_disconnect_timeout(Duration::from_secs(client_disconnect_timeout))
+        .workers(threads as usize)
         .bind((addr.ip(), addr.port()))
         .unwrap()
         .disable_signals()

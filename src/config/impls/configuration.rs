@@ -21,6 +21,7 @@ impl Configuration {
             HttpTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:6969"),
+                threads: Some(0),
                 ssl: false,
                 ssl_key: String::from(""),
                 ssl_cert: String::from(""),
@@ -30,6 +31,7 @@ impl Configuration {
             ApiTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:8080"),
+                threads: Some(0),
                 ssl: false,
                 ssl_key: String::from(""),
                 ssl_cert: String::from(""),

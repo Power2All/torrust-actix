@@ -55,7 +55,8 @@ async fn main() -> std::io::Result<()>
                     tracker.config.api_keep_alive,
                     tracker.config.api_request_timeout,
                     tracker.config.api_disconnect_timeout,
-                (
+                    api_server_object.threads.unwrap_or(std::thread::available_parallelism().unwrap().get() as u64),
+                    (
                         api_server_object.ssl,
                         Some(api_server_object.ssl_key.clone()),
                         Some(api_server_object.ssl_cert.clone())
@@ -70,6 +71,7 @@ async fn main() -> std::io::Result<()>
                     tracker.config.api_keep_alive,
                     tracker.config.api_request_timeout,
                     tracker.config.api_disconnect_timeout,
+                    api_server_object.threads.unwrap_or(std::thread::available_parallelism().unwrap().get() as u64),
                     (
                         api_server_object.ssl,
                         None,
@@ -107,6 +109,7 @@ async fn main() -> std::io::Result<()>
                     tracker.config.http_keep_alive,
                     tracker.config.http_request_timeout,
                     tracker.config.http_disconnect_timeout,
+                    http_server_object.threads.unwrap_or(std::thread::available_parallelism().unwrap().get() as u64),
                     (
                         http_server_object.ssl,
                         Some(http_server_object.ssl_key.clone()),
@@ -122,6 +125,7 @@ async fn main() -> std::io::Result<()>
                     tracker.config.http_keep_alive,
                     tracker.config.http_request_timeout,
                     tracker.config.http_disconnect_timeout,
+                    http_server_object.threads.unwrap_or(std::thread::available_parallelism().unwrap().get() as u64),
                     (
                         http_server_object.ssl,
                         None,
