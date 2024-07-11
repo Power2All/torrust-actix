@@ -5,6 +5,7 @@ use crossbeam_skiplist::SkipMap;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
+use crate::tracker::structs::torrent_sharding::TorrentSharding;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
@@ -12,7 +13,7 @@ impl TorrentTracker {
     {
         TorrentTracker {
             config: config.clone(),
-            torrents: Arc::new(SkipMap::new()),
+            torrents_sharding: Arc::new(TorrentSharding::default()),
             torrents_updates: Arc::new(SkipMap::new()),
             torrents_shadow: Arc::new(SkipMap::new()),
             stats: Arc::new(StatsAtomics {
