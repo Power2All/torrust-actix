@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::process::exit;
 use std::sync::atomic::Ordering;
 use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
@@ -40,7 +41,7 @@ impl TorrentSharding {
     pub fn insert(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) {
         match self.shards.get(&info_hash.0[0]) {
             None => {
-                panic!("Unable to get shard {}", &info_hash.0[0]);
+                info!("Unable to get shard {}", &info_hash.0[0]);
             }
             Some(shard) => {
                 let mut shard_unpacked = shard.value().clone();
