@@ -53,6 +53,7 @@ impl TorrentSharding {
                         shard_unpacked.insert(info_hash, torrent_entry);
                     }
                 }
+                info!("Inserting {} into shards", info_hash.0[0]);
                 self.shards.insert(info_hash.0[0], shard_unpacked);
             }
         }
