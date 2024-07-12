@@ -90,27 +90,44 @@ impl TorrentTracker {
 
     pub async fn torrent_peers_cleanup(&self, peer_timeout: Duration, persistent: bool)
     {
-        let torrents_arc = self.torrents_sharding.clone();
+        let torrents_arc = self.torrents.clone();
+        let mut start: usize = 0;
+        let size: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
         let mut removed_peers = 0u64;
-        let mut remove_peers = vec![];
-        for shard in 0..255 {
-            info!("[PEERS CLEANUP] Scanning shard {}", shard);
-            let shard = torrents_arc.get_shard(shard);
-            for (info_hash, torrent_entry) in shard {
-                for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
-                    if torrent_peer.updated.elapsed() > peer_timeout {
-                        remove_peers.push((info_hash, *peer_id));
-                    }
+        loop {
+            if start > torrents_arc.len() {
+                break;
+            }
+            info!("[PEERS CLEANUP] Scanning torrents from {} to  {}", start, (start + size));
+            let mut torrent_index = vec![];
+            for torrent in torrents_arc.iter().skip(start) {
+                torrent_index.push(*torrent.key());
+                if torrent_index.len() == size {
+                    break;
                 }
-                for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
-                    if torrent_peer.updated.elapsed() > peer_timeout {
-                        remove_peers.push((info_hash, *peer_id));
+            }
+            let mut remove_peers = vec![];
+            for (info_hash, torrent_entry) in self.get_torrents(torrent_index).await {
+                match torrent_entry {
+                    None => {}
+                    Some(torrent) => {
+                        for (peer_id, torrent_peer) in torrent.seeds.iter() {
+                            if torrent_peer.updated.elapsed() > peer_timeout {
+                                remove_peers.push((info_hash, *peer_id));
+                            }
+                        }
+                        for (peer_id, torrent_peer) in torrent.peers.iter() {
+                            if torrent_peer.updated.elapsed() > peer_timeout {
+                                remove_peers.push((info_hash, *peer_id));
+                            }
+                        }
                     }
                 }
             }
-        }
-        if !remove_peers.is_empty() {
-            removed_peers += self.remove_torrent_peers(remove_peers, persistent).await.len() as u64;
+            if !remove_peers.is_empty() {
+                removed_peers += self.remove_torrent_peers(remove_peers, persistent).await.len() as u64;
+            }
+            start += size - 100;
         }
         info!("[PEERS CLEANUP] Removed {} peers", removed_peers);
     }

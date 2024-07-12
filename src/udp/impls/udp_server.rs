@@ -54,7 +54,7 @@ impl UdpServer {
             let udp_sock = socket.local_addr().unwrap();
             tokio::select! {
                 _ = rx.changed() => {
-                    info!("Stopping UDP szerver: {}...", udp_sock);
+                    info!("Stopping UDP server: {}...", udp_sock);
                     break;
                 }
                 Ok((valid_bytes, remote_addr)) = socket.recv_from(&mut data) => {
