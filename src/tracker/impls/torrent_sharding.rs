@@ -14,7 +14,6 @@ impl TorrentSharding {
             info!("{:#?}", count);
             output.insert(count, BTreeMap::new());
         }
-        output.insert(255u8, BTreeMap::new());
         TorrentSharding {
             length: Default::default(),
             shards: output
