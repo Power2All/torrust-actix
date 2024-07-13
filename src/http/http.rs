@@ -6,6 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use actix_cors::Cors;
 use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
@@ -331,10 +332,11 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     };
 
     let mut peer_count = 0;
+    let (seeds_list_map, peers_list_map) = data.get_torrent_peers(announce_unwrapped.info_hash).await;
     if announce_unwrapped.clone().compact {
         let mut peers: Vec<u8> = Vec::new();
         if announce_unwrapped.clone().left != 0 {
-            for (_peer_id, torrent_peer) in torrent_entry.seeds.iter() {
+            for (_peer_id, torrent_peer) in seeds_list_map.iter() {
                 if peer_count == data.config.peers_returned.unwrap_or(72) {
                     break;
                 }
@@ -350,7 +352,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 peer_count += 1;
             }
         }
-        for (_peer_id, torrent_peer) in torrent_entry.peers.iter() {
+        for (_peer_id, torrent_peer) in peers_list_map.iter() {
             if peer_count == data.config.peers_returned.unwrap_or(72) {
                 break;
             }
@@ -369,18 +371,18 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                     "interval" => ben_int!(data.config.interval.unwrap() as i64),
                     "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
-                    "complete" => ben_int!(torrent_entry.seeds_count as i64),
-                    "incomplete" => ben_int!(torrent_entry.peers_count as i64),
-                    "downloaded" => ben_int!(torrent_entry.completed),
+                    "complete" => ben_int!(torrent_entry.seeds.load(Ordering::SeqCst) as i64),
+                    "incomplete" => ben_int!(torrent_entry.peers.load(Ordering::SeqCst) as i64),
+                    "downloaded" => ben_int!(torrent_entry.completed.load(Ordering::SeqCst) as i64),
                     "peers" => ben_bytes!(peers)
                 }.encode())
         } else {
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                     "interval" => ben_int!(data.config.interval.unwrap() as i64),
                     "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
-                    "complete" => ben_int!(torrent_entry.seeds_count as i64),
-                    "incomplete" => ben_int!(torrent_entry.peers_count as i64),
-                    "downloaded" => ben_int!(torrent_entry.completed),
+                    "complete" => ben_int!(torrent_entry.seeds.load(Ordering::SeqCst) as i64),
+                    "incomplete" => ben_int!(torrent_entry.peers.load(Ordering::SeqCst) as i64),
+                    "downloaded" => ben_int!(torrent_entry.completed.load(Ordering::SeqCst) as i64),
                     "peers6" => ben_bytes!(peers)
                 }.encode())
         };
@@ -388,7 +390,36 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
     let mut peers_list = ben_list!();
     let peers_list_mut = peers_list.list_mut().unwrap();
-    for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
+    if announce_unwrapped.left != 0 {
+        for (peer_id, torrent_peer) in seeds_list_map.iter() {
+            if peer_count == data.config.peers_returned.unwrap_or(72) {
+                break;
+            }
+            match torrent_peer.peer_addr.ip() {
+                IpAddr::V4(_) => {
+                    if announce_unwrapped.clone().remote_addr.is_ipv4() {
+                        peers_list_mut.push(ben_map! {
+                        "peer id" => ben_bytes!(peer_id.clone().to_string()),
+                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
+                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                    });
+                        peer_count += 1;
+                    }
+                },
+                IpAddr::V6(_) => {
+                    if announce_unwrapped.clone().remote_addr.is_ipv6() {
+                        peers_list_mut.push(ben_map! {
+                        "peer id" => ben_bytes!(peer_id.clone().to_string()),
+                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
+                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                    });
+                        peer_count += 1;
+                    }
+                }
+            }
+        }
+    }
+    for (peer_id, torrent_peer) in peers_list_map.iter() {
         if peer_count == data.config.peers_returned.unwrap_or(72) {
             break;
         }
@@ -419,18 +450,18 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "interval" => ben_int!(data.config.interval.unwrap() as i64),
                 "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
-                "complete" => ben_int!(torrent_entry.seeds_count as i64),
-                "incomplete" => ben_int!(torrent_entry.peers_count as i64),
-                "downloaded" => ben_int!(torrent_entry.completed),
+                "complete" => ben_int!(torrent_entry.seeds.load(Ordering::SeqCst) as i64),
+                "incomplete" => ben_int!(torrent_entry.peers.load(Ordering::SeqCst) as i64),
+                "downloaded" => ben_int!(torrent_entry.completed.load(Ordering::SeqCst) as i64),
                 "peers" => peers_list
             }.encode())
     } else {
         HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "interval" => ben_int!(data.config.interval.unwrap() as i64),
                 "min interval" => ben_int!(data.config.interval_minimum.unwrap() as i64),
-                "complete" => ben_int!(torrent_entry.seeds_count as i64),
-                "incomplete" => ben_int!(torrent_entry.peers_count as i64),
-                "downloaded" => ben_int!(torrent_entry.completed),
+                "complete" => ben_int!(torrent_entry.seeds.load(Ordering::SeqCst) as i64),
+                "incomplete" => ben_int!(torrent_entry.peers.load(Ordering::SeqCst) as i64),
+                "downloaded" => ben_int!(torrent_entry.completed.load(Ordering::SeqCst) as i64),
                 "peers6" => peers_list
             }.encode())
     }
@@ -508,11 +539,11 @@ pub async fn http_service_scrape_handler(request: HttpRequest, data: Arc<Torrent
             let data_scrape = data.handle_scrape(data.clone(), e.clone()).await;
             let mut scrape_list = ben_map!();
             let scrape_list_mut = scrape_list.dict_mut().unwrap();
-            for (key, value) in data_scrape.iter() {
-                scrape_list_mut.insert(Cow::from(key.0.to_vec()), ben_map! {
-                    "complete" => ben_int!(value.seeds_count as i64),
-                    "downloaded" => ben_int!(value.completed),
-                    "incomplete" => ben_int!(value.peers_count as i64)
+            for (info_hash, torrent_entry) in data_scrape.iter() {
+                scrape_list_mut.insert(Cow::from(info_hash.0.to_vec()), ben_map! {
+                    "complete" => ben_int!(torrent_entry.seeds.load(Ordering::SeqCst) as i64),
+                    "downloaded" => ben_int!(torrent_entry.completed.load(Ordering::SeqCst) as i64),
+                    "incomplete" => ben_int!(torrent_entry.peers.load(Ordering::SeqCst) as i64)
                 });
             }
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {

@@ -1,6 +1,7 @@
 use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::{Instant, SystemTime};
 use log::{debug, info};
 use tokio::net::UdpSocket;
@@ -8,7 +9,6 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 use crate::udp::enums::request::Request;
@@ -168,13 +168,6 @@ impl UdpServer {
             tracker.set_stats(StatsEvent::TestCounterUdp, 0).await;
         }
 
-        if tracker.get_torrent(InfoHash(request.info_hash.0)).await.is_none() {
-            if tracker.config.persistence {
-                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntry::new(), true).await;
-            } else {
-                tracker.add_torrent(InfoHash(request.info_hash.0), TorrentEntry::new(), false).await;
-            }
-        }
         if tracker.config.whitelist && !tracker.check_whitelist(InfoHash(request.info_hash.0)).await {
             debug!("[UDP ERROR] Torrent Not Whitelisted");
             if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
@@ -261,7 +254,7 @@ impl UdpServer {
                 }
             }
         }
-        match tracker.get_torrent(InfoHash(request.info_hash.0)).await {
+        match tracker.get_torrent(&InfoHash(request.info_hash.0)).await {
             None => {
                 debug!("[UDP ERROR] Unknown InfoHash");
                 if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
@@ -294,11 +287,12 @@ impl UdpServer {
                 return Err(ServerError::InternalServerError);
             }
         };
+        let (seeds_list_map, peers_list_map) = tracker.get_torrent_peers(request.info_hash).await;
         let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::new();
         let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::new();
         let mut count = 0;
         if request.bytes_left.0 as u64 != 0 {
-            for (_, torrent_peer) in torrent.seeds.iter() {
+            for (_, torrent_peer) in seeds_list_map.iter() {
                 if count > 72 {
                     break;
                 }
@@ -317,7 +311,7 @@ impl UdpServer {
                 count += 1;
             }
         } else {
-            for (_, torrent_peer) in torrent.peers.iter() {
+            for (_, torrent_peer) in peers_list_map.iter() {
                 if count > 72 {
                     break;
                 }
@@ -339,16 +333,16 @@ impl UdpServer {
         let mut announce_response = Response::from(AnnounceResponse {
             transaction_id: request.transaction_id,
             announce_interval: AnnounceInterval(tracker.config.interval.unwrap() as i32),
-            leechers: NumberOfPeers(torrent.peers_count as i32),
-            seeders: NumberOfPeers(torrent.seeds_count as i32),
+            leechers: NumberOfPeers(torrent.peers.load(Ordering::SeqCst) as i32),
+            seeders: NumberOfPeers(torrent.seeds.load(Ordering::SeqCst) as i32),
             peers,
         });
         if remote_addr.is_ipv6() {
             announce_response = Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
                 announce_interval: AnnounceInterval(tracker.config.interval.unwrap() as i32),
-                leechers: NumberOfPeers(torrent.peers_count as i32),
-                seeders: NumberOfPeers(torrent.seeds_count as i32),
+                leechers: NumberOfPeers(torrent.peers.load(Ordering::SeqCst) as i32),
+                seeders: NumberOfPeers(torrent.seeds.load(Ordering::SeqCst) as i32),
                 peers: peers6
             });
         }
@@ -374,7 +368,7 @@ impl UdpServer {
         let mut torrent_stats: Vec<TorrentScrapeStatistics> = Vec::new();
         for info_hash in request.info_hashes.iter() {
             let info_hash = InfoHash(info_hash.0);
-            let scrape_entry = match tracker.get_torrent(InfoHash(info_hash.0)).await {
+            let scrape_entry = match tracker.get_torrent(&InfoHash(info_hash.0)).await {
                 None => {
                     TorrentScrapeStatistics {
                         seeders: NumberOfPeers(0),
@@ -384,9 +378,9 @@ impl UdpServer {
                 }
                 Some(torrent_info) => {
                     TorrentScrapeStatistics {
-                        seeders: NumberOfPeers(torrent_info.seeds_count as i32),
-                        completed: NumberOfDownloads(torrent_info.completed as i32),
-                        leechers: NumberOfPeers(torrent_info.peers_count as i32),
+                        seeders: NumberOfPeers(torrent_info.seeds.load(Ordering::SeqCst) as i32),
+                        completed: NumberOfDownloads(torrent_info.completed.load(Ordering::SeqCst) as i32),
+                        leechers: NumberOfPeers(torrent_info.peers.load(Ordering::SeqCst) as i32),
                     }
                 }
             };

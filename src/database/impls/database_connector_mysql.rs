@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 use futures_util::TryStreamExt;
 use log::{error, info};
@@ -50,7 +51,6 @@ impl DatabaseConnectorMySQL {
         let mut counter = 0u64;
         let mut total_torrents = 0u64;
         let mut total_completes = 0u64;
-
         let query = format!(
             "SELECT `{}`,`{}` FROM `{}`",
             tracker.config.db_structure.table_torrents_info_hash,
@@ -58,31 +58,25 @@ impl DatabaseConnectorMySQL {
             tracker.config.db_structure.db_torrents
         );
         let mut rows = sqlx::query(query.as_str()).fetch(&self.pool);
-        let mut torrents_parsing = HashMap::new();
         while let Some(result) = rows.try_next().await? {
-            if counter == 100000 {
-                tracker.add_torrents(torrents_parsing.clone(), false).await;
-                torrents_parsing.clear();
-                info!("[MySQL] Loaded {} torrents...", total_torrents);
-                counter = 0;
-            }
             let info_hash_data: &[u8] = result.get(tracker.config.db_structure.table_torrents_info_hash.clone().as_str());
             let info_hash_decoded = hex::decode(info_hash_data).unwrap();
             let completed_data: i64 = result.get(tracker.config.db_structure.table_torrents_completed.clone().as_str());
             let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-            let mut torrent_entry = TorrentEntry::new();
-            torrent_entry.completed = completed_data;
-            torrents_parsing.insert(InfoHash(info_hash), torrent_entry);
+            TorrentTracker::add_torrent(tracker.clone(), InfoHash(info_hash), TorrentEntry {
+                seeds: AtomicU64::new(0),
+                peers: AtomicU64::new(0),
+                completed: AtomicU64::new(completed_data as u64),
+                updated: std::time::Instant::now()
+            }, false, false).await;
             counter += 1;
             total_torrents += 1;
             total_completes += completed_data as u64;
+            if counter == 100000 {
+                info!("[MySQL] Loaded {} torrents...", total_torrents);
+                counter = 0;
+            }
         }
-
-        if counter != 0 {
-            tracker.add_torrents(torrents_parsing.clone(), false).await;
-            torrents_parsing.clear();
-        }
-
         info!("[MySQL] Loaded {} torrents...", total_torrents);
         Ok((total_torrents, total_completes))
     }

@@ -253,7 +253,6 @@ impl TorrentTracker {
             left: NumberOfBytes(announce_query.left as i64),
             event: AnnounceEvent::None,
         };
-
         match announce_query.event {
             AnnounceEvent::Started | AnnounceEvent::None => {
                 torrent_peer.event = AnnounceEvent::Started;
@@ -275,7 +274,12 @@ impl TorrentTracker {
                         data.add_user(user_key.unwrap(), user).await;
                     }
                 }
-                Ok((torrent_peer, torrent_entry))
+                Ok((torrent_peer, TorrentEntry {
+                    seeds: torrent_entry.seeds,
+                    peers: torrent_entry.peers,
+                    completed: torrent_entry.completed,
+                    updated: std::time::Instant::now()
+                }))
             }
             AnnounceEvent::Stopped => {
                 torrent_peer.event = AnnounceEvent::Stopped;
@@ -356,7 +360,7 @@ impl TorrentTracker {
         let mut return_data = BTreeMap::new();
         for hash in scrape_query.info_hash.iter() {
             debug!("[DEBUG] Calling get_torrent");
-            match data.get_torrent(*hash).await {
+            match data.get_torrent(hash).await {
                 None => { return_data.insert(*hash, TorrentEntry::new()); }
                 Some(result) => {
                     return_data.insert(*hash, result);

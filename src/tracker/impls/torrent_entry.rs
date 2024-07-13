@@ -1,14 +1,12 @@
-use std::collections::BTreeMap;
+use std::sync::atomic::AtomicU64;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 
 impl TorrentEntry {
     pub fn new() -> TorrentEntry {
         TorrentEntry {
-            peers: BTreeMap::new(),
-            peers_count: 0,
-            seeds: BTreeMap::new(),
-            seeds_count: 0,
-            completed: 0,
+            peers: AtomicU64::new(0),
+            seeds: AtomicU64::new(0),
+            completed: AtomicU64::new(0),
             updated: std::time::Instant::now(),
         }
     }

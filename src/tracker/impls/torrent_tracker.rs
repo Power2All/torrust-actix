@@ -12,7 +12,9 @@ impl TorrentTracker {
     {
         TorrentTracker {
             config: config.clone(),
-            torrents: Arc::new(SkipMap::new()),
+            torrents_map: Arc::new(SkipMap::new()),
+            seeds_map: Arc::new(SkipMap::new()),
+            peers_map: Arc::new(SkipMap::new()),
             torrents_updates: Arc::new(SkipMap::new()),
             torrents_shadow: Arc::new(SkipMap::new()),
             stats: Arc::new(StatsAtomics {
