@@ -9,6 +9,7 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
+use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 use crate::udp::enums::request::Request;
@@ -67,14 +68,16 @@ impl UdpServer {
                     let payload_cloned = payload.clone();
                     let tracker_cloned = tracker.clone();
                     let socket_cloned = socket.clone();
-                    let response = self.handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
-                    self.send_response(socket_cloned, remote_addr_cloned, response).await;
+                    tokio::spawn(async move {
+                        let response = UdpServer::handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
+                        UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
+                    });
                 }
             }
         }
     }
 
-    pub async fn send_response(&self, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
+    pub async fn send_response(socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
         debug!("sending response to: {:?}", &remote_addr);
 
         let buffer = vec![0u8; MAX_PACKET_SIZE];
@@ -86,7 +89,7 @@ impl UdpServer {
                 let inner = cursor.get_ref();
 
                 debug!("{:?}", &inner[..position]);
-                self.send_packet(socket, &remote_addr, &inner[..position]).await;
+                UdpServer::send_packet(socket, &remote_addr, &inner[..position]).await;
             }
             Err(_) => {
                 debug!("could not write response to bytes.");
@@ -94,18 +97,18 @@ impl UdpServer {
         }
     }
 
-    pub async fn send_packet(&self, socket: Arc<UdpSocket>, remote_addr: &SocketAddr, payload: &[u8]) {
+    pub async fn send_packet(socket: Arc<UdpSocket>, remote_addr: &SocketAddr, payload: &[u8]) {
         let _ = socket.send_to(payload, remote_addr).await;
     }
 
-    pub async fn get_connection_id(&self, remote_address: &SocketAddr) -> ConnectionId {
+    pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
         match SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
             Ok(duration) => ConnectionId(((duration.as_secs() / 3600) | ((remote_address.port() as u64) << 36)) as i64),
             Err(_) => ConnectionId(0x7FFFFFFFFFFFFFFF)
         }
     }
 
-    pub async fn handle_packet(&self, remote_addr: SocketAddr, payload: Vec<u8>, tracker: Arc<TorrentTracker>) -> Response {
+    pub async fn handle_packet(remote_addr: SocketAddr, payload: Vec<u8>, tracker: Arc<TorrentTracker>) -> Response {
         match Request::from_bytes(&payload[..payload.len()], MAX_SCRAPE_TORRENTS).map_err(|_| ServerError::InternalServerError) {
             Ok(request) => {
                 let transaction_id = match &request {
@@ -120,31 +123,31 @@ impl UdpServer {
                     }
                 };
 
-                match self.handle_request(request, remote_addr, tracker).await {
+                match UdpServer::handle_request(request, remote_addr, tracker).await {
                     Ok(response) => response,
-                    Err(e) => self.handle_udp_error(e, transaction_id).await
+                    Err(e) => UdpServer::handle_udp_error(e, transaction_id).await
                 }
             }
-            Err(_) => self.handle_udp_error(ServerError::BadRequest, TransactionId(0)).await
+            Err(_) => UdpServer::handle_udp_error(ServerError::BadRequest, TransactionId(0)).await
         }
     }
 
-    pub async fn handle_request(&self, request: Request, remote_addr: SocketAddr, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+    pub async fn handle_request(request: Request, remote_addr: SocketAddr, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         match request {
             Request::Connect(connect_request) => {
-                self.handle_udp_connect(remote_addr, &connect_request, tracker).await
+                UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await
             }
             Request::Announce(announce_request) => {
-                self.handle_udp_announce(remote_addr, &announce_request, tracker).await
+                UdpServer::handle_udp_announce(remote_addr, &announce_request, tracker).await
             }
             Request::Scrape(scrape_request) => {
-                self.handle_udp_scrape(remote_addr, &scrape_request, tracker).await
+                UdpServer::handle_udp_scrape(remote_addr, &scrape_request, tracker).await
             }
         }
     }
 
-    pub async fn handle_udp_connect(&self, remote_addr: SocketAddr, request: &ConnectRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
-        let connection_id = self.get_connection_id(&remote_addr).await;
+    pub async fn handle_udp_connect(remote_addr: SocketAddr, request: &ConnectRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+        let connection_id = UdpServer::get_connection_id(&remote_addr).await;
         let response = Response::from(ConnectResponse {
             transaction_id: request.transaction_id,
             connection_id
@@ -160,7 +163,7 @@ impl UdpServer {
         Ok(response)
     }
 
-    pub async fn handle_udp_announce(&self, remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+    pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         tracker.update_stats(StatsEvent::TestCounterUdp, 1).await;
         let stat_test_counter = tracker.get_stats().await.test_counter_udp;
         let start = Instant::now();
@@ -254,16 +257,6 @@ impl UdpServer {
                 }
             }
         }
-        match tracker.get_torrent(&InfoHash(request.info_hash.0)).await {
-            None => {
-                debug!("[UDP ERROR] Unknown InfoHash");
-                if stat_test_counter > tracker.config.log_perf_count.unwrap_or(10000) as i64 {
-                    info!("[PERF UDP] handle_udp_announce: {:?}", start.elapsed());
-                }
-                return Err(ServerError::UnknownInfoHash);
-            }
-            Some(_) => {}
-        };
         let torrent = match tracker.handle_announce(tracker.clone(), AnnounceQueryRequest {
             info_hash: InfoHash(request.info_hash.0),
             peer_id: PeerId(request.peer_id.0),
@@ -357,7 +350,7 @@ impl UdpServer {
         Ok(announce_response)
     }
 
-    pub async fn handle_udp_scrape(&self, remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+    pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         tracker.update_stats(StatsEvent::TestCounterUdp, 1).await;
         let stat_test_counter = tracker.get_stats().await.test_counter_udp;
         let start = Instant::now();
@@ -400,7 +393,7 @@ impl UdpServer {
         }))
     }
 
-    pub async fn handle_udp_error(&self, e: ServerError, transaction_id: TransactionId) -> Response {
+    pub async fn handle_udp_error(e: ServerError, transaction_id: TransactionId) -> Response {
         let message = e.to_string();
         Response::from(ErrorResponse { transaction_id, message: message.into() })
     }
