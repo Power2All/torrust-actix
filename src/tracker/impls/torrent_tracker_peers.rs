@@ -1,151 +1,355 @@
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
-use concat_arrays::concat_arrays;
 use log::info;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
+use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    pub async fn get_torrent_peers(&self, info_hash: InfoHash) -> (HashMap<PeerId, TorrentPeer>, HashMap<PeerId, TorrentPeer>)
+    pub async fn get_torrent_peers(&self, info_hash: InfoHash, amount: u64, ip_type: TorrentPeersType, self_ip: Option<IpAddr>) -> TorrentPeers
     {
-        let mut return_data_seeds: HashMap<PeerId, TorrentPeer> = HashMap::new();
-        let return_data_peers = HashMap::new();
-        let seeds_map = self.seeds_map.clone();
-        let peers_map = self.peers_map.clone();
-        let start_range: [u8; 40] = concat_arrays!(info_hash.0, [0; 20]);
-        let end_range: [u8; 40] = concat_arrays!(info_hash.0, [255; 20]);
-        for seed in seeds_map.range(start_range..=end_range) {
-            return_data_seeds.insert(PeerId(*seed.key().last_chunk::<20>().unwrap()), seed.value().clone());
+        let mut torrent_peers = TorrentPeers {
+            seeds_ipv4: BTreeMap::new(),
+            seeds_ipv6: BTreeMap::new(),
+            peers_ipv4: BTreeMap::new(),
+            peers_ipv6: BTreeMap::new()
+        };
+        let map = self.torrents_map.clone();
+        let lock = map.read();
+        match lock.get(&info_hash) {
+            None => {
+                torrent_peers
+            }
+            Some(t) => {
+                match ip_type {
+                    TorrentPeersType::All => {
+                        let mut count_seeds_ipv4 = 0u64;
+                        let mut count_seeds_ipv6 = 0u64;
+                        let mut count_peers_ipv4 = 0u64;
+                        let mut count_peers_ipv6 = 0u64;
+                        for (peer_id, torrent_peer) in t.seeds.iter() {
+                            if amount != 0 && count_seeds_ipv4 == amount && count_seeds_ipv6 == amount {
+                                break;
+                            }
+                            match torrent_peer.peer_addr {
+                                SocketAddr::V4(_) => {
+                                    if (amount != 0 && count_seeds_ipv4 == amount) || (self_ip.is_some() && torrent_peer.peer_addr.ip() != self_ip.unwrap()) {
+                                        continue;
+                                    }
+                                    torrent_peers.seeds_ipv4.insert(*peer_id, torrent_peer.clone());
+                                    count_seeds_ipv4 += 1;
+                                }
+                                SocketAddr::V6(_) => {
+                                    if (amount != 0 && count_seeds_ipv6 == amount) || (self_ip.is_some() && torrent_peer.peer_addr.ip() != self_ip.unwrap()) {
+                                        continue;
+                                    }
+                                    torrent_peers.seeds_ipv6.insert(*peer_id, torrent_peer.clone());
+                                    count_seeds_ipv6 += 1;
+                                }
+                            }
+                        }
+                        for (peer_id, torrent_peer) in t.peers.iter() {
+                            if count_peers_ipv4 == amount && count_peers_ipv6 == amount {
+                                break;
+                            }
+                            match torrent_peer.peer_addr {
+                                SocketAddr::V4(_) => {
+                                    if (amount != 0 && count_peers_ipv4 == amount) || (self_ip.is_some() && torrent_peer.peer_addr.ip() != self_ip.unwrap()) {
+                                        continue;
+                                    }
+                                    torrent_peers.peers_ipv4.insert(*peer_id, torrent_peer.clone());
+                                    count_peers_ipv4 += 1;
+                                }
+                                SocketAddr::V6(_) => {
+                                    if (amount != 0 && count_peers_ipv6 == amount) || (self_ip.is_some() && torrent_peer.peer_addr.ip() != self_ip.unwrap()) {
+                                        continue;
+                                    }
+                                    torrent_peers.peers_ipv6.insert(*peer_id, torrent_peer.clone());
+                                    count_peers_ipv6 += 1;
+                                }
+                            }
+                        }
+                    }
+                    TorrentPeersType::IPv4 => {
+                        let mut count_seeds_ipv4 = 0u64;
+                        let mut count_peers_ipv4 = 0u64;
+                        for (peer_id, torrent_peer) in t.seeds.iter() {
+                            if count_seeds_ipv4 == amount {
+                                break;
+                            }
+                            match torrent_peer.peer_addr {
+                                SocketAddr::V4(_) => {
+                                    if (amount != 0 && count_seeds_ipv4 == amount) || (self_ip.is_some() && torrent_peer.peer_addr.ip() != self_ip.unwrap()) {
+                                        continue;
+                                    }
+                                    torrent_peers.seeds_ipv4.insert(*peer_id, torrent_peer.clone());
+                                    count_seeds_ipv4 += 1;
+                                }
+                                SocketAddr::V6(_) => {}
+                            }
+                        }
+                        for (peer_id, torrent_peer) in t.peers.iter() {
+                            if count_peers_ipv4 == amount {
+                                break;
+                            }
+                            match torrent_peer.peer_addr {
+                                SocketAddr::V4(_) => {
+                                    if (amount != 0 && count_peers_ipv4 == amount) || (self_ip.is_some() && torrent_peer.peer_addr.ip() != self_ip.unwrap()) {
+                                        continue;
+                                    }
+                                    torrent_peers.peers_ipv4.insert(*peer_id, torrent_peer.clone());
+                                    count_peers_ipv4 += 1;
+                                }
+                                SocketAddr::V6(_) => {}
+                            }
+                        }
+                    }
+                    TorrentPeersType::IPv6 => {
+                        let mut count_seeds_ipv6 = 0u64;
+                        let mut count_peers_ipv6 = 0u64;
+                        for (peer_id, torrent_peer) in t.seeds.iter() {
+                            if count_seeds_ipv6 == amount {
+                                break;
+                            }
+                            match torrent_peer.peer_addr {
+                                SocketAddr::V4(_) => {}
+                                SocketAddr::V6(_) => {
+                                    if (amount != 0 && count_seeds_ipv6 == amount) || (self_ip.is_some() && torrent_peer.peer_addr.ip() != self_ip.unwrap()) {
+                                        continue;
+                                    }
+                                    torrent_peers.seeds_ipv6.insert(*peer_id, torrent_peer.clone());
+                                    count_seeds_ipv6 += 1;
+                                }
+                            }
+                        }
+                        for (peer_id, torrent_peer) in t.peers.iter() {
+                            if count_peers_ipv6 == amount {
+                                break;
+                            }
+                            match torrent_peer.peer_addr {
+                                SocketAddr::V4(_) => {}
+                                SocketAddr::V6(_) => {
+                                    if (amount != 0 && count_peers_ipv6 == amount) || (self_ip.is_some() && torrent_peer.peer_addr.ip() != self_ip.unwrap()) {
+                                        continue;
+                                    }
+                                    torrent_peers.peers_ipv6.insert(*peer_id, torrent_peer.clone());
+                                    count_peers_ipv6 += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                torrent_peers
+            }
         }
-        for peer in peers_map.range(start_range..=end_range) {
-            return_data_seeds.insert(PeerId(*peer.key().last_chunk::<20>().unwrap()), peer.value().clone());
-        }
-        (return_data_seeds, return_data_peers)
     }
 
     pub async fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool, persistent: bool) -> TorrentEntry
     {
-        let torrents_map = self.torrents_map.clone();
-        let torrent = match torrents_map.get(&info_hash) {
-            None => { TorrentEntry::new() }
-            Some(torrent) => { TorrentEntry {
-                seeds: AtomicU64::new(torrent.value().seeds.load(Ordering::SeqCst)),
-                peers: AtomicU64::new(torrent.value().peers.load(Ordering::SeqCst)),
-                completed: AtomicU64::new(torrent.value().completed.load(Ordering::SeqCst)),
-                updated: std::time::Instant::now()
-            }}
-        };
-        let seeds_map = self.seeds_map.clone();
-        let peers_map = self.peers_map.clone();
-        let hash_info_peer_id: [u8; 40] = concat_arrays!(info_hash.0, peer_id.0);
-        let start_range: [u8; 40] = concat_arrays!(info_hash.0, [0; 20]);
-        let end_range: [u8; 40] = concat_arrays!(info_hash.0, [255; 20]);
-        let mut seeds = 0u64;
-        let mut peers = 0u64;
-        match torrent_peer.left {
-            NumberOfBytes(0) => {
-                if completed {
-                    torrent.completed.fetch_add(1, Ordering::SeqCst);
-                    self.update_stats(StatsEvent::Completed, 1).await;
-                    if persistent {
-                        self.add_torrents_update(info_hash, torrent.completed.load(Ordering::SeqCst) as i64).await
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
+        match lock.entry(info_hash) {
+            Entry::Vacant(v) => {
+                let mut completed_count = 0u64;
+                if completed && persistent {
+                    completed_count += 1;
+                }
+                let mut torrent = TorrentEntry {
+                    seeds: BTreeMap::new(),
+                    peers: BTreeMap::new(),
+                    completed: completed_count,
+                    updated: std::time::Instant::now()
+                };
+                match torrent_peer.left {
+                    NumberOfBytes(0) => {
+                        let seeds_count = torrent.seeds.len();
+                        torrent.seeds.insert(peer_id, torrent_peer);
+                        if completed {
+                            self.add_torrents_update(info_hash, completed_count as i64).await;
+                        }
+                        if seeds_count != torrent.seeds.len() {
+                            self.update_stats(StatsEvent::Seeds, (torrent.seeds.len() - seeds_count) as i64).await;
+                        }
+                    }
+                    _ => {
+                        let peers_count = torrent.peers.len();
+                        torrent.peers.insert(peer_id, torrent_peer);
+                        if peers_count != torrent.peers.len() {
+                            self.update_stats(StatsEvent::Peers, (torrent.peers.len() - peers_count) as i64).await;
+                        }
                     }
                 }
-                seeds_map.insert(hash_info_peer_id, torrent_peer);
-                peers_map.remove(&hash_info_peer_id);
-                let _: Vec<_> = seeds_map.range(start_range..=end_range).inspect(|_| seeds += 1).collect();
-                let _: Vec<_> = peers_map.range(start_range..=end_range).inspect(|_| peers += 1).collect();
+                v.insert(torrent.clone());
+                self.update_stats(StatsEvent::Torrents, 1).await;
+                torrent
             }
-            _ => {
-                peers_map.insert(hash_info_peer_id, torrent_peer);
-                seeds_map.remove(&hash_info_peer_id);
-                let _: Vec<_> = seeds_map.range(start_range..=end_range).inspect(|_| seeds += 1).collect();
-                let _: Vec<_> = peers_map.range(start_range..=end_range).inspect(|_| peers += 1).collect();
+            Entry::Occupied(mut t) => {
+                let torrent = t.get_mut();
+                if completed && persistent {
+                    torrent.completed += 1;
+                }
+                torrent.updated = std::time::Instant::now();
+                match torrent_peer.left {
+                    NumberOfBytes(0) => {
+                        let seeds_count = torrent.seeds.len();
+                        torrent.seeds.insert(peer_id, torrent_peer);
+                        if completed {
+                            self.add_torrents_update(info_hash, torrent.completed as i64).await;
+                        }
+                        if seeds_count != torrent.seeds.len() {
+                            self.update_stats(StatsEvent::Seeds, (torrent.seeds.len() - seeds_count) as i64).await;
+                        }
+                    }
+                    _ => {
+                        let peers_count = torrent.peers.len();
+                        torrent.peers.insert(peer_id, torrent_peer);
+                        if peers_count != torrent.peers.len() {
+                            self.update_stats(StatsEvent::Peers, (torrent.peers.len() - peers_count) as i64).await;
+                        }
+                    }
+                }
+                TorrentEntry {
+                    seeds: torrent.seeds.clone(),
+                    peers: torrent.peers.clone(),
+                    completed: torrent.completed,
+                    updated: torrent.updated
+                }
             }
-        }
-        let _ = torrent.seeds.fetch_sub(torrent.seeds.load(Ordering::SeqCst), Ordering::SeqCst);
-        let _ = torrent.seeds.fetch_add(seeds, Ordering::SeqCst);
-        let _ = torrent.peers.fetch_sub(torrent.peers.load(Ordering::SeqCst), Ordering::SeqCst);
-        let _ = torrent.peers.fetch_add(peers, Ordering::SeqCst);
-        torrents_map.insert(info_hash, TorrentEntry {
-            seeds: AtomicU64::new(torrent.seeds.load(Ordering::SeqCst)),
-            peers: AtomicU64::new(torrent.peers.load(Ordering::SeqCst)),
-            completed: AtomicU64::new(torrent.completed.load(Ordering::SeqCst)),
-            updated: std::time::Instant::now()
-        });
-        TorrentEntry {
-            seeds: AtomicU64::new(torrent.seeds.load(Ordering::SeqCst)),
-            peers: AtomicU64::new(torrent.peers.load(Ordering::SeqCst)),
-            completed: AtomicU64::new(torrent.completed.load(Ordering::SeqCst)),
-            updated: std::time::Instant::now()
         }
     }
 
-    pub async fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> Option<TorrentEntry>
+    pub async fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> Option<(TorrentEntry, bool, bool)>
     {
-        let torrents_map = self.torrents_map.clone();
-        let torrent = match torrents_map.get(&info_hash) {
-            None => { TorrentEntry::new() }
-            Some(torrent) => { TorrentEntry {
-                seeds: AtomicU64::new(torrent.value().seeds.load(Ordering::SeqCst)),
-                peers: AtomicU64::new(torrent.value().peers.load(Ordering::SeqCst)),
-                completed: AtomicU64::new(torrent.value().completed.load(Ordering::SeqCst)),
-                updated: std::time::Instant::now()
-            }}
-        };
-        let seeds_map = self.seeds_map.clone();
-        let peers_map = self.peers_map.clone();
-        let hash_info_peer_id: [u8; 40] = concat_arrays!(info_hash.0, peer_id.0);
-        let start_range: [u8; 40] = concat_arrays!(info_hash.0, [0; 20]);
-        let end_range: [u8; 40] = concat_arrays!(info_hash.0, [255; 20]);
-        let mut seeds = 0u64;
-        let mut peers = 0u64;
-        seeds_map.remove(&hash_info_peer_id);
-        peers_map.remove(&hash_info_peer_id);
-        let _: Vec<_> = seeds_map.range(start_range..=end_range).inspect(|_| seeds += 1).collect();
-        let _: Vec<_> = peers_map.range(start_range..=end_range).inspect(|_| peers += 1).collect();
-        if !persistent && seeds == 0 && peers == 0 {
-            torrents_map.remove(&info_hash);
-        } else {
-            torrents_map.insert(info_hash, TorrentEntry {
-                seeds: AtomicU64::new(torrent.seeds.load(Ordering::SeqCst)),
-                peers: AtomicU64::new(torrent.peers.load(Ordering::SeqCst)),
-                completed: AtomicU64::new(torrent.completed.load(Ordering::SeqCst)),
-                updated: std::time::Instant::now(),
-            });
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
+        match lock.entry(info_hash) {
+            Entry::Vacant(_) => { None }
+            Entry::Occupied(mut t) => {
+                let mut torrent = t.get_mut();
+                let seed_found = match torrent.seeds.remove(&peer_id) {
+                    None => { false }
+                    Some(_) => { true }
+                };
+                let peer_found = match torrent.peers.remove(&peer_id) {
+                    None => { false}
+                    Some(_) => { true }
+                };
+                if seed_found {
+                    self.update_stats(StatsEvent::Seeds, -1).await;
+                }
+                if peer_found {
+                    self.update_stats(StatsEvent::Peers, -1).await;
+                }
+                let torrent_return = torrent.clone();
+                if persistent {
+                    self.remove_torrents_update(info_hash).await;
+                } else {
+                    if torrent.peers.len() == 0 && torrent.seeds.len() == 0 {
+                        t.remove();
+                        self.update_stats(StatsEvent::Torrents, -1).await;
+                    }
+                }
+                Some((TorrentEntry {
+                    seeds: torrent_return.seeds.clone(),
+                    peers: torrent_return.peers.clone(),
+                    completed: torrent_return.completed,
+                    updated: torrent_return.updated
+                }, seed_found, peer_found))
+            }
         }
-        Some(TorrentEntry {
-            seeds: AtomicU64::new(torrent.seeds.load(Ordering::SeqCst)),
-            peers: AtomicU64::new(torrent.peers.load(Ordering::SeqCst)),
-            completed: AtomicU64::new(torrent.completed.load(Ordering::SeqCst)),
-            updated: std::time::Instant::now(),
-        })
     }
 
     pub async fn torrent_peers_cleanup(&self, peer_timeout: Duration, persistent: bool)
     {
-        let mut removed_seeds = 0u64;
-        let mut removed_peers = 0u64;
-        let seeds_map = self.seeds_map.clone();
-        let peers_map = self.peers_map.clone();
-        for seed in seeds_map.iter() {
-            if seed.value().updated.elapsed() > peer_timeout {
-                self.remove_torrent_peer(InfoHash(*seed.key().first_chunk::<20>().unwrap()), PeerId(*seed.key().last_chunk::<20>().unwrap()), persistent).await;
-                removed_seeds += 1;
+        let lock = self.torrents_map.clone();
+        let mut start = 0u64;
+        let mut amount = self.config.cleanup_chunks.unwrap_or(100000);
+        let mut seeds_found = 0u64;
+        let mut peers_found = 0u64;
+        loop {
+            for (info_hash, torrent_entry) in self.get_torrents_chunk(start as usize, amount as usize).await.iter() {
+                if start > amount {
+                    break;
+                }
+                for (peer_id, torrent_peer) in self.get_torrent_peers(*info_hash, 0, TorrentPeersType::All, None).await.seeds_ipv4 {
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        match self.remove_torrent_peer(*info_hash, peer_id, persistent).await {
+                            None => {}
+                            Some((_, seeds, peers)) => {
+                                if seeds {
+                                    seeds_found += 1;
+                                    self.update_stats(StatsEvent::Seeds, -1).await;
+                                }
+                                if peers {
+                                    peers_found += 1;
+                                    self.update_stats(StatsEvent::Peers, -1).await;
+                                }
+                            }
+                        }
+                    }
+                }
+                for (peer_id, torrent_peer) in self.get_torrent_peers(*info_hash, 0, TorrentPeersType::All, None).await.seeds_ipv6 {
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        match self.remove_torrent_peer(*info_hash, peer_id, persistent).await {
+                            None => {}
+                            Some((_, seeds, peers)) => {
+                                if seeds {
+                                    seeds_found += 1;
+                                    self.update_stats(StatsEvent::Seeds, -1).await;
+                                }
+                                if peers {
+                                    peers_found += 1;
+                                    self.update_stats(StatsEvent::Peers, -1).await;
+                                }
+                            }
+                        }
+                    }
+                }
+                for (peer_id, torrent_peer) in self.get_torrent_peers(*info_hash, 0, TorrentPeersType::All, None).await.peers_ipv4 {
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        match self.remove_torrent_peer(*info_hash, peer_id, persistent).await {
+                            None => {}
+                            Some((_, seeds, peers)) => {
+                                if seeds {
+                                    seeds_found += 1;
+                                    self.update_stats(StatsEvent::Seeds, -1).await;
+                                }
+                                if peers {
+                                    peers_found += 1;
+                                    self.update_stats(StatsEvent::Peers, -1).await;
+                                }
+                            }
+                        }
+                    }
+                }
+                for (peer_id, torrent_peer) in self.get_torrent_peers(*info_hash, 0, TorrentPeersType::All, None).await.peers_ipv6 {
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        match self.remove_torrent_peer(*info_hash, peer_id, persistent).await {
+                            None => {}
+                            Some((_, seeds, peers)) => {
+                                if seeds {
+                                    seeds_found += 1;
+                                    self.update_stats(StatsEvent::Seeds, -1).await;
+                                }
+                                if peers {
+                                    peers_found += 1;
+                                    self.update_stats(StatsEvent::Peers, -1).await;
+                                }
+                            }
+                        }
+                    }
+                }
             }
+            start += amount;
         }
-        for peer in peers_map.iter() {
-            if peer.value().updated.elapsed() > peer_timeout {
-                self.remove_torrent_peer(InfoHash(*peer.key().first_chunk::<20>().unwrap()), PeerId(*peer.key().last_chunk::<20>().unwrap()), persistent).await;
-                removed_peers += 1;
-            }
-        }
-        info!("[PEERS CLEANUP] Removed {} seeds and {} peers", removed_seeds, removed_peers);
+        info!("[PEERS CLEANUP] Removed {} seeds and {} peers", seeds_found, peers_found);
     }
 }

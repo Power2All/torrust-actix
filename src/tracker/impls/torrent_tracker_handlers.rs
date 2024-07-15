@@ -287,7 +287,7 @@ impl TorrentTracker {
                 debug!("[DEBUG] Calling remove_torrent_peer");
                 let torrent_entry = match data.remove_torrent_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await {
                     None => { TorrentEntry::new() }
-                    Some(torrent) => {
+                    Some((torrent_entry, _, _)) => {
                         if data.config.users && user_key.is_some(){
                             if let Some(mut user) = data.get_user(user_key.unwrap()).await {
                                 user.uploaded += announce_query.uploaded;
@@ -300,7 +300,7 @@ impl TorrentTracker {
                                 data.add_users_update(user_key.unwrap(), user).await;
                             }
                         }
-                        torrent
+                        torrent_entry
                     }
                 };
                 Ok((torrent_peer, torrent_entry))
@@ -358,12 +358,12 @@ impl TorrentTracker {
     {
         // We generate the output and return it, even if it's empty...
         let mut return_data = BTreeMap::new();
-        for hash in scrape_query.info_hash.iter() {
+        for info_hash in scrape_query.info_hash.iter() {
             debug!("[DEBUG] Calling get_torrent");
-            match data.get_torrent(hash).await {
-                None => { return_data.insert(*hash, TorrentEntry::new()); }
+            match data.get_torrent(*info_hash).await {
+                None => { return_data.insert(*info_hash, TorrentEntry::new()); }
                 Some(result) => {
-                    return_data.insert(*hash, result);
+                    return_data.insert(*info_hash, result);
                 }
             }
         }

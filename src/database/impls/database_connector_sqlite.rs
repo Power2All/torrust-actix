@@ -1,8 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 use futures_util::TryStreamExt;
 use log::{error, info};
@@ -114,12 +113,12 @@ impl DatabaseConnectorSQLite {
             let info_hash_decoded = hex::decode(info_hash_data).unwrap();
             let completed_data: i64 = result.get(tracker.config.db_structure.table_torrents_completed.clone().as_str());
             let info_hash = InfoHash(<[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap());
-            TorrentTracker::add_torrent(tracker.clone(), info_hash, TorrentEntry {
-                peers: AtomicU64::new(0),
-                seeds: AtomicU64::new(0),
-                completed: AtomicU64::new(completed_data as u64),
+            tracker.add_torrent(info_hash, TorrentEntry {
+                peers: BTreeMap::new(),
+                seeds: BTreeMap::new(),
+                completed: completed_data as u64,
                 updated: std::time::Instant::now(),
-            }, tracker.config.persistence, false).await;
+            }, tracker.config.persistence).await;
             total_torrents += 1;
             total_completes += completed_data as u64;
         }

@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 use chrono::Utc;
 use crossbeam_skiplist::SkipMap;
+use parking_lot::RwLock;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
@@ -12,9 +14,7 @@ impl TorrentTracker {
     {
         TorrentTracker {
             config: config.clone(),
-            torrents_map: Arc::new(SkipMap::new()),
-            seeds_map: Arc::new(SkipMap::new()),
-            peers_map: Arc::new(SkipMap::new()),
+            torrents_map: Arc::new(RwLock::new(BTreeMap::new())),
             torrents_updates: Arc::new(SkipMap::new()),
             torrents_shadow: Arc::new(SkipMap::new()),
             stats: Arc::new(StatsAtomics {

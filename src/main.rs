@@ -40,6 +40,24 @@ async fn main() -> std::io::Result<()>
 
     tracker.set_stats(StatsEvent::Completed, config.total_downloads as i64).await;
 
+    // tokio::spawn(async move {
+    //     loop {
+    //         task::sleep(Duration::from_secs(10)).await;
+    //         let deadlocks = deadlock::check_deadlock();
+    //         if deadlocks.is_empty() {
+    //             continue;
+    //         }
+    //         info!("[DEADLOCK] Found {} deadlocks", deadlocks.len());
+    //         for (i, threads) in deadlocks.iter().enumerate() {
+    //             info!("[DEADLOCK] #{}", i);
+    //             for t in threads {
+    //                 info!("[DEADLOCK] Thread ID: {:#?}", t.thread_id());
+    //                 info!("[DEADLOCK] {:#?}", t.backtrace());
+    //             }
+    //         }
+    //     }
+    // });
+
     let mut api_handlers = Vec::new();
     let mut api_futures = Vec::new();
     let mut apis_handlers = Vec::new();
@@ -165,8 +183,7 @@ async fn main() -> std::io::Result<()>
             tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64).await;
             task::sleep(Duration::from_secs(tracker_spawn_stats.config.log_console_interval.unwrap_or(60u64))).await;
             let stats = tracker_spawn_stats.get_stats().await;
-            let torrent_stats = tracker_spawn_stats.get_torrents_stats().await;
-            info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", torrent_stats.0, stats.torrents_updates, stats.torrents_shadow, torrent_stats.1, torrent_stats.2, stats.completed);
+            info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
             info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
             info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
             info!("[STATS TCP IPv6] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled);

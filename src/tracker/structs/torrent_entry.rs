@@ -1,11 +1,13 @@
-use std::sync::atomic::AtomicU64;
-use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use serde::Serialize;
+use crate::tracker::structs::peer_id::PeerId;
+use crate::tracker::structs::torrent_peer::TorrentPeer;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct TorrentEntry {
-    pub seeds: AtomicU64,
-    pub peers: AtomicU64,
-    pub completed: AtomicU64,
+    pub seeds: BTreeMap<PeerId, TorrentPeer>,
+    pub peers: BTreeMap<PeerId, TorrentPeer>,
+    pub completed: u64,
     #[serde(with = "serde_millis")]
     pub updated: std::time::Instant
 }

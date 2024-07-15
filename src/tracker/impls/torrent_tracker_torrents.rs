@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-use std::ops::Add;
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use concat_arrays::concat_arrays;
 use log::info;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -18,104 +16,84 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn add_torrent(torrent_tracker: Arc<TorrentTracker>, info_hash: InfoHash, torrent_entry: TorrentEntry, persistent: bool, threaded: bool)
+    pub async fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry, persistent: bool) -> TorrentEntry
     {
-        let torrents_map = torrent_tracker.torrents_map.clone();
-        if threaded {
-            tokio::spawn(async move {
-                torrents_map.insert(info_hash, TorrentEntry::default());
-                if persistent {
-                    torrent_tracker.add_torrents_update(info_hash, torrent_entry.completed.load(Ordering::SeqCst) as i64).await;
-                }
-            });
-        } else {
-            torrents_map.insert(info_hash, TorrentEntry::default());
-            if persistent {
-                torrent_tracker.add_torrents_update(info_hash, torrent_entry.completed.load(Ordering::SeqCst) as i64).await;
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
+        let torrent = match lock.entry(info_hash) {
+            Entry::Vacant(v) => {
+                self.update_stats(StatsEvent::Torrents, 1).await;
+                v.insert(torrent_entry.clone()).clone()
             }
+            Entry::Occupied(o) => {
+                o.get().clone()
+            }
+        };
+        if persistent {
+            self.add_torrents_update(info_hash, torrent_entry.completed as i64).await;
         }
+        torrent.clone()
     }
 
-    pub async fn get_torrent(&self, info_hash: &InfoHash) -> Option<TorrentEntry>
+    pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let torrents_map = self.torrents_map.clone();
-        let return_data = match torrents_map.get(&info_hash) {
+        let map = self.torrents_map.clone();
+        let lock = map.read();
+        match lock.get(&info_hash) {
             None => { None }
-            Some(torrent) => {
+            Some(t) => {
                 Some(TorrentEntry {
-                    seeds: AtomicU64::new(torrent.value().seeds.load(Ordering::SeqCst)),
-                    peers: AtomicU64::new(torrent.value().peers.load(Ordering::SeqCst)),
-                    completed: AtomicU64::new(torrent.value().completed.load(Ordering::SeqCst)),
-                    updated: std::time::Instant::now()
+                    seeds: t.seeds.clone(),
+                    peers: t.peers.clone(),
+                    completed: t.completed,
+                    updated: t.updated
                 })
             }
-        };
-        return_data
+        }
     }
 
-    pub async fn remove_torrent(&self, info_hash: &InfoHash, persistent: bool) -> bool
+    pub async fn remove_torrent(&self, info_hash: InfoHash, persistent: bool) -> (bool, u64, u64)
     {
-        let torrents_map = self.torrents_map.clone();
-        let seeds_map = self.seeds_map.clone();
-        let peers_map = self.peers_map.clone();
-        let start_range: [u8; 40] = concat_arrays!(info_hash.0, [0; 20]);
-        let end_range: [u8; 40] = concat_arrays!(info_hash.0, [255; 20]);
-        for seed in seeds_map.range(start_range..=end_range) {
-            seeds_map.remove(seed.key());
-        }
-        for peer in peers_map.range(start_range..=end_range) {
-            seeds_map.remove(peer.key());
-        }
-        let return_data = match torrents_map.remove(info_hash) {
-            None => { false }
-            Some(_) => { true }
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
+        let result = match lock.entry(info_hash) {
+            Entry::Vacant(_) => {
+                (false, 0, 0)
+            }
+            Entry::Occupied(o) => {
+                let seeds = o.get().clone().seeds.len();
+                let peers = o.get().clone().peers.len();
+                o.remove();
+                (true, seeds as u64, peers as u64)
+            }
         };
-        return_data
+        if result.0 {
+            self.update_stats(StatsEvent::Seeds, 0 - result.1 as i64).await;
+            self.update_stats(StatsEvent::Peers, 0 - result.2 as i64).await;
+        }
+        result
     }
 
-    pub async fn get_torrents_chunk(&self, skip: usize, amount: usize) -> HashMap<InfoHash, u64>
+    pub async fn get_torrents_chunk(&self, skip: usize, amount: usize) -> BTreeMap<InfoHash, TorrentEntry>
     {
-        let torrents_map = self.torrents_map.clone();
-        let mut torrents_return: HashMap<InfoHash, u64> = HashMap::new();
-        let mut current_count: usize = 0;
-        let mut handled_count: usize = 0;
-        for torrent in torrents_map.iter().skip(skip) {
-            if handled_count >= amount {
+        let lock = self.torrents_map.clone();
+        let mut count = 0usize;
+        let mut returned_data = BTreeMap::new();
+        if lock.read().len() > skip {
+            return returned_data;
+        }
+        for (info_hash, torrent_entry) in lock.read().iter().skip(skip) {
+            count += 1;
+            if count == amount {
                 break;
             }
-            torrents_return.insert(*torrent.key(), torrent.value().completed.load(Ordering::SeqCst));
-            current_count = current_count.add(1);
-            handled_count = handled_count.add(1);
+            returned_data.insert(*info_hash, TorrentEntry {
+                seeds: torrent_entry.seeds.clone(),
+                peers: torrent_entry.peers.clone(),
+                completed: torrent_entry.completed,
+                updated: torrent_entry.updated
+            });
         }
-        torrents_return
-    }
-
-    pub async fn get_torrents_stats(&self) -> (u64, u64, u64)
-    {
-        let torrents_map = self.torrents_map.clone();
-        let seeds_map = self.seeds_map.clone();
-        let peers_map = self.peers_map.clone();
-        let mut seeds = 0u64;
-        let mut peers = 0u64;
-        let mut start: usize = 0;
-        let mut torrents: usize = 0;
-        let size: usize = self.config.cleanup_chunks.unwrap_or(100000) as usize;
-        loop {
-            if start > torrents_map.len() {
-                break;
-            }
-            for torrent in torrents_map.iter().skip(start) {
-                torrents += 1;
-                let start_range: [u8; 40] = concat_arrays!(torrent.key().0, [0; 20]);
-                let end_range: [u8; 40] = concat_arrays!(torrent.key().0, [255; 20]);
-                let _: Vec<_> = seeds_map.range(start_range..=end_range).inspect(|_| seeds += 1).collect();
-                let _: Vec<_> = peers_map.range(start_range..=end_range).inspect(|_| peers += 1).collect();
-                if torrents == size {
-                    break;
-                }
-            }
-            start += size;
-        }
-        (torrents as u64, seeds, peers)
+        returned_data
     }
 }

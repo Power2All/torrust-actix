@@ -1,15 +1,14 @@
 use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use std::time::{Instant, SystemTime};
 use log::{debug, info};
 use tokio::net::UdpSocket;
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 use crate::udp::enums::request::Request;
@@ -68,10 +67,8 @@ impl UdpServer {
                     let payload_cloned = payload.clone();
                     let tracker_cloned = tracker.clone();
                     let socket_cloned = socket.clone();
-                    tokio::spawn(async move {
-                        let response = UdpServer::handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
-                        UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
-                    });
+                    let response = UdpServer::handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
+                    UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
                 }
             }
         }
@@ -280,62 +277,72 @@ impl UdpServer {
                 return Err(ServerError::InternalServerError);
             }
         };
-        let (seeds_list_map, peers_list_map) = tracker.get_torrent_peers(request.info_hash).await;
+        let torrent_peers = tracker.get_torrent_peers(request.info_hash, 72, TorrentPeersType::All, Some(remote_addr.ip())).await;
         let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::new();
         let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::new();
         let mut count = 0;
         if request.bytes_left.0 as u64 != 0 {
-            for (_, torrent_peer) in seeds_list_map.iter() {
-                if count > 72 {
-                    break;
-                }
-                if remote_addr.is_ipv4() && torrent_peer.peer_addr.is_ipv4() {
+            if remote_addr.is_ipv4()  {
+                for (_, torrent_peer) in torrent_peers.seeds_ipv4.iter() {
+                    if count > 72 {
+                        break;
+                    }
                     peers.push(ResponsePeer::<Ipv4Addr> {
                         ip_address: torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>().unwrap(),
                         port: Port(torrent_peer.peer_addr.port()),
                     });
+                    count += 1;
                 }
-                if remote_addr.is_ipv6() && torrent_peer.peer_addr.is_ipv6() {
+            } else {
+                for (_, torrent_peer) in torrent_peers.seeds_ipv6.iter() {
+                    if count > 72 {
+                        break;
+                    }
                     peers6.push(ResponsePeer::<Ipv6Addr> {
                         ip_address: torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>().unwrap(),
                         port: Port(torrent_peer.peer_addr.port()),
                     });
+                    count += 1;
                 }
+            }
+        }
+        if remote_addr.is_ipv4() {
+            for (_, torrent_peer) in torrent_peers.peers_ipv4.iter() {
+                if count > 72 {
+                    break;
+                }
+                peers.push(ResponsePeer::<Ipv4Addr> {
+                    ip_address: torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>().unwrap(),
+                    port: Port(torrent_peer.peer_addr.port()),
+                });
                 count += 1;
             }
         } else {
-            for (_, torrent_peer) in peers_list_map.iter() {
+            for (_, torrent_peer) in torrent_peers.peers_ipv6.iter() {
                 if count > 72 {
                     break;
                 }
-                if torrent_peer.peer_addr.is_ipv4() {
-                    peers.push(ResponsePeer::<Ipv4Addr> {
-                        ip_address: torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>().unwrap(),
-                        port: Port(torrent_peer.peer_addr.port()),
-                    });
-                }
-                if torrent_peer.peer_addr.is_ipv6() {
-                    peers6.push(ResponsePeer::<Ipv6Addr> {
-                        ip_address: torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>().unwrap(),
-                        port: Port(torrent_peer.peer_addr.port()),
-                    });
-                }
+                peers6.push(ResponsePeer::<Ipv6Addr> {
+                    ip_address: torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>().unwrap(),
+                    port: Port(torrent_peer.peer_addr.port()),
+                });
                 count += 1;
             }
         }
+
         let mut announce_response = Response::from(AnnounceResponse {
             transaction_id: request.transaction_id,
             announce_interval: AnnounceInterval(tracker.config.interval.unwrap() as i32),
-            leechers: NumberOfPeers(torrent.peers.load(Ordering::SeqCst) as i32),
-            seeders: NumberOfPeers(torrent.seeds.load(Ordering::SeqCst) as i32),
+            leechers: NumberOfPeers(torrent.peers.len() as i32),
+            seeders: NumberOfPeers(torrent.seeds.len() as i32),
             peers,
         });
         if remote_addr.is_ipv6() {
             announce_response = Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
                 announce_interval: AnnounceInterval(tracker.config.interval.unwrap() as i32),
-                leechers: NumberOfPeers(torrent.peers.load(Ordering::SeqCst) as i32),
-                seeders: NumberOfPeers(torrent.seeds.load(Ordering::SeqCst) as i32),
+                leechers: NumberOfPeers(torrent.peers.len() as i32),
+                seeders: NumberOfPeers(torrent.seeds.len() as i32),
                 peers: peers6
             });
         }
@@ -361,7 +368,7 @@ impl UdpServer {
         let mut torrent_stats: Vec<TorrentScrapeStatistics> = Vec::new();
         for info_hash in request.info_hashes.iter() {
             let info_hash = InfoHash(info_hash.0);
-            let scrape_entry = match tracker.get_torrent(&InfoHash(info_hash.0)).await {
+            let scrape_entry = match tracker.get_torrent(InfoHash(info_hash.0)).await {
                 None => {
                     TorrentScrapeStatistics {
                         seeders: NumberOfPeers(0),
@@ -371,9 +378,9 @@ impl UdpServer {
                 }
                 Some(torrent_info) => {
                     TorrentScrapeStatistics {
-                        seeders: NumberOfPeers(torrent_info.seeds.load(Ordering::SeqCst) as i32),
-                        completed: NumberOfDownloads(torrent_info.completed.load(Ordering::SeqCst) as i32),
-                        leechers: NumberOfPeers(torrent_info.peers.load(Ordering::SeqCst) as i32),
+                        seeders: NumberOfPeers(torrent_info.seeds.len() as i32),
+                        completed: NumberOfDownloads(torrent_info.completed as i32),
+                        leechers: NumberOfPeers(torrent_info.peers.len() as i32),
                     }
                 }
             };
