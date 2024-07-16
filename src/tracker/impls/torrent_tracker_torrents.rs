@@ -29,6 +29,7 @@ impl TorrentTracker {
                 o.get().clone()
             }
         };
+        drop(lock);
         if persistent {
             self.add_torrents_update(info_hash, torrent_entry.completed as i64).await;
         }
@@ -67,6 +68,7 @@ impl TorrentTracker {
                 (true, seeds as u64, peers as u64)
             }
         };
+        drop(lock);
         if result.0 {
             self.update_stats(StatsEvent::Seeds, 0 - result.1 as i64).await;
             self.update_stats(StatsEvent::Peers, 0 - result.2 as i64).await;
@@ -76,13 +78,14 @@ impl TorrentTracker {
 
     pub async fn get_torrents_chunk(&self, skip: usize, amount: usize) -> BTreeMap<InfoHash, TorrentEntry>
     {
-        let lock = self.torrents_map.clone();
+        let map = self.torrents_map.clone();
         let mut count = 0usize;
         let mut returned_data = BTreeMap::new();
-        if lock.read().len() > skip {
+        let lock = map.read();
+        if lock.len() > skip {
             return returned_data;
         }
-        for (info_hash, torrent_entry) in lock.read().iter().skip(skip) {
+        for (info_hash, torrent_entry) in lock.iter().skip(skip) {
             count += 1;
             if count == amount {
                 break;

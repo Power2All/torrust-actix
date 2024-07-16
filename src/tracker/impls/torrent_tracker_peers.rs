@@ -172,7 +172,7 @@ impl TorrentTracker {
                     NumberOfBytes(0) => {
                         let seeds_count = torrent.seeds.len();
                         torrent.seeds.insert(peer_id, torrent_peer);
-                        if completed {
+                        if completed && persistent {
                             self.add_torrents_update(info_hash, completed_count as i64).await;
                         }
                         if seeds_count != torrent.seeds.len() {
@@ -201,7 +201,7 @@ impl TorrentTracker {
                     NumberOfBytes(0) => {
                         let seeds_count = torrent.seeds.len();
                         torrent.seeds.insert(peer_id, torrent_peer);
-                        if completed {
+                        if completed && persistent {
                             self.add_torrents_update(info_hash, torrent.completed as i64).await;
                         }
                         if seeds_count != torrent.seeds.len() {
