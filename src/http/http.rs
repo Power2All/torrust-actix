@@ -727,11 +727,11 @@ pub fn http_stat_update(ip: IpAddr, data: Data<Arc<TorrentTracker>>, stats_ipv4:
     match ip {
         IpAddr::V4(_) => {
             let data_clone = data.clone();
-            tokio::spawn(async move { data_clone.update_stats(stats_ipv4, count); });
+            data_clone.update_stats(stats_ipv4, count);;
         }
         IpAddr::V6(_) => {
             let data_clone = data.clone();
-            tokio::spawn(async move { data_clone.update_stats(stat_ipv6, count); });
+            data_clone.update_stats(stat_ipv6, count);
         }
     }
 }

@@ -200,9 +200,6 @@ async fn main() -> std::io::Result<()>
             task::sleep(Duration::from_secs(tracker_spawn_cleanup.config.interval_cleanup.unwrap_or(60))).await;
             info!("[PEERS] Checking now for dead peers.");
             let (torrents, seeds, peers) = tracker_spawn_cleanup.torrent_peers_cleanup(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap()), tracker_spawn_cleanup.config.persistence);
-            tracker_spawn_cleanup.update_stats(StatsEvent::Torrents, (0 - torrents) as i64);
-            tracker_spawn_cleanup.update_stats(StatsEvent::Seeds, (0 - seeds) as i64);
-            tracker_spawn_cleanup.update_stats(StatsEvent::Peers, (0 - peers) as i64);
             info!("[PEERS] Peers cleaned up.");
 
             if tracker_spawn_cleanup.config.users {

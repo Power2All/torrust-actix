@@ -4,6 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use log::info;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
+use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
@@ -180,14 +181,17 @@ impl TorrentTracker {
                 let mut torrent_entry = TorrentEntry {
                     seeds: BTreeMap::new(),
                     peers: BTreeMap::new(),
-                    completed: if completed { 1 } else { 0 },
+                    completed: if completed && torrent_peer.left == NumberOfBytes(0) { self.update_stats(StatsEvent::Completed, 1); 1 } else { 0 },
                     updated: std::time::Instant::now()
                 };
+                self.update_stats(StatsEvent::Torrents, 1);
                 match torrent_peer.left {
                     NumberOfBytes(0) => {
+                        self.update_stats(StatsEvent::Seeds, 1);
                         torrent_entry.seeds.insert(peer_id, torrent_peer);
                     }
                     _ => {
+                        self.update_stats(StatsEvent::Peers, 1);
                         torrent_entry.peers.insert(peer_id, torrent_peer);
                     }
                 }
@@ -196,16 +200,23 @@ impl TorrentTracker {
             }
             Entry::Occupied(mut o) => {
                 let previous_torrent = o.get().clone();
-                o.get_mut().seeds.remove(&peer_id);
-                o.get_mut().peers.remove(&peer_id);
+                if o.get_mut().seeds.remove(&peer_id).is_some() {
+                    self.update_stats(StatsEvent::Seeds, -1);
+                };
+                if o.get_mut().peers.remove(&peer_id).is_some() {
+                    self.update_stats(StatsEvent::Peers, -1);
+                };
                 if completed {
+                    self.update_stats(StatsEvent::Completed, 1);
                     o.get_mut().completed += 1;
                 }
                 match torrent_peer.left {
                     NumberOfBytes(0) => {
+                        self.update_stats(StatsEvent::Seeds, 1);
                         o.get_mut().seeds.insert(peer_id, torrent_peer);
                     }
                     _ => {
+                        self.update_stats(StatsEvent::Peers, 1);
                         o.get_mut().peers.insert(peer_id, torrent_peer);
                     }
                 }
@@ -224,10 +235,15 @@ impl TorrentTracker {
             }
             Entry::Occupied(mut o) => {
                 let previous_torrent = o.get().clone();
-                o.get_mut().seeds.remove(&peer_id);
-                o.get_mut().peers.remove(&peer_id);
+                if o.get_mut().seeds.remove(&peer_id).is_some() {
+                    self.update_stats(StatsEvent::Seeds, -1);
+                };
+                if o.get_mut().peers.remove(&peer_id).is_some() {
+                    self.update_stats(StatsEvent::Peers, -1);
+                };
                 if !persistent && o.get().seeds.len() == 0 && o.get().peers.len() == 0 {
                     lock.remove(&info_hash);
+                    self.update_stats(StatsEvent::Torrents, -1);
                     return (Some(previous_torrent), None);
                 }
                 (Some(previous_torrent), Some(o.get().clone()))

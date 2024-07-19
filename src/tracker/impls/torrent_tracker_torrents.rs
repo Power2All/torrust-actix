@@ -20,6 +20,7 @@ impl TorrentTracker {
     {
         match self.torrents_map.clone().write().entry(info_hash) {
             Entry::Vacant(v) => {
+                self.update_stats(StatsEvent::Torrents, 1);
                 (v.insert(torrent_entry).clone(), true)
             }
             Entry::Occupied(o) => {
@@ -36,6 +37,7 @@ impl TorrentTracker {
         for (info_hash, torrent_entry) in hashes.iter() {
             match lock.entry(*info_hash) {
                 Entry::Vacant(v) => {
+                    self.update_stats(StatsEvent::Torrents, 1);
                     returned_data.insert(*info_hash, (torrent_entry.clone(), true));
                     v.insert(torrent_entry.clone());
                 }
@@ -81,7 +83,15 @@ impl TorrentTracker {
 
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        self.torrents_map.clone().write().remove(&info_hash)
+        match self.torrents_map.clone().write().remove(&info_hash) {
+            None => { None }
+            Some(data) => {
+                self.update_stats(StatsEvent::Torrents, -1);
+                self.update_stats(StatsEvent::Seeds, data.seeds.len() as i64);
+                self.update_stats(StatsEvent::Peers, data.peers.len() as i64);
+                Some(data)
+            }
+        }
     }
 
     pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
@@ -90,7 +100,12 @@ impl TorrentTracker {
         let map = self.torrents_map.clone();
         let mut lock = map.write();
         for info_hash in hashes.iter() {
-            returned_data.insert(*info_hash, lock.remove(info_hash).map(|torrent| torrent.clone()));
+            returned_data.insert(*info_hash, lock.remove(info_hash).map(|torrent| {
+                self.update_stats(StatsEvent::Torrents, -1);
+                self.update_stats(StatsEvent::Seeds, torrent.seeds.len() as i64);
+                self.update_stats(StatsEvent::Peers, torrent.peers.len() as i64);
+                torrent.clone()
+            }));
         }
         returned_data
     }
