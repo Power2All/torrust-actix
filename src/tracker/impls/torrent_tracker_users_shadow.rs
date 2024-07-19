@@ -22,7 +22,7 @@ impl TorrentTracker {
         users_shadow_arc.insert(user_id, user_entry_item);
         let users_shadow_count = users_shadow_arc.len();
 
-        self.set_stats(StatsEvent::UsersShadow, users_shadow_count as i64).await;
+        self.set_stats(StatsEvent::UsersShadow, users_shadow_count as i64);
     }
 
     pub async fn remove_users_shadow(&self, user_id: UserId)
@@ -32,7 +32,7 @@ impl TorrentTracker {
         users_shadow_arc.remove(&user_id);
         let users_shadow_count = users_shadow_arc.len();
 
-        self.set_stats(StatsEvent::UsersShadow, users_shadow_count as i64).await;
+        self.set_stats(StatsEvent::UsersShadow, users_shadow_count as i64);
     }
 
     pub async fn remove_users_shadows(&self, hashes: Vec<UserId>)
@@ -45,7 +45,7 @@ impl TorrentTracker {
             users_shadow_count = users_shadow_arc.len();
         }
 
-        self.set_stats(StatsEvent::UsersShadow, users_shadow_count as i64).await;
+        self.set_stats(StatsEvent::UsersShadow, users_shadow_count as i64);
     }
 
     pub async fn get_users_shadow(&self) -> HashMap<UserId, UserEntryItem>
@@ -64,6 +64,6 @@ impl TorrentTracker {
 
         users_shadow_arc.clear();
 
-        self.set_stats(StatsEvent::UsersShadow, 0).await;
+        self.set_stats(StatsEvent::UsersShadow, 0);
     }
 }

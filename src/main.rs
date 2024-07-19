@@ -6,13 +6,14 @@ use async_std::task;
 use clap::Parser;
 use futures_util::future::{try_join_all, TryJoinAll};
 use log::info;
+use parking_lot::deadlock;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{setup_logging, udp_check_host_and_port_used};
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
 use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
-use torrust_actix::udp::udp::udp_service;
+// use torrust_actix::udp::udp::udp_service;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -38,25 +39,25 @@ async fn main() -> std::io::Result<()>
 
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
 
-    tracker.set_stats(StatsEvent::Completed, config.total_downloads as i64).await;
+    tracker.set_stats(StatsEvent::Completed, config.total_downloads as i64);
 
-    // tokio::spawn(async move {
-    //     loop {
-    //         task::sleep(Duration::from_secs(10)).await;
-    //         let deadlocks = deadlock::check_deadlock();
-    //         if deadlocks.is_empty() {
-    //             continue;
-    //         }
-    //         info!("[DEADLOCK] Found {} deadlocks", deadlocks.len());
-    //         for (i, threads) in deadlocks.iter().enumerate() {
-    //             info!("[DEADLOCK] #{}", i);
-    //             for t in threads {
-    //                 info!("[DEADLOCK] Thread ID: {:#?}", t.thread_id());
-    //                 info!("[DEADLOCK] {:#?}", t.backtrace());
-    //             }
-    //         }
-    //     }
-    // });
+    tokio::spawn(async move {
+        loop {
+            task::sleep(Duration::from_secs(10)).await;
+            let deadlocks = deadlock::check_deadlock();
+            if deadlocks.is_empty() {
+                continue;
+            }
+            info!("[DEADLOCK] Found {} deadlocks", deadlocks.len());
+            for (i, threads) in deadlocks.iter().enumerate() {
+                info!("[DEADLOCK] #{}", i);
+                for t in threads {
+                    info!("[DEADLOCK] Thread ID: {:#?}", t.thread_id());
+                    info!("[DEADLOCK] {:#?}", t.backtrace());
+                }
+            }
+        }
+    });
 
     let mut api_handlers = Vec::new();
     let mut api_futures = Vec::new();
@@ -166,23 +167,23 @@ async fn main() -> std::io::Result<()>
         });
     }
 
-    let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
-    let mut udp_futures = Vec::new();
-    for udp_server_object in &config.udp_server {
-        if udp_server_object.enabled {
-            udp_check_host_and_port_used(udp_server_object.bind_address.clone());
-            let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
-            let tracker_clone = tracker.clone();
-            udp_futures.push(udp_service(address, tracker_clone, udp_rx.clone()).await);
-        }
-    }
+    // let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
+    // let mut udp_futures = Vec::new();
+    // for udp_server_object in &config.udp_server {
+    //     if udp_server_object.enabled {
+    //         udp_check_host_and_port_used(udp_server_object.bind_address.clone());
+    //         let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
+    //         let tracker_clone = tracker.clone();
+    //         udp_futures.push(udp_service(address, tracker_clone, udp_rx.clone()).await);
+    //     }
+    // }
 
     let tracker_spawn_stats = tracker.clone();
     tokio::spawn(async move {
         loop {
-            tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64).await;
+            tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64);
             task::sleep(Duration::from_secs(tracker_spawn_stats.config.log_console_interval.unwrap_or(60u64))).await;
-            let stats = tracker_spawn_stats.get_stats().await;
+            let stats = tracker_spawn_stats.get_stats();
             info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
             info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
             info!("[STATS TCP IPv4] Connect: {} - API: {} - Announce: {} - Scrape: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled);
@@ -195,10 +196,13 @@ async fn main() -> std::io::Result<()>
     let tracker_spawn_cleanup = tracker.clone();
     tokio::spawn(async move {
         loop {
-            tracker_spawn_cleanup.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn_cleanup.config.interval_cleanup.unwrap() as i64).await;
+            tracker_spawn_cleanup.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn_cleanup.config.interval_cleanup.unwrap() as i64);
             task::sleep(Duration::from_secs(tracker_spawn_cleanup.config.interval_cleanup.unwrap_or(60))).await;
             info!("[PEERS] Checking now for dead peers.");
-            tracker_spawn_cleanup.torrent_peers_cleanup(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap()), tracker_spawn_cleanup.config.persistence).await;
+            let (torrents, seeds, peers) = tracker_spawn_cleanup.torrent_peers_cleanup(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap()), tracker_spawn_cleanup.config.persistence);
+            tracker_spawn_cleanup.update_stats(StatsEvent::Torrents, (0 - torrents) as i64);
+            tracker_spawn_cleanup.update_stats(StatsEvent::Seeds, (0 - seeds) as i64);
+            tracker_spawn_cleanup.update_stats(StatsEvent::Peers, (0 - peers) as i64);
             info!("[PEERS] Peers cleaned up.");
 
             if tracker_spawn_cleanup.config.users {
@@ -224,10 +228,9 @@ async fn main() -> std::io::Result<()>
             for handle in https_handlers.iter() {
                 handle.stop(true).await;
             }
-            let _ = udp_tx.send(true);
-            let _ = udp_futures.into_iter()
-                .collect::<TryJoinAll<_>>()
-                .await;
+            // let _ = udp_tx.send(true);
+            // let _ = udp_futures.into_iter()
+            //     .collect::<TryJoinAll<_>>();
             info!("Server shutting down completed");
             Ok(())
         }

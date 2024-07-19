@@ -2,9 +2,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::SystemTime;
+use actix_web::web::Data;
 use log::debug;
 use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
+use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::announce_event::AnnounceEvent;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -262,9 +264,23 @@ impl TorrentTracker {
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer.clone(),
-                    false,
-                    data.config.persistence
-                ).await;
+                    false
+                );
+                match torrent_entry.0 {
+                    None => {
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Torrents, 1);
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Seeds, StatsEvent::Seeds, torrent_entry.1.seeds.len() as i64);
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Peers, StatsEvent::Peers, torrent_entry.1.peers.len() as i64);
+                    }
+                    Some(torrent_previous_entry) => {
+                        if (torrent_entry.1.seeds.len() - torrent_previous_entry.seeds.len()) != 0 {
+                            self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Torrents, (torrent_entry.1.seeds.len() - torrent_previous_entry.seeds.len()) as i64);
+                        }
+                        if (torrent_entry.1.peers.len() - torrent_previous_entry.peers.len()) != 0 {
+                            self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Torrents, (torrent_entry.1.peers.len() - torrent_previous_entry.peers.len()) as i64);
+                        }
+                    }
+                }
                 if data.config.users && user_key.is_some() {
                     if let Some(mut user) = data.get_user(user_key.unwrap()).await {
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
@@ -275,19 +291,30 @@ impl TorrentTracker {
                     }
                 }
                 Ok((torrent_peer, TorrentEntry {
-                    seeds: torrent_entry.seeds,
-                    peers: torrent_entry.peers,
-                    completed: torrent_entry.completed,
-                    updated: std::time::Instant::now()
+                    seeds: torrent_entry.1.seeds,
+                    peers: torrent_entry.1.peers,
+                    completed: torrent_entry.1.completed,
+                    updated: torrent_entry.1.updated
                 }))
             }
             AnnounceEvent::Stopped => {
                 torrent_peer.event = AnnounceEvent::Stopped;
                 debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
                 debug!("[DEBUG] Calling remove_torrent_peer");
-                let torrent_entry = match data.remove_torrent_peer(announce_query.info_hash, announce_query.peer_id, data.config.persistence).await {
-                    None => { TorrentEntry::new() }
-                    Some((torrent_entry, _, _)) => {
+                let torrent_entry = match data.remove_torrent_peer(
+                    announce_query.info_hash,
+                    announce_query.peer_id,
+                    data.config.persistence
+                ) {
+                    (Some(previous_torrent), None) => {
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Torrents, -1);
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Seeds, StatsEvent::Seeds, 0i64 - previous_torrent.seeds.len() as i64);
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Peers, StatsEvent::Peers, 0i64 - previous_torrent.peers.len() as i64);
+                        TorrentEntry::new()
+                    }
+                    (Some(previous_torrent), Some(new_torrent)) => {
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Seeds, StatsEvent::Seeds, 0i64 - (previous_torrent.seeds.len() as i64 - new_torrent.seeds.len() as i64));
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Peers, StatsEvent::Peers, 0i64 - (previous_torrent.peers.len() as i64 - new_torrent.peers.len() as i64));
                         if data.config.users && user_key.is_some(){
                             if let Some(mut user) = data.get_user(user_key.unwrap()).await {
                                 user.uploaded += announce_query.uploaded;
@@ -300,7 +327,10 @@ impl TorrentTracker {
                                 data.add_users_update(user_key.unwrap(), user).await;
                             }
                         }
-                        torrent_entry
+                        new_torrent
+                    }
+                    _ => {
+                        TorrentEntry::new()
                     }
                 };
                 Ok((torrent_peer, torrent_entry))
@@ -313,9 +343,23 @@ impl TorrentTracker {
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer.clone(),
-                    true,
-                    data.config.persistence
-                ).await;
+                    true
+                );
+                match torrent_entry.0 {
+                    None => {
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Torrents, 1);
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Seeds, StatsEvent::Seeds, torrent_entry.1.seeds.len() as i64);
+                        self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Peers, StatsEvent::Peers, torrent_entry.1.peers.len() as i64);
+                    }
+                    Some(torrent_previous_entry) => {
+                        if (torrent_entry.1.seeds.len() - torrent_previous_entry.seeds.len()) != 0 {
+                            self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Torrents, torrent_entry.1.seeds.len() as i64 - torrent_previous_entry.seeds.len() as i64);
+                        }
+                        if (torrent_entry.1.peers.len() - torrent_previous_entry.peers.len()) != 0 {
+                            self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Torrents, torrent_entry.1.peers.len() as i64 - torrent_previous_entry.peers.len() as i64);
+                        }
+                    }
+                };
                 if data.config.users && user_key.is_some(){
                     if let Some(mut user) = data.get_user(user_key.unwrap()).await {
                         user.completed += 1;
@@ -323,7 +367,7 @@ impl TorrentTracker {
                         data.add_user(user_key.unwrap(), user).await;
                     }
                 }
-                Ok((torrent_peer, torrent_entry))
+                Ok((torrent_peer, torrent_entry.1))
             }
         }
     }
@@ -360,7 +404,7 @@ impl TorrentTracker {
         let mut return_data = BTreeMap::new();
         for info_hash in scrape_query.info_hash.iter() {
             debug!("[DEBUG] Calling get_torrent");
-            match data.get_torrent(*info_hash).await {
+            match data.get_torrent(*info_hash) {
                 None => { return_data.insert(*info_hash, TorrentEntry::new()); }
                 Some(result) => {
                     return_data.insert(*info_hash, result);
@@ -368,5 +412,19 @@ impl TorrentTracker {
             }
         }
         return_data
+    }
+
+    pub fn handle_stat_update(&self, ip: IpAddr, data: Data<Arc<TorrentTracker>>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
+    {
+        match ip {
+            IpAddr::V4(_) => {
+                let data_clone = data.clone();
+                tokio::spawn(async move { data_clone.update_stats(stats_ipv4, count); });
+            }
+            IpAddr::V6(_) => {
+                let data_clone = data.clone();
+                tokio::spawn(async move { data_clone.update_stats(stat_ipv6, count); });
+            }
+        }
     }
 }

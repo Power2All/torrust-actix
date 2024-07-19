@@ -83,7 +83,7 @@ pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
 
 pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> bool
 {
-    let stats = tracker.clone().get_stats().await;
+    let stats = tracker.clone().get_stats();
     if stats.maintenance_mode != 0 {
         return true;
     }

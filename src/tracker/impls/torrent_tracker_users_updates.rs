@@ -12,7 +12,7 @@ impl TorrentTracker {
         users_updates_arc.insert(user_id, user_entry_item);
         let users_update_count = users_updates_arc.len() as i64;
 
-        self.set_stats(StatsEvent::UsersUpdates, users_update_count).await;
+        self.set_stats(StatsEvent::UsersUpdates, users_update_count);
     }
 
     pub async fn add_users_updates(&self, updates: HashMap<UserId, UserEntryItem>)
@@ -26,7 +26,7 @@ impl TorrentTracker {
             users_update_count = users_updates_arc.len();
         }
 
-        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64).await;
+        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64);
     }
 
     pub async fn get_users_update(&self) -> HashMap<UserId, UserEntryItem>
@@ -46,7 +46,7 @@ impl TorrentTracker {
         users_updates_arc.remove(&user_id);
         let users_update_count = users_updates_arc.len();
 
-        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64).await;
+        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64);
     }
 
     pub async fn remove_users_updates(&self, hashes: Vec<UserId>)
@@ -60,7 +60,7 @@ impl TorrentTracker {
             users_update_count = users_updates_arc.len();
         }
 
-        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64).await;
+        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64);
     }
 
     pub async fn transfer_users_updates_to_users_shadow(&self)
@@ -72,6 +72,6 @@ impl TorrentTracker {
             users_updates_arc.remove(item.key());
         }
 
-        self.set_stats(StatsEvent::UsersUpdates, 0).await;
+        self.set_stats(StatsEvent::UsersUpdates, 0);
     }
 }

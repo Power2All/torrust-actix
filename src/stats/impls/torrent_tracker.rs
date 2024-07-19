@@ -4,7 +4,7 @@ use crate::stats::structs::stats::Stats;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    pub async fn get_stats(&self) -> Stats
+    pub fn get_stats(&self) -> Stats
     {
         Stats {
             started: self.stats.started.load(Ordering::SeqCst),
@@ -28,10 +28,14 @@ impl TorrentTracker {
             blacklist: self.stats.blacklist.load(Ordering::SeqCst),
             keys_enabled: self.stats.keys_enabled.load(Ordering::SeqCst),
             keys: self.stats.keys.load(Ordering::SeqCst),
+            tcp4_not_found: self.stats.tcp4_not_found.load(Ordering::SeqCst),
+            tcp4_failure: self.stats.tcp4_failure.load(Ordering::SeqCst),
             tcp4_connections_handled: self.stats.tcp4_connections_handled.load(Ordering::SeqCst),
             tcp4_api_handled: self.stats.tcp4_api_handled.load(Ordering::SeqCst),
             tcp4_announces_handled: self.stats.tcp4_announces_handled.load(Ordering::SeqCst),
             tcp4_scrapes_handled: self.stats.tcp4_scrapes_handled.load(Ordering::SeqCst),
+            tcp6_not_found: self.stats.tcp6_not_found.load(Ordering::SeqCst),
+            tcp6_failure: self.stats.tcp6_failure.load(Ordering::SeqCst),
             tcp6_connections_handled: self.stats.tcp6_connections_handled.load(Ordering::SeqCst),
             tcp6_api_handled: self.stats.tcp6_api_handled.load(Ordering::SeqCst),
             tcp6_announces_handled: self.stats.tcp6_announces_handled.load(Ordering::SeqCst),
@@ -47,7 +51,7 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
+    pub fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
         match event {
             StatsEvent::Torrents => {
@@ -118,6 +122,14 @@ impl TorrentTracker {
                 if value > 0 { self.stats.keys.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.keys.fetch_sub(-value, Ordering::SeqCst); }
             }
+            StatsEvent::Tcp4NotFound => {
+                if value > 0 { self.stats.tcp4_not_found.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.tcp4_not_found.fetch_sub(-value, Ordering::SeqCst); }
+            }
+            StatsEvent::Tcp4Failure => {
+                if value > 0 { self.stats.tcp4_failure.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.tcp4_failure.fetch_sub(-value, Ordering::SeqCst); }
+            }
             StatsEvent::Tcp4ConnectionsHandled => {
                 if value > 0 { self.stats.tcp4_connections_handled.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.tcp4_connections_handled.fetch_sub(-value, Ordering::SeqCst); }
@@ -133,6 +145,14 @@ impl TorrentTracker {
             StatsEvent::Tcp4ScrapesHandled => {
                 if value > 0 { self.stats.tcp4_scrapes_handled.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.tcp4_scrapes_handled.fetch_sub(-value, Ordering::SeqCst); }
+            }
+            StatsEvent::Tcp6NotFound => {
+                if value > 0 { self.stats.tcp6_not_found.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.tcp6_not_found.fetch_sub(-value, Ordering::SeqCst); }
+            }
+            StatsEvent::Tcp6Failure => {
+                if value > 0 { self.stats.tcp6_failure.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.tcp6_failure.fetch_sub(-value, Ordering::SeqCst); }
             }
             StatsEvent::Tcp6ConnectionsHandled => {
                 if value > 0 { self.stats.tcp6_connections_handled.fetch_add(value, Ordering::SeqCst); }
@@ -182,11 +202,11 @@ impl TorrentTracker {
                 if value > 0 { self.stats.test_counter_udp.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.test_counter_udp.fetch_sub(-value, Ordering::SeqCst); }
             }
-        }
-        self.get_stats().await
+        };
+        self.get_stats()
     }
 
-    pub async fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
+    pub fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
         match event {
             StatsEvent::Torrents => {
@@ -240,6 +260,12 @@ impl TorrentTracker {
             StatsEvent::Key => {
                 self.stats.keys.store(value, Ordering::SeqCst);
             }
+            StatsEvent::Tcp4NotFound => {
+                self.stats.tcp4_not_found.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::Tcp4Failure => {
+                self.stats.tcp4_failure.store(value, Ordering::SeqCst);
+            }
             StatsEvent::Tcp4ConnectionsHandled => {
                 self.stats.tcp4_connections_handled.store(value, Ordering::SeqCst);
             }
@@ -251,6 +277,12 @@ impl TorrentTracker {
             }
             StatsEvent::Tcp4ScrapesHandled => {
                 self.stats.tcp4_scrapes_handled.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::Tcp6NotFound => {
+                self.stats.tcp6_not_found.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::Tcp6Failure => {
+                self.stats.tcp6_failure.store(value, Ordering::SeqCst);
             }
             StatsEvent::Tcp6ConnectionsHandled => {
                 self.stats.tcp6_connections_handled.store(value, Ordering::SeqCst);
@@ -288,7 +320,7 @@ impl TorrentTracker {
             StatsEvent::TestCounterUdp => {
                 self.stats.test_counter_udp.store(value, Ordering::SeqCst);
             }
-        }
-        self.get_stats().await
+        };
+        self.get_stats()
     }
 }

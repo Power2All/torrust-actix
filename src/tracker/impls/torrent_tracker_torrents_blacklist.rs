@@ -34,7 +34,7 @@ impl TorrentTracker {
 
         if on_load { blacklist_arc.insert(info_hash, 1i64); } else { blacklist_arc.insert(info_hash, 2i64); }
 
-        self.update_stats(StatsEvent::Blacklist, 1).await;
+        self.update_stats(StatsEvent::Blacklist, 1);
     }
 
     pub async fn get_blacklist(&self) -> Vec<InfoHash>
@@ -56,7 +56,7 @@ impl TorrentTracker {
         let mut blacklist_count = 0i64;
         for item in blacklist_arc.iter() { if item.value() == &1i64 { blacklist_count += 1; } }
 
-        self.set_stats(StatsEvent::Blacklist, blacklist_count).await;
+        self.set_stats(StatsEvent::Blacklist, blacklist_count);
     }
 
     pub async fn remove_blacklist(&self, info_hash: InfoHash)
@@ -68,7 +68,7 @@ impl TorrentTracker {
         let mut blacklist_count = 0i64;
         for item in blacklist_arc.iter() { if item.value() == &1 { blacklist_count += 1; } }
 
-        self.set_stats(StatsEvent::Blacklist, blacklist_count).await;
+        self.set_stats(StatsEvent::Blacklist, blacklist_count);
     }
 
     pub async fn check_blacklist(&self, info_hash: InfoHash) -> bool
@@ -86,6 +86,6 @@ impl TorrentTracker {
 
         blacklist_arc.clear();
 
-        self.set_stats(StatsEvent::Blacklist, 0).await;
+        self.set_stats(StatsEvent::Blacklist, 0);
     }
 }

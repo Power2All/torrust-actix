@@ -12,90 +12,85 @@ impl TorrentTracker {
     {
         if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker.clone()).await {
             info!("Loaded {} torrents with {} completes.", torrents, completes);
-            self.set_stats(StatsEvent::Completed, completes as i64).await;
+            self.set_stats(StatsEvent::Completed, completes as i64);
         }
     }
 
-    pub async fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry, persistent: bool) -> TorrentEntry
+    pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
-        let map = self.torrents_map.clone();
-        let mut lock = map.write();
-        let torrent = match lock.entry(info_hash) {
+        match self.torrents_map.clone().write().entry(info_hash) {
             Entry::Vacant(v) => {
-                self.update_stats(StatsEvent::Torrents, 1).await;
-                v.insert(torrent_entry.clone()).clone()
+                (v.insert(torrent_entry).clone(), true)
             }
             Entry::Occupied(o) => {
-                o.get().clone()
+                (o.get().clone(), false)
             }
-        };
-        drop(lock);
-        if persistent {
-            self.add_torrents_update(info_hash, torrent_entry.completed as i64).await;
         }
-        torrent.clone()
     }
 
-    pub async fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
+    pub fn add_torrents(&self, hashes: BTreeMap<InfoHash, TorrentEntry>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
     {
+        let mut returned_data = BTreeMap::new();
         let map = self.torrents_map.clone();
-        let lock = map.read();
-        match lock.get(&info_hash) {
+        let mut lock = map.write();
+        for (info_hash, torrent_entry) in hashes.iter() {
+            match lock.entry(*info_hash) {
+                Entry::Vacant(v) => {
+                    returned_data.insert(*info_hash, (torrent_entry.clone(), true));
+                    v.insert(torrent_entry.clone());
+                }
+                Entry::Occupied(mut o) => {
+                    returned_data.insert(*info_hash, (o.get().clone(), false));
+                    o.insert(torrent_entry.clone());
+                }
+            }
+        }
+        returned_data
+    }
+
+    pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
+    {
+        match self.torrents_map.clone().read().get(&info_hash) {
             None => { None }
-            Some(t) => {
+            Some(torrent) => {
                 Some(TorrentEntry {
-                    seeds: t.seeds.clone(),
-                    peers: t.peers.clone(),
-                    completed: t.completed,
-                    updated: t.updated
+                    seeds: torrent.seeds.clone(),
+                    peers: torrent.peers.clone(),
+                    completed: torrent.completed,
+                    updated: torrent.updated,
                 })
             }
         }
     }
 
-    pub async fn remove_torrent(&self, info_hash: InfoHash, persistent: bool) -> (bool, u64, u64)
+    pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
+        let mut returned_data = BTreeMap::new();
         let map = self.torrents_map.clone();
-        let mut lock = map.write();
-        let result = match lock.entry(info_hash) {
-            Entry::Vacant(_) => {
-                (false, 0, 0)
-            }
-            Entry::Occupied(o) => {
-                let seeds = o.get().clone().seeds.len();
-                let peers = o.get().clone().peers.len();
-                o.remove();
-                (true, seeds as u64, peers as u64)
-            }
-        };
-        drop(lock);
-        if result.0 {
-            self.update_stats(StatsEvent::Seeds, 0 - result.1 as i64).await;
-            self.update_stats(StatsEvent::Peers, 0 - result.2 as i64).await;
+        let lock = map.read();
+        for info_hash in hashes.iter() {
+            returned_data.insert(*info_hash, lock.get(info_hash).map(|torrent| torrent.clone()));
         }
-        result
+        returned_data
     }
 
-    pub async fn get_torrents_chunk(&self, skip: usize, amount: usize) -> BTreeMap<InfoHash, TorrentEntry>
+    pub fn get_torrents_chunk(&self, skip: usize, amount: usize) -> BTreeMap<InfoHash, TorrentEntry>
     {
-        let map = self.torrents_map.clone();
-        let mut count = 0usize;
+        self.torrents_map.clone().read().iter().skip(skip).into_iter().take(amount).map(|(info_hash, torrent_entry)| (info_hash.clone(), torrent_entry.clone())).collect::<BTreeMap<InfoHash, TorrentEntry>>()
+    }
+
+    pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
+    {
+        self.torrents_map.clone().write().remove(&info_hash)
+    }
+
+    pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
+    {
         let mut returned_data = BTreeMap::new();
-        let lock = map.read();
-        if lock.len() > skip {
-            return returned_data;
-        }
-        for (info_hash, torrent_entry) in lock.iter().skip(skip) {
-            count += 1;
-            if count == amount {
-                break;
-            }
-            returned_data.insert(*info_hash, TorrentEntry {
-                seeds: torrent_entry.seeds.clone(),
-                peers: torrent_entry.peers.clone(),
-                completed: torrent_entry.completed,
-                updated: torrent_entry.updated
-            });
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
+        for info_hash in hashes.iter() {
+            returned_data.insert(*info_hash, lock.remove(info_hash).map(|torrent| torrent.clone()));
         }
         returned_data
     }
