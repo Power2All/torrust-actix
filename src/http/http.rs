@@ -259,7 +259,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                             let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
                                 Ok(ip) => { ip }
                                 Err(e) => {
-                                    error!("[IPV4 Error] {}", e.to_string());
+                                    error!("[IPV4 Error] {} - {}", torrent_peer.peer_addr.ip().to_string(), e.to_string());
                                     return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                                             "failure reason" => ben_bytes!(e.to_string())
                                         }.encode());
@@ -283,7 +283,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                                 let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
                                     Ok(ip) => { ip }
                                     Err(e) => {
-                                        error!("[IPV4 Error] {}", e.to_string());
+                                        error!("[IPV4 Error] {} - {}", torrent_peer.peer_addr.ip().to_string(), e.to_string());
                                         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                                             "failure reason" => ben_bytes!(e.to_string())
                                         }.encode());
@@ -319,7 +319,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                             let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
                                 Ok(ip) => { ip }
                                 Err(e) => {
-                                    error!("[IPV6 Error] {}", e.to_string());
+                                    error!("[IPV6 Error] {} - {}", torrent_peer.peer_addr.ip().to_string(), e.to_string());
                                     return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                                             "failure reason" => ben_bytes!(e.to_string())
                                         }.encode());
@@ -343,7 +343,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                                 let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
                                     Ok(ip) => { ip }
                                     Err(e) => {
-                                        error!("[IPV6 Error] {}", e.to_string());
+                                        error!("[IPV6 Error] {} - {}", torrent_peer.peer_addr.ip().to_string(), e.to_string());
                                         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                                             "failure reason" => ben_bytes!(e.to_string())
                                         }.encode());
