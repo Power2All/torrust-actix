@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::fs::File;
 use std::future::Future;
 use std::io::{BufReader, Write};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -256,7 +256,16 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     );
                     if seeds.is_some() {
                         for (_, torrent_peer) in seeds.unwrap().iter() {
-                            let _ = peers_list.write(&u32::from(torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>().unwrap()).to_be_bytes());
+                            let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
+                                Ok(ip) => { ip }
+                                Err(e) => {
+                                    error!("[IPV4 Error] {}", e.to_string());
+                                    return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                                            "failure reason" => ben_bytes!(e.to_string())
+                                        }.encode());
+                                }
+                            };
+                            let _ = peers_list.write(&u32::from(peer_pre_parse).to_be_bytes());
                             peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
                         }
                     }
@@ -271,7 +280,16 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     if peers.is_some() {
                         for (_, torrent_peer) in peers.unwrap().iter() {
                             if peers_list.len() != 72 {
-                                let _ = peers_list.write(&u32::from(torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>().unwrap()).to_be_bytes());
+                                let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
+                                    Ok(ip) => { ip }
+                                    Err(e) => {
+                                        error!("[IPV4 Error] {}", e.to_string());
+                                        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                                            "failure reason" => ben_bytes!(e.to_string())
+                                        }.encode());
+                                    }
+                                };
+                                let _ = peers_list.write(&u32::from(peer_pre_parse).to_be_bytes());
                                 peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
                                 continue;
                             }
@@ -298,7 +316,16 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     );
                     if seeds.is_some() {
                         for (_, torrent_peer) in seeds.unwrap().iter() {
-                            let _ = peers_list.write(&u128::from(torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>().unwrap()).to_be_bytes());
+                            let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
+                                Ok(ip) => { ip }
+                                Err(e) => {
+                                    error!("[IPV6 Error] {}", e.to_string());
+                                    return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                                            "failure reason" => ben_bytes!(e.to_string())
+                                        }.encode());
+                                }
+                            };
+                            let _ = peers_list.write(&u128::from(peer_pre_parse).to_be_bytes());
                             peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
                         }
                     }
@@ -313,7 +340,16 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     if peers.is_some() {
                         for (_, torrent_peer) in peers.unwrap().iter() {
                             if peers_list.len() != 72 {
-                                let _ = peers_list.write(&u128::from(torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>().unwrap()).to_be_bytes());
+                                let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
+                                    Ok(ip) => { ip }
+                                    Err(e) => {
+                                        error!("[IPV6 Error] {}", e.to_string());
+                                        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                                            "failure reason" => ben_bytes!(e.to_string())
+                                        }.encode());
+                                    }
+                                };
+                                let _ = peers_list.write(&u128::from(peer_pre_parse).to_be_bytes());
                                 peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
                                 continue;
                             }
