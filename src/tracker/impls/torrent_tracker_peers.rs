@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use log::info;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
@@ -81,16 +81,43 @@ impl TorrentTracker {
             return peers.iter().take(amount).map(|(peer_id, torrent_peer)| {
                 match type_ip {
                     TorrentPeersType::All => { None }
-                    TorrentPeersType::IPv4 | TorrentPeersType::IPv6 => {
+                    TorrentPeersType::IPv4 => {
                         match self_ip {
                             None => {
-                                Some((peer_id.clone(), torrent_peer.clone()))
+                                match torrent_peer.peer_addr {
+                                    SocketAddr::V4(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                    SocketAddr::V6(_) => { None}
+                                }
                             }
                             Some(ip) => {
                                 if ip != torrent_peer.peer_addr.ip() {
-                                    return Some((peer_id.clone(), torrent_peer.clone()));
+                                    match torrent_peer.peer_addr {
+                                        SocketAddr::V4(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                        SocketAddr::V6(_) => { None }
+                                    }
+                                } else {
+                                    None
                                 }
-                                None
+                            }
+                        }
+                    }
+                    TorrentPeersType::IPv6 => {
+                        match self_ip {
+                            None => {
+                                match torrent_peer.peer_addr {
+                                    SocketAddr::V4(_) => { None }
+                                    SocketAddr::V6(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                }
+                            }
+                            Some(ip) => {
+                                if ip != torrent_peer.peer_addr.ip() {
+                                    match torrent_peer.peer_addr {
+                                        SocketAddr::V4(_) => { None }
+                                        SocketAddr::V6(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                    }
+                                } else {
+                                    None
+                                }
                             }
                         }
                     }
@@ -100,16 +127,43 @@ impl TorrentTracker {
         peers.iter().map(|(peer_id, torrent_peer)| {
             match type_ip {
                 TorrentPeersType::All => { None }
-                TorrentPeersType::IPv4 | TorrentPeersType::IPv6 => {
+                TorrentPeersType::IPv4 => {
                     match self_ip {
                         None => {
-                            Some((peer_id.clone(), torrent_peer.clone()))
+                            match torrent_peer.peer_addr {
+                                SocketAddr::V4(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                SocketAddr::V6(_) => { None}
+                            }
                         }
                         Some(ip) => {
                             if ip != torrent_peer.peer_addr.ip() {
-                                return Some((peer_id.clone(), torrent_peer.clone()));
+                                match torrent_peer.peer_addr {
+                                    SocketAddr::V4(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                    SocketAddr::V6(_) => { None }
+                                }
+                            } else {
+                                None
                             }
-                            None
+                        }
+                    }
+                }
+                TorrentPeersType::IPv6 => {
+                    match self_ip {
+                        None => {
+                            match torrent_peer.peer_addr {
+                                SocketAddr::V4(_) => { None }
+                                SocketAddr::V6(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                            }
+                        }
+                        Some(ip) => {
+                            if ip != torrent_peer.peer_addr.ip() {
+                                match torrent_peer.peer_addr {
+                                    SocketAddr::V4(_) => { None }
+                                    SocketAddr::V6(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                }
+                            } else {
+                                None
+                            }
                         }
                     }
                 }
