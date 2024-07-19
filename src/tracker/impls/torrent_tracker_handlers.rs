@@ -345,6 +345,9 @@ impl TorrentTracker {
                     torrent_peer.clone(),
                     true
                 );
+                if announce_query.left == 0 {
+                    self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Completed, 1);
+                }
                 match torrent_entry.0 {
                     None => {
                         self.handle_stat_update(announce_query.remote_addr, Data::new(data.clone()), StatsEvent::Torrents, StatsEvent::Torrents, 1);
