@@ -280,6 +280,24 @@ impl TorrentTracker {
                             }
                         }
                     }
+                    for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
+                        if torrent_peer.updated.elapsed() > peer_timeout {
+                            match self.remove_torrent_peer(*info_hash, *peer_id, persistent) {
+                                (None, None) => {
+                                    torrents_removed += 1;
+                                }
+                                (previous, None) => {
+                                    torrents_removed += 1;
+                                    seeds_found += previous.clone().unwrap().seeds.len() as u64;
+                                    peers_found += previous.clone().unwrap().peers.len() as u64;
+                                }
+                                (previous, new) => {
+                                    seeds_found += previous.clone().unwrap().seeds.len() as u64 - new.clone().unwrap().seeds.len() as u64;
+                                    peers_found += previous.clone().unwrap().peers.len() as u64 - new.clone().unwrap().peers.len() as u64;
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
                 break;
