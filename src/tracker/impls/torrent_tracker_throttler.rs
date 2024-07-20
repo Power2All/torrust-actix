@@ -62,7 +62,7 @@ impl TorrentTracker {
         }
     }
 
-    pub fn scan_throttle_outdated(&self)
+    pub fn scan_throttle_outdated(&self) -> u64
     {
         let map = self.peers_throttler.clone();
         let lock = map.read();
@@ -80,5 +80,13 @@ impl TorrentTracker {
         let _: Vec<_> = remove_list.iter().map(|hash| {
             lock.remove(hash);
         }).collect();
+        remove_list.len() as u64
+    }
+
+    pub fn get_throttle_count(&self) -> u64
+    {
+        let map = self.peers_throttler.clone();
+        let lock = map.read();
+        lock.len() as u64
     }
 }

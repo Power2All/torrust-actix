@@ -48,6 +48,7 @@ impl TorrentTracker {
             udp6_connections_handled: self.stats.udp6_connections_handled.load(Ordering::SeqCst),
             udp6_announces_handled: self.stats.udp6_announces_handled.load(Ordering::SeqCst),
             udp6_scrapes_handled: self.stats.udp6_scrapes_handled.load(Ordering::SeqCst),
+            throttled: self.get_throttle_count() as i64,
             test_counter: self.stats.test_counter.load(Ordering::SeqCst),
             test_counter_udp: self.stats.test_counter_udp.load(Ordering::SeqCst),
         }
