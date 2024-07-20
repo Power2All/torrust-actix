@@ -199,7 +199,7 @@ async fn main() -> std::io::Result<()>
             tracker_spawn_cleanup.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn_cleanup.config.interval_cleanup.unwrap() as i64);
             task::sleep(Duration::from_secs(tracker_spawn_cleanup.config.interval_cleanup.unwrap_or(60))).await;
             info!("[PEERS] Checking now for dead peers.");
-            let (torrents, seeds, peers) = tracker_spawn_cleanup.torrent_peers_cleanup(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap()), tracker_spawn_cleanup.config.persistence);
+            let _ = tracker_spawn_cleanup.torrent_peers_cleanup(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap()), tracker_spawn_cleanup.config.persistence);
             info!("[PEERS] Peers cleaned up.");
 
             if tracker_spawn_cleanup.config.users {

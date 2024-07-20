@@ -1,5 +1,4 @@
 use std::collections::btree_map::Entry;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::IpAddr;
 use std::ops::Deref;
 use crate::common::common::get_sys_time_in_secs;
@@ -18,7 +17,7 @@ impl TorrentTracker {
         let map = self.peers_throttler.clone();
         let mut lock = map.write();
         match lock.entry(u128::from_le_bytes(ip_parsed.octets())) {
-            Entry::Vacant(v) => {
+            Entry::Vacant(_) => {
                 true
             }
             Entry::Occupied(mut o) => {
@@ -66,18 +65,14 @@ impl TorrentTracker {
     pub fn scan_throttle_outdated(&self)
     {
         let map = self.peers_throttler.clone();
-        let mut lock = map.read();
+        let lock = map.read();
         let mut remove_list = vec![];
         for (hash, (timestamp, count)) in lock.iter() {
-            if count.deref() <= &self.config.throttle_max_count.unwrap_or(5) {
-                if get_sys_time_in_secs() > timestamp.deref() + self.config.throttle_max_timestamp_reset.unwrap_or(60) {
-                    remove_list.push(hash.clone());
-                }
+            if count <= &self.config.throttle_max_count.unwrap_or(5) && get_sys_time_in_secs() > timestamp + self.config.throttle_max_timestamp_reset.unwrap_or(60) {
+                remove_list.push(*hash);
             }
-            if count.deref() > &self.config.throttle_max_count.unwrap_or(5) {
-                if get_sys_time_in_secs() > timestamp.deref() + self.config.throttle_duration_reject.unwrap_or(60) {
-                    remove_list.push(hash.clone());
-                }
+            if count > &self.config.throttle_max_count.unwrap_or(5) && get_sys_time_in_secs() > timestamp + self.config.throttle_duration_reject.unwrap_or(60) {
+                remove_list.push(*hash);
             }
         }
         drop(lock);

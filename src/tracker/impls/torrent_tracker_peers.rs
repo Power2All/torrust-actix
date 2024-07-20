@@ -33,42 +33,18 @@ impl TorrentTracker {
             Some(data) => {
                 match ip_type {
                     TorrentPeersType::All => {
-                        returned_data.seeds_ipv4 = match self.get_peers(data.seeds.clone(), TorrentPeersType::IPv4, self_ip, amount) {
-                            None => { BTreeMap::new() }
-                            Some(data) => { data }
-                        };
-                        returned_data.seeds_ipv6 = match self.get_peers(data.seeds.clone(), TorrentPeersType::IPv6, self_ip, amount) {
-                            None => { BTreeMap::new() }
-                            Some(data) => { data }
-                        };
-                        returned_data.peers_ipv4 = match self.get_peers(data.peers.clone(), TorrentPeersType::IPv4, self_ip, amount) {
-                            None => { BTreeMap::new() }
-                            Some(data) => { data }
-                        };
-                        returned_data.peers_ipv6 = match self.get_peers(data.peers.clone(), TorrentPeersType::IPv6, self_ip, amount) {
-                            None => { BTreeMap::new() }
-                            Some(data) => { data }
-                        };
+                        returned_data.seeds_ipv4 = self.get_peers(data.seeds.clone(), TorrentPeersType::IPv4, self_ip, amount).unwrap_or_default();
+                        returned_data.seeds_ipv6 = self.get_peers(data.seeds.clone(), TorrentPeersType::IPv6, self_ip, amount).unwrap_or_default();
+                        returned_data.peers_ipv4 = self.get_peers(data.peers.clone(), TorrentPeersType::IPv4, self_ip, amount).unwrap_or_default();
+                        returned_data.peers_ipv6 = self.get_peers(data.peers.clone(), TorrentPeersType::IPv6, self_ip, amount).unwrap_or_default();
                     }
                     TorrentPeersType::IPv4 => {
-                        returned_data.seeds_ipv4 = match self.get_peers(data.seeds.clone(), TorrentPeersType::IPv4, self_ip, amount) {
-                            None => { BTreeMap::new() }
-                            Some(data) => { data }
-                        };
-                        returned_data.peers_ipv4 = match self.get_peers(data.peers.clone(), TorrentPeersType::IPv4, self_ip, amount) {
-                            None => { BTreeMap::new() }
-                            Some(data) => { data }
-                        };
+                        returned_data.seeds_ipv4 = self.get_peers(data.seeds.clone(), TorrentPeersType::IPv4, self_ip, amount).unwrap_or_default();
+                        returned_data.peers_ipv4 = self.get_peers(data.peers.clone(), TorrentPeersType::IPv4, self_ip, amount).unwrap_or_default();
                     }
                     TorrentPeersType::IPv6 => {
-                        returned_data.seeds_ipv6 = match self.get_peers(data.seeds.clone(), TorrentPeersType::IPv6, self_ip, amount) {
-                            None => { BTreeMap::new() }
-                            Some(data) => { data }
-                        };
-                        returned_data.peers_ipv6 = match self.get_peers(data.peers.clone(), TorrentPeersType::IPv6, self_ip, amount) {
-                            None => { BTreeMap::new() }
-                            Some(data) => { data }
-                        };
+                        returned_data.seeds_ipv6 = self.get_peers(data.seeds.clone(), TorrentPeersType::IPv6, self_ip, amount).unwrap_or_default();
+                        returned_data.peers_ipv6 = self.get_peers(data.peers.clone(), TorrentPeersType::IPv6, self_ip, amount).unwrap_or_default();
                     }
                 }
                 Some(returned_data)
@@ -86,14 +62,14 @@ impl TorrentTracker {
                         match self_ip {
                             None => {
                                 match torrent_peer.peer_addr {
-                                    SocketAddr::V4(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                    SocketAddr::V4(_) => { Some((*peer_id, torrent_peer.clone())) }
                                     SocketAddr::V6(_) => { None}
                                 }
                             }
                             Some(ip) => {
                                 if ip != torrent_peer.peer_addr.ip() {
                                     match torrent_peer.peer_addr {
-                                        SocketAddr::V4(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                        SocketAddr::V4(_) => { Some((*peer_id, torrent_peer.clone())) }
                                         SocketAddr::V6(_) => { None }
                                     }
                                 } else {
@@ -107,14 +83,14 @@ impl TorrentTracker {
                             None => {
                                 match torrent_peer.peer_addr {
                                     SocketAddr::V4(_) => { None }
-                                    SocketAddr::V6(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                    SocketAddr::V6(_) => { Some((*peer_id, torrent_peer.clone())) }
                                 }
                             }
                             Some(ip) => {
                                 if ip != torrent_peer.peer_addr.ip() {
                                     match torrent_peer.peer_addr {
                                         SocketAddr::V4(_) => { None }
-                                        SocketAddr::V6(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                        SocketAddr::V6(_) => { Some((*peer_id, torrent_peer.clone())) }
                                     }
                                 } else {
                                     None
@@ -132,14 +108,14 @@ impl TorrentTracker {
                     match self_ip {
                         None => {
                             match torrent_peer.peer_addr {
-                                SocketAddr::V4(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                SocketAddr::V4(_) => { Some((*peer_id, torrent_peer.clone())) }
                                 SocketAddr::V6(_) => { None}
                             }
                         }
                         Some(ip) => {
                             if ip != torrent_peer.peer_addr.ip() {
                                 match torrent_peer.peer_addr {
-                                    SocketAddr::V4(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                    SocketAddr::V4(_) => { Some((*peer_id, torrent_peer.clone())) }
                                     SocketAddr::V6(_) => { None }
                                 }
                             } else {
@@ -153,14 +129,14 @@ impl TorrentTracker {
                         None => {
                             match torrent_peer.peer_addr {
                                 SocketAddr::V4(_) => { None }
-                                SocketAddr::V6(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                SocketAddr::V6(_) => { Some((*peer_id, torrent_peer.clone())) }
                             }
                         }
                         Some(ip) => {
                             if ip != torrent_peer.peer_addr.ip() {
                                 match torrent_peer.peer_addr {
                                     SocketAddr::V4(_) => { None }
-                                    SocketAddr::V6(_) => { Some((peer_id.clone(), torrent_peer.clone())) }
+                                    SocketAddr::V6(_) => { Some((*peer_id, torrent_peer.clone())) }
                                 }
                             } else {
                                 None
@@ -241,7 +217,7 @@ impl TorrentTracker {
                 if o.get_mut().peers.remove(&peer_id).is_some() {
                     self.update_stats(StatsEvent::Peers, -1);
                 };
-                if !persistent && o.get().seeds.len() == 0 && o.get().peers.len() == 0 {
+                if !persistent && o.get().seeds.is_empty() && o.get().peers.is_empty() {
                     lock.remove(&info_hash);
                     self.update_stats(StatsEvent::Torrents, -1);
                     return (Some(previous_torrent), None);
@@ -260,7 +236,7 @@ impl TorrentTracker {
         let mut peers_found = 0u64;
         loop {
             let torrents = self.get_torrents_chunk(start, chunk_size);
-            if torrents.len() != 0 {
+            if !torrents.is_empty() {
                 for (info_hash, torrent_entry) in torrents.iter() {
                     for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
                         if torrent_peer.updated.elapsed() > peer_timeout {

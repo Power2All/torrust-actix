@@ -52,17 +52,12 @@ impl TorrentTracker {
 
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        match self.torrents_map.clone().read().get(&info_hash) {
-            None => { None }
-            Some(torrent) => {
-                Some(TorrentEntry {
-                    seeds: torrent.seeds.clone(),
-                    peers: torrent.peers.clone(),
-                    completed: torrent.completed,
-                    updated: torrent.updated,
-                })
-            }
-        }
+        self.torrents_map.clone().read().get(&info_hash).map(|torrent| TorrentEntry {
+            seeds: torrent.seeds.clone(),
+            peers: torrent.peers.clone(),
+            completed: torrent.completed,
+            updated: torrent.updated
+        })
     }
 
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
@@ -71,14 +66,14 @@ impl TorrentTracker {
         let map = self.torrents_map.clone();
         let lock = map.read();
         for info_hash in hashes.iter() {
-            returned_data.insert(*info_hash, lock.get(info_hash).map(|torrent| torrent.clone()));
+            returned_data.insert(*info_hash, lock.get(info_hash).cloned());
         }
         returned_data
     }
 
     pub fn get_torrents_chunk(&self, skip: usize, amount: usize) -> BTreeMap<InfoHash, TorrentEntry>
     {
-        self.torrents_map.clone().read().iter().skip(skip).into_iter().take(amount).map(|(info_hash, torrent_entry)| (info_hash.clone(), torrent_entry.clone())).collect::<BTreeMap<InfoHash, TorrentEntry>>()
+        self.torrents_map.clone().read().iter().skip(skip).take(amount).map(|(info_hash, torrent_entry)| (*info_hash, torrent_entry.clone())).collect::<BTreeMap<InfoHash, TorrentEntry>>()
     }
 
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
