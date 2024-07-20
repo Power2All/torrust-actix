@@ -30,12 +30,14 @@ impl TorrentTracker {
             keys: self.stats.keys.load(Ordering::SeqCst),
             tcp4_not_found: self.stats.tcp4_not_found.load(Ordering::SeqCst),
             tcp4_failure: self.stats.tcp4_failure.load(Ordering::SeqCst),
+            tcp4_throttled: self.stats.tcp4_throttled.load(Ordering::SeqCst),
             tcp4_connections_handled: self.stats.tcp4_connections_handled.load(Ordering::SeqCst),
             tcp4_api_handled: self.stats.tcp4_api_handled.load(Ordering::SeqCst),
             tcp4_announces_handled: self.stats.tcp4_announces_handled.load(Ordering::SeqCst),
             tcp4_scrapes_handled: self.stats.tcp4_scrapes_handled.load(Ordering::SeqCst),
             tcp6_not_found: self.stats.tcp6_not_found.load(Ordering::SeqCst),
             tcp6_failure: self.stats.tcp6_failure.load(Ordering::SeqCst),
+            tcp6_throttled: self.stats.tcp6_throttled.load(Ordering::SeqCst),
             tcp6_connections_handled: self.stats.tcp6_connections_handled.load(Ordering::SeqCst),
             tcp6_api_handled: self.stats.tcp6_api_handled.load(Ordering::SeqCst),
             tcp6_announces_handled: self.stats.tcp6_announces_handled.load(Ordering::SeqCst),
@@ -130,6 +132,10 @@ impl TorrentTracker {
                 if value > 0 { self.stats.tcp4_failure.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.tcp4_failure.fetch_sub(-value, Ordering::SeqCst); }
             }
+            StatsEvent::Tcp4Throttled => {
+                if value > 0 { self.stats.tcp4_throttled.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.tcp4_throttled.fetch_sub(-value, Ordering::SeqCst); }
+            }
             StatsEvent::Tcp4ConnectionsHandled => {
                 if value > 0 { self.stats.tcp4_connections_handled.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.tcp4_connections_handled.fetch_sub(-value, Ordering::SeqCst); }
@@ -153,6 +159,10 @@ impl TorrentTracker {
             StatsEvent::Tcp6Failure => {
                 if value > 0 { self.stats.tcp6_failure.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.tcp6_failure.fetch_sub(-value, Ordering::SeqCst); }
+            }
+            StatsEvent::Tcp6Throttled => {
+                if value > 0 { self.stats.tcp6_throttled.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.tcp6_throttled.fetch_sub(-value, Ordering::SeqCst); }
             }
             StatsEvent::Tcp6ConnectionsHandled => {
                 if value > 0 { self.stats.tcp6_connections_handled.fetch_add(value, Ordering::SeqCst); }
@@ -266,6 +276,9 @@ impl TorrentTracker {
             StatsEvent::Tcp4Failure => {
                 self.stats.tcp4_failure.store(value, Ordering::SeqCst);
             }
+            StatsEvent::Tcp4Throttled => {
+                self.stats.tcp4_throttled.store(value, Ordering::SeqCst);
+            }
             StatsEvent::Tcp4ConnectionsHandled => {
                 self.stats.tcp4_connections_handled.store(value, Ordering::SeqCst);
             }
@@ -283,6 +296,9 @@ impl TorrentTracker {
             }
             StatsEvent::Tcp6Failure => {
                 self.stats.tcp6_failure.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::Tcp6Throttled => {
+                self.stats.tcp6_throttled.store(value, Ordering::SeqCst);
             }
             StatsEvent::Tcp6ConnectionsHandled => {
                 self.stats.tcp6_connections_handled.store(value, Ordering::SeqCst);

@@ -71,6 +71,10 @@ impl Configuration {
             interval_cleanup: Some(900),
             cleanup_chunks: Some(100000),
 
+            throttle_max_count: None,
+            throttle_max_timestamp_reset: None,
+            throttle_duration_reject: None,
+
             http_server,
             udp_server,
             web_support: false,

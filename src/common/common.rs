@@ -194,3 +194,10 @@ pub async fn convert_bytes_to_int(array: &Vec<u8>) -> u64 {
     let mut rdr = Cursor::new(array_fixed);
     rdr.read_u64::<BigEndian>().unwrap()
 }
+
+pub fn get_sys_time_in_secs() -> u64 {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}

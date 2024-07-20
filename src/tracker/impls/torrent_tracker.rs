@@ -15,6 +15,7 @@ impl TorrentTracker {
         TorrentTracker {
             config: config.clone(),
             torrents_map: Arc::new(RwLock::new(BTreeMap::new())),
+            peers_throttler: Arc::new(RwLock::new(BTreeMap::new())),
             torrents_updates: Arc::new(SkipMap::new()),
             torrents_shadow: Arc::new(SkipMap::new()),
             stats: Arc::new(StatsAtomics {
@@ -45,12 +46,14 @@ impl TorrentTracker {
                 tcp4_scrapes_handled: AtomicI64::new(0),
                 tcp4_not_found: AtomicI64::new(0),
                 tcp4_failure: AtomicI64::new(0),
+                tcp4_throttled: AtomicI64::new(0),
                 tcp6_connections_handled: AtomicI64::new(0),
                 tcp6_api_handled: AtomicI64::new(0),
                 tcp6_announces_handled: AtomicI64::new(0),
                 tcp6_scrapes_handled: AtomicI64::new(0),
                 tcp6_not_found: AtomicI64::new(0),
                 tcp6_failure: AtomicI64::new(0),
+                tcp6_throttled: AtomicI64::new(0),
                 udp4_connections_handled: AtomicI64::new(0),
                 udp4_announces_handled: AtomicI64::new(0),
                 udp4_scrapes_handled: AtomicI64::new(0),
@@ -58,7 +61,7 @@ impl TorrentTracker {
                 udp6_announces_handled: AtomicI64::new(0),
                 udp6_scrapes_handled: AtomicI64::new(0),
                 test_counter: AtomicI64::new(0),
-                test_counter_udp: AtomicI64::new(0),
+                test_counter_udp: AtomicI64::new(0)
             }),
             torrents_whitelist: Arc::new(SkipMap::new()),
             torrents_blacklist: Arc::new(SkipMap::new()),
