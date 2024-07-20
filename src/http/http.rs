@@ -270,13 +270,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
     if announce_unwrapped.compact {
         let mut peers_list: Vec<u8> = Vec::new();
-        return match announce_unwrapped.remote_addr {
+        return match ip {
             IpAddr::V4(_) => {
                 if announce_unwrapped.left != 0 {
                     let seeds = data.get_peers(
                         torrent_entry.seeds.clone(),
                         TorrentPeersType::IPv4,
-                        Some(announce_unwrapped.remote_addr),
+                        Some(ip),
                         72
                     );
                     if seeds.is_some() {
@@ -299,7 +299,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     let peers = data.get_peers(
                         torrent_entry.peers.clone(),
                         TorrentPeersType::IPv4,
-                        Some(announce_unwrapped.remote_addr),
+                        Some(ip),
                         72
                     );
                     if peers.is_some() {
@@ -336,7 +336,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     let seeds = data.get_peers(
                         torrent_entry.seeds.clone(),
                         TorrentPeersType::IPv6,
-                        Some(announce_unwrapped.remote_addr),
+                        Some(ip),
                         72
                     );
                     if seeds.is_some() {
@@ -359,7 +359,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     let peers = data.get_peers(
                         torrent_entry.peers.clone(),
                         TorrentPeersType::IPv6,
-                        Some(announce_unwrapped.remote_addr),
+                        Some(ip),
                         72
                     );
                     if peers.is_some() {
@@ -396,13 +396,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
     let mut peers_list = ben_list!();
     let peers_list_mut = peers_list.list_mut().unwrap();
-    return match announce_unwrapped.remote_addr {
+    return match ip {
         IpAddr::V4(_) => {
             if announce_unwrapped.left != 0 {
                 let seeds = data.get_peers(
                     torrent_entry.seeds.clone(),
                     TorrentPeersType::IPv4,
-                    Some(announce_unwrapped.remote_addr),
+                    Some(ip),
                     72
                 );
                 if seeds.is_some() {
@@ -419,7 +419,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 let peers = data.get_peers(
                     torrent_entry.peers.clone(),
                     TorrentPeersType::IPv4,
-                    Some(announce_unwrapped.remote_addr),
+                    Some(ip),
                     72
                 );
                 if peers.is_some() {
@@ -450,7 +450,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 let seeds = data.get_peers(
                     torrent_entry.seeds.clone(),
                     TorrentPeersType::IPv6,
-                    Some(announce_unwrapped.remote_addr),
+                    Some(ip),
                     72
                 );
                 if seeds.is_some() {
@@ -467,7 +467,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 let peers = data.get_peers(
                     torrent_entry.peers.clone(),
                     TorrentPeersType::IPv6,
-                    Some(announce_unwrapped.remote_addr),
+                    Some(ip),
                     72
                 );
                 if peers.is_some() {
