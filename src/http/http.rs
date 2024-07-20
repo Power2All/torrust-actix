@@ -237,6 +237,8 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let announce_unwrapped = match announce {
         Ok(result) => { result }
         Err(e) => {
+            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            data.increase_throttle_count(ip);
             return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "failure reason" => ben_bytes!(e.to_string())
             }.encode());
