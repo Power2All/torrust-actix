@@ -237,8 +237,6 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let announce_unwrapped = match announce {
         Ok(result) => { result }
         Err(e) => {
-            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            data.increase_throttle_count(ip);
             return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "failure reason" => ben_bytes!(e.to_string())
             }.encode());
@@ -246,16 +244,12 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     };
 
     if data.config.whitelist && !data.check_whitelist(announce_unwrapped.info_hash).await {
-        http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-        data.increase_throttle_count(ip);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
             "failure reason" => ben_bytes!("unknown info_hash")
         }.encode());
     }
 
     if data.config.blacklist && data.check_blacklist(announce_unwrapped.info_hash).await {
-        http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-        data.increase_throttle_count(ip);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
             "failure reason" => ben_bytes!("forbidden info_hash")
         }.encode());
