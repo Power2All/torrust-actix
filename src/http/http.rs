@@ -504,10 +504,12 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
         Ok(ip) => {
             match ip.is_ipv4() {
                 true => {
-                    data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1);
+                    let data_clone = data.clone();
+                    tokio::spawn(async move { data_clone.update_stats(StatsEvent::Tcp4ScrapesHandled, 1); });
                 }
                 false => {
-                    data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1);
+                    let data_clone = data.clone();
+                    tokio::spawn(async move { data_clone.update_stats(StatsEvent::Tcp6ScrapesHandled, 1); });
                 }
             }
             ip
@@ -591,10 +593,12 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<TorrentTra
         Ok(ip) => {
             match ip.is_ipv4() {
                 true => {
-                    data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1);
+                    let data_clone = data.clone();
+                    tokio::spawn(async move { data_clone.update_stats(StatsEvent::Tcp4ScrapesHandled, 1); });
                 }
                 false => {
-                    data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1);
+                    let data_clone = data.clone();
+                    tokio::spawn(async move { data_clone.update_stats(StatsEvent::Tcp6ScrapesHandled, 1); });
                 }
             }
             ip
@@ -617,13 +621,13 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<TorrentTra
     http_service_scrape_handler(request, ip, data.as_ref().clone()).await
 }
 
-pub async fn http_service_not_found(request: HttpRequest, data: Data<Arc<TorrentTracker>>) -> HttpResponse
+pub async fn http_service_not_found(request: HttpRequest, data: web::Data<Arc<TorrentTracker>>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
             match ip.is_ipv4() {
-                true => { data.update_stats(StatsEvent::Tcp4NotFound, 1); }
-                false => { data.update_stats(StatsEvent::Tcp6NotFound, 1); }
+                true => { tokio::spawn(async move { data.update_stats(StatsEvent::Tcp4NotFound, 1); }); }
+                false => { tokio::spawn(async move { data.update_stats(StatsEvent::Tcp6NotFound, 1); }); }
             }
             ip
         },
