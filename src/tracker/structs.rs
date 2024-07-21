@@ -11,3 +11,4 @@ pub mod user_entry_item;
 pub mod user_id;
 pub mod user_id_visitor;
 pub mod torrent_peers;
+pub mod torrent_sharding;
