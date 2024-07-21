@@ -20,7 +20,7 @@ impl TorrentTracker {
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
-        match lock.entry(info_hash) {
+        let return_data = match lock.entry(info_hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Torrents, 1);
                 (v.insert(torrent_entry).clone(), true)
@@ -28,7 +28,10 @@ impl TorrentTracker {
             Entry::Occupied(o) => {
                 (o.get().clone(), false)
             }
-        }
+        };
+        drop(lock);
+        drop(shard);
+        return_data
     }
 
     pub fn add_torrents(&self, hashes: BTreeMap<InfoHash, TorrentEntry>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
@@ -44,12 +47,15 @@ impl TorrentTracker {
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
         let lock = shard.read();
-        lock.get(&info_hash).map(|torrent| TorrentEntry {
+        let torrent = lock.get(&info_hash).map(|torrent| TorrentEntry {
             seeds: torrent.seeds.clone(),
             peers: torrent.peers.clone(),
             completed: torrent.completed,
             updated: torrent.updated
-        })
+        });
+        drop(lock);
+        drop(shard);
+        torrent
     }
 
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
@@ -65,7 +71,7 @@ impl TorrentTracker {
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
-        match lock.remove(&info_hash) {
+        let return_data = match lock.remove(&info_hash) {
             None => { None }
             Some(data) => {
                 self.update_stats(StatsEvent::Torrents, -1);
@@ -73,7 +79,10 @@ impl TorrentTracker {
                 self.update_stats(StatsEvent::Peers, data.peers.len() as i64);
                 Some(data)
             }
-        }
+        };
+        drop(lock);
+        drop(shard);
+        return_data
     }
 
     pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>

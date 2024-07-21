@@ -539,7 +539,13 @@ impl TorrentSharding {
     pub fn get_torrents_amount(&self) -> u64
     {
         let mut torrents = 0u64;
-        for index in 0u8..=255u8 { torrents += self.get_shard(index).unwrap().read().len() as u64; }
+        for index in 0u8..=255u8 {
+            let map = self.get_shard(index).unwrap();
+            let lock = map.read();
+            torrents += lock.len() as u64;
+            drop(lock);
+            drop(map);
+        }
         torrents
     }
 }

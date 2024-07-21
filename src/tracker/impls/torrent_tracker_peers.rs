@@ -146,7 +146,7 @@ impl TorrentTracker {
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
-        match lock.entry(info_hash) {
+        let return_data = match lock.entry(info_hash) {
             Entry::Vacant(v) => {
                 let mut torrent_entry = TorrentEntry {
                     seeds: BTreeMap::new(),
@@ -192,14 +192,17 @@ impl TorrentTracker {
                 }
                 (Some(previous_torrent), o.get().clone())
             }
-        }
+        };
+        drop(lock);
+        drop(shard);
+        return_data
     }
 
     pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
-        match lock.entry(info_hash) {
+        let return_data = match lock.entry(info_hash) {
             Entry::Vacant(_) => {
                 (None, None)
             }
@@ -218,7 +221,10 @@ impl TorrentTracker {
                 }
                 (Some(previous_torrent), Some(o.get().clone()))
             }
-        }
+        };
+        drop(lock);
+        drop(shard);
+        return_data
     }
 
     pub fn torrent_peers_cleanup(&self, peer_timeout: Duration, persistent: bool) -> (u64, u64, u64)
