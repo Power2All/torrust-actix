@@ -16,7 +16,7 @@ impl TorrentTracker {
         // Check if the IP is in our throttle list, and determine if it hit the throttle limit.
         let map = self.peers_throttler.clone();
         let mut lock = map.write();
-        let return_data = match lock.entry(u128::from_le_bytes(ip_parsed.octets())) {
+        match lock.entry(u128::from_le_bytes(ip_parsed.octets())) {
             Entry::Vacant(_) => {
                 true
             }
@@ -37,10 +37,7 @@ impl TorrentTracker {
                 }
                 true
             }
-        };
-        drop(lock);
-        drop(map);
-        return_data
+        }
     }
 
     pub fn increase_throttle_count(&self, ip: IpAddr)
@@ -54,7 +51,7 @@ impl TorrentTracker {
         // Check if the IP is in our throttle list, and if not, add it, otherwise update the counter.
         let map = self.peers_throttler.clone();
         let mut lock = map.write();
-        let return_data = match lock.entry(u128::from_le_bytes(ip_parsed.octets())) {
+        match lock.entry(u128::from_le_bytes(ip_parsed.octets())) {
             Entry::Vacant(v) => {
                 v.insert((get_sys_time_in_secs(), 1));
             }
@@ -62,10 +59,7 @@ impl TorrentTracker {
                 let (_, count) = o.get_mut();
                 *count += 1;
             }
-        };
-        drop(lock);
-        drop(map);
-        return_data
+        }
     }
 
     pub fn scan_throttle_outdated(&self) -> u64
@@ -82,14 +76,10 @@ impl TorrentTracker {
             }
         }
         drop(lock);
-        drop(map);
-        let map = self.peers_throttler.clone();
         let mut lock = map.write();
         let _: Vec<_> = remove_list.iter().map(|hash| {
             lock.remove(hash);
         }).collect();
-        drop(lock);
-        drop(map);
         remove_list.len() as u64
     }
 
@@ -97,9 +87,6 @@ impl TorrentTracker {
     {
         let map = self.peers_throttler.clone();
         let lock = map.read();
-        let size = lock.len() as u64;
-        drop(lock);
-        drop(map);
-        size
+        lock.len() as u64
     }
 }
