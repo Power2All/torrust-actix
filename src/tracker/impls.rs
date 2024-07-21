@@ -20,4 +20,3 @@ pub mod user_id;
 pub mod user_id_visitor;
 pub mod announce_event;
 pub mod torrent_tracker_throttler;
-pub mod torrent_sharding;

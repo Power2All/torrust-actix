@@ -22,8 +22,14 @@ impl TorrentTracker {
             peers_ipv4: BTreeMap::new(),
             peers_ipv6: BTreeMap::new()
         };
-        match self.get_torrent(info_hash) {
-            None => { None }
+        let map = self.torrents_map.clone();
+        let lock = map.read();
+        let torrent = lock.get(&info_hash).cloned();
+        drop(lock);
+        match torrent {
+            None => {
+                None
+            }
             Some(data) => {
                 match ip_type {
                     TorrentPeersType::All => {
@@ -144,8 +150,8 @@ impl TorrentTracker {
 
     pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> (Option<TorrentEntry>, TorrentEntry)
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
-        let mut lock = shard.write();
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
                 let mut torrent_entry = TorrentEntry {
@@ -197,8 +203,8 @@ impl TorrentTracker {
 
     pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
-        let mut lock = shard.write();
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
         match lock.entry(info_hash) {
             Entry::Vacant(_) => {
                 (None, None)
@@ -223,14 +229,15 @@ impl TorrentTracker {
 
     pub fn torrent_peers_cleanup(&self, peer_timeout: Duration, persistent: bool) -> (u64, u64, u64)
     {
+        let mut start = 0usize;
+        let chunk_size: usize = self.config.cleanup_chunks.unwrap_or(1000) as usize;
         let mut torrents_removed = 0u64;
         let mut seeds_found = 0u64;
         let mut peers_found = 0u64;
-        for shard in 0u8..=255u8 {
-            let shard = self.torrents_sharding.clone().get_shard(shard).unwrap();
-            let lock = shard.write();
-            if !lock.is_empty() {
-                for (info_hash, torrent_entry) in lock.iter() {
+        loop {
+            let torrents = self.get_torrents_chunk(start, chunk_size);
+            if !torrents.is_empty() {
+                for (info_hash, torrent_entry) in torrents.iter() {
                     for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
                         if torrent_peer.updated.elapsed() > peer_timeout {
                             match self.remove_torrent_peer(*info_hash, *peer_id, persistent) {
@@ -268,9 +275,10 @@ impl TorrentTracker {
                         }
                     }
                 }
+            } else {
+                break;
             }
-            drop(lock);
-            drop(shard);
+            start += chunk_size;
         }
         info!("[PEERS CLEANUP] Removed {} torrents, {} seeds and {} peers", torrents_removed, seeds_found, peers_found);
         (torrents_removed, seeds_found, peers_found)

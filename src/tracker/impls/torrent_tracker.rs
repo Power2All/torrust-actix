@@ -14,7 +14,6 @@ impl TorrentTracker {
     {
         TorrentTracker {
             config: config.clone(),
-            torrents_sharding: Arc::new(Default::default()),
             torrents_map: Arc::new(RwLock::new(BTreeMap::new())),
             peers_throttler: Arc::new(RwLock::new(BTreeMap::new())),
             torrents_updates: Arc::new(SkipMap::new()),

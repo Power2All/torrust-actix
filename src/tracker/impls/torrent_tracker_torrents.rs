@@ -18,9 +18,7 @@ impl TorrentTracker {
 
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
-        let mut lock = shard.write();
-        match lock.entry(info_hash) {
+        match self.torrents_map.clone().write().entry(info_hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Torrents, 1);
                 (v.insert(torrent_entry).clone(), true)
@@ -34,17 +32,27 @@ impl TorrentTracker {
     pub fn add_torrents(&self, hashes: BTreeMap<InfoHash, TorrentEntry>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
     {
         let mut returned_data = BTreeMap::new();
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
         for (info_hash, torrent_entry) in hashes.iter() {
-            returned_data.insert(*info_hash, self.add_torrent(*info_hash, torrent_entry.clone()));
+            match lock.entry(*info_hash) {
+                Entry::Vacant(v) => {
+                    self.update_stats(StatsEvent::Torrents, 1);
+                    returned_data.insert(*info_hash, (torrent_entry.clone(), true));
+                    v.insert(torrent_entry.clone());
+                }
+                Entry::Occupied(mut o) => {
+                    returned_data.insert(*info_hash, (o.get().clone(), false));
+                    o.insert(torrent_entry.clone());
+                }
+            }
         }
         returned_data
     }
 
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
-        let lock = shard.read();
-        lock.get(&info_hash).map(|torrent| TorrentEntry {
+        self.torrents_map.clone().read().get(&info_hash).map(|torrent| TorrentEntry {
             seeds: torrent.seeds.clone(),
             peers: torrent.peers.clone(),
             completed: torrent.completed,
@@ -55,17 +63,22 @@ impl TorrentTracker {
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         let mut returned_data = BTreeMap::new();
+        let map = self.torrents_map.clone();
+        let lock = map.read();
         for info_hash in hashes.iter() {
-            returned_data.insert(*info_hash, self.get_torrent(*info_hash));
+            returned_data.insert(*info_hash, lock.get(info_hash).cloned());
         }
         returned_data
     }
 
+    pub fn get_torrents_chunk(&self, skip: usize, amount: usize) -> BTreeMap<InfoHash, TorrentEntry>
+    {
+        self.torrents_map.clone().read().iter().skip(skip).take(amount).map(|(info_hash, torrent_entry)| (*info_hash, torrent_entry.clone())).collect::<BTreeMap<InfoHash, TorrentEntry>>()
+    }
+
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
-        let mut lock = shard.write();
-        match lock.remove(&info_hash) {
+        match self.torrents_map.clone().write().remove(&info_hash) {
             None => { None }
             Some(data) => {
                 self.update_stats(StatsEvent::Torrents, -1);
@@ -79,16 +92,15 @@ impl TorrentTracker {
     pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         let mut returned_data = BTreeMap::new();
+        let map = self.torrents_map.clone();
+        let mut lock = map.write();
         for info_hash in hashes.iter() {
-            returned_data.insert(*info_hash, match self.remove_torrent(*info_hash) {
-                None => { None }
-                Some(torrent) => {
-                    self.update_stats(StatsEvent::Torrents, -1);
-                    self.update_stats(StatsEvent::Seeds, torrent.seeds.len() as i64);
-                    self.update_stats(StatsEvent::Peers, torrent.peers.len() as i64);
-                    Some(torrent)
-                }
-            });
+            returned_data.insert(*info_hash, lock.remove(info_hash).map(|torrent| {
+                self.update_stats(StatsEvent::Torrents, -1);
+                self.update_stats(StatsEvent::Seeds, torrent.seeds.len() as i64);
+                self.update_stats(StatsEvent::Peers, torrent.peers.len() as i64);
+                torrent.clone()
+            }));
         }
         returned_data
     }
