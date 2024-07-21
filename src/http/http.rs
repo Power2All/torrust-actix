@@ -124,14 +124,6 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
         Err(result) => { return result; }
     };
 
-    // Validate throttler
-    if !data.validate_throttle(ip) {
-        http_stat_update(ip, data.clone(), StatsEvent::Tcp4Throttled, StatsEvent::Tcp6Throttled, 1);
-        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map!{
-            "failure reason" => ben_bytes!("throttled")
-        }.encode());
-    }
-
     if data.config.keys {
         let key = path.clone();
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
@@ -161,14 +153,6 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
         },
         Err(result) => { return result; }
     };
-
-    // Validate throttler
-    if !data.validate_throttle(ip) {
-        http_stat_update(ip, data.clone(), StatsEvent::Tcp4Throttled, StatsEvent::Tcp6Throttled, 1);
-        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map!{
-            "failure reason" => ben_bytes!("throttled")
-        }.encode());
-    }
 
     if data.config.keys {
         let key = path.clone().0;
@@ -203,14 +187,6 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentT
         }
     };
 
-    // Validate throttler
-    if !data.validate_throttle(ip) {
-        http_stat_update(ip, data.clone(), StatsEvent::Tcp4Throttled, StatsEvent::Tcp6Throttled, 1);
-        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map!{
-            "failure reason" => ben_bytes!("throttled")
-        }.encode());
-    }
-
     if data.config.keys {
         http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map!{
@@ -228,7 +204,6 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         Ok(result) => { result }
         Err(err) => {
             http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            data.increase_throttle_count(ip);
             return err;
         }
     };
@@ -259,7 +234,6 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         Ok(result) => { result }
         Err(e) => {
             http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            data.increase_throttle_count(ip);
             return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "failure reason" => ben_bytes!(e.to_string())
             }.encode());
@@ -513,14 +487,6 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
         }
     };
 
-    // Validate throttler
-    if !data.validate_throttle(ip) {
-        http_stat_update(ip, data.clone(), StatsEvent::Tcp4Throttled, StatsEvent::Tcp6Throttled, 1);
-        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map!{
-            "failure reason" => ben_bytes!("throttled")
-        }.encode());
-    }
-
     debug!("[DEBUG] Request from {}: Scrape with Key", ip);
 
     if data.config.keys {
@@ -539,7 +505,6 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
         Ok(result) => { result }
         Err(err) => {
             http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            data.increase_throttle_count(ip);
             return err;
         }
     };
@@ -547,7 +512,6 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
     let scrape = data.validate_scrape(query_map).await;
     if scrape.is_err() {
         http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-        data.increase_throttle_count(ip);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
             "failure reason" => ben_bytes!(scrape.unwrap_err().to_string())
         }.encode());
@@ -573,7 +537,6 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
         }
         Err(e) => {
             http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            data.increase_throttle_count(ip);
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "failure reason" => ben_bytes!(e.to_string())
             }.encode())
@@ -599,14 +562,6 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<TorrentTra
             return result;
         }
     };
-
-    // Validate throttler
-    if !data.validate_throttle(ip) {
-        http_stat_update(ip, data.clone(), StatsEvent::Tcp4Throttled, StatsEvent::Tcp6Throttled, 1);
-        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map!{
-            "failure reason" => ben_bytes!("throttled")
-        }.encode());
-    }
 
     debug!("[DEBUG] Request from {}: Scrape", ip);
 

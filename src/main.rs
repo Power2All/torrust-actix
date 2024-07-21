@@ -185,9 +185,9 @@ async fn main() -> std::io::Result<()>
             task::sleep(Duration::from_secs(tracker_spawn_stats.config.log_console_interval.unwrap_or(60u64))).await;
             let stats = tracker_spawn_stats.get_stats();
             info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
-            info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {} - Throttled: {}", stats.whitelist, stats.blacklist, stats.keys, stats.throttled);
-            info!("[STATS TCP IPv4] C: {} - API: {} - A: {} - S: {} - F: {} - T: {} - 404: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled, stats.tcp4_failure, stats.tcp4_throttled, stats.tcp4_not_found);
-            info!("[STATS TCP IPv6] C: {} - API: {} - A: {} - S: {} - F: {} - T: {} - 404: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_throttled, stats.tcp6_not_found);
+            info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
+            info!("[STATS TCP IPv4] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled, stats.tcp4_failure, stats.tcp4_not_found);
+            info!("[STATS TCP IPv6] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found);
             info!("[STATS UDP IPv4] Connect: {} - Announce: {} - Scrape: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled);
             info!("[STATS UDP IPv6] Connect: {} - Announce: {} - Scrape: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled);
         }
@@ -207,16 +207,6 @@ async fn main() -> std::io::Result<()>
                 tracker_spawn_cleanup.clean_users_active_torrents(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap())).await;
                 info!("[USERS] Inactive torrents in users cleaned up.");
             }
-        }
-    });
-
-    let tracker_spawn_throttled = tracker.clone();
-    tokio::spawn(async move {
-        loop {
-            task::sleep(Duration::from_secs(tracker_spawn_throttled.config.throttle_max_timestamp_reset.unwrap_or(60))).await;
-            info!("[THROTTLE] For old throttles, and remove them.");
-            let removed = tracker_spawn_throttled.scan_throttle_outdated();
-            info!("[THROTTLE] Cleaned up {} throttles.", removed);
         }
     });
 

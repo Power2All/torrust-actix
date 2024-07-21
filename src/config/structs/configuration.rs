@@ -41,10 +41,6 @@ pub struct Configuration {
     pub interval_cleanup: Option<u64>,
     pub cleanup_chunks: Option<u64>,
 
-    pub throttle_max_count: Option<u64>,
-    pub throttle_max_timestamp_reset: Option<u64>,
-    pub throttle_duration_reject: Option<u64>,
-
     pub http_server: Vec<HttpTrackersConfig>,
     pub udp_server: Vec<UdpTrackersConfig>,
     pub web_support: bool,

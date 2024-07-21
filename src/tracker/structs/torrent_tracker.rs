@@ -15,7 +15,6 @@ pub struct TorrentTracker {
     pub config: Arc<Configuration>,
     pub torrents_sharding: Arc<TorrentSharding>,
     pub torrents_map: Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>,
-    pub peers_throttler: Arc<RwLock<BTreeMap<u128, (u64, u64)>>>, /* IP (can be IPv4 or IPV6), Timestamp and Counter */
     pub torrents_updates: Arc<SkipMap<InfoHash, i64>>,
     pub torrents_shadow: Arc<SkipMap<InfoHash, i64>>,
     pub stats: Arc<StatsAtomics>,
