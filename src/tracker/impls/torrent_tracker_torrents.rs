@@ -43,7 +43,7 @@ impl TorrentTracker {
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
-        let lock = shard.read();
+        let lock = shard.read_recursive();
         lock.get(&info_hash).map(|torrent| TorrentEntry {
             seeds: torrent.seeds.clone(),
             peers: torrent.peers.clone(),
