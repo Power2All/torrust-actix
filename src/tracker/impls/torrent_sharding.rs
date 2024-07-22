@@ -536,6 +536,12 @@ impl TorrentSharding {
             _ => { None }
         }
     }
+
+    pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry>
+    {
+        self.get_shard(shard).unwrap().read().clone()
+    }
+
     pub fn get_torrents_amount(&self) -> u64
     {
         let mut torrents = 0u64;

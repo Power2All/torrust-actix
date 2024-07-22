@@ -227,10 +227,9 @@ impl TorrentTracker {
         let mut seeds_found = 0u64;
         let mut peers_found = 0u64;
         for shard in 0u8..=255u8 {
-            let shard = self.torrents_sharding.clone().get_shard(shard).unwrap();
-            let lock = shard.write();
-            if !lock.is_empty() {
-                for (info_hash, torrent_entry) in lock.iter() {
+            let shard_data = self.torrents_sharding.get_shard_content(shard);
+            if !shard_data.is_empty() {
+                for (info_hash, torrent_entry) in shard_data.iter() {
                     for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
                         if torrent_peer.updated.elapsed() > peer_timeout {
                             match self.remove_torrent_peer(*info_hash, *peer_id, persistent) {
@@ -269,8 +268,6 @@ impl TorrentTracker {
                     }
                 }
             }
-            drop(lock);
-            drop(shard);
         }
         info!("[PEERS CLEANUP] Removed {} torrents, {} seeds and {} peers", torrents_removed, seeds_found, peers_found);
         (torrents_removed, seeds_found, peers_found)
