@@ -549,7 +549,7 @@ impl TorrentSharding {
         for index in 0u8..=255u8 {
             for shard in self.get_shard(index).unwrap().iter() {
                 seeds += shard.value().seeds.len() as u64;
-                peers += shard.value().peers.len() as u64;
+                peers += shard.value().seeds.len() as u64;
             }
         }
         (seeds, peers)
