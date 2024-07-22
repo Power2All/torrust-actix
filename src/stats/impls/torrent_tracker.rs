@@ -6,23 +6,21 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 impl TorrentTracker {
     pub fn get_stats(&self) -> Stats
     {
-        let live_torrents_stats = self.torrents_sharding.get_torrents_amount();
-        let (live_seeds_stats, live_peers_stats) = self.torrents_sharding.get_seeds_peers_amount();
         Stats {
             started: self.stats.started.load(Ordering::SeqCst),
             timestamp_run_save: self.stats.timestamp_run_save.load(Ordering::SeqCst),
             timestamp_run_timeout: self.stats.timestamp_run_timeout.load(Ordering::SeqCst),
             timestamp_run_console: self.stats.timestamp_run_console.load(Ordering::SeqCst),
             timestamp_run_keys_timeout: self.stats.timestamp_run_keys_timeout.load(Ordering::SeqCst),
-            torrents: live_torrents_stats as i64,
+            torrents: self.stats.torrents.load(Ordering::SeqCst),
             torrents_updates: self.stats.torrents_updates.load(Ordering::SeqCst),
             torrents_shadow: self.stats.torrents_shadow.load(Ordering::SeqCst),
             users: self.stats.users.load(Ordering::SeqCst),
             users_updates: self.stats.users_updates.load(Ordering::SeqCst),
             users_shadow: self.stats.users_shadow.load(Ordering::SeqCst),
             maintenance_mode: self.stats.maintenance_mode.load(Ordering::SeqCst),
-            seeds: live_seeds_stats as i64,
-            peers: live_peers_stats as i64,
+            seeds: self.stats.seeds.load(Ordering::SeqCst),
+            peers: self.stats.peers.load(Ordering::SeqCst),
             completed: self.stats.completed.load(Ordering::SeqCst),
             whitelist_enabled: self.stats.whitelist_enabled.load(Ordering::SeqCst),
             whitelist: self.stats.whitelist.load(Ordering::SeqCst),
