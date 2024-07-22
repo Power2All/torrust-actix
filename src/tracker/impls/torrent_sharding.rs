@@ -273,7 +273,7 @@ impl TorrentSharding {
     }
 
     #[allow(unreachable_patterns)]
-    pub fn get_shard(&self, shard: u8) -> Option<Arc<SkipMap<InfoHash, TorrentEntry>>>
+    pub async fn get_shard(&self, shard: u8) -> Option<Arc<SkipMap<InfoHash, TorrentEntry>>>
     {
         match shard {
             0 => { Some(self.shard_000.clone()) }
@@ -535,19 +535,19 @@ impl TorrentSharding {
             _ => { None }
         }
     }
-    pub fn get_torrents_amount(&self) -> u64
+    pub async fn get_torrents_amount(&self) -> u64
     {
         let mut torrents = 0u64;
-        for index in 0u8..=255u8 { torrents += self.get_shard(index).unwrap().len() as u64; }
+        for index in 0u8..=255u8 { torrents += self.get_shard(index).await.unwrap().len() as u64; }
         torrents
     }
 
-    pub fn get_seeds_peers_amount(&self) -> (u64, u64)
+    pub async fn get_seeds_peers_amount(&self) -> (u64, u64)
     {
         let mut seeds = 0u64;
         let mut peers = 0u64;
         for index in 0u8..=255u8 {
-            for shard in self.get_shard(index).unwrap().iter() {
+            for shard in self.get_shard(index).await.unwrap().iter() {
                 seeds += shard.value().seeds.len() as u64;
                 peers += shard.value().peers.len() as u64;
             }

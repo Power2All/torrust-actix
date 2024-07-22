@@ -45,7 +45,7 @@ pub async fn api_service_stats_get(request: HttpRequest, remote_ip: RemoteIP, da
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.config.clone()).await { return response; }
 
-    let stats = data.get_stats();
+    let stats = data.get_stats().await;
     HttpResponse::Ok().content_type(ContentType::json()).json(stats)
 }
 
@@ -120,9 +120,9 @@ pub async fn api_service(
 pub async fn api_service_stats_log(ip: IpAddr, tracker: Data<Arc<TorrentTracker>>)
 {
     if ip.is_ipv4() {
-        tracker.update_stats(StatsEvent::Tcp4ConnectionsHandled, 1);
+        tracker.update_stats(StatsEvent::Tcp4ConnectionsHandled, 1).await;
     } else {
-        tracker.update_stats(StatsEvent::Tcp6ConnectionsHandled, 1);
+        tracker.update_stats(StatsEvent::Tcp6ConnectionsHandled, 1).await;
     }
 }
 

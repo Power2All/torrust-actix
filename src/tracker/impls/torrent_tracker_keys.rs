@@ -38,7 +38,7 @@ impl TorrentTracker {
         let timeout_unix = timestamp.as_secs() as i64 + timeout;
         keys_arc.insert(hash, timeout_unix);
 
-        self.update_stats(StatsEvent::Key, 1);
+        self.update_stats(StatsEvent::Key, 1).await;
     }
 
     pub async fn add_key_raw(&self, hash: InfoHash, timeout: i64)
@@ -48,7 +48,7 @@ impl TorrentTracker {
         let time = SystemTime::from(Utc.timestamp_opt(timeout, 0).unwrap());
         if time.duration_since(SystemTime::now()).is_ok() { keys_arc.insert(hash, timeout); } else { return; }
 
-        self.update_stats(StatsEvent::Key, 1);
+        self.update_stats(StatsEvent::Key, 1).await;
     }
 
     pub async fn get_keys(&self) -> Vec<(InfoHash, i64)>
@@ -68,7 +68,7 @@ impl TorrentTracker {
         keys_arc.remove(&hash);
         let key_count = keys_arc.len();
 
-        self.set_stats(StatsEvent::Key, key_count as i64);
+        self.set_stats(StatsEvent::Key, key_count as i64).await;
     }
 
     pub async fn check_key(&self, hash: InfoHash) -> bool
@@ -86,7 +86,7 @@ impl TorrentTracker {
 
         keys_arc.clear();
 
-        self.set_stats(StatsEvent::Key, 0);
+        self.set_stats(StatsEvent::Key, 0).await;
     }
 
     pub async fn clean_keys(&self)

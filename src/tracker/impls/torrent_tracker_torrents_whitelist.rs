@@ -34,7 +34,7 @@ impl TorrentTracker {
 
         if on_load { whitelist_arc.insert(info_hash, 1i64); } else { whitelist_arc.insert(info_hash, 2i64); }
 
-        self.update_stats(StatsEvent::Whitelist, 1);
+        self.update_stats(StatsEvent::Whitelist, 1).await;
     }
 
     pub async fn get_whitelist(&self) -> Vec<(InfoHash, i64)>
@@ -55,7 +55,7 @@ impl TorrentTracker {
         let mut whitelist_count = 0i64;
         for item in whitelist_arc.iter() { if item.value() == &1i64 { whitelist_count += 1; } }
 
-        self.set_stats(StatsEvent::Whitelist, whitelist_count);
+        self.set_stats(StatsEvent::Whitelist, whitelist_count).await;
     }
 
     pub async fn remove_whitelist(&self, info_hash: InfoHash)
@@ -66,7 +66,7 @@ impl TorrentTracker {
         let mut whitelist_count = 0i64;
         for item in whitelist_arc.iter() { if item.value() == &1 { whitelist_count += 1; } }
 
-        self.set_stats(StatsEvent::Whitelist, whitelist_count);
+        self.set_stats(StatsEvent::Whitelist, whitelist_count).await;
     }
 
     pub async fn check_whitelist(&self, info_hash: InfoHash) -> bool
@@ -84,6 +84,6 @@ impl TorrentTracker {
 
         whitelist_arc.clear();
 
-        self.set_stats(StatsEvent::Whitelist, 0);
+        self.set_stats(StatsEvent::Whitelist, 0).await;
     }
 }

@@ -118,7 +118,7 @@ impl DatabaseConnectorSQLite {
                 seeds: BTreeMap::new(),
                 completed: completed_data as u64,
                 updated: std::time::Instant::now(),
-            });
+            }).await;
             total_torrents += 1;
             total_completes += completed_data as u64;
         }

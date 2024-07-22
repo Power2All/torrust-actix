@@ -118,7 +118,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
-            http_stat_update(ip, data.clone(), StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
+            http_stat_update(ip, data.clone(), StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1).await;
             ip
         },
         Err(result) => { return result; }
@@ -128,7 +128,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
         let key = path.clone();
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
         if let Some(value) = key_check {
-            http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1).await;
             return value;
         }
     }
@@ -148,7 +148,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
-            http_stat_update(ip, data.clone(), StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
+            http_stat_update(ip, data.clone(), StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1).await;
             ip
         },
         Err(result) => { return result; }
@@ -158,7 +158,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
         let key = path.clone().0;
         let key_check = http_service_check_key_validation(data.as_ref().clone(), key).await;
         if let Some(value) = key_check {
-            http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1).await;
             return value;
         }
     }
@@ -179,7 +179,7 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentT
     // Validate the IP address
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
-            http_stat_update(ip, data.clone(), StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
+            http_stat_update(ip, data.clone(), StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1).await;
             ip
         },
         Err(result) => {
@@ -188,7 +188,7 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<TorrentT
     };
 
     if data.config.keys {
-        http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+        http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1).await;
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map!{
             "failure reason" => ben_bytes!("missing key")
         }.encode());
@@ -203,7 +203,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let query_map = match http_service_query_hashing(query_map_result) {
         Ok(result) => { result }
         Err(err) => {
-            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1).await;
             return err;
         }
     };
@@ -233,7 +233,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let (_torrent_peer, torrent_entry) = match data.handle_announce(data.clone(), announce_unwrapped.clone(), user_key).await {
         Ok(result) => { result }
         Err(e) => {
-            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1).await;
             return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "failure reason" => ben_bytes!(e.to_string())
             }.encode());
@@ -250,7 +250,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         TorrentPeersType::IPv4,
                         Some(ip),
                         72
-                    );
+                    ).await;
                     if seeds.is_some() {
                         for (_, torrent_peer) in seeds.unwrap().iter() {
                             let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
@@ -273,7 +273,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         TorrentPeersType::IPv4,
                         Some(ip),
                         72
-                    );
+                    ).await;
                     if peers.is_some() {
                         for (_, torrent_peer) in peers.unwrap().iter() {
                             if peers_list.len() != 72 {
@@ -310,7 +310,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         TorrentPeersType::IPv6,
                         Some(ip),
                         72
-                    );
+                    ).await;
                     if seeds.is_some() {
                         for (_, torrent_peer) in seeds.unwrap().iter() {
                             let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
@@ -333,7 +333,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         TorrentPeersType::IPv6,
                         Some(ip),
                         72
-                    );
+                    ).await;
                     if peers.is_some() {
                         for (_, torrent_peer) in peers.unwrap().iter() {
                             if peers_list.len() != 72 {
@@ -376,7 +376,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     TorrentPeersType::IPv4,
                     Some(ip),
                     72
-                );
+                ).await;
                 if seeds.is_some() {
                     for (peer_id, torrent_peer) in seeds.unwrap().iter() {
                         peers_list_mut.push(ben_map! {
@@ -393,7 +393,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     TorrentPeersType::IPv4,
                     Some(ip),
                     72
-                );
+                ).await;
                 if peers.is_some() {
                     for (peer_id, torrent_peer) in peers.unwrap().iter() {
                         if peers_list_mut.len() != 72 {
@@ -424,7 +424,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     TorrentPeersType::IPv6,
                     Some(ip),
                     72
-                );
+                ).await;
                 if seeds.is_some() {
                     for (peer_id, torrent_peer) in seeds.unwrap().iter() {
                         peers_list_mut.push(ben_map! {
@@ -441,7 +441,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     TorrentPeersType::IPv6,
                     Some(ip),
                     72
-                );
+                ).await;
                 if peers.is_some() {
                     for (peer_id, torrent_peer) in peers.unwrap().iter() {
                         if peers_list_mut.len() != 72 {
@@ -474,10 +474,10 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
         Ok(ip) => {
             match ip.is_ipv4() {
                 true => {
-                    data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1);
+                    data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await;
                 }
                 false => {
-                    data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1);
+                    data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await;
                 }
             }
             ip
@@ -504,14 +504,14 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
     let query_map = match http_service_query_hashing(query_map_result) {
         Ok(result) => { result }
         Err(err) => {
-            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1).await;
             return err;
         }
     };
 
     let scrape = data.validate_scrape(query_map).await;
     if scrape.is_err() {
-        http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+        http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1).await;
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
             "failure reason" => ben_bytes!(scrape.unwrap_err().to_string())
         }.encode());
@@ -536,7 +536,7 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
             }.encode())
         }
         Err(e) => {
-            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            http_stat_update(ip, Data::new(data.clone()), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1).await;
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "failure reason" => ben_bytes!(e.to_string())
             }.encode())
@@ -550,10 +550,10 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<TorrentTra
         Ok(ip) => {
             match ip.is_ipv4() {
                 true => {
-                    data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1);
+                    data.update_stats(StatsEvent::Tcp4ScrapesHandled, 1).await;
                 }
                 false => {
-                    data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1);
+                    data.update_stats(StatsEvent::Tcp6ScrapesHandled, 1).await;
                 }
             }
             ip
@@ -573,8 +573,8 @@ pub async fn http_service_not_found(request: HttpRequest, data: Data<Arc<Torrent
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
             match ip.is_ipv4() {
-                true => { data.update_stats(StatsEvent::Tcp4NotFound, 1); }
-                false => { data.update_stats(StatsEvent::Tcp6NotFound, 1); }
+                true => { data.update_stats(StatsEvent::Tcp4NotFound, 1).await; }
+                false => { data.update_stats(StatsEvent::Tcp6NotFound, 1).await; }
             }
             ip
         },
@@ -593,8 +593,8 @@ pub async fn http_service_not_found(request: HttpRequest, data: Data<Arc<Torrent
 pub async fn http_service_stats_log(ip: IpAddr, tracker: Data<Arc<TorrentTracker>>)
 {
     match ip.is_ipv4() {
-        true => { tracker.update_stats(StatsEvent::Tcp4ConnectionsHandled, 1); }
-        false => { tracker.update_stats(StatsEvent::Tcp6ConnectionsHandled, 1); }
+        true => { tracker.update_stats(StatsEvent::Tcp4ConnectionsHandled, 1).await; }
+        false => { tracker.update_stats(StatsEvent::Tcp6ConnectionsHandled, 1).await; }
     }
 }
 
@@ -720,16 +720,16 @@ pub fn http_check_host_and_port_used(bind_address: String) {
     }
 }
 
-pub fn http_stat_update(ip: IpAddr, data: Data<Arc<TorrentTracker>>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
+pub async fn http_stat_update(ip: IpAddr, data: Data<Arc<TorrentTracker>>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
 {
     match ip {
         IpAddr::V4(_) => {
             let data_clone = data.clone();
-            data_clone.update_stats(stats_ipv4, count);
+            data_clone.update_stats(stats_ipv4, count).await;
         }
         IpAddr::V6(_) => {
             let data_clone = data.clone();
-            data_clone.update_stats(stat_ipv6, count);
+            data_clone.update_stats(stat_ipv6, count).await;
         }
     }
 }

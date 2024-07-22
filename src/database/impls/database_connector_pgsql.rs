@@ -66,7 +66,7 @@ impl DatabaseConnectorPgSQL {
                 peers: BTreeMap::new(),
                 completed: completed_data as u64,
                 updated: std::time::Instant::now()
-            });
+            }).await;
             counter += 1;
             total_torrents += 1;
             total_completes += completed_data as u64;

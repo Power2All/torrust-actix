@@ -63,7 +63,7 @@ impl TorrentTracker {
 
         users_arc.insert(user_key, user_entry_item);
 
-        self.set_stats(StatsEvent::Users, users_arc.len() as i64);
+        self.set_stats(StatsEvent::Users, users_arc.len() as i64).await;
     }
 
     pub async fn add_users(&self, users: HashMap<UserId, UserEntryItem>, _persistent: bool)
@@ -74,7 +74,7 @@ impl TorrentTracker {
             users_arc.insert(*user_id, user_entry_item.clone());
         }
 
-        self.set_stats(StatsEvent::Users, users_arc.len() as i64);
+        self.set_stats(StatsEvent::Users, users_arc.len() as i64).await;
     }
 
     pub async fn remove_user(&self, user_key: UserId)
@@ -83,7 +83,7 @@ impl TorrentTracker {
 
         users_arc.remove(&user_key);
 
-        self.set_stats(StatsEvent::Users, users_arc.len() as i64);
+        self.set_stats(StatsEvent::Users, users_arc.len() as i64).await;
     }
 
     pub async fn check_user_key(&self, hash: UserId) -> bool

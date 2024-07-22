@@ -263,7 +263,7 @@ impl TorrentTracker {
                     announce_query.peer_id,
                     torrent_peer.clone(),
                     false
-                );
+                ).await;
                 if data.config.users && user_key.is_some() {
                     if let Some(mut user) = data.get_user(user_key.unwrap()).await {
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
@@ -288,7 +288,7 @@ impl TorrentTracker {
                     announce_query.info_hash,
                     announce_query.peer_id,
                     data.config.persistence
-                ) {
+                ).await {
                     (Some(_), None) => {
                         TorrentEntry::new()
                     }
@@ -322,7 +322,7 @@ impl TorrentTracker {
                     announce_query.peer_id,
                     torrent_peer.clone(),
                     true
-                );
+                ).await;
                 if data.config.users && user_key.is_some(){
                     if let Some(mut user) = data.get_user(user_key.unwrap()).await {
                         user.completed += 1;
@@ -367,7 +367,7 @@ impl TorrentTracker {
         let mut return_data = BTreeMap::new();
         for info_hash in scrape_query.info_hash.iter() {
             debug!("[DEBUG] Calling get_torrent");
-            match data.get_torrent(*info_hash) {
+            match data.get_torrent(*info_hash).await {
                 None => { return_data.insert(*info_hash, TorrentEntry::new()); }
                 Some(result) => {
                     return_data.insert(*info_hash, result);
