@@ -4,10 +4,10 @@ use crate::stats::structs::stats::Stats;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    pub async fn get_stats(&self) -> Stats
+    pub fn get_stats(&self) -> Stats
     {
-        let live_torrents_stats = self.torrents_sharding.get_torrents_amount().await;
-        let (live_seeds_stats, live_peers_stats) = self.torrents_sharding.get_seeds_peers_amount().await;
+        let live_torrents_stats = self.torrents_sharding.get_torrents_amount();
+        let (live_seeds_stats, live_peers_stats) = self.torrents_sharding.get_seeds_peers_amount();
         Stats {
             started: self.stats.started.load(Ordering::SeqCst),
             timestamp_run_save: self.stats.timestamp_run_save.load(Ordering::SeqCst),
@@ -53,7 +53,7 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
+    pub fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
         match event {
             StatsEvent::Torrents => {
@@ -205,10 +205,10 @@ impl TorrentTracker {
                 if value < 0 { self.stats.test_counter_udp.fetch_sub(-value, Ordering::SeqCst); }
             }
         };
-        self.get_stats().await
+        self.get_stats()
     }
 
-    pub async fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
+    pub fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
         match event {
             StatsEvent::Torrents => {
@@ -323,6 +323,6 @@ impl TorrentTracker {
                 self.stats.test_counter_udp.store(value, Ordering::SeqCst);
             }
         };
-        self.get_stats().await
+        self.get_stats()
     }
 }

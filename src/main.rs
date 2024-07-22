@@ -39,7 +39,7 @@ async fn main() -> std::io::Result<()>
 
     let tracker = Arc::new(TorrentTracker::new(config.clone()).await);
 
-    tracker.set_stats(StatsEvent::Completed, config.total_downloads as i64).await;
+    tracker.set_stats(StatsEvent::Completed, config.total_downloads as i64);
 
     tokio::spawn(async move {
         loop {
@@ -181,9 +181,9 @@ async fn main() -> std::io::Result<()>
     let tracker_spawn_stats = tracker.clone();
     tokio::spawn(async move {
         loop {
-            tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64).await;
+            tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64);
             task::sleep(Duration::from_secs(tracker_spawn_stats.config.log_console_interval.unwrap_or(60u64))).await;
-            let stats = tracker_spawn_stats.get_stats().await;
+            let stats = tracker_spawn_stats.get_stats();
             info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
             info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
             info!("[STATS TCP IPv4] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled, stats.tcp4_failure, stats.tcp4_not_found);
@@ -196,10 +196,10 @@ async fn main() -> std::io::Result<()>
     let tracker_spawn_cleanup = tracker.clone();
     tokio::spawn(async move {
         loop {
-            tracker_spawn_cleanup.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_spawn_cleanup.config.interval_cleanup.unwrap() as i64).await;
+            tracker_spawn_cleanup.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_spawn_cleanup.config.interval_cleanup.unwrap() as i64);
             task::sleep(Duration::from_secs(tracker_spawn_cleanup.config.interval_cleanup.unwrap_or(60))).await;
             info!("[PEERS] Checking now for dead peers.");
-            let _ = tracker_spawn_cleanup.torrent_peers_cleanup(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap()), tracker_spawn_cleanup.config.persistence).await;
+            let _ = tracker_spawn_cleanup.torrent_peers_cleanup(Duration::from_secs(tracker_spawn_cleanup.config.clone().peer_timeout.unwrap()), tracker_spawn_cleanup.config.persistence);
             info!("[PEERS] Peers cleaned up.");
 
             if tracker_spawn_cleanup.config.users {

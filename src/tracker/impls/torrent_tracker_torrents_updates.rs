@@ -11,7 +11,7 @@ impl TorrentTracker {
         updates_arc.insert(info_hash, completed);
         let update_count = updates_arc.len() as i64;
 
-        self.set_stats(StatsEvent::TorrentsUpdates, update_count).await;
+        self.set_stats(StatsEvent::TorrentsUpdates, update_count);
     }
 
     pub async fn add_torrents_updates(&self, updates: HashMap<InfoHash, i64>)
@@ -25,7 +25,7 @@ impl TorrentTracker {
             update_count = updates_arc.len();
         }
 
-        self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64).await;
+        self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64);
     }
 
     pub async fn get_torrents_update(&self) -> HashMap<InfoHash, i64>
@@ -45,7 +45,7 @@ impl TorrentTracker {
         updates_arc.remove(&info_hash);
         let update_count = updates_arc.len();
 
-        self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64).await;
+        self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64);
     }
 
     pub async fn remove_torrents_updates(&self, hashes: Vec<InfoHash>)
@@ -59,7 +59,7 @@ impl TorrentTracker {
             update_count = updates_arc.len();
         }
 
-        self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64).await;
+        self.set_stats(StatsEvent::TorrentsUpdates, update_count as i64);
     }
 
     pub async fn transfer_torrents_updates_to_torrents_shadow(&self)
@@ -71,6 +71,6 @@ impl TorrentTracker {
             updates_arc.remove(item.key());
         }
 
-        self.set_stats(StatsEvent::TorrentsUpdates, 0).await;
+        self.set_stats(StatsEvent::TorrentsUpdates, 0);
     }
 }

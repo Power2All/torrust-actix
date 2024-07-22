@@ -21,7 +21,7 @@ impl TorrentTracker {
         shadow_arc.insert(info_hash, completed);
         let shadow_count = shadow_arc.len();
 
-        self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
+        self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64);
     }
 
     pub async fn remove_torrents_shadow(&self, info_hash: InfoHash)
@@ -31,7 +31,7 @@ impl TorrentTracker {
         shadow_arc.remove(&info_hash);
         let shadow_count = shadow_arc.len();
 
-        self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
+        self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64);
     }
 
     pub async fn remove_torrents_shadows(&self, hashes: Vec<InfoHash>)
@@ -44,7 +44,7 @@ impl TorrentTracker {
             shadow_count = shadow_arc.len();
         }
 
-        self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64).await;
+        self.set_stats(StatsEvent::TorrentsShadow, shadow_count as i64);
     }
 
     pub async fn get_torrents_shadow(&self) -> HashMap<InfoHash, i64>
@@ -63,6 +63,6 @@ impl TorrentTracker {
 
         shadow_arc.clear();
 
-        self.set_stats(StatsEvent::TorrentsShadow, 0).await;
+        self.set_stats(StatsEvent::TorrentsShadow, 0);
     }
 }
