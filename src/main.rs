@@ -1,10 +1,11 @@
 use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
+use std::thread::available_parallelism;
 use std::time::Duration;
 use async_std::task;
 use clap::Parser;
-use futures_util::future::{try_join_all, TryJoinAll};
+use futures_util::future::try_join_all;
 use log::info;
 use parking_lot::deadlock;
 use torrust_actix::api::api::api_service;
@@ -13,7 +14,7 @@ use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
 use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
-// use torrust_actix::udp::udp::udp_service;
+use torrust_actix::udp::udp::udp_service;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -167,16 +168,20 @@ async fn main() -> std::io::Result<()>
         });
     }
 
-    // let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
-    // let mut udp_futures = Vec::new();
-    // for udp_server_object in &config.udp_server {
-    //     if udp_server_object.enabled {
-    //         udp_check_host_and_port_used(udp_server_object.bind_address.clone());
-    //         let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
-    //         let tracker_clone = tracker.clone();
-    //         udp_futures.push(udp_service(address, tracker_clone, udp_rx.clone()).await);
-    //     }
-    // }
+    let (_udp_tx, udp_rx) = tokio::sync::watch::channel(false);
+    let mut udp_futures = Vec::new();
+    for udp_server_object in &config.udp_server {
+        if udp_server_object.enabled {
+            udp_check_host_and_port_used(udp_server_object.bind_address.clone());
+            let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
+            let threads: u64 = match udp_server_object.threads {
+                None => { available_parallelism().unwrap().get() as u64 }
+                Some(count) => { count }
+            };
+            let tracker_clone = tracker.clone();
+            udp_futures.push(udp_service(address, threads, tracker_clone, udp_rx.clone()).await);
+        }
+    }
 
     let tracker_spawn_stats = tracker.clone();
     tokio::spawn(async move {

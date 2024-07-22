@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::Write;
+use std::thread::available_parallelism;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::enums::configuration_error::ConfigurationError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
@@ -15,13 +16,14 @@ impl Configuration {
             UdpTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:6969"),
+                threads: Some(available_parallelism().unwrap().get() as u64)
             }
         );
         let http_server = vec!(
             HttpTrackersConfig {
                 enabled: false,
                 bind_address: String::from("0.0.0.0:6969"),
-                threads: Some(0),
+                threads: Some(available_parallelism().unwrap().get() as u64),
                 ssl: false,
                 ssl_key: String::from(""),
                 ssl_cert: String::from(""),
