@@ -40,9 +40,13 @@ impl TorrentTracker {
             tcp6_api_handled: self.stats.tcp6_api_handled.load(Ordering::SeqCst),
             tcp6_announces_handled: self.stats.tcp6_announces_handled.load(Ordering::SeqCst),
             tcp6_scrapes_handled: self.stats.tcp6_scrapes_handled.load(Ordering::SeqCst),
+            udp4_bad_request: self.stats.udp4_bad_request.load(Ordering::SeqCst),
+            udp4_invalid_request: self.stats.udp4_invalid_request.load(Ordering::SeqCst),
             udp4_connections_handled: self.stats.udp4_connections_handled.load(Ordering::SeqCst),
             udp4_announces_handled: self.stats.udp4_announces_handled.load(Ordering::SeqCst),
             udp4_scrapes_handled: self.stats.udp4_scrapes_handled.load(Ordering::SeqCst),
+            udp6_bad_request: self.stats.udp6_bad_request.load(Ordering::SeqCst),
+            udp6_invalid_request: self.stats.udp6_invalid_request.load(Ordering::SeqCst),
             udp6_connections_handled: self.stats.udp6_connections_handled.load(Ordering::SeqCst),
             udp6_announces_handled: self.stats.udp6_announces_handled.load(Ordering::SeqCst),
             udp6_scrapes_handled: self.stats.udp6_scrapes_handled.load(Ordering::SeqCst),
@@ -170,6 +174,14 @@ impl TorrentTracker {
                 if value > 0 { self.stats.tcp6_scrapes_handled.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.tcp6_scrapes_handled.fetch_sub(-value, Ordering::SeqCst); }
             }
+            StatsEvent::Udp4BadRequest => {
+                if value > 0 { self.stats.udp4_bad_request.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.udp4_bad_request.fetch_sub(-value, Ordering::SeqCst); }
+            }
+            StatsEvent::Udp4InvalidRequest => {
+                if value > 0 { self.stats.udp4_invalid_request.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.udp4_invalid_request.fetch_sub(-value, Ordering::SeqCst); }
+            }
             StatsEvent::Udp4ConnectionsHandled => {
                 if value > 0 { self.stats.udp4_connections_handled.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.udp4_connections_handled.fetch_sub(-value, Ordering::SeqCst); }
@@ -181,6 +193,14 @@ impl TorrentTracker {
             StatsEvent::Udp4ScrapesHandled => {
                 if value > 0 { self.stats.udp4_scrapes_handled.fetch_add(value, Ordering::SeqCst); }
                 if value < 0 { self.stats.udp4_scrapes_handled.fetch_sub(-value, Ordering::SeqCst); }
+            }
+            StatsEvent::Udp6BadRequest => {
+                if value > 0 { self.stats.udp6_bad_request.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.udp6_bad_request.fetch_sub(-value, Ordering::SeqCst); }
+            }
+            StatsEvent::Udp6InvalidRequest => {
+                if value > 0 { self.stats.udp4_invalid_request.fetch_add(value, Ordering::SeqCst); }
+                if value < 0 { self.stats.udp4_invalid_request.fetch_sub(-value, Ordering::SeqCst); }
             }
             StatsEvent::Udp6ConnectionsHandled => {
                 if value > 0 { self.stats.udp6_connections_handled.fetch_add(value, Ordering::SeqCst); }
@@ -296,6 +316,12 @@ impl TorrentTracker {
             StatsEvent::Tcp6ScrapesHandled => {
                 self.stats.tcp6_scrapes_handled.store(value, Ordering::SeqCst);
             }
+            StatsEvent::Udp4BadRequest => {
+                self.stats.udp4_bad_request.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::Udp4InvalidRequest => {
+                self.stats.udp4_bad_request.store(value, Ordering::SeqCst);
+            }
             StatsEvent::Udp4ConnectionsHandled => {
                 self.stats.udp4_connections_handled.store(value, Ordering::SeqCst);
             }
@@ -304,6 +330,12 @@ impl TorrentTracker {
             }
             StatsEvent::Udp4ScrapesHandled => {
                 self.stats.udp4_scrapes_handled.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::Udp6BadRequest => {
+                self.stats.udp6_bad_request.store(value, Ordering::SeqCst);
+            }
+            StatsEvent::Udp6InvalidRequest => {
+                self.stats.udp6_bad_request.store(value, Ordering::SeqCst);
             }
             StatsEvent::Udp6ConnectionsHandled => {
                 self.stats.udp6_connections_handled.store(value, Ordering::SeqCst);

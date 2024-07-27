@@ -70,8 +70,10 @@ impl UdpServer {
                             let payload_cloned = payload.clone();
                             let tracker_cloned = tracker.clone();
                             let socket_cloned = socket_clone.clone();
-                            let response = UdpServer::handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned).await;
-                            UdpServer::send_response(socket_cloned, remote_addr_cloned, response).await;
+                            tokio::spawn(async move {
+                                let response = UdpServer::handle_packet(remote_addr_cloned, payload_cloned, tracker_cloned.clone()).await;
+                                UdpServer::send_response(tracker_cloned.clone(), socket_cloned.clone(), remote_addr_cloned, response).await;
+                            });
                         }
                     }
                 }
@@ -79,7 +81,7 @@ impl UdpServer {
         }
     }
 
-    pub async fn send_response(socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
+    pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
         debug!("sending response to: {:?}", &remote_addr);
 
         let buffer = vec![0u8; MAX_PACKET_SIZE];
@@ -94,6 +96,10 @@ impl UdpServer {
                 UdpServer::send_packet(socket, &remote_addr, &inner[..position]).await;
             }
             Err(_) => {
+                match remote_addr {
+                    SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4InvalidRequest, 1); }
+                    SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6InvalidRequest, 1); }
+                }
                 debug!("could not write response to bytes.");
             }
         }
@@ -125,12 +131,24 @@ impl UdpServer {
                     }
                 };
 
-                match UdpServer::handle_request(request, remote_addr, tracker).await {
+                match UdpServer::handle_request(request, remote_addr, tracker.clone()).await {
                     Ok(response) => response,
-                    Err(e) => UdpServer::handle_udp_error(e, transaction_id).await
+                    Err(e) => {
+                        match remote_addr {
+                            SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4InvalidRequest, 1); }
+                            SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6InvalidRequest, 1); }
+                        }
+                        UdpServer::handle_udp_error(e, transaction_id).await
+                    }
                 }
             }
-            Err(_) => UdpServer::handle_udp_error(ServerError::BadRequest, TransactionId(0)).await
+            Err(_) => {
+                match remote_addr {
+                    SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4BadRequest, 1); }
+                    SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6BadRequest, 1); }
+                }
+                UdpServer::handle_udp_error(ServerError::BadRequest, TransactionId(0)).await
+            }
         }
     }
 
