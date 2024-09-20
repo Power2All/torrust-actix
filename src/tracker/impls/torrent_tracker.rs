@@ -1,23 +1,24 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 use chrono::Utc;
-use crossbeam_skiplist::SkipMap;
 use parking_lot::RwLock;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
+use crate::structs::Cli;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    pub async fn new(config: Arc<Configuration>) -> TorrentTracker
+    pub async fn new(config: Arc<Configuration>, args: Cli) -> TorrentTracker
     {
         TorrentTracker {
             config: config.clone(),
             torrents_sharding: Arc::new(Default::default()),
-            torrents_map: Arc::new(RwLock::new(BTreeMap::new())),
-            torrents_updates: Arc::new(SkipMap::new()),
-            torrents_shadow: Arc::new(SkipMap::new()),
+            torrents_updates: Arc::new(RwLock::new(HashMap::new())),
+            torrents_whitelist: Arc::new(RwLock::new(Vec::new())),
+            torrents_blacklist: Arc::new(RwLock::new(Vec::new())),
+            keys: Arc::new(RwLock::new(BTreeMap::new())),
             stats: Arc::new(StatsAtomics {
                 started: AtomicI64::new(Utc::now().timestamp()),
                 timestamp_run_save: AtomicI64::new(0),
@@ -34,11 +35,11 @@ impl TorrentTracker {
                 seeds: AtomicI64::new(0),
                 peers: AtomicI64::new(0),
                 completed: AtomicI64::new(0),
-                whitelist_enabled: AtomicBool::new(config.whitelist),
+                whitelist_enabled: AtomicBool::new(config.tracker_config.clone().unwrap().whitelist_enabled.unwrap()),
                 whitelist: AtomicI64::new(0),
-                blacklist_enabled: AtomicBool::new(config.blacklist),
+                blacklist_enabled: AtomicBool::new(config.tracker_config.clone().unwrap().blacklist_enabled.unwrap()),
                 blacklist: AtomicI64::new(0),
-                keys_enabled: AtomicBool::new(config.keys),
+                keys_enabled: AtomicBool::new(config.tracker_config.clone().unwrap().keys_enabled.unwrap()),
                 keys: AtomicI64::new(0),
                 tcp4_connections_handled: AtomicI64::new(0),
                 tcp4_api_handled: AtomicI64::new(0),
@@ -65,13 +66,9 @@ impl TorrentTracker {
                 test_counter: AtomicI64::new(0),
                 test_counter_udp: AtomicI64::new(0)
             }),
-            torrents_whitelist: Arc::new(SkipMap::new()),
-            torrents_blacklist: Arc::new(SkipMap::new()),
-            keys: Arc::new(SkipMap::new()),
-            users: Arc::new(SkipMap::new()),
-            users_updates: Arc::new(SkipMap::new()),
-            users_shadow: Arc::new(SkipMap::new()),
-            sqlx: DatabaseConnector::new(config.clone()).await,
+            users: Arc::new(RwLock::new(BTreeMap::new())),
+            users_updates: Arc::new(RwLock::new(BTreeMap::new())),
+            sqlx: DatabaseConnector::new(config.clone(), args).await,
         }
     }
 }

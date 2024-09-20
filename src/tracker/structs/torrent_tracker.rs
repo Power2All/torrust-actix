@@ -1,6 +1,5 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use crossbeam_skiplist::SkipMap;
 use parking_lot::RwLock;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
@@ -13,16 +12,13 @@ use crate::tracker::structs::user_id::UserId;
 
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
-    pub torrents_sharding: Arc<TorrentSharding>,
-    pub torrents_map: Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>,
-    pub torrents_updates: Arc<SkipMap<InfoHash, i64>>,
-    pub torrents_shadow: Arc<SkipMap<InfoHash, i64>>,
-    pub stats: Arc<StatsAtomics>,
-    pub torrents_whitelist: Arc<SkipMap<InfoHash, i64>>,
-    pub torrents_blacklist: Arc<SkipMap<InfoHash, i64>>,
-    pub keys: Arc<SkipMap<InfoHash, i64>>,
-    pub users: Arc<SkipMap<UserId, UserEntryItem>>,
-    pub users_updates: Arc<SkipMap<UserId, UserEntryItem>>,
-    pub users_shadow: Arc<SkipMap<UserId, UserEntryItem>>,
     pub sqlx: DatabaseConnector,
+    pub torrents_sharding: Arc<TorrentSharding>,
+    pub torrents_updates: Arc<RwLock<HashMap<u128, (InfoHash, TorrentEntry)>>>,
+    pub torrents_whitelist: Arc<RwLock<Vec<InfoHash>>>,
+    pub torrents_blacklist: Arc<RwLock<Vec<InfoHash>>>,
+    pub keys: Arc<RwLock<BTreeMap<InfoHash, i64>>>,
+    pub users: Arc<RwLock<BTreeMap<UserId, UserEntryItem>>>,
+    pub users_updates: Arc<RwLock<BTreeMap<UserId, UserEntryItem>>>,
+    pub stats: Arc<StatsAtomics>,
 }

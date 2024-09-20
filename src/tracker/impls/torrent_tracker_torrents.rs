@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::sync::Arc;
-use log::info;
+use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
@@ -11,8 +11,21 @@ impl TorrentTracker {
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker.clone()).await {
-            info!("Loaded {} torrents with {} completes.", torrents, completes);
-            self.set_stats(StatsEvent::Completed, completes as i64);
+            info!("Loaded {} torrents with {} completes", torrents, completes);
+        }
+    }
+
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, TorrentEntry>) -> Result<(), ()>
+    {
+        match self.sqlx.save_torrents(tracker.clone(), torrents.clone()).await {
+            Ok(_) => {
+                info!("[SAVE TORRENTS] Saved {} torrents", torrents.len());
+                Ok(())
+            }
+            Err(_) => {
+                error!("[SAVE TORRENTS] Unable to save {} torrents", torrents.len());
+                Err(())
+            }
         }
     }
 

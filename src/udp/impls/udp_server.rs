@@ -184,15 +184,15 @@ impl UdpServer {
     }
 
     pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
-        if tracker.config.whitelist && !tracker.check_whitelist(InfoHash(request.info_hash.0)).await {
+        if tracker.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() && !tracker.check_whitelist(InfoHash(request.info_hash.0)) {
             debug!("[UDP ERROR] Torrent Not Whitelisted");
             return Err(ServerError::TorrentNotWhitelisted);
         }
-        if tracker.config.blacklist && tracker.check_blacklist(InfoHash(request.info_hash.0)).await {
+        if tracker.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() && tracker.check_blacklist(InfoHash(request.info_hash.0)) {
             debug!("[UDP ERROR] Torrent Blacklisted");
             return Err(ServerError::TorrentBlacklisted);
         }
-        if tracker.config.keys {
+        if tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
             if request.path.len() < 50 {
                 debug!("[UDP ERROR] Unknown Key");
                 return Err(ServerError::UnknownKey);
@@ -201,7 +201,7 @@ impl UdpServer {
             match hex::decode(key_path_extract) {
                 Ok(result) => {
                     let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
-                    if !tracker.check_key(InfoHash::from(key)).await {
+                    if !tracker.check_key(InfoHash::from(key)) {
                         debug!("[UDP ERROR] Unknown Key");
                         return Err(ServerError::UnknownKey);
                     }
@@ -213,8 +213,8 @@ impl UdpServer {
             }
         }
         let mut user_key: Option<UserId> = None;
-        if tracker.config.users {
-            let user_key_path_extract: &str = if tracker.config.keys {
+        if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
+            let user_key_path_extract: &str = if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
                 if request.path.len() < 91 {
                     debug!("[UDP ERROR] Peer Key Not Valid");
                     return Err(ServerError::PeerKeyNotValid);
@@ -230,11 +230,15 @@ impl UdpServer {
             match hex::decode(user_key_path_extract) {
                 Ok(result) => {
                     let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
-                    if !tracker.check_user_key(UserId::from(key)).await {
-                        debug!("[UDP ERROR] Peer Key Not Valid");
-                        return Err(ServerError::PeerKeyNotValid);
-                    }
-                    user_key = Some(UserId::from(key));
+                    user_key = match tracker.check_user_key(UserId::from(key)) {
+                        None => {
+                            debug!("[UDP ERROR] Peer Key Not Valid");
+                            return Err(ServerError::PeerKeyNotValid);
+                        }
+                        Some(user_id) => {
+                            Some(UserId::from(user_id))
+                        }
+                    };
                 }
                 Err(error) => {
                     debug!("[UDP ERROR] Hex Decode Error");
@@ -338,7 +342,7 @@ impl UdpServer {
 
         let mut announce_response = Response::from(AnnounceResponse {
             transaction_id: request.transaction_id,
-            announce_interval: AnnounceInterval(tracker.config.interval.unwrap() as i32),
+            announce_interval: AnnounceInterval(tracker.config.tracker_config.clone().unwrap().request_interval.unwrap() as i32),
             leechers: NumberOfPeers(torrent.peers.len() as i32),
             seeders: NumberOfPeers(torrent.seeds.len() as i32),
             peers,
@@ -346,7 +350,7 @@ impl UdpServer {
         if remote_addr.is_ipv6() {
             announce_response = Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
-                announce_interval: AnnounceInterval(tracker.config.interval.unwrap() as i32),
+                announce_interval: AnnounceInterval(tracker.config.tracker_config.clone().unwrap().request_interval.unwrap() as i32),
                 leechers: NumberOfPeers(torrent.peers.len() as i32),
                 seeders: NumberOfPeers(torrent.seeds.len() as i32),
                 peers: peers6

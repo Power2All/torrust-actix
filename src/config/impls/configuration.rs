@@ -5,100 +5,123 @@ use crate::common::structs::custom_error::CustomError;
 use crate::config::enums::configuration_error::ConfigurationError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
+use crate::config::structs::database_config::DatabaseConfig;
 use crate::config::structs::database_structure_config::DatabaseStructureConfig;
+use crate::config::structs::database_structure_config_blacklist::DatabaseStructureConfigBlacklist;
+use crate::config::structs::database_structure_config_keys::DatabaseStructureConfigKeys;
+use crate::config::structs::database_structure_config_torrents::DatabaseStructureConfigTorrents;
+use crate::config::structs::database_structure_config_users::DatabaseStructureConfigUsers;
+use crate::config::structs::database_structure_config_whitelist::DatabaseStructureConfigWhitelist;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
+use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 
 impl Configuration {
     pub fn init() -> Configuration {
-        let udp_server = vec!(
-            UdpTrackersConfig {
-                enabled: false,
-                bind_address: String::from("0.0.0.0:6969"),
-                threads: Some(available_parallelism().unwrap().get() as u64)
-            }
-        );
-        let http_server = vec!(
-            HttpTrackersConfig {
-                enabled: false,
-                bind_address: String::from("0.0.0.0:6969"),
-                threads: Some(available_parallelism().unwrap().get() as u64),
-                ssl: false,
-                ssl_key: String::from(""),
-                ssl_cert: String::from(""),
-            }
-        );
-        let api_server = vec!(
-            ApiTrackersConfig {
-                enabled: false,
-                bind_address: String::from("0.0.0.0:8080"),
-                threads: Some(0),
-                ssl: false,
-                ssl_key: String::from(""),
-                ssl_cert: String::from(""),
-            }
-        );
         Configuration {
             log_level: String::from("info"),
             log_console_interval: Some(60),
-            log_perf_count: Some(10000),
-
-            db_driver: DatabaseDrivers::sqlite3,
-            db_path: String::from("sqlite://:memory:"),
-            persistence: false,
-            persistence_interval: Some(60),
-            total_downloads: 0,
-
-            api_key: String::from("MyAccessToken"),
-
-            whitelist: false,
-            blacklist: false,
-            keys: false,
-            keys_cleanup_interval: Some(60),
-            users: false,
-
-            interval: Some(1800),
-            interval_minimum: Some(1800),
-            peer_timeout: Some(2700),
-            peers_returned: Some(200),
-
-            http_keep_alive: 60,
-            http_request_timeout: 10,
-            http_disconnect_timeout: 10,
-            api_keep_alive: 60,
-            api_request_timeout: 60,
-            api_disconnect_timeout: 60,
-
-            interval_cleanup: Some(900),
-            cleanup_chunks: Some(100000),
-
-            http_server,
-            udp_server,
-            web_support: false,
-            api_server,
-            http_real_ip: String::from("X-Real-IP"),
-
-            db_structure: DatabaseStructureConfig {
-                db_torrents: String::from("torrents"),
-                table_torrents_info_hash: String::from("info_hash"),
-                table_torrents_completed: String::from("completed"),
-                db_whitelist: String::from("whitelist"),
-                table_whitelist_info_hash: String::from("info_hash"),
-                db_blacklist: String::from("blacklist"),
-                table_blacklist_info_hash: String::from("info_hash"),
-                db_keys: String::from("keys"),
-                table_keys_hash: String::from("hash"),
-                table_keys_timeout: String::from("timeout"),
-                db_users: String::from("users"),
-                table_users_uuid: String::from("uuid"),
-                table_users_key: String::from("key"),
-                table_users_uploaded: String::from("uploaded"),
-                table_users_downloaded: String::from("downloaded"),
-                table_users_completed: String::from("completed"),
-                table_users_updated: String::from("updated"),
-                table_users_active: String::from("active"),
-            },
+            tracker_config: Some(TrackerConfig {
+                api_key: Some(String::from("MyApiKey")),
+                whitelist_enabled: Some(false),
+                blacklist_enabled: Some(false),
+                keys_enabled: Some(false),
+                keys_cleanup_interval: Some(60),
+                users_enabled: Some(false),
+                request_interval: Some(1800),
+                request_interval_minimum: Some(1800),
+                peers_timeout: Some(2700),
+                peers_cleanup_interval: Some(900),
+                total_downloads: 0
+            }),
+            database: Some(DatabaseConfig {
+                engine: Some(DatabaseDrivers::sqlite3),
+                path: Some(String::from("sqlite://:memory:")),
+                persistent: false,
+                persistent_interval: Some(60),
+                insert_vacant: false,
+                update_completed: true,
+                update_peers: false,
+            }),
+            database_structure: Some(DatabaseStructureConfig {
+                torrents: Some(DatabaseStructureConfigTorrents {
+                    database_name: String::from("torrents"),
+                    column_infohash: String::from("infohash"),
+                    bin_type_infohash: true,
+                    column_seeds: String::from("seeds"),
+                    column_peers: String::from("peers"),
+                    column_completed: String::from("completed")
+                }),
+                whitelist: Some(DatabaseStructureConfigWhitelist {
+                    database_name: String::from("whitelist"),
+                    column_infohash: String::from("infohash"),
+                    bin_type_infohash: true,
+                }),
+                blacklist: Some(DatabaseStructureConfigBlacklist {
+                    database_name: String::from("blacklist"),
+                    column_infohash: String::from("infohash"),
+                    bin_type_infohash: true,
+                }),
+                keys: Some(DatabaseStructureConfigKeys {
+                    database_name: String::from("keys"),
+                    column_hash: String::from("hash"),
+                    bin_type_hash: true,
+                    column_timeout: String::from("timeout")
+                }),
+                users: Some(DatabaseStructureConfigUsers {
+                    database_name: String::from("users"),
+                    id_uuid: true,
+                    column_uuid: String::from("uuid"),
+                    column_id: "id".to_string(),
+                    column_active: String::from("active"),
+                    column_key: String::from("key"),
+                    bin_type_key: true,
+                    column_uploaded: String::from("uploaded"),
+                    column_downloaded: String::from("downloaded"),
+                    column_completed: String::from("completed"),
+                    column_updated: String::from("updated"),
+                })
+            }),
+            http_server: vec!(
+                HttpTrackersConfig {
+                    enabled: true,
+                    bind_address: String::from("0.0.0.0:6969"),
+                    real_ip: Some(String::from("X-Real-IP")),
+                    keep_alive: Some(60),
+                    request_timeout: Some(15),
+                    disconnect_timeout: Some(15),
+                    max_connections: Some(25000),
+                    threads: Some(available_parallelism().unwrap().get() as u64),
+                    ssl: Some(false),
+                    ssl_key: Some(String::from("")),
+                    ssl_cert: Some(String::from("")),
+                    tls_connection_rate: Some(256)
+                }
+            ),
+            udp_server: vec!(
+                UdpTrackersConfig {
+                    enabled: true,
+                    bind_address: String::from("0.0.0.0:6969"),
+                    threads: Some(available_parallelism().unwrap().get() as u64),
+                }
+            ),
+            api_server: vec!(
+                ApiTrackersConfig {
+                    enabled: true,
+                    bind_address: String::from("0.0.0.0:8080"),
+                    real_ip: Some(String::from("X-Real-IP")),
+                    keep_alive: Some(60),
+                    request_timeout: Some(30),
+                    disconnect_timeout: Some(30),
+                    max_connections: Some(25000),
+                    threads: Some(available_parallelism().unwrap().get() as u64),
+                    ssl: Some(false),
+                    ssl_key: Some(String::from("")),
+                    ssl_cert: Some(String::from("")),
+                    tls_connection_rate: Some(256)
+                }
+            )
         }
     }
 

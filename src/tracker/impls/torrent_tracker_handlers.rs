@@ -203,7 +203,7 @@ impl TorrentTracker {
         }
 
         // Validate numwant
-        let mut numwant_integer = self.config.peers_returned.unwrap();
+        let mut numwant_integer = 72;
         match query.get("numwant") {
             None => {}
             Some(result) => {
@@ -216,8 +216,8 @@ impl TorrentTracker {
                         Ok(v) => v,
                         Err(_) => return Err(CustomError::new("missing or invalid numwant"))
                     };
-                    if numwant_integer == 0 || numwant_integer > self.config.peers_returned.unwrap() {
-                        numwant_integer = self.config.peers_returned.unwrap();
+                    if numwant_integer == 0 || numwant_integer > 72 {
+                        numwant_integer = 72;
                     }
                 }
             }
@@ -253,26 +253,38 @@ impl TorrentTracker {
             left: NumberOfBytes(announce_query.left as i64),
             event: AnnounceEvent::None,
         };
+
         match announce_query.event {
             AnnounceEvent::Started | AnnounceEvent::None => {
                 torrent_peer.event = AnnounceEvent::Started;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
                 debug!("[DEBUG] Calling add_torrent_peer");
+
                 let torrent_entry = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer.clone(),
                     false
                 );
-                if data.config.users && user_key.is_some() {
-                    if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+
+                if data.config.database.clone().unwrap().persistent {
+                    data.add_torrents_update(
+                        announce_query.info_hash,
+                        torrent_entry.1.clone()
+                    );
+                }
+
+                if data.config.tracker_config.clone().unwrap().users_enabled.unwrap() && user_key.is_some() {
+                    if let Some(mut user) = data.get_user(user_key.unwrap()) {
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                        let mut torrents_active = user.torrents_active.clone();
-                        torrents_active.insert(announce_query.info_hash, std::time::Instant::now());
-                        user.torrents_active = torrents_active;
-                        data.add_user(user_key.unwrap(), user).await;
+                        user.torrents_active.insert(announce_query.info_hash, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs());
+                        data.add_user(user_key.unwrap(), user.clone());
+                        if data.config.database.clone().unwrap().persistent {
+                            data.add_user_update(user_key.unwrap(), user);
+                        }
                     }
                 }
+
                 Ok((torrent_peer, TorrentEntry {
                     seeds: torrent_entry.1.seeds,
                     peers: torrent_entry.1.peers,
@@ -284,25 +296,26 @@ impl TorrentTracker {
                 torrent_peer.event = AnnounceEvent::Stopped;
                 debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
                 debug!("[DEBUG] Calling remove_torrent_peer");
+
                 let torrent_entry = match data.remove_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
-                    data.config.persistence
+                    data.config.database.clone().unwrap().persistent
                 ) {
                     (Some(_), None) => {
                         TorrentEntry::new()
                     }
                     (Some(_), Some(new_torrent)) => {
-                        if data.config.users && user_key.is_some(){
-                            if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+                        if data.config.tracker_config.clone().unwrap().users_enabled.unwrap() && user_key.is_some(){
+                            if let Some(mut user) = data.get_user(user_key.unwrap()) {
                                 user.uploaded += announce_query.uploaded;
                                 user.downloaded += announce_query.downloaded;
                                 user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                                let mut torrents_active = user.torrents_active.clone();
-                                torrents_active.remove(&announce_query.info_hash);
-                                user.torrents_active = torrents_active;
-                                data.add_user(user_key.unwrap(), user.clone()).await;
-                                data.add_users_update(user_key.unwrap(), user).await;
+                                user.torrents_active.remove(&announce_query.info_hash);
+                                data.add_user(user_key.unwrap(), user.clone());
+                                if data.config.database.clone().unwrap().persistent {
+                                    data.add_user_update(user_key.unwrap(), user);
+                                }
                             }
                         }
                         new_torrent
@@ -311,25 +324,46 @@ impl TorrentTracker {
                         TorrentEntry::new()
                     }
                 };
+
+                if data.config.database.clone().unwrap().persistent {
+                    data.add_torrents_update(
+                        announce_query.info_hash,
+                        torrent_entry.clone()
+                    );
+                }
+
                 Ok((torrent_peer, torrent_entry))
             }
             AnnounceEvent::Completed => {
                 torrent_peer.event = AnnounceEvent::Completed;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
                 debug!("[DEBUG] Calling add_torrent_peer");
+
                 let torrent_entry = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer.clone(),
                     true
                 );
-                if data.config.users && user_key.is_some(){
-                    if let Some(mut user) = data.get_user(user_key.unwrap()).await {
+
+                if data.config.database.clone().unwrap().persistent {
+                    data.add_torrents_update(
+                        announce_query.info_hash,
+                        torrent_entry.1.clone()
+                    );
+                }
+
+                if data.config.tracker_config.clone().unwrap().users_enabled.unwrap() && user_key.is_some(){
+                    if let Some(mut user) = data.get_user(user_key.unwrap()) {
                         user.completed += 1;
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                        data.add_user(user_key.unwrap(), user).await;
+                        data.add_user(user_key.unwrap(), user.clone());
+                        if data.config.database.clone().unwrap().persistent {
+                            data.add_user_update(user_key.unwrap(), user);
+                        }
                     }
                 }
+
                 Ok((torrent_peer, torrent_entry.1))
             }
         }

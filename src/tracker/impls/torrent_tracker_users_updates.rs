@@ -1,77 +1,67 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
 impl TorrentTracker {
-    pub async fn add_users_update(&self, user_id: UserId, user_entry_item: UserEntryItem)
+    pub fn get_user_update(&self, id: UserId) -> Option<UserEntryItem>
     {
-        let users_updates_arc = self.users_updates.clone();
-
-        users_updates_arc.insert(user_id, user_entry_item);
-        let users_update_count = users_updates_arc.len() as i64;
-
-        self.set_stats(StatsEvent::UsersUpdates, users_update_count);
-    }
-
-    pub async fn add_users_updates(&self, updates: HashMap<UserId, UserEntryItem>)
-    {
-        let users_updates_arc = self.users_updates.clone();
-
-        let mut users_update_count = 0;
-
-        for (user_id, user_entry_item) in updates.iter() {
-            users_updates_arc.insert(*user_id, user_entry_item.clone());
-            users_update_count = users_updates_arc.len();
+        let map = self.users_updates.clone();
+        let lock = map.read_recursive();
+        match lock.get(&id) {
+            None => {
+                None
+            }
+            Some(user_entry_item) => {
+                Some(user_entry_item.clone())
+            }
         }
-
-        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64);
     }
 
-    pub async fn get_users_update(&self) -> HashMap<UserId, UserEntryItem>
+    pub fn get_users_update(&self) -> BTreeMap<UserId, UserEntryItem>
     {
-        let users_updates_arc = self.users_updates.clone();
-
-        let mut users_updates = HashMap::new();
-        for item in users_updates_arc.iter() { users_updates.insert(*item.key(), item.value().clone()); }
-
-        users_updates
+        let map = self.users_updates.clone();
+        let lock = map.read_recursive();
+        lock.clone()
     }
 
-    pub async fn remove_users_update(&self, user_id: UserId)
+    pub fn add_user_update(&self, user_id: UserId, user_entry_item: UserEntryItem) -> bool
     {
-        let users_updates_arc = self.users_updates.clone();
-
-        users_updates_arc.remove(&user_id);
-        let users_update_count = users_updates_arc.len();
-
-        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64);
-    }
-
-    pub async fn remove_users_updates(&self, hashes: Vec<UserId>)
-    {
-        let users_updates_arc = self.users_updates.clone();
-
-        let mut users_update_count = 0;
-
-        for user_id in hashes.iter() {
-            users_updates_arc.remove(user_id);
-            users_update_count = users_updates_arc.len();
+        let map = self.users_updates.clone();
+        let mut lock = map.write();
+        match lock.entry(user_id) {
+            Entry::Vacant(v) => {
+                self.update_stats(StatsEvent::UsersUpdates, 1);
+                v.insert(user_entry_item);
+                true
+            }
+            Entry::Occupied(mut o) => {
+                o.insert(user_entry_item);
+                false
+            }
         }
-
-        self.set_stats(StatsEvent::UsersUpdates, users_update_count as i64);
     }
 
-    pub async fn transfer_users_updates_to_users_shadow(&self)
+    pub fn remove_user_update(&self, user_id: UserId) -> Option<UserEntryItem>
     {
-        let users_updates_arc = self.users_updates.clone();
-
-        for item in users_updates_arc.iter() {
-            self.add_users_shadow(*item.key(), item.value().clone()).await;
-            users_updates_arc.remove(item.key());
+        let map = self.users_updates.clone();
+        let mut lock = map.write();
+        match lock.remove(&user_id) {
+            None => { None }
+            Some(data) => {
+                self.update_stats(StatsEvent::UsersUpdates, -1);
+                Some(data)
+            }
         }
+    }
 
+    pub fn clear_user_update(&self)
+    {
+        let map = self.users_updates.clone();
+        let mut lock = map.write();
         self.set_stats(StatsEvent::UsersUpdates, 0);
+        lock.clear();
     }
 }

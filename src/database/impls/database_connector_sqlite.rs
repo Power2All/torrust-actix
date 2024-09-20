@@ -1,17 +1,20 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::ops::Deref;
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use futures_util::TryStreamExt;
 use log::{error, info};
-use regex::Regex;
-use sqlx::{ConnectOptions, Error, Pool, Row, Sqlite, Transaction};
+use sha1::{Digest, Sha1};
+use sqlx::{ConnectOptions, Error, Sqlite, Pool, Row, Transaction};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use crate::config::structs::configuration::Configuration;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
+use crate::stats::enums::stats_event::StatsEvent;
+use crate::structs::Cli;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -30,11 +33,11 @@ impl DatabaseConnectorSQLite {
         SqlitePoolOptions::new().connect_with(options.create_if_missing(true)).await
     }
 
-    pub async fn database_connector(config: Arc<Configuration>) -> DatabaseConnector
+    pub async fn database_connector(config: Arc<Configuration>, args: Cli) -> DatabaseConnector
     {
-        let sqlite_connect = DatabaseConnectorSQLite::create(&config.db_path).await;
+        let sqlite_connect = DatabaseConnectorSQLite::create(config.database.clone().unwrap().path.unwrap().as_str()).await;
         if sqlite_connect.is_err() {
-            error!("[SQLite] Unable to open the database {}", &config.db_path);
+            error!("[SQLite] Unable to connect to SQLite on DSL {}", config.database.clone().unwrap().path.unwrap());
             error!("[SQLite] Message: {:#?}", sqlite_connect.unwrap_err().into_database_error());
             exit(1);
         }
@@ -43,431 +46,1120 @@ impl DatabaseConnectorSQLite {
         structure.sqlite = Some(DatabaseConnectorSQLite { pool: sqlite_connect.unwrap() });
         structure.engine = Some(DatabaseDrivers::sqlite3);
 
-        let pool = &structure.sqlite.clone().unwrap().pool;
-        let _ = sqlx::query("PRAGMA temp_store = memory;").execute(pool).await;
-        let _ = sqlx::query("PRAGMA mmap_size = 30000000000;").execute(pool).await;
-        let _ = sqlx::query("PRAGMA page_size = 32768;").execute(pool).await;
-        let _ = sqlx::query("PRAGMA journal_mode = TRUNCATE;").execute(pool).await;
-        let _ = sqlx::query("PRAGMA journal_size_limit = 536870912;").execute(pool).await;
-        let _ = sqlx::query("PRAGMA synchronous = full;").execute(pool).await;
-        let _ = sqlx::query(
-            format!(
-                "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY, {} INTEGER DEFAULT 0 NOT NULL)",
-                config.db_structure.db_torrents,
-                config.db_structure.table_torrents_info_hash,
-                config.db_structure.table_torrents_completed
-            ).as_str()
-        ).execute(pool).await;
-        let _ = sqlx::query(
-            format!(
-                "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY)",
-                config.db_structure.db_whitelist,
-                config.db_structure.table_whitelist_info_hash
-            ).as_str()
-        ).execute(pool).await;
-        let _ = sqlx::query(
-            format!(
-                "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY)",
-                config.db_structure.db_blacklist,
-                config.db_structure.table_blacklist_info_hash,
-            ).as_str()
-        ).execute(pool).await;
-        let _ = sqlx::query(
-            format!(
-                "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(40) PRIMARY KEY, {} INTEGER DEFAULT 0 NOT NULL)",
-                config.db_structure.db_keys,
-                config.db_structure.table_keys_hash,
-                config.db_structure.table_keys_timeout,
-            ).as_str()
-        ).execute(pool).await;
-        let _ = sqlx::query(
-            format!(
-                "CREATE TABLE IF NOT EXISTS {} ({} VARCHAR(36) PRIMARY KEY, {} VARCHAR(40) NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL, {} INTEGER DEFAULT 0 NOT NULL)",
-                config.db_structure.db_users,
-                config.db_structure.table_users_uuid,
-                config.db_structure.table_users_key,
-                config.db_structure.table_users_uploaded,
-                config.db_structure.table_users_downloaded,
-                config.db_structure.table_users_completed,
-                config.db_structure.table_users_updated,
-                config.db_structure.table_users_active,
-            ).as_str()
-        ).execute(pool).await;
+        if args.create_databases {
+            let pool = &structure.sqlite.clone().unwrap().pool;
+            info!("[BOOT] Database creation triggered for SQLite.");
+            info!("[BOOT SQLite] Setting the PRAGMA config...");
+            let _ = sqlx::query("PRAGMA temp_store = memory;").execute(pool).await;
+            let _ = sqlx::query("PRAGMA mmap_size = 30000000000;").execute(pool).await;
+            let _ = sqlx::query("PRAGMA page_size = 32768;").execute(pool).await;
+            let _ = sqlx::query("PRAGMA journal_mode = TRUNCATE;").execute(pool).await;
+            let _ = sqlx::query("PRAGMA journal_size_limit = 536870912;").execute(pool).await;
+            let _ = sqlx::query("PRAGMA synchronous = full;").execute(pool).await;
+
+            // Create Torrent DB
+            info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().torrents.unwrap().database_name);
+            match config.database_structure.clone().unwrap().torrents.unwrap().bin_type_infohash {
+                true => {
+                    let _ = sqlx::query(
+                        format!(
+                            "CREATE TABLE IF NOT EXISTS `{}` (`{}` BLOB PRIMARY KEY NOT NULL, `{}` INTEGER DEFAULT 0, `{}` INTEGER DEFAULT 0, `{}` INTEGER DEFAULT 0)",
+                            config.database_structure.clone().unwrap().torrents.unwrap().database_name,
+                            config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
+                            config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
+                            config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
+                            config.database_structure.clone().unwrap().torrents.unwrap().column_completed
+                        ).as_str()
+                    ).execute(pool).await;
+                }
+                false => {
+                    let _ = sqlx::query(
+                        format!(
+                            "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL, `{}` INTEGER DEFAULT 0, `{}` INTEGER DEFAULT 0, `{}` INTEGER DEFAULT 0)",
+                            config.database_structure.clone().unwrap().torrents.unwrap().database_name,
+                            config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
+                            config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
+                            config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
+                            config.database_structure.clone().unwrap().torrents.unwrap().column_completed
+                        ).as_str()
+                    ).execute(pool).await;
+                }
+            }
+
+            // Create Whitelist DB
+            info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().whitelist.unwrap().database_name);
+            match config.database_structure.clone().unwrap().whitelist.unwrap().bin_type_infohash {
+                true => {
+                    let _ = sqlx::query(
+                        format!(
+                            "CREATE TABLE IF NOT EXISTS `{}` (`{}` BLOB PRIMARY KEY NOT NULL)",
+                            config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
+                        ).as_str()
+                    ).execute(pool).await;
+                }
+                false => {
+                    let _ = sqlx::query(
+                        format!(
+                            "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL)",
+                            config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
+                        ).as_str()
+                    ).execute(pool).await;
+                }
+            }
+
+            // Create Blacklist DB
+            info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().blacklist.unwrap().database_name);
+            match config.database_structure.clone().unwrap().blacklist.unwrap().bin_type_infohash {
+                true => {
+                    let _ = sqlx::query(
+                        format!(
+                            "CREATE TABLE IF NOT EXISTS `{}` (`{}` BLOB PRIMARY KEY NOT NULL)",
+                            config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
+                        ).as_str()
+                    ).execute(pool).await;
+                }
+                false => {
+                    let _ = sqlx::query(
+                        format!(
+                            "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL)",
+                            config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
+                        ).as_str()
+                    ).execute(pool).await;
+                }
+            }
+
+            // Create Keys DB
+            info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().keys.unwrap().database_name);
+            match config.database_structure.clone().unwrap().keys.unwrap().bin_type_hash {
+                true => {
+                    let _ = sqlx::query(
+                        format!(
+                            "CREATE TABLE IF NOT EXISTS `{}` (`{}` BLOB PRIMARY KEY NOT NULL, `{}` INTEGER DEFAULT 0)",
+                            config.database_structure.clone().unwrap().keys.unwrap().database_name,
+                            config.database_structure.clone().unwrap().keys.unwrap().column_hash,
+                            config.database_structure.clone().unwrap().keys.unwrap().column_timeout
+                        ).as_str()
+                    ).execute(pool).await;
+                }
+                false => {
+                    let _ = sqlx::query(
+                        format!(
+                            "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL, `{}` INTEGER DEFAULT 0)",
+                            config.database_structure.clone().unwrap().keys.unwrap().database_name,
+                            config.database_structure.clone().unwrap().keys.unwrap().column_hash,
+                            config.database_structure.clone().unwrap().keys.unwrap().column_timeout
+                        ).as_str()
+                    ).execute(pool).await;
+                }
+            }
+
+            // Create Users DB
+            info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().users.unwrap().database_name);
+            match config.database_structure.clone().unwrap().users.unwrap().id_uuid {
+                true => {
+                    match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
+                        true => {
+                            let _ = sqlx::query(
+                                format!(
+                                    "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL, `{}` BLOB NOT NULL, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0)",
+                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_uuid,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_key,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_downloaded,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_completed,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_active,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_updated
+                                ).as_str()
+                            ).execute(pool).await;
+                        }
+                        false => {
+                            let _ = sqlx::query(
+                                format!(
+                                    "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL, `{}` TEXT NOT NULL, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0)",
+                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_uuid,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_key,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_downloaded,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_completed,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_active,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_updated
+                                ).as_str()
+                            ).execute(pool).await;
+                        }
+                    }
+                }
+                false => {
+                    match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
+                        true => {
+                            let _ = sqlx::query(
+                                format!(
+                                    "CREATE TABLE IF NOT EXISTS `{}` (`{}` INTEGER PRIMARY KEY AUTOINCREMENT, `{}` BLOB NOT NULL, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0)",
+                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_id,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_key,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_downloaded,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_completed,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_active,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_updated
+                                ).as_str()
+                            ).execute(pool).await;
+                        }
+                        false => {
+                            let _ = sqlx::query(
+                                format!(
+                                    "CREATE TABLE IF NOT EXISTS `{}` (`{}` INTEGER PRIMARY KEY AUTOINCREMENT, `{}` TEXT NOT NULL, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0)",
+                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_id,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_key,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_downloaded,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_completed,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_active,
+                                    config.database_structure.clone().unwrap().users.unwrap().column_updated
+                                ).as_str()
+                            ).execute(pool).await;
+                        }
+                    }
+                }
+            }
+            info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
+            exit(0);
+        }
 
         structure
     }
 
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error>
     {
-        let mut total_torrents = 0u64;
-        let mut total_completes = 0u64;
-        let query = format!(
-            "SELECT {},{} FROM {}",
-            tracker.config.db_structure.table_torrents_info_hash,
-            tracker.config.db_structure.table_torrents_completed,
-            tracker.config.db_structure.db_torrents
-        );
-        let mut rows = sqlx::query(query.as_str()).fetch(&self.pool);
-        while let Some(result) = rows.try_next().await? {
-            let info_hash_data: &str = result.get(tracker.config.db_structure.table_torrents_info_hash.clone().as_str());
-            let info_hash_decoded = hex::decode(info_hash_data).unwrap();
-            let completed_data: i64 = result.get(tracker.config.db_structure.table_torrents_completed.clone().as_str());
-            let info_hash = InfoHash(<[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap());
-            tracker.add_torrent(info_hash, TorrentEntry {
-                peers: BTreeMap::new(),
-                seeds: BTreeMap::new(),
-                completed: completed_data as u64,
-                updated: std::time::Instant::now(),
-            });
-            total_torrents += 1;
-            total_completes += completed_data as u64;
+        let mut start = 0u64;
+        let length = 100000u64;
+        let mut torrents = 0u64;
+        let mut completed = 0u64;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().torrents {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
+        loop {
+            info!(
+                "[SQLite] Trying to querying {} torrents - Skip: {}",
+                length,
+                start
+            );
+            let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                true => {
+                    format!(
+                        "SELECT hex(`{}`) AS `{}`, `{}` FROM `{}` LIMIT {},{}",
+                        structure.column_infohash,
+                        structure.column_infohash,
+                        structure.column_completed,
+                        structure.database_name,
+                        start,
+                        length
+                    )
+                }
+                false => {
+                    format!(
+                        "SELECT `{}`, `{}` FROM `{}` LIMIT {},{}",
+                        structure.column_infohash,
+                        structure.column_completed,
+                        structure.database_name,
+                        start,
+                        length
+                    )
+                }
+            };
+            let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
+            let torrents_start = torrents;
+            while let Some(result) = rows.try_next().await? {
+                let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
+                let info_hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref()).unwrap();
+                let completed_count: u32 = result.get(structure.column_completed.as_str());
+                tracker.add_torrent(
+                    InfoHash(info_hash),
+                    TorrentEntry {
+                        seeds: BTreeMap::new(),
+                        peers: BTreeMap::new(),
+                        completed: completed_count as u64,
+                        updated: std::time::Instant::now()
+                    }
+                );
+                torrents += 1;
+                completed += completed_count as u64;
+                start += length;
+            }
+            if torrents_start == torrents {
+                break;
+            }
         }
-        info!("[SQLite3] Loaded {} torrents...", total_torrents);
-        Ok((total_torrents, total_completes))
+        tracker.set_stats(StatsEvent::Completed, completed as i64);
+        Ok((torrents, completed))
     }
 
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: HashMap<InfoHash, i64>) -> Result<(), Error>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, TorrentEntry>) -> Result<(), Error>
     {
         let mut torrents_transaction = self.pool.begin().await?;
         let mut torrents_handled_entries = 0u64;
-        for (info_hash, completed) in torrents.iter() {
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().torrents {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
+        for (info_hash, torrent_entry) in torrents.iter() {
             torrents_handled_entries += 1;
-            match sqlx::query(&format!(
-                "INSERT OR REPLACE INTO {} ({},{}) VALUES ('{}',{})",
-                tracker.config.db_structure.db_torrents,
-                tracker.config.db_structure.table_torrents_info_hash,
-                tracker.config.db_structure.table_torrents_completed,
-                info_hash,
-                completed.clone()
-            ))
-                .execute(&mut *torrents_transaction)
-                .await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[SQLite3] Error: {}", e.to_string());
-                    return Err(e);
+            match tracker.config.deref().clone().database.unwrap().insert_vacant {
+                true => {
+                    if tracker.config.deref().clone().database.unwrap().update_peers {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                            true => {
+                                format!(
+                                    "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES (X'{}', {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                    structure.database_name,
+                                    structure.column_infohash,
+                                    structure.column_seeds,
+                                    structure.column_peers,
+                                    info_hash,
+                                    torrent_entry.seeds.len(),
+                                    torrent_entry.peers.len(),
+                                    structure.column_infohash,
+                                    structure.column_seeds,
+                                    structure.column_seeds,
+                                    structure.column_peers,
+                                    structure.column_peers
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES ({}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                    structure.database_name,
+                                    structure.column_infohash,
+                                    structure.column_seeds,
+                                    structure.column_peers,
+                                    info_hash,
+                                    torrent_entry.seeds.len(),
+                                    torrent_entry.peers.len(),
+                                    structure.column_infohash,
+                                    structure.column_seeds,
+                                    structure.column_seeds,
+                                    structure.column_peers,
+                                    structure.column_peers
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[SQLite] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
+                    if tracker.config.deref().clone().database.unwrap().update_completed {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                            true => {
+                                format!(
+                                    "INSERT INTO `{}` (`{}`, `{}`) VALUES (X'{}', {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
+                                    structure.database_name,
+                                    structure.column_infohash,
+                                    structure.column_completed,
+                                    info_hash,
+                                    torrent_entry.completed,
+                                    structure.column_infohash,
+                                    structure.column_completed,
+                                    structure.column_completed
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "INSERT INTO `{}` (`{}`, `{}`) VALUES ({}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
+                                    structure.database_name,
+                                    structure.column_infohash,
+                                    structure.column_completed,
+                                    info_hash,
+                                    torrent_entry.completed,
+                                    structure.column_infohash,
+                                    structure.column_completed,
+                                    structure.column_completed
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[SQLite] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+                false => {
+                    if tracker.config.deref().clone().database.unwrap().update_peers {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                            true => {
+                                format!(
+                                    "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`=X'{}'",
+                                    structure.database_name,
+                                    structure.column_seeds,
+                                    torrent_entry.seeds.len(),
+                                    structure.column_peers,
+                                    torrent_entry.peers.len(),
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`='{}'",
+                                    structure.database_name,
+                                    structure.column_seeds,
+                                    torrent_entry.seeds.len(),
+                                    structure.column_peers,
+                                    torrent_entry.peers.len(),
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[SQLite] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
+                    if tracker.config.deref().clone().database.unwrap().update_completed {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                            true => {
+                                format!(
+                                    "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`=UNHEX('{}')",
+                                    structure.database_name,
+                                    structure.column_completed,
+                                    torrent_entry.completed,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`='{}'",
+                                    structure.database_name,
+                                    structure.column_completed,
+                                    torrent_entry.completed,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[SQLite] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
                 }
             }
-
-            if (torrents_handled_entries as f64 / 10000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
-                match torrents_transaction.commit().await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!("[SQLite3] Error: {}", e.to_string());
-                        return Err(e);
-                    }
-                };
-                info!("[SQLite3] Handled {} torrents", torrents_handled_entries);
-                torrents_transaction = self.pool.begin().await?
+            if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
+                info!("[SQLite] Handled {} torrents", torrents_handled_entries);
             }
         }
         self.commit(torrents_transaction).await
     }
 
-    pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<Vec<InfoHash>, Error>
+    pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        let mut return_data_whitelist = vec![];
-        let mut counter = 0u64;
-        let mut total_whitelist = 0u64;
-
-        let query = format!(
-            "SELECT {} FROM {}",
-            tracker.config.db_structure.table_whitelist_info_hash,
-            tracker.config.db_structure.db_whitelist
-        );
-        let mut rows = sqlx::query(query.as_str()).fetch(&self.pool);
-        while let Some(result) = rows.try_next().await? {
-            if counter == 100000 {
-                info!("[SQLite3] Loaded {} whitelists...", total_whitelist);
-                counter = 0;
+        let mut start = 0u64;
+        let length = 100000u64;
+        let mut hashes = 0u64;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().whitelist {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
+        loop {
+            info!(
+                "[SQLite] Trying to querying {} whitelisted hashes - Skip: {}",
+                length,
+                start
+            );
+            let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+                true => {
+                    format!(
+                        "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {},{}",
+                        structure.column_infohash,
+                        structure.column_infohash,
+                        structure.database_name,
+                        start,
+                        length
+                    )
+                }
+                false => {
+                    format!(
+                        "SELECT `{}` FROM `{}` LIMIT {},{}",
+                        structure.column_infohash,
+                        structure.database_name,
+                        start,
+                        length
+                    )
+                }
+            };
+            let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
+            let hashes_start = hashes;
+            while let Some(result) = rows.try_next().await? {
+                let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
+                let info_hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref()).unwrap();
+                tracker.add_whitelist(InfoHash(info_hash));
+                hashes += 1;
+                start += length;
             }
-            let info_hash_data: &str = result.get(tracker.config.db_structure.table_whitelist_info_hash.clone().as_str());
-            let info_hash_decoded = hex::decode(info_hash_data).unwrap();
-            let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-            return_data_whitelist.push(InfoHash(info_hash));
-            counter += 1;
-            total_whitelist += 1;
+            if hashes_start == hashes {
+                break;
+            }
         }
-
-        info!("[SQLite3] Loaded {} whitelists...", total_whitelist);
-        Ok(return_data_whitelist)
+        Ok(hashes)
     }
 
-    pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, i64)>) -> Result<(), Error>
+    pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<InfoHash>) -> Result<u64, Error>
     {
         let mut whitelist_transaction = self.pool.begin().await?;
         let mut whitelist_handled_entries = 0u64;
-        for (info_hash, value) in whitelists.iter() {
-            if value == &2 {
-                whitelist_handled_entries += 1;
-                match sqlx::query(&format!(
-                    "INSERT OR IGNORE INTO {} ({}) VALUES ('{}')",
-                    tracker.config.db_structure.db_whitelist,
-                    tracker.config.db_structure.table_whitelist_info_hash,
-                    info_hash
-                ))
-                    .execute(&mut *whitelist_transaction)
-                    .await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!("[SQLite3] Error: {}", e.to_string());
-                        return Err(e);
-                    }
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().whitelist {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
+        for info_hash in whitelists.iter() {
+            whitelist_handled_entries += 1;
+            let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+                true => {
+                    format!(
+                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
+                        structure.database_name,
+                        structure.column_infohash,
+                        info_hash
+                    )
                 }
-
-                if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 || whitelists.len() as u64 == whitelist_handled_entries {
-                    info!("[SQLite3] Handled {} whitelists", whitelist_handled_entries);
+                false => {
+                    format!(
+                        "INSERT IGNORE INTO `{}` (`{}`) VALUES ('{}')",
+                        structure.database_name,
+                        structure.column_infohash,
+                        info_hash
+                    )
+                }
+            };
+            match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("[SQLite] Error: {}", e.to_string());
+                    return Err(e);
                 }
             }
-            if value == &0 {
-                match sqlx::query(&format!(
-                    "DELETE FROM {} WHERE {} = '{}'",
-                    tracker.config.db_structure.db_whitelist,
-                    tracker.config.db_structure.table_whitelist_info_hash,
-                    info_hash
-                ))
-                    .execute(&mut *whitelist_transaction)
-                    .await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!("[SQLite3] Error: {}", e.to_string());
-                        return Err(e);
-                    }
-                }
+            if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 {
+                info!("[SQLite] Handled {} torrents", whitelist_handled_entries);
             }
         }
-        self.commit(whitelist_transaction).await
+        info!("[SQLite] Saved {} whitelisted torrents", whitelist_handled_entries);
+        let _ = self.commit(whitelist_transaction).await;
+        Ok(whitelist_handled_entries)
     }
 
-    pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<Vec<InfoHash>, Error>
+    pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        let mut return_data_blacklist = vec![];
-        let mut counter = 0u64;
-        let mut total_blacklist = 0u64;
-
-        let query = format!(
-            "SELECT {} FROM {}",
-            tracker.config.db_structure.table_blacklist_info_hash,
-            tracker.config.db_structure.db_blacklist
-        );
-        let mut rows = sqlx::query(query.as_str()).fetch(&self.pool);
-        while let Some(result) = rows.try_next().await? {
-            if counter == 100000 {
-                info!("[SQLite3] Loaded {} blacklists...", total_blacklist);
-                counter = 0;
+        let mut start = 0u64;
+        let length = 100000u64;
+        let mut hashes = 0u64;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().blacklist {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
+        loop {
+            info!(
+                "[SQLite] Trying to querying {} blacklisted hashes - Skip: {}",
+                length,
+                start
+            );
+            let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+                true => {
+                    format!(
+                        "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {},{}",
+                        structure.column_infohash,
+                        structure.column_infohash,
+                        structure.database_name,
+                        start,
+                        length
+                    )
+                }
+                false => {
+                    format!(
+                        "SELECT `{}` FROM `{}` LIMIT {},{}",
+                        structure.column_infohash,
+                        structure.database_name,
+                        start,
+                        length
+                    )
+                }
+            };
+            let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
+            let hashes_start = hashes;
+            while let Some(result) = rows.try_next().await? {
+                let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
+                let info_hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref()).unwrap();
+                tracker.add_blacklist(InfoHash(info_hash));
+                hashes += 1;
+                start += length;
             }
-            let info_hash_data: &str = result.get(tracker.config.db_structure.table_blacklist_info_hash.clone().as_str());
-            let info_hash_decoded = hex::decode(info_hash_data).unwrap();
-            let info_hash = <[u8; 20]>::try_from(info_hash_decoded[0..20].as_ref()).unwrap();
-            return_data_blacklist.push(InfoHash(info_hash));
-            counter += 1;
-            total_blacklist += 1;
+            if hashes_start == hashes {
+                break;
+            }
         }
-
-        info!("[SQLite3] Loaded {} blacklists...", total_blacklist);
-        Ok(return_data_blacklist)
+        Ok(hashes)
     }
 
-    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<InfoHash>) -> Result<(), Error>
+    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<InfoHash>) -> Result<u64, Error>
     {
         let mut blacklist_transaction = self.pool.begin().await?;
         let mut blacklist_handled_entries = 0u64;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().blacklist {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
         for info_hash in blacklists.iter() {
             blacklist_handled_entries += 1;
-            match sqlx::query(&format!(
-                "INSERT OR REPLACE INTO {} ({}) VALUES ('{}')",
-                tracker.config.db_structure.db_blacklist,
-                tracker.config.db_structure.table_blacklist_info_hash,
-                info_hash
-            ))
-                .execute(&mut *blacklist_transaction)
-                .await {
+            let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+                true => {
+                    format!(
+                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
+                        structure.database_name,
+                        structure.column_infohash,
+                        info_hash
+                    )
+                }
+                false => {
+                    format!(
+                        "INSERT IGNORE INTO `{}` (`{}`) VALUES ('{}')",
+                        structure.database_name,
+                        structure.column_infohash,
+                        info_hash
+                    )
+                }
+            };
+            match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[SQLite3] Error: {}", e.to_string());
+                    error!("[SQLite] Error: {}", e.to_string());
                     return Err(e);
                 }
             }
-
-            if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 || blacklists.len() as u64 == blacklist_handled_entries {
-                info!("[SQLite3] Handled {} whitelists", blacklist_handled_entries);
+            if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 {
+                info!("[SQLite] Handled {} torrents", blacklist_handled_entries);
             }
         }
-        self.commit(blacklist_transaction).await
+        info!("[SQLite] Saved {} blacklisted torrents", blacklist_handled_entries);
+        let _ = self.commit(blacklist_transaction).await;
+        Ok(blacklist_handled_entries)
     }
 
-    pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<Vec<(InfoHash, i64)>, Error>
+    pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        let mut return_data_keys = vec![];
-        let mut counter = 0u64;
-        let mut total_keys = 0u64;
-
-        let query = format!(
-            "SELECT {},{} FROM {}",
-            tracker.config.db_structure.table_keys_hash,
-            tracker.config.db_structure.table_keys_timeout,
-            tracker.config.db_structure.db_keys
-        );
-        let mut rows = sqlx::query(query.as_str()).fetch(&self.pool);
-        while let Some(result) = rows.try_next().await? {
-            if counter == 100000 {
-                info!("[SQLite3] Loaded {} keys...", total_keys);
-                counter = 0;
+        let mut start = 0u64;
+        let length = 100000u64;
+        let mut hashes = 0u64;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().keys {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
+        loop {
+            info!(
+                "[SQLite] Trying to querying {} keys hashes - Skip: {}",
+                length,
+                start
+            );
+            let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+                true => {
+                    format!(
+                        "SELECT HEX(`{}`) AS `{}`,`{}` FROM `{}` LIMIT {},{}",
+                        structure.column_hash,
+                        structure.column_hash,
+                        structure.column_timeout,
+                        structure.database_name,
+                        start,
+                        length
+                    )
+                }
+                false => {
+                    format!(
+                        "SELECT `{}`,`{}` FROM `{}` LIMIT {},{}",
+                        structure.column_hash,
+                        structure.column_timeout,
+                        structure.database_name,
+                        start,
+                        length
+                    )
+                }
+            };
+            let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
+            let hashes_start = hashes;
+            while let Some(result) = rows.try_next().await? {
+                let hash_data: &[u8] = result.get(structure.column_hash.as_str());
+                let hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(hash_data).unwrap()[0..20].as_ref()).unwrap();
+                let timeout: i64 = result.get(structure.column_timeout.as_str());
+                tracker.add_key(InfoHash(hash), timeout);
+                hashes += 1;
+                start += length;
             }
-            let hash_data: &str = result.get(tracker.config.db_structure.table_keys_hash.clone().as_str());
-            let hash_decoded = hex::decode(hash_data).unwrap();
-            let timeout_data: i64 = result.get(tracker.config.db_structure.table_keys_timeout.clone().as_str());
-            let hash = <[u8; 20]>::try_from(hash_decoded[0..20].as_ref()).unwrap();
-            return_data_keys.push((InfoHash(hash), timeout_data));
-            counter += 1;
-            total_keys += 1;
+            if hashes_start == hashes {
+                break;
+            }
         }
-
-        info!("[SQLite3] Loaded {} keys...", total_keys);
-        Ok(return_data_keys)
+        Ok(hashes)
     }
 
-    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: Vec<(InfoHash, i64)>) -> Result<(), Error>
+    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, i64>) -> Result<u64, Error>
     {
         let mut keys_transaction = self.pool.begin().await?;
         let mut keys_handled_entries = 0u64;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().keys {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
         for (hash, timeout) in keys.iter() {
             keys_handled_entries += 1;
-            match sqlx::query(&format!(
-                "INSERT OR REPLACE INTO {} ({},{}) VALUES ('{}',{})",
-                tracker.config.db_structure.db_keys,
-                tracker.config.db_structure.table_keys_hash,
-                tracker.config.db_structure.table_keys_timeout,
-                hash,
-                timeout.clone()
-            ))
-                .execute(&mut *keys_transaction)
-                .await {
+            let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+                true => {
+                    format!(
+                        "INSERT INTO `{}` (`{}`,`{}`) VALUES (UNHEX('{}'),{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`), `{}` = VALUES(`{}`)",
+                        structure.database_name,
+                        structure.column_hash,
+                        structure.column_timeout,
+                        hash,
+                        timeout,
+                        structure.column_hash,
+                        structure.column_hash,
+                        structure.column_timeout,
+                        structure.column_timeout
+                    )
+                }
+                false => {
+                    format!(
+                        "INSERT INTO `{}` (`{}`,`{}`) VALUES ('{}',{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`), `{}` = VALUES(`{}`)",
+                        structure.database_name,
+                        structure.column_hash,
+                        structure.column_timeout,
+                        hash,
+                        timeout,
+                        structure.column_hash,
+                        structure.column_hash,
+                        structure.column_timeout,
+                        structure.column_timeout
+                    )
+                }
+            };
+            match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[SQLite3] Error: {}", e.to_string());
+                    error!("[SQLite] Error: {}", e.to_string());
                     return Err(e);
                 }
             }
-
-            if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 || keys.len() as u64 == keys_handled_entries {
-                info!("[SQLite3] Handled {} keys", keys_handled_entries);
+            if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 {
+                info!("[SQLite] Handled {} keys", keys_handled_entries);
             }
         }
-        self.commit(keys_transaction).await
+        info!("[SQLite] Saved {} keys", keys_handled_entries);
+        let _ = self.commit(keys_transaction).await;
+        Ok(keys_handled_entries)
     }
 
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        let mut counter = 0u64;
-        let mut total_users = 0u64;
-
-        let query = format!(
-            "SELECT {},{},{},{},{},{},{} FROM {}",
-            tracker.config.db_structure.table_users_uuid,
-            tracker.config.db_structure.table_users_key,
-            tracker.config.db_structure.table_users_uploaded,
-            tracker.config.db_structure.table_users_downloaded,
-            tracker.config.db_structure.table_users_completed,
-            tracker.config.db_structure.table_users_updated,
-            tracker.config.db_structure.table_users_active,
-            tracker.config.db_structure.db_torrents
-        );
-        let mut rows = sqlx::query(query.as_str()).fetch(&self.pool);
-        let mut users_parsing = HashMap::new();
-        while let Some(result) = rows.try_next().await? {
-            if counter == 100000 {
-                tracker.add_users(users_parsing.clone(), false).await;
-                users_parsing.clear();
-                info!("[SQLite3] Loaded {} users...", total_users);
-                counter = 0;
-            }
-
-            let uuid_regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$").unwrap();
-            if !uuid_regex.is_match(result.get(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str())) {
-                info!("[SQLite3] Could not parse the user with ID: {}", result.get::<&str, _>(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str()));
-                continue;
-            }
-            let uuid: &str = result.get(tracker.config.db_structure.table_users_uuid.clone().to_lowercase().as_str());
-
-            let user_key_data: &str = result.get(tracker.config.db_structure.table_users_key.clone().as_str());
-            let user_key_decoded = hex::decode(user_key_data).unwrap();
-            let user_key = <[u8; 20]>::try_from(user_key_decoded[0..20].as_ref()).unwrap();
-
-            let uploaded: i64 = result.get(tracker.config.db_structure.table_users_uploaded.clone().as_str());
-            let downloaded: i64 = result.get(tracker.config.db_structure.table_users_uploaded.clone().as_str());
-            let completed: i64 = result.get(tracker.config.db_structure.table_users_completed.clone().as_str());
-            let updated: i64 = result.get(tracker.config.db_structure.table_users_updated.clone().as_str());
-            let active: i64 = result.get(tracker.config.db_structure.table_users_active.clone().as_str());
-
-            users_parsing.insert(
-                UserId(user_key),
-                UserEntryItem {
-                    uuid: uuid.to_string(),
-                    key: UserId(user_key),
-                    uploaded: uploaded as u64,
-                    downloaded: downloaded as u64,
-                    completed: completed as u64,
-                    updated: updated as u64,
-                    active: active as u8,
-                    torrents_active: HashMap::new()
-                }
+        let mut start = 0u64;
+        let length = 100000u64;
+        let mut hashes = 0u64;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().users {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
+        loop {
+            info!(
+                "[SQLite] Trying to querying {} users - Skip: {}",
+                length,
+                start
             );
-            counter += 1;
-            total_users += 1;
+            let string_format = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                true => {
+                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                        true => {
+                            format!(
+                                "SELECT `{}`,HEX(`{}`),`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}` LIMIT {},{}",
+                                structure.column_uuid,
+                                structure.column_key,
+                                structure.column_uploaded,
+                                structure.column_downloaded,
+                                structure.column_completed,
+                                structure.column_updated,
+                                structure.column_active,
+                                structure.database_name,
+                                start,
+                                length
+                            )
+                        }
+                        false => {
+                            format!(
+                                "SELECT `{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}` LIMIT {},{}",
+                                structure.column_uuid,
+                                structure.column_key,
+                                structure.column_uploaded,
+                                structure.column_downloaded,
+                                structure.column_completed,
+                                structure.column_updated,
+                                structure.column_active,
+                                structure.database_name,
+                                start,
+                                length
+                            )
+                        }
+                    }
+                }
+                false => {
+                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                        true => {
+                            format!(
+                                "SELECT `{}`,HEX(`{}`),`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}` LIMIT {},{}",
+                                structure.column_id,
+                                structure.column_key,
+                                structure.column_uploaded,
+                                structure.column_downloaded,
+                                structure.column_completed,
+                                structure.column_updated,
+                                structure.column_active,
+                                structure.database_name,
+                                start,
+                                length
+                            )
+                        }
+                        false => {
+                            format!(
+                                "SELECT `{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}` LIMIT {},{}",
+                                structure.column_id,
+                                structure.column_key,
+                                structure.column_uploaded,
+                                structure.column_downloaded,
+                                structure.column_completed,
+                                structure.column_updated,
+                                structure.column_active,
+                                structure.database_name,
+                                start,
+                                length
+                            )
+                        }
+                    }
+                }
+            };
+            let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
+            let hashes_start = hashes;
+            while let Some(result) = rows.try_next().await? {
+                let hash = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                    true => {
+                        let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
+                        let mut hasher = Sha1::new();
+                        hasher.update(uuid_data);
+                        let hashed = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
+                        hashed
+                    }
+                    false => {
+                        let id_data: &[u8] = result.get(structure.column_id.as_str());
+                        let mut hasher = Sha1::new();
+                        hasher.update(id_data);
+                        let hashed = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
+                        hashed
+                    }
+                };
+                tracker.add_user(UserId(hash), UserEntryItem {
+                    key: UserId::from_str(result.get(structure.column_key.as_str())).unwrap(),
+                    user_id: match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                        true => { None }
+                        false => { Some(result.get::<u32, &str>(structure.column_id.as_str()) as u64) }
+                    },
+                    user_uuid: match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                        true => { Some(result.get(structure.column_uuid.as_str())) }
+                        false => { None }
+                    },
+                    uploaded: result.get::<u32, &str>(structure.column_uploaded.as_str()) as u64,
+                    downloaded: result.get::<u32, &str>(structure.column_downloaded.as_str()) as u64,
+                    completed: result.get::<u32, &str>(structure.column_completed.as_str()) as u64,
+                    updated: result.get::<u32, &str>(structure.column_updated.as_str())  as u64,
+                    active: result.get(structure.column_active.as_str()),
+                    torrents_active: Default::default(),
+                });
+                hashes += 1;
+                start += length;
+            }
+            if hashes_start == hashes {
+                break;
+            }
         }
-
-        if counter != 0 {
-            tracker.add_users(users_parsing.clone(), false).await;
-            users_parsing.clear();
-        }
-
-        info!("[SQLite3] Loaded {} users...", total_users);
-        Ok(total_users)
+        Ok(hashes)
     }
 
-    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: HashMap<UserId, UserEntryItem>) -> Result<(), Error>
+    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, UserEntryItem>) -> Result<(), Error>
     {
         let mut users_transaction = self.pool.begin().await?;
         let mut users_handled_entries = 0u64;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().users {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
         for (_, user_entry_item) in users.iter() {
-            match sqlx::query(&format!(
-                "INSERT OR REPLACE INTO {} ('{}','{}',{},{},{},{},{}) VALUES ('{}','{}',{},{},{},{},{})",
-                tracker.config.db_structure.db_users,
-                tracker.config.db_structure.table_users_uuid,
-                tracker.config.db_structure.table_users_key,
-                tracker.config.db_structure.table_users_uploaded,
-                tracker.config.db_structure.table_users_downloaded,
-                tracker.config.db_structure.table_users_completed,
-                tracker.config.db_structure.table_users_updated,
-                tracker.config.db_structure.table_users_active,
-                user_entry_item.uuid,
-                user_entry_item.key,
-                user_entry_item.uploaded,
-                user_entry_item.downloaded,
-                user_entry_item.completed,
-                user_entry_item.updated,
-                user_entry_item.active
-            ))
-                .execute(&mut *users_transaction)
-                .await {
+            users_handled_entries += 1;
+            let string_format = match  tracker.config.deref().clone().database.unwrap().insert_vacant {
+                true => {
+                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                        true => {
+                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                true => {
+                                    format!(
+                                        "INSERT INTO `{}` (`{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}`) VALUES (UNHEX('{}'),UNHEX('{}'),{},{},{},{},{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`)",
+                                        structure.database_name,
+                                        structure.column_uuid,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_downloaded,
+                                        structure.column_key,
+                                        structure.column_uploaded,
+                                        structure.column_updated,
+                                        user_entry_item.user_uuid.clone().unwrap(),
+                                        user_entry_item.completed,
+                                        user_entry_item.active,
+                                        user_entry_item.downloaded,
+                                        user_entry_item.key,
+                                        user_entry_item.uploaded,
+                                        user_entry_item.updated,
+                                        structure.column_completed,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_active,
+                                        structure.column_downloaded,
+                                        structure.column_downloaded,
+                                        structure.column_key,
+                                        structure.column_key,
+                                        structure.column_uploaded,
+                                        structure.column_uploaded,
+                                        structure.column_updated,
+                                        structure.column_updated
+                                    )
+                                }
+                                false => {
+                                    format!(
+                                        "INSERT INTO `{}` (`{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}`) VALUES ('{}','{}',{},{},{},{},{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`)",
+                                        structure.database_name,
+                                        structure.column_uuid,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_downloaded,
+                                        structure.column_key,
+                                        structure.column_uploaded,
+                                        structure.column_updated,
+                                        user_entry_item.user_uuid.clone().unwrap(),
+                                        user_entry_item.completed,
+                                        user_entry_item.active,
+                                        user_entry_item.downloaded,
+                                        user_entry_item.key,
+                                        user_entry_item.uploaded,
+                                        user_entry_item.updated,
+                                        structure.column_completed,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_active,
+                                        structure.column_downloaded,
+                                        structure.column_downloaded,
+                                        structure.column_key,
+                                        structure.column_key,
+                                        structure.column_uploaded,
+                                        structure.column_uploaded,
+                                        structure.column_updated,
+                                        structure.column_updated
+                                    )
+                                }
+                            }
+                        }
+                        false => {
+                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                true => {
+                                    format!(
+                                        "INSERT INTO `{}` (`{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}`) VALUES (UNHEX('{}'),UNHEX('{}'),{},{},{},{},{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`)",
+                                        structure.database_name,
+                                        structure.column_id,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_downloaded,
+                                        structure.column_key,
+                                        structure.column_uploaded,
+                                        structure.column_updated,
+                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.completed,
+                                        user_entry_item.active,
+                                        user_entry_item.downloaded,
+                                        user_entry_item.key,
+                                        user_entry_item.uploaded,
+                                        user_entry_item.updated,
+                                        structure.column_completed,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_active,
+                                        structure.column_downloaded,
+                                        structure.column_downloaded,
+                                        structure.column_key,
+                                        structure.column_key,
+                                        structure.column_uploaded,
+                                        structure.column_uploaded,
+                                        structure.column_updated,
+                                        structure.column_updated
+                                    )
+                                }
+                                false => {
+                                    format!(
+                                        "INSERT INTO `{}` (`{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}`) VALUES ('{}','{}',{},{},{},{},{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`)",
+                                        structure.database_name,
+                                        structure.column_id,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_downloaded,
+                                        structure.column_key,
+                                        structure.column_uploaded,
+                                        structure.column_updated,
+                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.completed,
+                                        user_entry_item.active,
+                                        user_entry_item.downloaded,
+                                        user_entry_item.key,
+                                        user_entry_item.uploaded,
+                                        user_entry_item.updated,
+                                        structure.column_completed,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_active,
+                                        structure.column_downloaded,
+                                        structure.column_downloaded,
+                                        structure.column_key,
+                                        structure.column_key,
+                                        structure.column_uploaded,
+                                        structure.column_uploaded,
+                                        structure.column_updated,
+                                        structure.column_updated
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                false => {
+                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                        true => {
+                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                true => {
+                                    format!(
+                                        "UPDATE IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=UNHEX('{}')",
+                                        structure.database_name,
+                                        structure.column_completed,
+                                        user_entry_item.completed,
+                                        structure.column_active,
+                                        user_entry_item.active,
+                                        structure.column_downloaded,
+                                        user_entry_item.downloaded,
+                                        structure.column_key,
+                                        user_entry_item.key,
+                                        structure.column_uploaded,
+                                        user_entry_item.uploaded,
+                                        structure.column_updated,
+                                        user_entry_item.updated,
+                                        structure.column_uuid,
+                                        user_entry_item.user_uuid.clone().unwrap(),
+                                    )
+                                }
+                                false => {
+                                    format!(
+                                        "UPDATE IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
+                                        structure.database_name,
+                                        structure.column_completed,
+                                        user_entry_item.completed,
+                                        structure.column_active,
+                                        user_entry_item.active,
+                                        structure.column_downloaded,
+                                        user_entry_item.downloaded,
+                                        structure.column_key,
+                                        user_entry_item.key,
+                                        structure.column_uploaded,
+                                        user_entry_item.uploaded,
+                                        structure.column_updated,
+                                        user_entry_item.updated,
+                                        structure.column_uuid,
+                                        user_entry_item.user_uuid.clone().unwrap(),
+                                    )
+                                }
+                            }
+                        }
+                        false => {
+                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                true => {
+                                    format!(
+                                        "UPDATE IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=UNHEX('{}')",
+                                        structure.database_name,
+                                        structure.column_completed,
+                                        user_entry_item.completed,
+                                        structure.column_active,
+                                        user_entry_item.active,
+                                        structure.column_downloaded,
+                                        user_entry_item.downloaded,
+                                        structure.column_key,
+                                        user_entry_item.key,
+                                        structure.column_uploaded,
+                                        user_entry_item.uploaded,
+                                        structure.column_updated,
+                                        user_entry_item.updated,
+                                        structure.column_id,
+                                        user_entry_item.user_id.clone().unwrap(),
+                                    )
+                                }
+                                false => {
+                                    format!(
+                                        "UPDATE IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
+                                        structure.database_name,
+                                        structure.column_completed,
+                                        user_entry_item.completed,
+                                        structure.column_active,
+                                        user_entry_item.active,
+                                        structure.column_downloaded,
+                                        user_entry_item.downloaded,
+                                        structure.column_key,
+                                        user_entry_item.key,
+                                        structure.column_uploaded,
+                                        user_entry_item.uploaded,
+                                        structure.column_updated,
+                                        user_entry_item.updated,
+                                        structure.column_id,
+                                        user_entry_item.user_id.clone().unwrap(),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[SQLite3] Error: {}", e.to_string());
+                    error!("[SQLite] Error: {}", e.to_string());
                     return Err(e);
                 }
             }
-            users_handled_entries += 1;
-
-            if (users_handled_entries as f64 / 10000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
-                match self.commit(users_transaction).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        return Err(e);
-                    }
-                };
-                info!("[SQLite3] Handled {} torrents", users_handled_entries);
-                users_transaction = self.pool.begin().await?
+            if (users_handled_entries as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
+                info!("[SQLite] Handled {} users", users_handled_entries);
             }
         }
         self.commit(users_transaction).await

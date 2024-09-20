@@ -1,18 +1,15 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 use std::io::Cursor;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
+use async_std::future;
 use byteorder::{BigEndian, ReadBytesExt};
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
+use tokio_shutdown::Shutdown;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::configuration::Configuration;
-use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_peer::TorrentPeer;
-use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>>, CustomError> {
     let mut queries: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
@@ -81,15 +78,6 @@ pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
 }
 
-pub async fn maintenance_mode(tracker: Arc<TorrentTracker>) -> bool
-{
-    let stats = tracker.clone().get_stats();
-    if stats.maintenance_mode != 0 {
-        return true;
-    }
-    false
-}
-
 pub fn print_type<T>(_: &T) {
     println!("{:?}", std::any::type_name::<T>());
 }
@@ -149,25 +137,6 @@ pub fn setup_logging(config: &Configuration)
     info!("logging initialized.");
 }
 
-pub fn parse_ip_format(peers: BTreeMap<PeerId, TorrentPeer>, config: Arc<Configuration>, remote_addr: IpAddr, peer_addr: SocketAddr) -> BTreeMap<PeerId, TorrentPeer> {
-    let mut peers_parsed = 0u64;
-    let mut peer_list = BTreeMap::new();
-    for (peer_id, torrent_peer) in peers.iter() {
-        if peers_parsed == config.peers_returned.unwrap() {
-            break;
-        }
-        if remote_addr.is_ipv4() && peer_addr.is_ipv4() {
-            peer_list.insert(*peer_id, torrent_peer.clone());
-            peers_parsed += 1;
-        }
-        if remote_addr.is_ipv6() && peer_addr.is_ipv6() {
-            peer_list.insert(*peer_id, torrent_peer.clone());
-            peers_parsed += 1;
-        }
-    }
-    peer_list
-}
-
 pub async fn current_time() -> u64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH).unwrap()
@@ -193,4 +162,16 @@ pub async fn convert_bytes_to_int(array: &Vec<u8>) -> u64 {
     array_fixed.extend(array);
     let mut rdr = Cursor::new(array_fixed);
     rdr.read_u64::<BigEndian>().unwrap()
+}
+
+pub async fn shutdown_waiting(timeout: Duration, shutdown_handler: Shutdown) -> bool
+{
+    match future::timeout(timeout, shutdown_handler.handle()).await {
+        Ok(_) => {
+            true
+        }
+        Err(_) => {
+            false
+        }
+    }
 }

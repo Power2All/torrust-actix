@@ -6,3 +6,4 @@ pub mod stats;
 pub mod api;
 pub mod http;
 pub mod udp;
+pub mod structs;
