@@ -40,6 +40,7 @@ log = "0.4.22"
 parking_lot = { version = "0.12.3", features = ["arc_lock", "hardware-lock-elision", "owning_ref", "serde", "deadlock_detection"] }
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.14"
+rcgen = "0.13.1"
 regex = "1.10.6"
 rustls = { version = "0.23.13", default-features = false, features = ["std", "ring"] }
 rustls-pemfile = "2.1.3"

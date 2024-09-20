@@ -6,11 +6,10 @@ use parking_lot::RwLock;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
-use crate::structs::Cli;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    pub async fn new(config: Arc<Configuration>, args: Cli) -> TorrentTracker
+    pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
         TorrentTracker {
             config: config.clone(),
@@ -68,7 +67,7 @@ impl TorrentTracker {
             }),
             users: Arc::new(RwLock::new(BTreeMap::new())),
             users_updates: Arc::new(RwLock::new(BTreeMap::new())),
-            sqlx: DatabaseConnector::new(config.clone(), args).await,
+            sqlx: DatabaseConnector::new(config.clone(), create_database).await,
         }
     }
 }

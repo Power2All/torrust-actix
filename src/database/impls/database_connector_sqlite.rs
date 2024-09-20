@@ -14,7 +14,6 @@ use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::structs::Cli;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -33,7 +32,7 @@ impl DatabaseConnectorSQLite {
         SqlitePoolOptions::new().connect_with(options.create_if_missing(true)).await
     }
 
-    pub async fn database_connector(config: Arc<Configuration>, args: Cli) -> DatabaseConnector
+    pub async fn database_connector(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
         let sqlite_connect = DatabaseConnectorSQLite::create(config.database.clone().unwrap().path.unwrap().as_str()).await;
         if sqlite_connect.is_err() {
@@ -46,7 +45,7 @@ impl DatabaseConnectorSQLite {
         structure.sqlite = Some(DatabaseConnectorSQLite { pool: sqlite_connect.unwrap() });
         structure.engine = Some(DatabaseDrivers::sqlite3);
 
-        if args.create_databases {
+        if create_database {
             let pool = &structure.sqlite.clone().unwrap().pool;
             info!("[BOOT] Database creation triggered for SQLite.");
             info!("[BOOT SQLite] Setting the PRAGMA config...");

@@ -14,7 +14,6 @@ use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::structs::Cli;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -31,7 +30,7 @@ impl DatabaseConnectorMySQL {
         ).await
     }
 
-    pub async fn database_connector(config: Arc<Configuration>, args: Cli) -> DatabaseConnector
+    pub async fn database_connector(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
         let mysql_connect = DatabaseConnectorMySQL::create(config.database.clone().unwrap().path.unwrap().as_str()).await;
         if mysql_connect.is_err() {
@@ -44,7 +43,7 @@ impl DatabaseConnectorMySQL {
         structure.mysql = Some(DatabaseConnectorMySQL { pool: mysql_connect.unwrap() });
         structure.engine = Some(DatabaseDrivers::mysql);
 
-        if args.create_databases {
+        if create_database {
             let pool = &structure.mysql.clone().unwrap().pool;
 
             // Create Torrent DB

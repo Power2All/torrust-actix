@@ -6,7 +6,6 @@ use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
-use crate::structs::Cli;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -14,19 +13,19 @@ use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
 impl DatabaseConnector {
-    pub async fn new(config: Arc<Configuration>, args: Cli) -> DatabaseConnector
+    pub async fn new(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
         match &config.database {
-            None => { DatabaseConnectorSQLite::database_connector(config, args).await }
+            None => { DatabaseConnectorSQLite::database_connector(config, create_database).await }
             Some(db) => {
                 match &db.engine {
                     None => {
-                        DatabaseConnectorSQLite::database_connector(config, args).await
+                        DatabaseConnectorSQLite::database_connector(config, create_database).await
                     }
                     Some(db_engine) => {
                         match db_engine {
-                            DatabaseDrivers::sqlite3 => { DatabaseConnectorSQLite::database_connector(config, args).await }
-                            DatabaseDrivers::mysql => { DatabaseConnectorMySQL::database_connector(config, args).await }
+                            DatabaseDrivers::sqlite3 => { DatabaseConnectorSQLite::database_connector(config, create_database).await }
+                            DatabaseDrivers::mysql => { DatabaseConnectorMySQL::database_connector(config, create_database).await }
                             // DatabaseDrivers::pgsql => { DatabaseConnectorPgSQL::database_connector(config, args).await }
                         }
                     }
