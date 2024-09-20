@@ -19,6 +19,6 @@ pub struct TorrentTracker {
     pub torrents_blacklist: Arc<RwLock<Vec<InfoHash>>>,
     pub keys: Arc<RwLock<BTreeMap<InfoHash, i64>>>,
     pub users: Arc<RwLock<BTreeMap<UserId, UserEntryItem>>>,
-    pub users_updates: Arc<RwLock<BTreeMap<UserId, UserEntryItem>>>,
+    pub users_updates: Arc<RwLock<HashMap<u128, (UserId, UserEntryItem)>>>,
     pub stats: Arc<StatsAtomics>,
 }

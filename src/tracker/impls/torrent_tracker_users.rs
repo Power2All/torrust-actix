@@ -3,7 +3,7 @@ use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use chrono::{TimeZone, Utc};
-use log::info;
+use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -15,6 +15,20 @@ impl TorrentTracker {
     {
         if let Ok(users) = self.sqlx.load_users(tracker.clone()).await {
             info!("Loaded {} users", users);
+        }
+    }
+
+    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, UserEntryItem>) -> Result<(), ()>
+    {
+        match self.sqlx.save_users(tracker.clone(), users.clone()).await {
+            Ok(_) => {
+                info!("[SAVE USERS] Saved {} users", users.len());
+                Ok(())
+            }
+            Err(_) => {
+                error!("[SAVE USERS] Unable to save {} users", users.len());
+                Err(())
+            }
         }
     }
 

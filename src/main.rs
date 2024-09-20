@@ -272,20 +272,44 @@ async fn main() -> std::io::Result<()>
     }
 
     if tracker.config.database.clone().unwrap().persistent {
-        let torrents_updates_handler = tokio_shutdown.clone();
-        let tracker_spawn_torrents_updates = tracker.clone();
-        info!("[BOOT] Starting thread for torrents database updates with {} seconds delay...", tracker_spawn_torrents_updates.config.database.clone().unwrap().persistent_interval.unwrap());
+        let updates_handler = tokio_shutdown.clone();
+        let tracker_spawn_updates = tracker.clone();
+        info!("[BOOT] Starting thread for database updates with {} seconds delay...", tracker_spawn_updates.config.database.clone().unwrap().persistent_interval.unwrap());
         tokio::spawn(async move {
             loop {
-                tracker_spawn_torrents_updates.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn_torrents_updates.config.database.clone().unwrap().persistent_interval.unwrap() as i64);
-                if shutdown_waiting(Duration::from_secs(tracker_spawn_torrents_updates.config.database.clone().unwrap().persistent_interval.unwrap()), torrents_updates_handler.clone()).await {
-                    info!("[BOOT] Shutting down thread for torrents updates...");
+                tracker_spawn_updates.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn_updates.config.database.clone().unwrap().persistent_interval.unwrap() as i64);
+                if shutdown_waiting(Duration::from_secs(tracker_spawn_updates.config.database.clone().unwrap().persistent_interval.unwrap()), updates_handler.clone()).await {
+                    info!("[BOOT] Shutting down thread for updates...");
                     return;
                 }
 
                 info!("[TORRENTS UPDATES] Start updating torrents into the DB.");
-                let _ = tracker_spawn_torrents_updates.save_torrents_updates(tracker_spawn_torrents_updates.clone()).await;
+                let _ = tracker_spawn_updates.save_torrent_updates(tracker_spawn_updates.clone()).await;
                 info!("[TORRENTS UPDATES] Torrent updates inserted into DB.");
+
+                if tracker_spawn_updates.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() {
+                    info!("[WHITELIST UPDATES] Start updating whitelist into the DB.");
+                    let _ = tracker_spawn_updates.save_whitelist(tracker_spawn_updates.clone(), tracker_spawn_updates.get_whitelist()).await;
+                    info!("[WHITELIST UPDATES] Whitelist updates inserted into DB.");
+                }
+
+                if tracker_spawn_updates.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() {
+                    info!("[BLACKLIST UPDATES] Start updating whitelist into the DB.");
+                    let _ = tracker_spawn_updates.save_blacklist(tracker_spawn_updates.clone(), tracker_spawn_updates.get_blacklist()).await;
+                    info!("[BLACKLIST UPDATES] Blacklist updates inserted into DB.");
+                }
+
+                if tracker_spawn_updates.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+                    info!("[KEYS UPDATES] Start updating whitelist into the DB.");
+                    let _ = tracker_spawn_updates.save_keys(tracker_spawn_updates.clone(), tracker_spawn_updates.get_keys()).await;
+                    info!("[KEYS UPDATES] Keys updates inserted into DB.");
+                }
+
+                if tracker_spawn_updates.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
+                    info!("[USERS UPDATES] Start updating users into the DB.");
+                    let _ = tracker_spawn_updates.save_user_updates(tracker_spawn_updates.clone()).await;
+                    info!("[USERS UPDATES] Keys updates inserted into DB.");
+                }
             }
         });
     }
@@ -306,15 +330,14 @@ async fn main() -> std::io::Result<()>
                 handle.stop(true).await;
             }
             let _ = udp_tx.send(true);
-            let _ = udp_futures.into_iter()
-                .collect::<TryJoinAll<_>>();
+            let _ = udp_futures.into_iter().collect::<TryJoinAll<_>>();
             tokio_shutdown.handle().await;
 
             task::sleep(Duration::from_secs(1)).await;
 
             if tracker.config.database.clone().unwrap().persistent {
                 info!("Saving data to the database...");
-                let _ = tracker.save_torrents_updates(tracker.clone()).await;
+                let _ = tracker.save_torrent_updates(tracker.clone()).await;
                 if tracker.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() {
                     let _ = tracker.save_whitelist(tracker.clone(), tracker.get_whitelist()).await;
                 }
@@ -324,9 +347,9 @@ async fn main() -> std::io::Result<()>
                 if tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
                     let _ = tracker.save_keys(tracker.clone(), tracker.get_keys()).await;
                 }
-                // if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
-                //     tracker.load_users(tracker.clone()).await;
-                // }
+                if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
+                    let _ = tracker.save_user_updates(tracker.clone()).await;
+                }
             } else {
                 info!("Saving completed data to an INI...");
                 tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().unwrap().total_downloads as i64);

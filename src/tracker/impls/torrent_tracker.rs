@@ -66,7 +66,7 @@ impl TorrentTracker {
                 test_counter_udp: AtomicI64::new(0)
             }),
             users: Arc::new(RwLock::new(BTreeMap::new())),
-            users_updates: Arc::new(RwLock::new(BTreeMap::new())),
+            users_updates: Arc::new(RwLock::new(HashMap::new())),
             sqlx: DatabaseConnector::new(config.clone(), create_database).await,
         }
     }

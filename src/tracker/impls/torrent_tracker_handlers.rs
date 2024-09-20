@@ -268,7 +268,7 @@ impl TorrentTracker {
                 );
 
                 if data.config.database.clone().unwrap().persistent {
-                    data.add_torrents_update(
+                    data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.1.clone()
                     );
@@ -326,7 +326,7 @@ impl TorrentTracker {
                 };
 
                 if data.config.database.clone().unwrap().persistent {
-                    data.add_torrents_update(
+                    data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.clone()
                     );
@@ -347,7 +347,7 @@ impl TorrentTracker {
                 );
 
                 if data.config.database.clone().unwrap().persistent {
-                    data.add_torrents_update(
+                    data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.1.clone()
                     );

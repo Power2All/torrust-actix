@@ -7,12 +7,13 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    pub fn add_torrents_update(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
+    pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
         let map = self.torrents_updates.clone();
         let mut lock = map.write();
         match lock.insert(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos(), (info_hash, torrent_entry.clone())) {
             None => {
+                self.update_stats(StatsEvent::TorrentsUpdates, 1);
                 (torrent_entry, true)
             }
             Some(_) => {
@@ -21,24 +22,24 @@ impl TorrentTracker {
         }
     }
 
-    pub fn add_torrents_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentEntry)>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
+    pub fn add_torrent_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentEntry)>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
     {
         let mut returned_data = BTreeMap::new();
         for (timestamp, (info_hash, torrent_entry)) in hashes.iter() {
-            returned_data.insert(*info_hash, self.add_torrents_update(*info_hash, torrent_entry.clone()));
-            let _ = self.remove_torrents_update(timestamp);
+            returned_data.insert(*info_hash, self.add_torrent_update(*info_hash, torrent_entry.clone()));
+            let _ = self.remove_torrent_update(timestamp);
         }
         returned_data
     }
 
-    pub fn get_torrents_updates(&self) -> HashMap<u128, (InfoHash, TorrentEntry)>
+    pub fn get_torrent_updates(&self) -> HashMap<u128, (InfoHash, TorrentEntry)>
     {
         let map = self.torrents_updates.clone();
         let lock = map.read_recursive();
         lock.clone()
     }
 
-    pub fn remove_torrents_update(&self, timestamp: &u128) -> bool
+    pub fn remove_torrent_update(&self, timestamp: &u128) -> bool
     {
         let map = self.torrents_updates.clone();
         let mut lock = map.write();
@@ -51,7 +52,7 @@ impl TorrentTracker {
         }
     }
 
-    pub fn clear_torrents_updates(&self)
+    pub fn clear_torrent_updates(&self)
     {
         let map = self.torrents_updates.clone();
         let mut lock = map.write();
@@ -59,11 +60,11 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsUpdates, 0);
     }
 
-    pub async fn save_torrents_updates(&self, torrent_tracker: Arc<TorrentTracker>)
+    pub async fn save_torrent_updates(&self, torrent_tracker: Arc<TorrentTracker>)
     {
         let mut hashmapping: HashMap<InfoHash, (Vec<u128>, TorrentEntry)> = HashMap::new();
         let mut hashmap: BTreeMap<InfoHash, TorrentEntry> = BTreeMap::new();
-        let updates = self.get_torrents_updates();
+        let updates = self.get_torrent_updates();
 
         // Build the actually updates for SQL, adding the timestamps into a vector for removal afterward.
         for (timestamp, (info_hash, torrent_entry)) in updates.iter() {
@@ -87,7 +88,7 @@ impl TorrentTracker {
                 // We can remove the updates keys, since they are updated.
                 for (_, (timestamps, _)) in hashmapping.iter() {
                     for timestamp in timestamps.iter() {
-                        self.remove_torrents_update(timestamp);
+                        self.remove_torrent_update(timestamp);
                     }
                 }
             }
