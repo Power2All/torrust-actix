@@ -34,7 +34,7 @@ async fn main() -> std::io::Result<()>
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    let tracker = Arc::new(TorrentTracker::new(config.clone(), args.create_databases).await);
+    let tracker = Arc::new(TorrentTracker::new(config.clone(), args.create_database).await);
 
     if tracker.config.database.clone().unwrap().persistent {
         tracker.load_torrents(tracker.clone()).await;

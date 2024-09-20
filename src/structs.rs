@@ -7,7 +7,7 @@ pub struct Cli {
     #[arg(long)]
     pub create_config: bool,
     #[arg(long)]
-    pub create_databases: bool,
+    pub create_database: bool,
     #[arg(long)]
     pub create_selfsigned: bool,
     #[arg(long, requires("create_selfsigned"), default_value = "localhost")]

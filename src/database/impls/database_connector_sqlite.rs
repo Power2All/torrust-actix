@@ -254,7 +254,7 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "SELECT hex(`{}`) AS `{}`, `{}` FROM `{}` LIMIT {},{}",
+                        "SELECT hex(`{}`) AS `{}`, `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_infohash,
                         structure.column_completed,
@@ -265,7 +265,7 @@ impl DatabaseConnectorSQLite {
                 }
                 false => {
                     format!(
-                        "SELECT `{}`, `{}` FROM `{}` LIMIT {},{}",
+                        "SELECT `{}`, `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_completed,
                         structure.database_name,
@@ -334,7 +334,7 @@ impl DatabaseConnectorSQLite {
                             }
                             false => {
                                 format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES ({}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                    "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES ('{}', {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                     structure.database_name,
                                     structure.column_infohash,
                                     structure.column_seeds,
@@ -375,7 +375,7 @@ impl DatabaseConnectorSQLite {
                             }
                             false => {
                                 format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`) VALUES ({}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
+                                    "INSERT INTO `{}` (`{}`, `{}`) VALUES ('{}', {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
                                     structure.database_name,
                                     structure.column_infohash,
                                     structure.column_completed,
@@ -436,7 +436,7 @@ impl DatabaseConnectorSQLite {
                         let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                             true => {
                                 format!(
-                                    "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`=UNHEX('{}')",
+                                    "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`=X'{}'",
                                     structure.database_name,
                                     structure.column_completed,
                                     torrent_entry.completed,
@@ -490,7 +490,7 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {},{}",
+                        "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_infohash,
                         structure.database_name,
@@ -500,7 +500,7 @@ impl DatabaseConnectorSQLite {
                 }
                 false => {
                     format!(
-                        "SELECT `{}` FROM `{}` LIMIT {},{}",
+                        "SELECT `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.database_name,
                         start,
@@ -537,7 +537,7 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
+                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (X'{}')",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -586,7 +586,7 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {},{}",
+                        "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_infohash,
                         structure.database_name,
@@ -596,7 +596,7 @@ impl DatabaseConnectorSQLite {
                 }
                 false => {
                     format!(
-                        "SELECT `{}` FROM `{}` LIMIT {},{}",
+                        "SELECT `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.database_name,
                         start,
@@ -633,7 +633,7 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
+                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (X'{}')",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -682,7 +682,7 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
                 true => {
                     format!(
-                        "SELECT HEX(`{}`) AS `{}`,`{}` FROM `{}` LIMIT {},{}",
+                        "SELECT HEX(`{}`) AS `{}`, `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_hash,
                         structure.column_hash,
                         structure.column_timeout,
@@ -693,7 +693,7 @@ impl DatabaseConnectorSQLite {
                 }
                 false => {
                     format!(
-                        "SELECT `{}`,`{}` FROM `{}` LIMIT {},{}",
+                        "SELECT `{}`, `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_hash,
                         structure.column_timeout,
                         structure.database_name,
@@ -732,13 +732,12 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
                 true => {
                     format!(
-                        "INSERT INTO `{}` (`{}`,`{}`) VALUES (UNHEX('{}'),{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`), `{}` = VALUES(`{}`)",
+                        "INSERT INTO `{}` (`{}`, `{}`) VALUES (X'{}', {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
                         structure.database_name,
                         structure.column_hash,
                         structure.column_timeout,
                         hash,
                         timeout,
-                        structure.column_hash,
                         structure.column_hash,
                         structure.column_timeout,
                         structure.column_timeout
@@ -746,13 +745,12 @@ impl DatabaseConnectorSQLite {
                 }
                 false => {
                     format!(
-                        "INSERT INTO `{}` (`{}`,`{}`) VALUES ('{}',{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`), `{}` = VALUES(`{}`)",
+                        "INSERT INTO `{}` (`{}`, `{}`) VALUES ('{}', {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
                         structure.database_name,
                         structure.column_hash,
                         structure.column_timeout,
                         hash,
                         timeout,
-                        structure.column_hash,
                         structure.column_hash,
                         structure.column_timeout,
                         structure.column_timeout
@@ -795,7 +793,7 @@ impl DatabaseConnectorSQLite {
                     match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                         true => {
                             format!(
-                                "SELECT `{}`,HEX(`{}`),`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}` LIMIT {},{}",
+                                "SELECT `{}`, HEX(`{}`), `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
                                 structure.column_uuid,
                                 structure.column_key,
                                 structure.column_uploaded,
@@ -810,7 +808,7 @@ impl DatabaseConnectorSQLite {
                         }
                         false => {
                             format!(
-                                "SELECT `{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}` LIMIT {},{}",
+                                "SELECT `{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
                                 structure.column_uuid,
                                 structure.column_key,
                                 structure.column_uploaded,
@@ -829,7 +827,7 @@ impl DatabaseConnectorSQLite {
                     match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                         true => {
                             format!(
-                                "SELECT `{}`,HEX(`{}`),`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}` LIMIT {},{}",
+                                "SELECT `{}`, HEX(`{}`), `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
                                 structure.column_id,
                                 structure.column_key,
                                 structure.column_uploaded,
@@ -844,7 +842,7 @@ impl DatabaseConnectorSQLite {
                         }
                         false => {
                             format!(
-                                "SELECT `{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}` FROM `{}` LIMIT {},{}",
+                                "SELECT `{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
                                 structure.column_id,
                                 structure.column_key,
                                 structure.column_uploaded,
@@ -923,7 +921,7 @@ impl DatabaseConnectorSQLite {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}`) VALUES (UNHEX('{}'),UNHEX('{}'),{},{},{},{},{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`)",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (X'{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                         structure.database_name,
                                         structure.column_uuid,
                                         structure.column_completed,
@@ -939,6 +937,7 @@ impl DatabaseConnectorSQLite {
                                         user_entry_item.key,
                                         user_entry_item.uploaded,
                                         user_entry_item.updated,
+                                        structure.column_uuid,
                                         structure.column_completed,
                                         structure.column_completed,
                                         structure.column_active,
@@ -955,7 +954,7 @@ impl DatabaseConnectorSQLite {
                                 }
                                 false => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}`) VALUES ('{}','{}',{},{},{},{},{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`)",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                         structure.database_name,
                                         structure.column_uuid,
                                         structure.column_completed,
@@ -971,6 +970,7 @@ impl DatabaseConnectorSQLite {
                                         user_entry_item.key,
                                         user_entry_item.uploaded,
                                         user_entry_item.updated,
+                                        structure.column_uuid,
                                         structure.column_completed,
                                         structure.column_completed,
                                         structure.column_active,
@@ -991,7 +991,7 @@ impl DatabaseConnectorSQLite {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}`) VALUES (UNHEX('{}'),UNHEX('{}'),{},{},{},{},{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`)",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (X'{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                         structure.database_name,
                                         structure.column_id,
                                         structure.column_completed,
@@ -1000,13 +1000,14 @@ impl DatabaseConnectorSQLite {
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_updated,
-                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.user_uuid.clone().unwrap(),
                                         user_entry_item.completed,
                                         user_entry_item.active,
                                         user_entry_item.downloaded,
                                         user_entry_item.key,
                                         user_entry_item.uploaded,
                                         user_entry_item.updated,
+                                        structure.column_id,
                                         structure.column_completed,
                                         structure.column_completed,
                                         structure.column_active,
@@ -1023,7 +1024,7 @@ impl DatabaseConnectorSQLite {
                                 }
                                 false => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`,`{}`,`{}`,`{}`,`{}`,`{}`,`{}`) VALUES ('{}','{}',{},{},{},{},{}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`),`{}` = VALUES(`{}`)",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                         structure.database_name,
                                         structure.column_id,
                                         structure.column_completed,
@@ -1032,13 +1033,14 @@ impl DatabaseConnectorSQLite {
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_updated,
-                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.user_uuid.clone().unwrap(),
                                         user_entry_item.completed,
                                         user_entry_item.active,
                                         user_entry_item.downloaded,
                                         user_entry_item.key,
                                         user_entry_item.uploaded,
                                         user_entry_item.updated,
+                                        structure.column_id,
                                         structure.column_completed,
                                         structure.column_completed,
                                         structure.column_active,
@@ -1063,7 +1065,7 @@ impl DatabaseConnectorSQLite {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=UNHEX('{}')",
+                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=X'{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1083,7 +1085,7 @@ impl DatabaseConnectorSQLite {
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
+                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1107,7 +1109,7 @@ impl DatabaseConnectorSQLite {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=UNHEX('{}')",
+                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=X'{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1121,13 +1123,13 @@ impl DatabaseConnectorSQLite {
                                         user_entry_item.uploaded,
                                         structure.column_updated,
                                         user_entry_item.updated,
-                                        structure.column_id,
+                                        structure.column_uuid,
                                         user_entry_item.user_id.clone().unwrap(),
                                     )
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
+                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1141,7 +1143,7 @@ impl DatabaseConnectorSQLite {
                                         user_entry_item.uploaded,
                                         structure.column_updated,
                                         user_entry_item.updated,
-                                        structure.column_id,
+                                        structure.column_uuid,
                                         user_entry_item.user_id.clone().unwrap(),
                                     )
                                 }
