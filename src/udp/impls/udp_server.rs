@@ -236,7 +236,7 @@ impl UdpServer {
                             return Err(ServerError::PeerKeyNotValid);
                         }
                         Some(user_id) => {
-                            Some(UserId::from(user_id))
+                            Some(user_id)
                         }
                     };
                 }

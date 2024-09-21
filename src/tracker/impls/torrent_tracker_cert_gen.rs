@@ -14,7 +14,7 @@ impl TorrentTracker {
         let mut subject_alt_names = vec![
             String::from("localhost")
         ];
-        if args.selfsigned_domain != String::from("localhost") {
+        if args.selfsigned_domain != *"localhost" {
             subject_alt_names.push(args.selfsigned_domain.clone());
         }
 
@@ -22,22 +22,22 @@ impl TorrentTracker {
         let CertifiedKey { cert, key_pair} = generate_simple_self_signed(subject_alt_names).unwrap();
 
         // Write the key and cert file.
-        match fs::write(format!("{}", args.selfsigned_keyfile.as_str()), key_pair.serialize_pem()) {
+        match fs::write(args.selfsigned_keyfile.as_str(), key_pair.serialize_pem()) {
             Ok(_) => {
                 info!("[CERTGEN] The key file {} has been generated", args.selfsigned_keyfile.as_str());
             }
             Err(error) => {
                 error!("[CERTGEN] The key file {} could not be generated!", args.selfsigned_keyfile.as_str());
-                panic!("[CERTGEN] {}", error.to_string())
+                panic!("[CERTGEN] {}", error)
             }
         }
-        match fs::write(format!("{}", args.selfsigned_certfile.as_str()), cert.pem()) {
+        match fs::write(args.selfsigned_certfile.as_str(), cert.pem()) {
             Ok(_) => {
                 info!("[CERTGEN] The cert file {} has been generated", args.selfsigned_certfile.as_str());
             }
             Err(error) => {
                 error!("[CERTGEN] The cert file {} could not be generated!", args.selfsigned_certfile.as_str());
-                panic!("[CERTGEN] {}", error.to_string())
+                panic!("[CERTGEN] {}", error)
             }
         }
 

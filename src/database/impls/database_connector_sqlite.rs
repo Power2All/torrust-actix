@@ -1124,7 +1124,7 @@ impl DatabaseConnectorSQLite {
                                         structure.column_updated,
                                         user_entry_item.updated,
                                         structure.column_uuid,
-                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.user_id.unwrap(),
                                     )
                                 }
                                 false => {
@@ -1144,7 +1144,7 @@ impl DatabaseConnectorSQLite {
                                         structure.column_updated,
                                         user_entry_item.updated,
                                         structure.column_uuid,
-                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.user_id.unwrap(),
                                     )
                                 }
                             }

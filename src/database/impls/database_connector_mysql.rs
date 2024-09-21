@@ -996,7 +996,7 @@ impl DatabaseConnectorMySQL {
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_updated,
-                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.user_id.unwrap(),
                                         user_entry_item.completed,
                                         user_entry_item.active,
                                         user_entry_item.downloaded,
@@ -1028,7 +1028,7 @@ impl DatabaseConnectorMySQL {
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_updated,
-                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.user_id.unwrap(),
                                         user_entry_item.completed,
                                         user_entry_item.active,
                                         user_entry_item.downloaded,
@@ -1118,7 +1118,7 @@ impl DatabaseConnectorMySQL {
                                         structure.column_updated,
                                         user_entry_item.updated,
                                         structure.column_id,
-                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.user_id.unwrap(),
                                     )
                                 }
                                 false => {
@@ -1138,7 +1138,7 @@ impl DatabaseConnectorMySQL {
                                         structure.column_updated,
                                         user_entry_item.updated,
                                         structure.column_id,
-                                        user_entry_item.user_id.clone().unwrap(),
+                                        user_entry_item.user_id.unwrap(),
                                     )
                                 }
                             }

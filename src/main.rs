@@ -6,7 +6,7 @@ use std::time::Duration;
 use async_std::task;
 use clap::Parser;
 use futures_util::future::{try_join_all, TryJoinAll};
-use log::info;
+use log::{error, info};
 use parking_lot::deadlock;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
@@ -176,7 +176,7 @@ async fn main() -> std::io::Result<()>
 
     let stats_handler = tokio_shutdown.clone();
     let tracker_spawn_stats = tracker.clone();
-    info!("[BOOT] Starting thread for console updates with {} seconds delay...", tracker_spawn_stats.config.log_console_interval.clone().unwrap_or(60u64));
+    info!("[BOOT] Starting thread for console updates with {} seconds delay...", tracker_spawn_stats.config.log_console_interval.unwrap_or(60u64));
     tokio::spawn(async move {
         loop {
             tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64);
@@ -231,7 +231,7 @@ async fn main() -> std::io::Result<()>
                 }
 
                 info!("[KEYS] Checking now for outdated keys.");
-                let _ = tracker_spawn_cleanup_keys.clean_keys();
+                tracker_spawn_cleanup_keys.clean_keys();
                 info!("[KEYS] Keys cleaned up.");
             }
         });
@@ -296,7 +296,13 @@ async fn main() -> std::io::Result<()>
                 handle.stop(true).await;
             }
             let _ = udp_tx.send(true);
-            let _ = udp_futures.into_iter().collect::<TryJoinAll<_>>();
+            match udp_futures.into_iter().collect::<TryJoinAll<_>>().await {
+                Ok(_) => {}
+                Err(error) => {
+                    error!("Errors happened on shutting down UDP sockets!");
+                    error!("{}", error.to_string());
+                }
+            }
             tokio_shutdown.handle().await;
 
             task::sleep(Duration::from_secs(1)).await;

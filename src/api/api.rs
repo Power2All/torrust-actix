@@ -60,10 +60,10 @@ pub async fn api_service(
     api_server_object: ApiTrackersConfig
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
-    let keep_alive = api_server_object.keep_alive.clone().unwrap();
-    let request_timeout = api_server_object.request_timeout.clone().unwrap();
-    let disconnect_timeout = api_server_object.disconnect_timeout.clone().unwrap();
-    let worker_threads = api_server_object.threads.clone().unwrap() as usize;
+    let keep_alive = api_server_object.keep_alive.unwrap();
+    let request_timeout = api_server_object.request_timeout.unwrap();
+    let disconnect_timeout = api_server_object.disconnect_timeout.unwrap();
+    let worker_threads = api_server_object.threads.unwrap() as usize;
 
     if api_server_object.ssl.unwrap() {
         info!("[APIS] Starting server listener with SSL on {}", addr);

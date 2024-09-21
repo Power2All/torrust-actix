@@ -36,14 +36,7 @@ impl TorrentTracker {
     {
         let map = self.users.clone();
         let lock = map.read_recursive();
-        match lock.get(&id) {
-            None => {
-                None
-            }
-            Some(user_entry_item) => {
-                Some(user_entry_item.clone())
-            }
-        }
+        lock.get(&id).cloned()
     }
 
     pub fn get_users(&self) -> BTreeMap<UserId, UserEntryItem>
@@ -76,7 +69,7 @@ impl TorrentTracker {
         let mut lock = map.write();
         match lock.entry(user_id) {
             Entry::Vacant(_) => {
-                return false;
+                false
             }
             Entry::Occupied(mut o) => {
                 let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
@@ -106,7 +99,7 @@ impl TorrentTracker {
         let mut lock = map.write();
         match lock.entry(user_id) {
             Entry::Vacant(_) => {
-                return false;
+                false
             }
             Entry::Occupied(mut o) => {
                 match o.get_mut().torrents_active.remove(&info_hash) {
@@ -123,7 +116,7 @@ impl TorrentTracker {
         let lock = map.read_recursive();
         for (user_id, user_entry_item) in lock.iter() {
             if user_entry_item.key == key {
-                return Some(user_id.clone());
+                return Some(*user_id);
             }
         }
         None

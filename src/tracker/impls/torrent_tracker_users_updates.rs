@@ -60,29 +60,26 @@ impl TorrentTracker {
         for (timestamp, (user_id, user_entry_item)) in updates.iter() {
             match hashmapping.get_mut(user_id) {
                 None => {
-                    hashmapping.insert(user_id.clone(), (vec![*timestamp], user_entry_item.clone()));
-                    hashmap.insert(user_id.clone(), user_entry_item.clone());
+                    hashmapping.insert(*user_id, (vec![*timestamp], user_entry_item.clone()));
+                    hashmap.insert(*user_id, user_entry_item.clone());
                 }
                 Some((timestamps, _)) => {
                     if !timestamps.contains(timestamp) {
                         timestamps.push(*timestamp);
                     }
-                    hashmap.insert(user_id.clone(), user_entry_item.clone());
+                    hashmap.insert(*user_id, user_entry_item.clone());
                 }
             }
         }
 
         // Now we're going to save the torrents in a list, and depending on what we get returned, we remove them from the updates list.
-        match self.save_users(torrent_tracker.clone(), hashmap).await {
-            Ok(_) => {
-                // We can remove the updates keys, since they are updated.
-                for (_, (timestamps, _)) in hashmapping.iter() {
-                    for timestamp in timestamps.iter() {
-                        self.remove_user_update(timestamp);
-                    }
+        if self.save_users(torrent_tracker.clone(), hashmap).await.is_ok() {
+            // We can remove the updates keys, since they are updated.
+            for (_, (timestamps, _)) in hashmapping.iter() {
+                for timestamp in timestamps.iter() {
+                    self.remove_user_update(timestamp);
                 }
             }
-            Err(_) => {}
         }
     }
 }

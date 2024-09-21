@@ -54,12 +54,12 @@ pub async fn http_service(
     http_server_object: HttpTrackersConfig,
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
-    let keep_alive = http_server_object.keep_alive.clone().unwrap();
-    let request_timeout = http_server_object.request_timeout.clone().unwrap();
-    let disconnect_timeout = http_server_object.disconnect_timeout.clone().unwrap();
-    let worker_threads = http_server_object.threads.clone().unwrap() as usize;
+    let keep_alive = http_server_object.keep_alive.unwrap();
+    let request_timeout = http_server_object.request_timeout.unwrap();
+    let disconnect_timeout = http_server_object.disconnect_timeout.unwrap();
+    let worker_threads = http_server_object.threads.unwrap() as usize;
 
-    if http_server_object.ssl.clone().unwrap() {
+    if http_server_object.ssl.unwrap() {
         info!("[HTTPS] Starting server listener with SSL on {}", addr);
         if http_server_object.ssl_key.is_none() || http_server_object.ssl_cert.is_none() {
             error!("[HTTPS] No SSL key or SSL certificate given, exiting...");
