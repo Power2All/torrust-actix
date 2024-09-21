@@ -61,9 +61,9 @@ pub async fn http_service(
     let worker_threads = http_server_object.threads.clone().unwrap() as usize;
 
     if http_server_object.ssl.clone().unwrap() {
-        info!("[HTTP] Starting server listener with SSL on {}", addr);
+        info!("[HTTPS] Starting server listener with SSL on {}", addr);
         if http_server_object.ssl_key.is_none() || http_server_object.ssl_cert.is_none() {
-            error!("[HTTP] No SSL key or SSL certificate given, exiting...");
+            error!("[HTTPS] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
 
