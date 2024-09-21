@@ -542,10 +542,22 @@ impl TorrentSharding {
         self.get_shard(shard).unwrap().read().clone()
     }
 
+    pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry>
+    {
+        let mut torrents_return = BTreeMap::new();
+        for index in 0u8..=255u8 {
+            let mut shard = self.get_shard(index).unwrap().read_recursive().clone();
+            torrents_return.append(&mut shard);
+        }
+        torrents_return
+    }
+
     pub fn get_torrents_amount(&self) -> u64
     {
         let mut torrents = 0u64;
-        for index in 0u8..=255u8 { torrents += self.get_shard(index).unwrap().read_recursive().len() as u64; }
+        for index in 0u8..=255u8 {
+            torrents += self.get_shard(index).unwrap().read_recursive().len() as u64;
+        }
         torrents
     }
 }

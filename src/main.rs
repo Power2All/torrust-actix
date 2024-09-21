@@ -92,6 +92,68 @@ async fn main() -> std::io::Result<()>
         exit(0)
     }
 
+    if args.export {
+        info!("[EXPORT] Requesting to export data");
+
+        info!("[EXPORT] Exporting torrents to file {}", args.export_file_torrents.as_str());
+        match fs::write(format!("{}", args.export_file_torrents.as_str()), &serde_json::to_vec(&tracker.clone().torrents_sharding.get_all_content())?) {
+            Ok(_) => {
+                info!("[EXPORT] The torrents have been exported");
+            }
+            Err(error) => {
+                error!("[EXPORT] The torrents file {} could not be generated!", args.export_file_torrents.as_str());
+                panic!("[EXPORT] {}", error.to_string())
+            }
+        }
+
+        info!("[EXPORT] Exporting whitelists to file {}", args.export_file_whitelists.as_str());
+        match fs::write(format!("{}", args.export_file_whitelists.as_str()), &serde_json::to_vec(&tracker.clone().get_whitelist())?) {
+            Ok(_) => {
+                info!("[EXPORT] The whitelists have been exported");
+            }
+            Err(error) => {
+                error!("[EXPORT] The whitelists file {} could not be generated!", args.export_file_whitelists.as_str());
+                panic!("[EXPORT] {}", error.to_string())
+            }
+        }
+
+        info!("[EXPORT] Exporting blacklists to file {}", args.export_file_blacklists.as_str());
+        match fs::write(format!("{}", args.export_file_blacklists.as_str()), &serde_json::to_vec(&tracker.clone().get_blacklist())?) {
+            Ok(_) => {
+                info!("[EXPORT] The blacklists have been exported");
+            }
+            Err(error) => {
+                error!("[EXPORT] The blacklists file {} could not be generated!", args.export_file_blacklists.as_str());
+                panic!("[EXPORT] {}", error.to_string())
+            }
+        }
+
+        info!("[EXPORT] Exporting keys to file {}", args.export_file_keys.as_str());
+        match fs::write(format!("{}", args.export_file_keys.as_str()), &serde_json::to_vec(&tracker.clone().get_keys())?) {
+            Ok(_) => {
+                info!("[EXPORT] The keys have been exported");
+            }
+            Err(error) => {
+                error!("[EXPORT] The keys file {} could not be generated!", args.export_file_keys.as_str());
+                panic!("[EXPORT] {}", error.to_string())
+            }
+        }
+
+        info!("[EXPORT] Exporting users to file {}", args.export_file_users.as_str());
+        match fs::write(format!("{}", args.export_file_users.as_str()), &serde_json::to_vec(&tracker.clone().get_users())?) {
+            Ok(_) => {
+                info!("[EXPORT] The users have been exported");
+            }
+            Err(error) => {
+                error!("[EXPORT] The users file {} could not be generated!", args.export_file_users.as_str());
+                panic!("[EXPORT] {}", error.to_string())
+            }
+        }
+
+        info!("[EXPORT] Exporting of data completed");
+        exit(0)
+    }
+
     let tokio_shutdown = Shutdown::new().expect("shutdown creation works on first call");
 
     let deadlocks_handler = tokio_shutdown.clone();
