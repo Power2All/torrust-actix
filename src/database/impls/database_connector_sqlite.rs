@@ -537,7 +537,7 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (X'{}')",
+                        "INSERT OR IGNORE INTO `{}` (`{}`) VALUES (X'{}')",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -545,7 +545,7 @@ impl DatabaseConnectorSQLite {
                 }
                 false => {
                     format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES ('{}')",
+                        "INSERT OR IGNORE INTO `{}` (`{}`) VALUES ('{}')",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -633,7 +633,7 @@ impl DatabaseConnectorSQLite {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (X'{}')",
+                        "INSERT OR IGNORE INTO `{}` (`{}`) VALUES (X'{}')",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -641,7 +641,7 @@ impl DatabaseConnectorSQLite {
                 }
                 false => {
                     format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES ('{}')",
+                        "INSERT OR IGNORE INTO `{}` (`{}`) VALUES ('{}')",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash

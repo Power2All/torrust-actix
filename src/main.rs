@@ -1,4 +1,3 @@
-use std::fs;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
@@ -7,9 +6,8 @@ use std::time::Duration;
 use async_std::task;
 use clap::Parser;
 use futures_util::future::{try_join_all, TryJoinAll};
-use log::{error, info};
+use log::info;
 use parking_lot::deadlock;
-use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
@@ -54,105 +52,11 @@ async fn main() -> std::io::Result<()>
         tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().unwrap().total_downloads as i64);
     }
 
-    if args.create_selfsigned {
-        info!("[CERTGEN] Requesting to generate a self-signed key and certificate file");
+    if args.create_selfsigned { tracker.cert_gen(&args).await; }
 
-        // Set localhost and optional domain if given.
-        let mut subject_alt_names = vec![
-            String::from("localhost")
-        ];
-        if args.selfsigned_domain != String::from("localhost") {
-            subject_alt_names.push(args.selfsigned_domain.clone());
-        }
+    if args.export { tracker.export(&args, tracker.clone()).await; }
 
-        // Generate X.509 key and cert file.
-        let CertifiedKey { cert, key_pair} = generate_simple_self_signed(subject_alt_names).unwrap();
-
-        // Write the key and cert file.
-        match fs::write(format!("{}", args.selfsigned_keyfile.as_str()), key_pair.serialize_pem()) {
-            Ok(_) => {
-                info!("[CERTGEN] The key file {} has been generated", args.selfsigned_keyfile.as_str());
-            }
-            Err(error) => {
-                error!("[CERTGEN] The key file {} could not be generated!", args.selfsigned_keyfile.as_str());
-                panic!("[CERTGEN] {}", error.to_string())
-            }
-        }
-        match fs::write(format!("{}", args.selfsigned_certfile.as_str()), cert.pem()) {
-            Ok(_) => {
-                info!("[CERTGEN] The cert file {} has been generated", args.selfsigned_certfile.as_str());
-            }
-            Err(error) => {
-                error!("[CERTGEN] The cert file {} could not be generated!", args.selfsigned_certfile.as_str());
-                panic!("[CERTGEN] {}", error.to_string())
-            }
-        }
-
-        info!("[CERTGEN] The files {} and {} has been generated, use them only for development reasons", args.selfsigned_keyfile.as_str(), args.selfsigned_certfile.as_str());
-        exit(0)
-    }
-
-    if args.export {
-        info!("[EXPORT] Requesting to export data");
-
-        info!("[EXPORT] Exporting torrents to file {}", args.export_file_torrents.as_str());
-        match fs::write(format!("{}", args.export_file_torrents.as_str()), &serde_json::to_vec(&tracker.clone().torrents_sharding.get_all_content())?) {
-            Ok(_) => {
-                info!("[EXPORT] The torrents have been exported");
-            }
-            Err(error) => {
-                error!("[EXPORT] The torrents file {} could not be generated!", args.export_file_torrents.as_str());
-                panic!("[EXPORT] {}", error.to_string())
-            }
-        }
-
-        info!("[EXPORT] Exporting whitelists to file {}", args.export_file_whitelists.as_str());
-        match fs::write(format!("{}", args.export_file_whitelists.as_str()), &serde_json::to_vec(&tracker.clone().get_whitelist())?) {
-            Ok(_) => {
-                info!("[EXPORT] The whitelists have been exported");
-            }
-            Err(error) => {
-                error!("[EXPORT] The whitelists file {} could not be generated!", args.export_file_whitelists.as_str());
-                panic!("[EXPORT] {}", error.to_string())
-            }
-        }
-
-        info!("[EXPORT] Exporting blacklists to file {}", args.export_file_blacklists.as_str());
-        match fs::write(format!("{}", args.export_file_blacklists.as_str()), &serde_json::to_vec(&tracker.clone().get_blacklist())?) {
-            Ok(_) => {
-                info!("[EXPORT] The blacklists have been exported");
-            }
-            Err(error) => {
-                error!("[EXPORT] The blacklists file {} could not be generated!", args.export_file_blacklists.as_str());
-                panic!("[EXPORT] {}", error.to_string())
-            }
-        }
-
-        info!("[EXPORT] Exporting keys to file {}", args.export_file_keys.as_str());
-        match fs::write(format!("{}", args.export_file_keys.as_str()), &serde_json::to_vec(&tracker.clone().get_keys())?) {
-            Ok(_) => {
-                info!("[EXPORT] The keys have been exported");
-            }
-            Err(error) => {
-                error!("[EXPORT] The keys file {} could not be generated!", args.export_file_keys.as_str());
-                panic!("[EXPORT] {}", error.to_string())
-            }
-        }
-
-        info!("[EXPORT] Exporting users to file {}", args.export_file_users.as_str());
-        match fs::write(format!("{}", args.export_file_users.as_str()), &serde_json::to_vec(&tracker.clone().get_users())?) {
-            Ok(_) => {
-                info!("[EXPORT] The users have been exported");
-            }
-            Err(error) => {
-                error!("[EXPORT] The users file {} could not be generated!", args.export_file_users.as_str());
-                panic!("[EXPORT] {}", error.to_string())
-            }
-        }
-
-        info!("[EXPORT] Exporting of data completed");
-        exit(0)
-    }
+    if args.import { tracker.import(&args, tracker.clone()).await; }
 
     let tokio_shutdown = Shutdown::new().expect("shutdown creation works on first call");
 

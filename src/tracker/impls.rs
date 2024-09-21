@@ -18,3 +18,6 @@ pub mod user_id;
 pub mod user_id_visitor;
 pub mod announce_event;
 pub mod torrent_sharding;
+pub mod torrent_tracker_import;
+pub mod torrent_tracker_export;
+pub mod torrent_tracker_cert_gen;
