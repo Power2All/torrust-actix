@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::SystemTime;
+use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
@@ -60,7 +61,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsUpdates, 0);
     }
 
-    pub async fn save_torrent_updates(&self, torrent_tracker: Arc<TorrentTracker>)
+    pub async fn save_torrent_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let mut hashmapping: HashMap<InfoHash, (Vec<u128>, TorrentEntry)> = HashMap::new();
         let mut hashmap: BTreeMap<InfoHash, TorrentEntry> = BTreeMap::new();
@@ -83,12 +84,20 @@ impl TorrentTracker {
         }
 
         // Now we're going to save the torrents in a list, and depending on what we get returned, we remove them from the updates list.
-        if self.save_torrents(torrent_tracker.clone(), hashmap).await.is_ok() {
-            // We can remove the updates keys, since they are updated.
-            for (_, (timestamps, _)) in hashmapping.iter() {
-                for timestamp in timestamps.iter() {
-                    self.remove_torrent_update(timestamp);
+        match self.save_torrents(torrent_tracker.clone(), hashmap).await {
+            Ok(_) => {
+                // We can remove the updates keys, since they are updated.
+                for (_, (timestamps, _)) in hashmapping.iter() {
+                    for timestamp in timestamps.iter() {
+                        self.remove_torrent_update(timestamp);
+                    }
                 }
+                info!("[SAVE TORRENTS UPDATES] Saved {} torrents", hashmapping.len());
+                Ok(())
+            }
+            Err(_) => {
+                error!("[SAVE TORRENTS UPDATES] Unable to save {} torrents", hashmapping.len());
+                Err(())
             }
         }
     }

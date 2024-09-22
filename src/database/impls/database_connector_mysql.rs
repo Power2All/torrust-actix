@@ -35,7 +35,7 @@ impl DatabaseConnectorMySQL {
         let mysql_connect = DatabaseConnectorMySQL::create(config.database.clone().unwrap().path.unwrap().as_str()).await;
         if mysql_connect.is_err() {
             error!("[MySQL] Unable to connect to MySQL on DSL {}", config.database.clone().unwrap().path.unwrap());
-            error!("[MySQL] Message: {:#?}", mysql_connect.unwrap_err().into_database_error());
+            error!("[MySQL] Message: {:#?}", mysql_connect.unwrap_err().into_database_error().unwrap().message());
             exit(1);
         }
 
@@ -51,7 +51,7 @@ impl DatabaseConnectorMySQL {
                 true => {
                     let _ = sqlx::query(
                         format!(
-                            "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, `{}` BIGINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                            "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().torrents.unwrap().database_name,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
@@ -64,7 +64,7 @@ impl DatabaseConnectorMySQL {
                 false => {
                     let _ = sqlx::query(
                         format!(
-                            "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, `{}` BIGINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                            "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().torrents.unwrap().database_name,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
@@ -157,7 +157,7 @@ impl DatabaseConnectorMySQL {
                         true => {
                             let _ = sqlx::query(
                                 format!(
-                                    "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                                    "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` BINARY(20) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
@@ -173,7 +173,7 @@ impl DatabaseConnectorMySQL {
                         false => {
                             let _ = sqlx::query(
                                 format!(
-                                    "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                                    "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` VARCHAR(40) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
@@ -193,7 +193,7 @@ impl DatabaseConnectorMySQL {
                         true => {
                             let _ = sqlx::query(
                                 format!(
-                                    "CREATE TABLE `{}` (`{}` BIGINT NOT NULL AUTO_INCREMENT, `{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                                    "CREATE TABLE `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` BINARY(20) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
@@ -209,7 +209,7 @@ impl DatabaseConnectorMySQL {
                         false => {
                             let _ = sqlx::query(
                                 format!(
-                                    "CREATE TABLE `{}` (`{}` BIGINT NOT NULL AUTO_INCREMENT, `{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                                    "CREATE TABLE `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` VARCHAR(40) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
@@ -225,6 +225,8 @@ impl DatabaseConnectorMySQL {
                     }
                 }
             }
+            info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
+            exit(0);
         }
 
         structure

@@ -37,7 +37,7 @@ impl DatabaseConnectorSQLite {
         let sqlite_connect = DatabaseConnectorSQLite::create(config.database.clone().unwrap().path.unwrap().as_str()).await;
         if sqlite_connect.is_err() {
             error!("[SQLite] Unable to connect to SQLite on DSL {}", config.database.clone().unwrap().path.unwrap());
-            error!("[SQLite] Message: {:#?}", sqlite_connect.unwrap_err().into_database_error());
+            error!("[SQLite] Message: {:#?}", sqlite_connect.unwrap_err().into_database_error().unwrap().message());
             exit(1);
         }
 

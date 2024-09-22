@@ -33,7 +33,12 @@ impl TorrentTracker {
                         updated: std::time::Instant::now(),
                     });
                 }
-                tracker.save_torrent_updates(tracker.clone()).await;
+                match tracker.save_torrent_updates(tracker.clone()).await {
+                    Ok(_) => {}
+                    Err(_) => {
+                        panic!("[IMPORT] Unable to save torrents to the database!");
+                    }
+                }
             }
             Err(error) => {
                 error!("[IMPORT] The torrents file {} could not be imported!", args.import_file_torrents.as_str());
@@ -55,7 +60,9 @@ impl TorrentTracker {
                     }
                     match tracker.save_whitelist(tracker.clone(), tracker.get_whitelist()).await {
                         Ok(_) => {}
-                        Err(_) => { panic!("[IMPORT] Unable to save whitelist to the database!"); }
+                        Err(_) => {
+                            panic!("[IMPORT] Unable to save whitelist to the database!");
+                        }
                     }
                 }
                 Err(error) => {
