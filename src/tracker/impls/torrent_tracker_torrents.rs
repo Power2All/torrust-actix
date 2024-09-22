@@ -29,6 +29,20 @@ impl TorrentTracker {
         }
     }
 
+    pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> bool
+    {
+        match self.sqlx.reset_seeds_peers(tracker.clone()).await {
+            Ok(_) => {
+                info!("[RESET SEEDS PEERS] Completed");
+                true
+            }
+            Err(_) => {
+                error!("[RESET SEEDS PEERS] Unable to reset the seeds and peers");
+                false
+            }
+        }
+    }
+
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();

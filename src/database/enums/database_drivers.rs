@@ -6,5 +6,5 @@ use serde::{Deserialize, Serialize};
 pub enum DatabaseDrivers {
     sqlite3,
     mysql,
-    // pgsql,
+    pgsql,
 }

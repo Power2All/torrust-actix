@@ -1162,6 +1162,30 @@ impl DatabaseConnectorMySQL {
         self.commit(users_transaction).await
     }
 
+    pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error>
+    {
+        let mut reset_seeds_peers_transaction = self.pool.begin().await?;
+        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().torrents {
+            None => { return Err(Error::RowNotFound); }
+            Some(db_structure) => { db_structure }
+        };
+        let string_format = format!(
+            "UPDATE `{}` SET `{}`=0, `{}`=0",
+            structure.database_name,
+            structure.column_seeds,
+            structure.column_peers
+        );
+        match sqlx::query(string_format.as_str()).execute(&mut *reset_seeds_peers_transaction).await {
+            Ok(_) => {}
+            Err(e) => {
+                error!("[MySQL] Error: {}", e.to_string());
+                return Err(e);
+            }
+        }
+        let _ = self.commit(reset_seeds_peers_transaction).await;
+        Ok(())
+    }
+
     pub async fn commit(&self, transaction: Transaction<'_, MySql>) -> Result<(), Error>
     {
         match transaction.commit().await {

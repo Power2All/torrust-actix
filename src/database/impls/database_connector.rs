@@ -5,6 +5,7 @@ use crate::config::structs::configuration::Configuration;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
+use crate::database::structs::database_connector_pgsql::DatabaseConnectorPgSQL;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
@@ -26,7 +27,7 @@ impl DatabaseConnector {
                         match db_engine {
                             DatabaseDrivers::sqlite3 => { DatabaseConnectorSQLite::database_connector(config, create_database).await }
                             DatabaseDrivers::mysql => { DatabaseConnectorMySQL::database_connector(config, create_database).await }
-                            // DatabaseDrivers::pgsql => { DatabaseConnectorPgSQL::database_connector(config, args).await }
+                            DatabaseDrivers::pgsql => { DatabaseConnectorPgSQL::database_connector(config, create_database).await }
                         }
                     }
                 }
@@ -40,7 +41,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_torrents(tracker.clone()).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_torrents(tracker.clone()).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_torrents(tracker.clone()).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_torrents(tracker.clone()).await }
             };
         }
 
@@ -53,7 +54,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_whitelist(tracker.clone()).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_whitelist(tracker.clone()).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_whitelist(tracker.clone()).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_whitelist(tracker.clone()).await }
             };
         }
 
@@ -66,7 +67,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_blacklist(tracker.clone()).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_blacklist(tracker.clone()).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_blacklist(tracker.clone()).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_blacklist(tracker.clone()).await }
             };
         }
 
@@ -79,7 +80,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_keys(tracker.clone()).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_keys(tracker.clone()).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_keys(tracker.clone()).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_keys(tracker.clone()).await }
             };
         }
 
@@ -92,7 +93,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_users(tracker.clone()).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_users(tracker.clone()).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_users(tracker.clone()).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_users(tracker.clone()).await }
             };
         }
 
@@ -105,7 +106,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_whitelist(tracker.clone(), whitelists).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_whitelist(tracker.clone(), whitelists).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_whitelist(tracker.clone(), whitelists).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_whitelist(tracker.clone(), whitelists).await }
             };
         }
 
@@ -118,7 +119,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_blacklist(tracker.clone(), blacklists).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_blacklist(tracker.clone(), blacklists).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_blacklist(tracker.clone(), blacklists).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_blacklist(tracker.clone(), blacklists).await }
             };
         }
 
@@ -131,7 +132,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_keys(tracker.clone(), keys).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_keys(tracker.clone(), keys).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_keys(tracker.clone(), keys).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_keys(tracker.clone(), keys).await }
             };
         }
 
@@ -144,7 +145,7 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
             };
         }
 
@@ -157,7 +158,20 @@ impl DatabaseConnector {
             return match self.engine.clone().unwrap() {
                 DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_users(tracker.clone(), users).await }
                 DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_users(tracker.clone(), users).await }
-                // DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_users(tracker.clone(), users).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_users(tracker.clone(), users).await }
+            };
+        }
+
+        Err(Error::RowNotFound)
+    }
+
+    pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error>
+    {
+        if self.engine.is_some() {
+            return match self.engine.clone().unwrap() {
+                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().reset_seeds_peers(tracker.clone()).await }
+                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().reset_seeds_peers(tracker.clone()).await }
+                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().reset_seeds_peers(tracker.clone()).await }
             };
         }
 
