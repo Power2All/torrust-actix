@@ -792,8 +792,9 @@ impl DatabaseConnectorMySQL {
                     match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                         true => {
                             format!(
-                                "SELECT `{}`, HEX(`{}`), `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
+                                "SELECT `{}`, HEX(`{}`) AS `{}`, `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
                                 structure.column_uuid,
+                                structure.column_key,
                                 structure.column_key,
                                 structure.column_uploaded,
                                 structure.column_downloaded,
@@ -826,8 +827,9 @@ impl DatabaseConnectorMySQL {
                     match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                         true => {
                             format!(
-                                "SELECT `{}`, HEX(`{}`), `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
+                                "SELECT `{}`, HEX(`{}`) AS `{}`, `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
                                 structure.column_id,
+                                structure.column_key,
                                 structure.column_key,
                                 structure.column_uploaded,
                                 structure.column_downloaded,
@@ -889,8 +891,8 @@ impl DatabaseConnectorMySQL {
                     uploaded: result.get(structure.column_uploaded.as_str()),
                     downloaded: result.get(structure.column_downloaded.as_str()),
                     completed: result.get(structure.column_completed.as_str()),
-                    updated: result.get(structure.column_updated.as_str()),
-                    active: result.get(structure.column_active.as_str()),
+                    updated: result.get::<i32, &str>(structure.column_updated.as_str()) as u64,
+                    active: result.get::<i8, &str>(structure.column_active.as_str()) as u8,
                     torrents_active: Default::default(),
                 });
                 hashes += 1;
@@ -921,32 +923,32 @@ impl DatabaseConnectorMySQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (UNHEX('{}'), UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
                                         structure.database_name,
                                         structure.column_uuid,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_downloaded,
                                         structure.column_key,
                                         structure.column_uploaded,
+                                        structure.column_downloaded,
+                                        structure.column_completed,
+                                        structure.column_active,
                                         structure.column_updated,
                                         user_entry_item.user_uuid.clone().unwrap(),
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.downloaded,
                                         user_entry_item.key,
                                         user_entry_item.uploaded,
+                                        user_entry_item.downloaded,
+                                        user_entry_item.completed,
+                                        user_entry_item.active,
                                         user_entry_item.updated,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
                                         structure.column_key,
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_uploaded,
+                                        structure.column_downloaded,
+                                        structure.column_downloaded,
+                                        structure.column_completed,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_active,
                                         structure.column_updated,
                                         structure.column_updated
                                     )
@@ -956,29 +958,29 @@ impl DatabaseConnectorMySQL {
                                         "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', '{}', {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
                                         structure.database_name,
                                         structure.column_uuid,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_downloaded,
                                         structure.column_key,
                                         structure.column_uploaded,
+                                        structure.column_downloaded,
+                                        structure.column_completed,
+                                        structure.column_active,
                                         structure.column_updated,
                                         user_entry_item.user_uuid.clone().unwrap(),
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.downloaded,
                                         user_entry_item.key,
                                         user_entry_item.uploaded,
+                                        user_entry_item.downloaded,
+                                        user_entry_item.completed,
+                                        user_entry_item.active,
                                         user_entry_item.updated,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
                                         structure.column_key,
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_uploaded,
+                                        structure.column_downloaded,
+                                        structure.column_downloaded,
+                                        structure.column_completed,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_active,
                                         structure.column_updated,
                                         structure.column_updated
                                     )
@@ -989,32 +991,32 @@ impl DatabaseConnectorMySQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (UNHEX('{}'), UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
                                         structure.database_name,
                                         structure.column_id,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_downloaded,
                                         structure.column_key,
                                         structure.column_uploaded,
+                                        structure.column_downloaded,
+                                        structure.column_completed,
+                                        structure.column_active,
                                         structure.column_updated,
                                         user_entry_item.user_id.unwrap(),
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.downloaded,
                                         user_entry_item.key,
                                         user_entry_item.uploaded,
+                                        user_entry_item.downloaded,
+                                        user_entry_item.completed,
+                                        user_entry_item.active,
                                         user_entry_item.updated,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
                                         structure.column_key,
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_uploaded,
+                                        structure.column_downloaded,
+                                        structure.column_downloaded,
+                                        structure.column_completed,
+                                        structure.column_completed,
+                                        structure.column_active,
+                                        structure.column_active,
                                         structure.column_updated,
                                         structure.column_updated
                                     )
@@ -1061,7 +1063,7 @@ impl DatabaseConnectorMySQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
+                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=UNHEX('{}'), `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1081,7 +1083,7 @@ impl DatabaseConnectorMySQL {
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={} WHERE `{}`='{}'",
+                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`='{}', `{}`={}, `{}`={} WHERE `{}`='{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1105,7 +1107,7 @@ impl DatabaseConnectorMySQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
+                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=UNHEX('{}'), `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1125,7 +1127,7 @@ impl DatabaseConnectorMySQL {
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={} WHERE `{}`='{}'",
+                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`='{}', `{}`={}, `{}`={} WHERE `{}`='{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,

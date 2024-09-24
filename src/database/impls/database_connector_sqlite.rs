@@ -887,7 +887,7 @@ impl DatabaseConnectorSQLite {
                     uploaded: result.get::<u32, &str>(structure.column_uploaded.as_str()) as u64,
                     downloaded: result.get::<u32, &str>(structure.column_downloaded.as_str()) as u64,
                     completed: result.get::<u32, &str>(structure.column_completed.as_str()) as u64,
-                    updated: result.get::<u32, &str>(structure.column_updated.as_str())  as u64,
+                    updated: result.get::<u32, &str>(structure.column_updated.as_str()) as u64,
                     active: result.get(structure.column_active.as_str()),
                     torrents_active: Default::default(),
                 });

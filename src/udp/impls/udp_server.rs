@@ -214,36 +214,32 @@ impl UdpServer {
         }
         let mut user_key: Option<UserId> = None;
         if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
-            let user_key_path_extract: &str = if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
-                if request.path.len() < 91 {
-                    debug!("[UDP ERROR] Peer Key Not Valid");
-                    return Err(ServerError::PeerKeyNotValid);
-                }
-                &request.path[51..91]
-            } else {
-                if request.path.len() < 50 {
-                    debug!("[UDP ERROR] Peer Key Not Valid");
-                    return Err(ServerError::PeerKeyNotValid);
-                }
-                &request.path[10..50]
-            };
-            match hex::decode(user_key_path_extract) {
-                Ok(result) => {
-                    let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
-                    user_key = match tracker.check_user_key(UserId::from(key)) {
-                        None => {
-                            debug!("[UDP ERROR] Peer Key Not Valid");
-                            return Err(ServerError::PeerKeyNotValid);
-                        }
-                        Some(user_id) => {
-                            Some(user_id)
-                        }
-                    };
-                }
-                Err(error) => {
-                    debug!("[UDP ERROR] Hex Decode Error");
-                    debug!("{:#?}", error);
-                    return Err(ServerError::PeerKeyNotValid);
+            let mut user_key_path_extract = None;
+            if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() && request.path.len() >= 91 {
+                user_key_path_extract = Some(&request.path[51..=91]);
+            }
+            if !tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() && request.path.len() >= 50 {
+                user_key_path_extract = Some(&request.path[10..=50])
+            }
+            if user_key_path_extract.is_some() {
+                match hex::decode(user_key_path_extract.unwrap()) {
+                    Ok(result) => {
+                        let key = <[u8; 20]>::try_from(result[0..20].as_ref()).unwrap();
+                        user_key = match tracker.check_user_key(UserId::from(key)) {
+                            None => {
+                                debug!("[UDP ERROR] Peer Key Not Valid");
+                                return Err(ServerError::PeerKeyNotValid);
+                            }
+                            Some(user_id) => {
+                                Some(user_id)
+                            }
+                        };
+                    }
+                    Err(error) => {
+                        debug!("[UDP ERROR] Hex Decode Error");
+                        debug!("{:#?}", error);
+                        return Err(ServerError::PeerKeyNotValid);
+                    }
                 }
             }
         }
