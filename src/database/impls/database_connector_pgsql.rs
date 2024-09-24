@@ -256,7 +256,7 @@ impl DatabaseConnectorPgSQL {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "SELECT {}, {} FROM `{}` LIMIT {}, {}",
+                        "SELECT encode({}::bytea, 'hex'), {} FROM {} LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_completed,
                         structure.database_name,
@@ -266,7 +266,7 @@ impl DatabaseConnectorPgSQL {
                 }
                 false => {
                     format!(
-                        "SELECT `{}`, `{}` FROM `{}` LIMIT {}, {}",
+                        "SELECT {}, {} FROM {} LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_completed,
                         structure.database_name,
@@ -280,7 +280,7 @@ impl DatabaseConnectorPgSQL {
             while let Some(result) = rows.try_next().await? {
                 let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
                 let info_hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref()).unwrap();
-                let completed_count: u32 = result.get(structure.column_completed.as_str());
+                let completed_count: i64 = result.get(structure.column_completed.as_str());
                 tracker.add_torrent(
                     InfoHash(info_hash),
                     TorrentEntry {
@@ -318,7 +318,7 @@ impl DatabaseConnectorPgSQL {
                         let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                             true => {
                                 format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES (X'{}', {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                    "INSERT INTO {} ({}, {}, {}) VALUES (decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}",
                                     structure.database_name,
                                     structure.column_infohash,
                                     structure.column_seeds,
@@ -335,7 +335,7 @@ impl DatabaseConnectorPgSQL {
                             }
                             false => {
                                 format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES ('{}', {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                    "INSERT INTO {} ({}, {}, {}) VALUES ('{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}",
                                     structure.database_name,
                                     structure.column_infohash,
                                     structure.column_seeds,
@@ -354,7 +354,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e.to_string());
                                 return Err(e);
                             }
                         }
@@ -363,7 +363,7 @@ impl DatabaseConnectorPgSQL {
                         let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                             true => {
                                 format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`) VALUES (X'{}', {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
+                                    "INSERT INTO {} ({}, {}) VALUES (decode('{}', 'hex'), {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                                     structure.database_name,
                                     structure.column_infohash,
                                     structure.column_completed,
@@ -376,7 +376,7 @@ impl DatabaseConnectorPgSQL {
                             }
                             false => {
                                 format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`) VALUES ('{}', {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
+                                    "INSERT INTO {} ({}, {}) VALUES ('{}', {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                                     structure.database_name,
                                     structure.column_infohash,
                                     structure.column_completed,
@@ -391,7 +391,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e.to_string());
                                 return Err(e);
                             }
                         }
@@ -402,24 +402,30 @@ impl DatabaseConnectorPgSQL {
                         let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                             true => {
                                 format!(
-                                    "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`=X'{}'",
+                                    "UPDATE {} SET ({}, {}) = ({}, {}) WHERE {}=decode('{}', 'hex') AND NOT EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
                                     structure.database_name,
                                     structure.column_seeds,
-                                    torrent_entry.seeds.len(),
                                     structure.column_peers,
+                                    torrent_entry.seeds.len(),
                                     torrent_entry.peers.len(),
+                                    structure.column_infohash,
+                                    info_hash,
+                                    structure.database_name,
                                     structure.column_infohash,
                                     info_hash
                                 )
                             }
                             false => {
                                 format!(
-                                    "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`='{}'",
+                                    "UPDATE {} SET ({}, {}) = ({}, {}) WHERE {}='{}' AND NOT EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
                                     structure.database_name,
                                     structure.column_seeds,
-                                    torrent_entry.seeds.len(),
                                     structure.column_peers,
+                                    torrent_entry.seeds.len(),
                                     torrent_entry.peers.len(),
+                                    structure.column_infohash,
+                                    info_hash,
+                                    structure.database_name,
                                     structure.column_infohash,
                                     info_hash
                                 )
@@ -428,7 +434,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e.to_string());
                                 return Err(e);
                             }
                         }
@@ -437,20 +443,26 @@ impl DatabaseConnectorPgSQL {
                         let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                             true => {
                                 format!(
-                                    "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`=X'{}'",
+                                    "UPDATE {} SET {}={} WHERE {}=decode('{}', 'hex') AND EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
                                     structure.database_name,
                                     structure.column_completed,
                                     torrent_entry.completed,
+                                    structure.column_infohash,
+                                    info_hash,
+                                    structure.database_name,
                                     structure.column_infohash,
                                     info_hash
                                 )
                             }
                             false => {
                                 format!(
-                                    "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`='{}'",
+                                    "UPDATE {} SET {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
                                     structure.database_name,
                                     structure.column_completed,
                                     torrent_entry.completed,
+                                    structure.column_infohash,
+                                    info_hash,
+                                    structure.database_name,
                                     structure.column_infohash,
                                     info_hash
                                 )
@@ -459,7 +471,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e.to_string());
                                 return Err(e);
                             }
                         }
@@ -467,7 +479,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
             if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
-                info!("[SQLite] Handled {} torrents", torrents_handled_entries);
+                info!("[PgSQL] Handled {} torrents", torrents_handled_entries);
             }
         }
         self.commit(torrents_transaction).await
@@ -484,15 +496,14 @@ impl DatabaseConnectorPgSQL {
         };
         loop {
             info!(
-                "[SQLite] Trying to querying {} whitelisted hashes - Skip: {}",
+                "[PgSQL] Trying to querying {} whitelisted hashes - Skip: {}",
                 length,
                 start
             );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {}, {}",
-                        structure.column_infohash,
+                        "SELECT encode({}::bytea, 'hex') FROM {} LIMIT {}, {}",
                         structure.column_infohash,
                         structure.database_name,
                         start,
@@ -501,7 +512,7 @@ impl DatabaseConnectorPgSQL {
                 }
                 false => {
                     format!(
-                        "SELECT `{}` FROM `{}` LIMIT {}, {}",
+                        "SELECT {} FROM {} LIMIT {}, {}",
                         structure.column_infohash,
                         structure.database_name,
                         start,
@@ -538,7 +549,7 @@ impl DatabaseConnectorPgSQL {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "INSERT OR IGNORE INTO `{}` (`{}`) VALUES (X'{}')",
+                        "INSERT INTO {} ({}) VALUES (decode('{}', 'hex')) ON CONFLICT DO NOTHING",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -546,7 +557,7 @@ impl DatabaseConnectorPgSQL {
                 }
                 false => {
                     format!(
-                        "INSERT OR IGNORE INTO `{}` (`{}`) VALUES ('{}')",
+                        "INSERT INTO {} ({}) VALUES ('{}') ON CONFLICT DO NOTHING",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -556,15 +567,15 @@ impl DatabaseConnectorPgSQL {
             match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[SQLite] Error: {}", e.to_string());
+                    error!("[PgSQL] Error: {}", e.to_string());
                     return Err(e);
                 }
             }
             if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[SQLite] Handled {} torrents", whitelist_handled_entries);
+                info!("[PgSQL] Handled {} torrents", whitelist_handled_entries);
             }
         }
-        info!("[SQLite] Saved {} whitelisted torrents", whitelist_handled_entries);
+        info!("[PgSQL] Saved {} whitelisted torrents", whitelist_handled_entries);
         let _ = self.commit(whitelist_transaction).await;
         Ok(whitelist_handled_entries)
     }
@@ -580,15 +591,14 @@ impl DatabaseConnectorPgSQL {
         };
         loop {
             info!(
-                "[SQLite] Trying to querying {} blacklisted hashes - Skip: {}",
+                "[PgSQL] Trying to querying {} blacklisted hashes - Skip: {}",
                 length,
                 start
             );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {}, {}",
-                        structure.column_infohash,
+                        "SELECT encode({}::bytea, 'hex') FROM {} LIMIT {}, {}",
                         structure.column_infohash,
                         structure.database_name,
                         start,
@@ -597,7 +607,7 @@ impl DatabaseConnectorPgSQL {
                 }
                 false => {
                     format!(
-                        "SELECT `{}` FROM `{}` LIMIT {}, {}",
+                        "SELECT {} FROM {} LIMIT {}, {}",
                         structure.column_infohash,
                         structure.database_name,
                         start,
@@ -634,7 +644,7 @@ impl DatabaseConnectorPgSQL {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     format!(
-                        "INSERT OR IGNORE INTO `{}` (`{}`) VALUES (X'{}')",
+                        "INSERT INTO {} ({}) VALUES (decode('{}', 'hex')) ON CONFLICT DO NOTHING",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -642,7 +652,7 @@ impl DatabaseConnectorPgSQL {
                 }
                 false => {
                     format!(
-                        "INSERT OR IGNORE INTO `{}` (`{}`) VALUES ('{}')",
+                        "INSERT INTO {} ({}) VALUES ('{}') ON CONFLICT DO NOTHING",
                         structure.database_name,
                         structure.column_infohash,
                         info_hash
@@ -652,15 +662,15 @@ impl DatabaseConnectorPgSQL {
             match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[SQLite] Error: {}", e.to_string());
+                    error!("[PgSQL] Error: {}", e.to_string());
                     return Err(e);
                 }
             }
             if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[SQLite] Handled {} torrents", blacklist_handled_entries);
+                info!("[PgSQL] Handled {} torrents", blacklist_handled_entries);
             }
         }
-        info!("[SQLite] Saved {} blacklisted torrents", blacklist_handled_entries);
+        info!("[PgSQL] Saved {} blacklisted torrents", blacklist_handled_entries);
         let _ = self.commit(blacklist_transaction).await;
         Ok(blacklist_handled_entries)
     }
@@ -676,15 +686,14 @@ impl DatabaseConnectorPgSQL {
         };
         loop {
             info!(
-                "[SQLite] Trying to querying {} keys hashes - Skip: {}",
+                "[PgSQL] Trying to querying {} keys hashes - Skip: {}",
                 length,
                 start
             );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
                 true => {
                     format!(
-                        "SELECT HEX(`{}`) AS `{}`, `{}` FROM `{}` LIMIT {}, {}",
-                        structure.column_hash,
+                        "SELECT encode({}::bytea, 'hex'), {} FROM {} LIMIT {}, {}",
                         structure.column_hash,
                         structure.column_timeout,
                         structure.database_name,
@@ -694,7 +703,7 @@ impl DatabaseConnectorPgSQL {
                 }
                 false => {
                     format!(
-                        "SELECT `{}`, `{}` FROM `{}` LIMIT {}, {}",
+                        "SELECT {}, {} FROM {} LIMIT {}, {}",
                         structure.column_hash,
                         structure.column_timeout,
                         structure.database_name,
@@ -733,7 +742,7 @@ impl DatabaseConnectorPgSQL {
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
                 true => {
                     format!(
-                        "INSERT INTO `{}` (`{}`, `{}`) VALUES (X'{}', {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
+                        "INSERT INTO {} ({}, {}) VALUES (decode('{}', 'hex'), {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                         structure.database_name,
                         structure.column_hash,
                         structure.column_timeout,
@@ -746,7 +755,7 @@ impl DatabaseConnectorPgSQL {
                 }
                 false => {
                     format!(
-                        "INSERT INTO `{}` (`{}`, `{}`) VALUES ('{}', {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`",
+                        "INSERT INTO {} ({}, {}) VALUES ('{}', {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
                         structure.database_name,
                         structure.column_hash,
                         structure.column_timeout,
@@ -761,15 +770,15 @@ impl DatabaseConnectorPgSQL {
             match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[SQLite] Error: {}", e.to_string());
+                    error!("[PgSQL] Error: {}", e.to_string());
                     return Err(e);
                 }
             }
             if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[SQLite] Handled {} keys", keys_handled_entries);
+                info!("[PgSQL] Handled {} keys", keys_handled_entries);
             }
         }
-        info!("[SQLite] Saved {} keys", keys_handled_entries);
+        info!("[PgSQL] Saved {} keys", keys_handled_entries);
         let _ = self.commit(keys_transaction).await;
         Ok(keys_handled_entries)
     }
@@ -785,7 +794,7 @@ impl DatabaseConnectorPgSQL {
         };
         loop {
             info!(
-                "[SQLite] Trying to querying {} users - Skip: {}",
+                "[PgSQL] Trying to querying {} users - Skip: {}",
                 length,
                 start
             );
@@ -794,7 +803,7 @@ impl DatabaseConnectorPgSQL {
                     match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                         true => {
                             format!(
-                                "SELECT `{}`, HEX(`{}`), `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
+                                "SELECT {}, encode({}::bytea, 'hex'), {}, {}, {}, {}, {} FROM {} LIMIT {}, {}",
                                 structure.column_uuid,
                                 structure.column_key,
                                 structure.column_uploaded,
@@ -809,7 +818,7 @@ impl DatabaseConnectorPgSQL {
                         }
                         false => {
                             format!(
-                                "SELECT `{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
+                                "SELECT {}, {}, {}, {}, {}, {}, {} FROM {} LIMIT {}, {}",
                                 structure.column_uuid,
                                 structure.column_key,
                                 structure.column_uploaded,
@@ -828,7 +837,7 @@ impl DatabaseConnectorPgSQL {
                     match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                         true => {
                             format!(
-                                "SELECT `{}`, HEX(`{}`), `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
+                                "SELECT {}, encode({}::bytea, 'hex'), {}, {}, {}, {}, {} FROM {} LIMIT {}, {}",
                                 structure.column_id,
                                 structure.column_key,
                                 structure.column_uploaded,
@@ -843,7 +852,7 @@ impl DatabaseConnectorPgSQL {
                         }
                         false => {
                             format!(
-                                "SELECT `{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
+                                "SELECT {}, {}, {}, {}, {}, {}, {} FROM {} LIMIT {}, {}",
                                 structure.column_id,
                                 structure.column_key,
                                 structure.column_uploaded,
@@ -882,17 +891,17 @@ impl DatabaseConnectorPgSQL {
                     key: UserId::from_str(result.get(structure.column_key.as_str())).unwrap(),
                     user_id: match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                         true => { None }
-                        false => { Some(result.get::<u32, &str>(structure.column_id.as_str()) as u64) }
+                        false => { Some(result.get::<i64, &str>(structure.column_id.as_str()) as u64) }
                     },
                     user_uuid: match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                         true => { Some(result.get(structure.column_uuid.as_str())) }
                         false => { None }
                     },
-                    uploaded: result.get::<u32, &str>(structure.column_uploaded.as_str()) as u64,
-                    downloaded: result.get::<u32, &str>(structure.column_downloaded.as_str()) as u64,
-                    completed: result.get::<u32, &str>(structure.column_completed.as_str()) as u64,
-                    updated: result.get::<u32, &str>(structure.column_updated.as_str())  as u64,
-                    active: result.get(structure.column_active.as_str()),
+                    uploaded: result.get::<i64, &str>(structure.column_uploaded.as_str()) as u64,
+                    downloaded: result.get::<i64, &str>(structure.column_downloaded.as_str()) as u64,
+                    completed: result.get::<i64, &str>(structure.column_completed.as_str()) as u64,
+                    updated: result.get::<i32, &str>(structure.column_updated.as_str()) as u64,
+                    active: result.get::<i16, &str>(structure.column_active.as_str()) as u8,
                     torrents_active: Default::default(),
                 });
                 hashes += 1;
@@ -922,7 +931,7 @@ impl DatabaseConnectorPgSQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (X'{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES (decode('{}', 'hex'), {}, {}, {}, {}, {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
                                         structure.database_name,
                                         structure.column_uuid,
                                         structure.column_completed,
@@ -955,7 +964,7 @@ impl DatabaseConnectorPgSQL {
                                 }
                                 false => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
                                         structure.database_name,
                                         structure.column_uuid,
                                         structure.column_completed,
@@ -992,7 +1001,7 @@ impl DatabaseConnectorPgSQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (X'{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES (decode('{}', 'hex'), {}, {}, {}, {}, {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
                                         structure.database_name,
                                         structure.column_id,
                                         structure.column_completed,
@@ -1001,7 +1010,7 @@ impl DatabaseConnectorPgSQL {
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_updated,
-                                        user_entry_item.user_uuid.clone().unwrap(),
+                                        user_entry_item.user_id.unwrap(),
                                         user_entry_item.completed,
                                         user_entry_item.active,
                                         user_entry_item.downloaded,
@@ -1025,7 +1034,7 @@ impl DatabaseConnectorPgSQL {
                                 }
                                 false => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
                                         structure.database_name,
                                         structure.column_id,
                                         structure.column_completed,
@@ -1034,7 +1043,7 @@ impl DatabaseConnectorPgSQL {
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_updated,
-                                        user_entry_item.user_uuid.clone().unwrap(),
+                                        user_entry_item.user_id.unwrap(),
                                         user_entry_item.completed,
                                         user_entry_item.active,
                                         user_entry_item.downloaded,
@@ -1066,7 +1075,7 @@ impl DatabaseConnectorPgSQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=X'{}'",
+                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}=decode('{}', 'hex') AND EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1082,11 +1091,14 @@ impl DatabaseConnectorPgSQL {
                                         user_entry_item.updated,
                                         structure.column_uuid,
                                         user_entry_item.user_uuid.clone().unwrap(),
+                                        structure.database_name,
+                                        structure.column_uuid,
+                                        user_entry_item.user_uuid.clone().unwrap()
                                     )
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
+                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1102,6 +1114,9 @@ impl DatabaseConnectorPgSQL {
                                         user_entry_item.updated,
                                         structure.column_uuid,
                                         user_entry_item.user_uuid.clone().unwrap(),
+                                        structure.database_name,
+                                        structure.column_uuid,
+                                        user_entry_item.user_uuid.clone().unwrap()
                                     )
                                 }
                             }
@@ -1110,7 +1125,7 @@ impl DatabaseConnectorPgSQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=X'{}'",
+                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}=decode('{}', 'hex') AND EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1124,13 +1139,16 @@ impl DatabaseConnectorPgSQL {
                                         user_entry_item.uploaded,
                                         structure.column_updated,
                                         user_entry_item.updated,
-                                        structure.column_uuid,
+                                        structure.column_id,
                                         user_entry_item.user_id.unwrap(),
+                                        structure.database_name,
+                                        structure.column_id,
+                                        user_entry_item.user_id.unwrap()
                                     )
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
+                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1144,8 +1162,11 @@ impl DatabaseConnectorPgSQL {
                                         user_entry_item.uploaded,
                                         structure.column_updated,
                                         user_entry_item.updated,
-                                        structure.column_uuid,
+                                        structure.column_id,
                                         user_entry_item.user_id.unwrap(),
+                                        structure.database_name,
+                                        structure.column_id,
+                                        user_entry_item.user_id.unwrap()
                                     )
                                 }
                             }
@@ -1156,12 +1177,12 @@ impl DatabaseConnectorPgSQL {
             match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[SQLite] Error: {}", e.to_string());
+                    error!("[PgSQL] Error: {}", e.to_string());
                     return Err(e);
                 }
             }
             if (users_handled_entries as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
-                info!("[SQLite] Handled {} users", users_handled_entries);
+                info!("[PgSQL] Handled {} users", users_handled_entries);
             }
         }
         self.commit(users_transaction).await
@@ -1191,14 +1212,14 @@ impl DatabaseConnectorPgSQL {
         Ok(())
     }
 
-    pub async fn commit(&self, transaction: Transaction<'_, Sqlite>) -> Result<(), Error>
+    pub async fn commit(&self, transaction: Transaction<'_, Postgres>) -> Result<(), Error>
     {
         match transaction.commit().await {
             Ok(_) => {
                 Ok(())
             }
             Err(e) => {
-                error!("[SQLite3] Error: {}", e.to_string());
+                error!("[PgSQL3] Error: {}", e.to_string());
                 Err(e)
             }
         }

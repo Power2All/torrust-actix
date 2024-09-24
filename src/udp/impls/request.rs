@@ -159,23 +159,14 @@ impl Request {
                 let mut path: &str = "";
                 let mut path_array = vec![];
 
-                let option_byte_value = match option_byte {
-                    Ok(value) => { value }
-                    Err(_) => { 0 }
-                };
-                let option_size_value = match option_size {
-                    Ok(value) => { value }
-                    Err(_) => { 0 }
-                };
+                let option_byte_value = option_byte.unwrap_or_default();
+                let option_size_value = option_size.unwrap_or_default();
                 if option_byte_value == 2 {
                     path_array.resize(option_size_value as usize, 0u8);
                     cursor.read_exact(&mut path_array).map_err(|err| {
                         RequestParseError::sendable_io(err, connection_id, transaction_id)
                     })?;
-                    path = match std::str::from_utf8(&path_array) {
-                        Ok(result) => { result }
-                        Err(_) => { "" }
-                    };
+                    path = std::str::from_utf8(&path_array).unwrap_or_default();
                 }
 
                 Ok((AnnounceRequest {
