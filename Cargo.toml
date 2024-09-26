@@ -32,7 +32,6 @@ byteorder = "^1.5"
 chrono = "^0.4"
 clap = { version = "^4.5", features = ["derive"] }
 clap_builder = "^4.5"
-crossbeam-skiplist = "^0.1"
 fern = { version = "^0.6", features = ["colored"] }
 futures-util = "^0.3"
 hex = "^0.4"
