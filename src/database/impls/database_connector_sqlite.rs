@@ -4,6 +4,7 @@ use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use async_std::task;
 use futures_util::TryStreamExt;
 use log::{error, info};
 use sha1::{Digest, Sha1};
@@ -260,6 +261,7 @@ impl DatabaseConnectorSQLite {
                 }
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
+            task::sleep(Duration::from_secs(1)).await;
             exit(0);
         }
 

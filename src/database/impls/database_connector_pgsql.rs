@@ -4,6 +4,7 @@ use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use async_std::task;
 use futures_util::TryStreamExt;
 use log::{error, info};
 use sha1::{Digest, Sha1};
@@ -89,7 +90,7 @@ impl DatabaseConnectorPgSQL {
                 true => {
                     match sqlx::query(
                         format!(
-                            "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
+                            "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, CONSTRAINT whitelist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
@@ -102,7 +103,7 @@ impl DatabaseConnectorPgSQL {
                 false => {
                     match sqlx::query(
                         format!(
-                            "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
+                            "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, CONSTRAINT whitelist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
@@ -120,7 +121,7 @@ impl DatabaseConnectorPgSQL {
                 true => {
                     match sqlx::query(
                         format!(
-                            "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
+                            "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, CONSTRAINT blacklist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
@@ -133,7 +134,7 @@ impl DatabaseConnectorPgSQL {
                 false => {
                     match sqlx::query(
                         format!(
-                            "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
+                            "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, CONSTRAINT blacklist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
@@ -151,7 +152,7 @@ impl DatabaseConnectorPgSQL {
                 true => {
                     match sqlx::query(
                         format!(
-                            "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
+                            "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT keys_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().keys.unwrap().database_name,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash,
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
@@ -165,7 +166,7 @@ impl DatabaseConnectorPgSQL {
                 false => {
                     match sqlx::query(
                         format!(
-                            "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
+                            "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT keys_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().keys.unwrap().database_name,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash,
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
@@ -267,6 +268,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
+            task::sleep(Duration::from_secs(1)).await;
             exit(0);
         }
 
@@ -967,7 +969,7 @@ impl DatabaseConnectorPgSQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES (decode('{}', 'hex'), {}, {}, {}, {}, {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
+                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
                                         structure.database_name,
                                         structure.column_uuid,
                                         structure.column_completed,
@@ -1000,7 +1002,7 @@ impl DatabaseConnectorPgSQL {
                                 }
                                 false => {
                                     format!(
-                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
+                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, '{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
                                         structure.database_name,
                                         structure.column_uuid,
                                         structure.column_completed,
@@ -1037,7 +1039,7 @@ impl DatabaseConnectorPgSQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES (decode('{}', 'hex'), {}, {}, {}, {}, {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
+                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
                                         structure.database_name,
                                         structure.column_id,
                                         structure.column_completed,
@@ -1070,7 +1072,7 @@ impl DatabaseConnectorPgSQL {
                                 }
                                 false => {
                                     format!(
-                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
+                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, '{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
                                         structure.database_name,
                                         structure.column_id,
                                         structure.column_completed,
@@ -1111,7 +1113,7 @@ impl DatabaseConnectorPgSQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}=decode('{}', 'hex') AND EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
+                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}=decode('{}', 'hex'), {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1134,7 +1136,7 @@ impl DatabaseConnectorPgSQL {
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
+                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}='{}', {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1161,7 +1163,7 @@ impl DatabaseConnectorPgSQL {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}=decode('{}', 'hex') AND EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
+                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}=decode('{}', 'hex'), {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1184,7 +1186,7 @@ impl DatabaseConnectorPgSQL {
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
+                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}='{}', {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
