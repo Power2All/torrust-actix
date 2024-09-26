@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::Write;
 use std::thread::available_parallelism;
+use regex::Regex;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::enums::configuration_error::ConfigurationError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
@@ -183,6 +184,29 @@ impl Configuration {
                 };
             }
         };
+
+        println!("[VALIDATE] Validating configuration...");
+        Self::validate(config.clone());
         Ok(config)
+    }
+
+    pub fn validate(config: Configuration) {
+        // Check Map
+        let check_map = vec![
+            ("Torrent Database", config.database_structure.clone().unwrap().torrents.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+        ];
+
+        // Validation
+        for (name, value, regex) in check_map {
+            Self::validate_value(name, value, regex);
+        }
+    }
+
+    pub fn validate_value(name: &str, value: String, regex: String)
+    {
+        let regex_check = Regex::new(regex.as_str()).unwrap();
+        if !regex_check.is_match(value.as_str()){
+            panic!("[VALIDATE CONFIG] Error checking {} [:] Name: \"{}\" [:] regex: \"{}\"", name, value, regex_check);
+        }
     }
 }
