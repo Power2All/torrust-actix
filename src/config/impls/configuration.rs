@@ -162,7 +162,7 @@ impl Configuration {
             Ok(c) => { config = c; }
             Err(error) => {
                 eprintln!("No config file found or corrupt.");
-                eprintln!("[ERROR] {}", error.to_string());
+                eprintln!("[ERROR] {}", error);
 
                 if !create {
                     eprintln!("You can either create your own config.toml file, or start this app using '--create-config' as parameter.");

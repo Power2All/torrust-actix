@@ -61,7 +61,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[MySQL] Error: {}", error); }
                     }
                 }
                 false => {
@@ -77,7 +77,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[MySQL] Error: {}", error); }
                     }
                 }
             }
@@ -94,7 +94,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[MySQL] Error: {}", error); }
                     }
                 }
                 false => {
@@ -107,7 +107,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[MySQL] Error: {}", error); }
                     }
                 }
             }
@@ -124,7 +124,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[MySQL] Error: {}", error); }
                     }
                 }
                 false => {
@@ -137,7 +137,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[MySQL] Error: {}", error); }
                     }
                 }
             }
@@ -155,7 +155,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[MySQL] Error: {}", error); }
                     }
                 }
                 false => {
@@ -169,7 +169,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[MySQL] Error: {}", error); }
                     }
                 }
             }
@@ -194,7 +194,7 @@ impl DatabaseConnectorMySQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[MySQL] Error: {}", error); }
                             }
                         }
                         false => {
@@ -213,7 +213,7 @@ impl DatabaseConnectorMySQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[MySQL] Error: {}", error); }
                             }
                         }
                     }
@@ -236,7 +236,7 @@ impl DatabaseConnectorMySQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[MySQL] Error: {}", error); }
                             }
                         }
                         false => {
@@ -255,7 +255,7 @@ impl DatabaseConnectorMySQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[MySQL] Error: {}", error); }
                             }
                         }
                     }

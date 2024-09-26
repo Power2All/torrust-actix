@@ -62,7 +62,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
                     }
                 }
                 false => {
@@ -78,7 +78,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
                     }
                 }
             }
@@ -96,7 +96,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
                     }
                 }
                 false => {
@@ -109,7 +109,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
                     }
                 }
             }
@@ -127,7 +127,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
                     }
                 }
                 false => {
@@ -140,7 +140,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
                     }
                 }
             }
@@ -159,7 +159,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
                     }
                 }
                 false => {
@@ -173,7 +173,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
                     }
                 }
             }
@@ -199,7 +199,7 @@ impl DatabaseConnectorPgSQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[PgSQL] Error: {}", error); }
                             }
                         }
                         false => {
@@ -218,7 +218,7 @@ impl DatabaseConnectorPgSQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[PgSQL] Error: {}", error); }
                             }
                         }
                     }
@@ -241,7 +241,7 @@ impl DatabaseConnectorPgSQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[PgSQL] Error: {}", error); }
                             }
                         }
                         false => {
@@ -260,7 +260,7 @@ impl DatabaseConnectorPgSQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[PgSQL] Error: {}", error); }
                             }
                         }
                     }

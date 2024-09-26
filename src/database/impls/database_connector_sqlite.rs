@@ -66,7 +66,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[SQLite] Error: {}", error); }
                     }
                 }
                 false => {
@@ -81,7 +81,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[SQLite] Error: {}", error); }
                     }
                 }
             }
@@ -98,7 +98,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[SQLite] Error: {}", error); }
                     }
                 }
                 false => {
@@ -110,7 +110,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[SQLite] Error: {}", error); }
                     }
                 }
             }
@@ -127,7 +127,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[SQLite] Error: {}", error); }
                     }
                 }
                 false => {
@@ -139,7 +139,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[SQLite] Error: {}", error); }
                     }
                 }
             }
@@ -157,7 +157,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[SQLite] Error: {}", error); }
                     }
                 }
                 false => {
@@ -170,7 +170,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                        Err(error) => { panic!("[SQLite] Error: {}", error); }
                     }
                 }
             }
@@ -195,7 +195,7 @@ impl DatabaseConnectorSQLite {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[SQLite] Error: {}", error); }
                             }
                         }
                         false => {
@@ -213,7 +213,7 @@ impl DatabaseConnectorSQLite {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[SQLite] Error: {}", error); }
                             }
                         }
                     }
@@ -235,7 +235,7 @@ impl DatabaseConnectorSQLite {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[SQLite] Error: {}", error); }
                             }
                         }
                         false => {
@@ -253,7 +253,7 @@ impl DatabaseConnectorSQLite {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                                Err(error) => { panic!("[SQLite] Error: {}", error); }
                             }
                         }
                     }
