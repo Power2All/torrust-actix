@@ -49,7 +49,7 @@ impl DatabaseConnectorMySQL {
             // Create Torrent DB
             match config.database_structure.clone().unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().torrents.unwrap().database_name,
@@ -59,10 +59,13 @@ impl DatabaseConnectorMySQL {
                             config.database_structure.clone().unwrap().torrents.unwrap().column_completed,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().torrents.unwrap().database_name,
@@ -72,62 +75,77 @@ impl DatabaseConnectorMySQL {
                             config.database_structure.clone().unwrap().torrents.unwrap().column_completed,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
             // Create Whitelist DB
             match config.database_structure.clone().unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
             // Create Blacklist DB
             match config.database_structure.clone().unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
             // Create Keys DB
             match config.database_structure.clone().unwrap().keys.unwrap().bin_type_hash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().keys.unwrap().database_name,
@@ -135,10 +153,13 @@ impl DatabaseConnectorMySQL {
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                             config.database_structure.clone().unwrap().keys.unwrap().database_name,
@@ -146,7 +167,10 @@ impl DatabaseConnectorMySQL {
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -155,7 +179,7 @@ impl DatabaseConnectorMySQL {
                 true => {
                     match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
                         true => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` BINARY(20) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -168,10 +192,13 @@ impl DatabaseConnectorMySQL {
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                            }
                         }
                         false => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` VARCHAR(40) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -184,14 +211,17 @@ impl DatabaseConnectorMySQL {
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                            }
                         }
                     }
                 }
                 false => {
                     match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
                         true => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` BINARY(20) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -204,10 +234,13 @@ impl DatabaseConnectorMySQL {
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                            }
                         }
                         false => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` VARCHAR(40) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -220,7 +253,10 @@ impl DatabaseConnectorMySQL {
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[MySQL] Error: {}", error.to_string()); }
+                            }
                         }
                     }
                 }

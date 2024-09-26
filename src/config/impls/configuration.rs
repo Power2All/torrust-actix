@@ -160,8 +160,9 @@ impl Configuration {
         let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
             Ok(c) => { config = c; }
-            Err(_) => {
+            Err(error) => {
                 eprintln!("No config file found or corrupt.");
+                eprintln!("[ERROR] {}", error.to_string());
 
                 if !create {
                     eprintln!("You can either create your own config.toml file, or start this app using '--create-config' as parameter.");

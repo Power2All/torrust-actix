@@ -49,15 +49,13 @@ impl DatabaseConnectorSQLite {
             let _ = sqlx::query("PRAGMA temp_store = memory;").execute(pool).await;
             let _ = sqlx::query("PRAGMA mmap_size = 30000000000;").execute(pool).await;
             let _ = sqlx::query("PRAGMA page_size = 32768;").execute(pool).await;
-            let _ = sqlx::query("PRAGMA journal_mode = TRUNCATE;").execute(pool).await;
-            let _ = sqlx::query("PRAGMA journal_size_limit = 536870912;").execute(pool).await;
             let _ = sqlx::query("PRAGMA synchronous = full;").execute(pool).await;
 
             // Create Torrent DB
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().torrents.unwrap().database_name);
             match config.database_structure.clone().unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS `{}` (`{}` BLOB PRIMARY KEY NOT NULL, `{}` INTEGER DEFAULT 0, `{}` INTEGER DEFAULT 0, `{}` INTEGER DEFAULT 0)",
                             config.database_structure.clone().unwrap().torrents.unwrap().database_name,
@@ -66,10 +64,13 @@ impl DatabaseConnectorSQLite {
                             config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_completed
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL, `{}` INTEGER DEFAULT 0, `{}` INTEGER DEFAULT 0, `{}` INTEGER DEFAULT 0)",
                             config.database_structure.clone().unwrap().torrents.unwrap().database_name,
@@ -78,7 +79,10 @@ impl DatabaseConnectorSQLite {
                             config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_completed
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -86,22 +90,28 @@ impl DatabaseConnectorSQLite {
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().whitelist.unwrap().database_name);
             match config.database_structure.clone().unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS `{}` (`{}` BLOB PRIMARY KEY NOT NULL)",
                             config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL)",
                             config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -109,22 +119,28 @@ impl DatabaseConnectorSQLite {
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().blacklist.unwrap().database_name);
             match config.database_structure.clone().unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS `{}` (`{}` BLOB PRIMARY KEY NOT NULL)",
                             config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL)",
                             config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -132,24 +148,30 @@ impl DatabaseConnectorSQLite {
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().unwrap().keys.unwrap().database_name);
             match config.database_structure.clone().unwrap().keys.unwrap().bin_type_hash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS `{}` (`{}` BLOB PRIMARY KEY NOT NULL, `{}` INTEGER DEFAULT 0)",
                             config.database_structure.clone().unwrap().keys.unwrap().database_name,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash,
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL, `{}` INTEGER DEFAULT 0)",
                             config.database_structure.clone().unwrap().keys.unwrap().database_name,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash,
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -159,7 +181,7 @@ impl DatabaseConnectorSQLite {
                 true => {
                     match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
                         true => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL, `{}` BLOB NOT NULL, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0)",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -171,10 +193,13 @@ impl DatabaseConnectorSQLite {
                                     config.database_structure.clone().unwrap().users.unwrap().column_active,
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                            }
                         }
                         false => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS `{}` (`{}` TEXT PRIMARY KEY NOT NULL, `{}` TEXT NOT NULL, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0)",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -186,14 +211,17 @@ impl DatabaseConnectorSQLite {
                                     config.database_structure.clone().unwrap().users.unwrap().column_active,
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                            }
                         }
                     }
                 }
                 false => {
                     match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
                         true => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS `{}` (`{}` INTEGER PRIMARY KEY AUTOINCREMENT, `{}` BLOB NOT NULL, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0)",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -205,10 +233,13 @@ impl DatabaseConnectorSQLite {
                                     config.database_structure.clone().unwrap().users.unwrap().column_active,
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                            }
                         }
                         false => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS `{}` (`{}` INTEGER PRIMARY KEY AUTOINCREMENT, `{}` TEXT NOT NULL, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0, `{}` INTEGER NOT NULL DEFAULT 0)",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -220,7 +251,10 @@ impl DatabaseConnectorSQLite {
                                     config.database_structure.clone().unwrap().users.unwrap().column_active,
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[SQLite] Error: {}", error.to_string()); }
+                            }
                         }
                     }
                 }
@@ -918,7 +952,7 @@ impl DatabaseConnectorSQLite {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (X'{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, X'{}', {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                         structure.database_name,
                                         structure.column_uuid,
                                         structure.column_completed,
@@ -927,7 +961,7 @@ impl DatabaseConnectorSQLite {
                                         structure.column_key,
                                         structure.column_uploaded,
                                         structure.column_updated,
-                                        user_entry_item.user_uuid.clone().unwrap(),
+                                        user_entry_item.user_uuid.clone().unwrap() ,
                                         user_entry_item.completed,
                                         user_entry_item.active,
                                         user_entry_item.downloaded,
@@ -951,7 +985,7 @@ impl DatabaseConnectorSQLite {
                                 }
                                 false => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, '{}', {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                         structure.database_name,
                                         structure.column_uuid,
                                         structure.column_completed,
@@ -988,7 +1022,7 @@ impl DatabaseConnectorSQLite {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (X'{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES (X'{}', {}, {}, {}, X'{}', {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                         structure.database_name,
                                         structure.column_id,
                                         structure.column_completed,
@@ -1021,7 +1055,7 @@ impl DatabaseConnectorSQLite {
                                 }
                                 false => {
                                     format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, {}, {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
+                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', {}, {}, {}, '{}', {}, {}) ON CONFLICT (`{}`) DO UPDATE SET `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`, `{}`=excluded.`{}`",
                                         structure.database_name,
                                         structure.column_id,
                                         structure.column_completed,
@@ -1062,7 +1096,7 @@ impl DatabaseConnectorSQLite {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=X'{}'",
+                                        "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=X'{}', `{}`={}, `{}`={} WHERE `{}`=X'{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1082,7 +1116,7 @@ impl DatabaseConnectorSQLite {
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
+                                        "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`='{}', `{}`={}, `{}`={} WHERE `{}`='{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1106,7 +1140,7 @@ impl DatabaseConnectorSQLite {
                             match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
                                 true => {
                                     format!(
-                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`=X'{}'",
+                                        "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=X'{}', `{}`={}, `{}`={} WHERE `{}`=X'{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,
@@ -1126,7 +1160,7 @@ impl DatabaseConnectorSQLite {
                                 }
                                 false => {
                                     format!(
-                                        "UPDATE OR IGNORE `{}` SET `{}`={},`{}`={},`{}`={},`{}`={},`{}`={},`{}`={} WHERE `{}`='{}'",
+                                        "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`='{}', `{}`={}, `{}`={} WHERE `{}`='{}'",
                                         structure.database_name,
                                         structure.column_completed,
                                         user_entry_item.completed,

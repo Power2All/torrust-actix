@@ -50,7 +50,7 @@ impl DatabaseConnectorPgSQL {
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().torrents.unwrap().database_name);
             match config.database_structure.clone().unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, {} integer NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().torrents.unwrap().database_name,
@@ -60,10 +60,13 @@ impl DatabaseConnectorPgSQL {
                             config.database_structure.clone().unwrap().torrents.unwrap().column_completed,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, {} integer NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().torrents.unwrap().database_name,
@@ -73,7 +76,10 @@ impl DatabaseConnectorPgSQL {
                             config.database_structure.clone().unwrap().torrents.unwrap().column_completed,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -81,24 +87,30 @@ impl DatabaseConnectorPgSQL {
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().whitelist.unwrap().database_name);
             match config.database_structure.clone().unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -106,24 +118,30 @@ impl DatabaseConnectorPgSQL {
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().blacklist.unwrap().database_name);
             match config.database_structure.clone().unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -131,7 +149,7 @@ impl DatabaseConnectorPgSQL {
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().keys.unwrap().database_name);
             match config.database_structure.clone().unwrap().keys.unwrap().bin_type_hash {
                 true => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().keys.unwrap().database_name,
@@ -139,10 +157,13 @@ impl DatabaseConnectorPgSQL {
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                    }
                 }
                 false => {
-                    let _ = sqlx::query(
+                    match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                             config.database_structure.clone().unwrap().keys.unwrap().database_name,
@@ -150,7 +171,10 @@ impl DatabaseConnectorPgSQL {
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash
                         ).as_str()
-                    ).execute(pool).await;
+                    ).execute(pool).await {
+                        Ok(_) => {}
+                        Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                    }
                 }
             }
 
@@ -160,7 +184,7 @@ impl DatabaseConnectorPgSQL {
                 true => {
                     match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
                         true => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS public.{} ({} character(36) NOT NULL, {} bytea NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT uuid_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -173,10 +197,13 @@ impl DatabaseConnectorPgSQL {
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                            }
                         }
                         false => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS public.{} ({} character(36) NOT NULL, {} character(40) NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT uuid_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -189,14 +216,17 @@ impl DatabaseConnectorPgSQL {
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                            }
                         }
                     }
                 }
                 false => {
                     match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
                         true => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS public.{} ({} bigserial NOT NULL, {} bytea NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT id_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -209,10 +239,13 @@ impl DatabaseConnectorPgSQL {
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                            }
                         }
                         false => {
-                            let _ = sqlx::query(
+                            match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS public.{} ({} bigserial NOT NULL, {} character(40) NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT id_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                                     config.database_structure.clone().unwrap().users.unwrap().database_name,
@@ -225,7 +258,10 @@ impl DatabaseConnectorPgSQL {
                                     config.database_structure.clone().unwrap().users.unwrap().column_updated,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id
                                 ).as_str()
-                            ).execute(pool).await;
+                            ).execute(pool).await {
+                                Ok(_) => {}
+                                Err(error) => { panic!("[PgSQL] Error: {}", error.to_string()); }
+                            }
                         }
                     }
                 }
