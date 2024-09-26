@@ -193,7 +193,27 @@ impl Configuration {
     pub fn validate(config: Configuration) {
         // Check Map
         let check_map = vec![
-            ("Torrent Database", config.database_structure.clone().unwrap().torrents.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("DB: torrents", config.database_structure.clone().unwrap().torrents.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: infohash", config.database_structure.clone().unwrap().torrents.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: seeds", config.database_structure.clone().unwrap().torrents.unwrap().column_seeds, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: peers", config.database_structure.clone().unwrap().torrents.unwrap().column_peers, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: completed", config.database_structure.clone().unwrap().torrents.unwrap().column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("DB: whitelist", config.database_structure.clone().unwrap().whitelist.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: infohash", config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("DB: blacklist", config.database_structure.clone().unwrap().blacklist.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: infohash", config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("DB: keys", config.database_structure.clone().unwrap().keys.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: hash", config.database_structure.clone().unwrap().keys.unwrap().column_hash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: timeout", config.database_structure.clone().unwrap().keys.unwrap().column_timeout, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("DB: users", config.database_structure.clone().unwrap().users.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: id", config.database_structure.clone().unwrap().users.unwrap().column_id, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: uuid", config.database_structure.clone().unwrap().users.unwrap().column_uuid, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: key", config.database_structure.clone().unwrap().users.unwrap().column_key, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: uploaded", config.database_structure.clone().unwrap().users.unwrap().column_uploaded, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: downloaded", config.database_structure.clone().unwrap().users.unwrap().column_downloaded, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: completed", config.database_structure.clone().unwrap().users.unwrap().column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: active", config.database_structure.clone().unwrap().users.unwrap().column_active, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("  Column: updated", config.database_structure.clone().unwrap().users.unwrap().column_updated, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
         ];
 
         // Validation
@@ -206,7 +226,7 @@ impl Configuration {
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();
         if !regex_check.is_match(value.as_str()){
-            panic!("[VALIDATE CONFIG] Error checking {} [:] Name: \"{}\" [:] regex: \"{}\"", name, value, regex_check);
+            panic!("[VALIDATE CONFIG] Error checking {} [:] Name: \"{}\" [:] Regex: \"{}\"", name, value, regex_check);
         }
     }
 }
