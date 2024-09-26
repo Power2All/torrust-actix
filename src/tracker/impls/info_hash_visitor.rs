@@ -21,10 +21,10 @@ impl<'v> serde::de::Visitor<'v> for InfoHashVisitor {
         let mut res = InfoHash([0u8; 20]);
 
         if binascii::hex2bin(v.as_bytes(), &mut res.0).is_err() {
-            return Err(serde::de::Error::invalid_value(
+            Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Str(v),
                 &"expected a hexadecimal string",
-            ));
+            ))
         } else {
             Ok(res)
         }
