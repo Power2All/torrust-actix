@@ -78,6 +78,14 @@ pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
 }
 
+pub fn hex2bin(data: String) -> Result<[u8; 20], CustomError>
+{
+    match hex::decode(data) {
+        Ok(hash_result) => { Ok(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap()) }
+        Err(_) => { Err(CustomError::new("error converting hex to bin")) }
+    }
+}
+
 pub fn print_type<T>(_: &T) {
     println!("{:?}", std::any::type_name::<T>());
 }

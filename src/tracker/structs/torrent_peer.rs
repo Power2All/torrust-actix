@@ -10,8 +10,6 @@ use crate::tracker::structs::peer_id::PeerId;
 pub struct TorrentPeer {
     pub peer_id: PeerId,
     pub peer_addr: SocketAddr,
-    pub peer_offer_id: Option<String>,
-    pub peer_offer: Option<String>,
     #[serde(with = "serde_millis")]
     pub updated: std::time::Instant,
     #[serde(with = "NumberOfBytesDef")]

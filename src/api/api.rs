@@ -7,15 +7,19 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use actix_cors::Cors;
-use actix_remote_ip::RemoteIP;
 use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
 use actix_web::web::{Data, ServiceConfig};
 use log::{error, info};
 use serde_json::json;
+use crate::api::api_blacklists::{api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
+use crate::api::api_keys::{api_service_keys_delete, api_service_keys_get, api_service_keys_post};
+use crate::api::api_stats::api_service_stats_get;
+use crate::api::api_torrents::{api_service_torrents_delete, api_service_torrents_get, api_service_torrents_patch, api_service_torrents_post};
+use crate::api::api_users::{api_service_users_delete, api_service_users_get, api_service_users_patch, api_service_users_post};
+use crate::api::api_whitelists::{api_service_whitelists_delete, api_service_whitelists_get, api_service_whitelists_post};
 use crate::api::structs::api_service_data::ApiServiceData;
-use crate::api::structs::query_token::QueryToken;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
 use crate::stats::enums::stats_event::StatsEvent;
@@ -26,7 +30,7 @@ pub fn api_service_cors() -> Cors
     // This is not a duplicate, each framework has their own CORS configuration.
     Cors::default()
         .send_wildcard()
-        .allowed_methods(vec!["GET"])
+        .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH"])
         .allowed_headers(vec![http::header::X_FORWARDED_FOR, http::header::ACCEPT])
         .allowed_header(http::header::CONTENT_TYPE)
         .max_age(1)
@@ -37,21 +41,37 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
     Box::new(move |cfg: &mut ServiceConfig| {
         cfg.app_data(Data::new(data.clone()));
         cfg.default_service(web::route().to(api_service_not_found));
-        cfg.service(web::resource("api/stats").route(web::get().to(api_service_stats_get)));
+        cfg.service(web::resource("stats")
+            .route(web::get().to(api_service_stats_get))
+        );
+        cfg.service(web::resource(["api/torrent/{info_hash}", "api/torrents"])
+            .route(web::get().to(api_service_torrents_get))
+            .route(web::post().to(api_service_torrents_post))
+            .route(web::delete().to(api_service_torrents_delete))
+            .route(web::patch().to(api_service_torrents_patch))
+        );
+        cfg.service(web::resource("api/whitelists")
+            .route(web::get().to(api_service_whitelists_get))
+            .route(web::post().to(api_service_whitelists_post))
+            .route(web::delete().to(api_service_whitelists_delete))
+        );
+        cfg.service(web::resource("api/blacklists")
+            .route(web::get().to(api_service_blacklists_get))
+            .route(web::post().to(api_service_blacklists_post))
+            .route(web::delete().to(api_service_blacklists_delete))
+        );
+        cfg.service(web::resource("api/keys")
+            .route(web::get().to(api_service_keys_get))
+            .route(web::post().to(api_service_keys_post))
+            .route(web::delete().to(api_service_keys_delete))
+        );
+        cfg.service(web::resource("api/users")
+            .route(web::get().to(api_service_users_get))
+            .route(web::post().to(api_service_users_post))
+            .route(web::delete().to(api_service_users_delete))
+            .route(web::patch().to(api_service_users_patch))
+        );
     })
-}
-
-pub async fn api_service_stats_get(request: HttpRequest, remote_ip: RemoteIP, data: Data<Arc<ApiServiceData>>) -> HttpResponse
-{
-    api_service_stats_log(remote_ip.0, data.torrent_tracker.clone()).await;
-
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await {
-        return response;
-    }
-
-    let stats = data.torrent_tracker.get_stats();
-    HttpResponse::Ok().content_type(ContentType::json()).json(stats)
 }
 
 pub async fn api_service(
@@ -155,7 +175,7 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
     }
 }
 
-pub async fn api_service_retrieve_remote_ip(request: HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
+pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = match request.peer_addr() {
         None => {
@@ -183,9 +203,9 @@ pub async fn api_service_retrieve_remote_ip(request: HttpRequest, data: Arc<ApiT
     }
 }
 
-pub async fn api_validate_ip(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> Result<IpAddr, HttpResponse>
+pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceData>>) -> Result<IpAddr, HttpResponse>
 {
-    match api_service_retrieve_remote_ip(request.clone(), data.api_trackers_config.clone()).await {
+    match api_service_retrieve_remote_ip(request, data.api_trackers_config.clone()).await {
         Ok(ip) => {
             api_service_stats_log(ip, data.torrent_tracker.clone()).await;
             Ok(ip)
@@ -200,14 +220,33 @@ pub async fn api_validate_ip(request: HttpRequest, data: Data<Arc<ApiServiceData
 
 pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    let _ = match api_validate_ip(request.clone(), data.clone()).await {
-        Ok(ip) => ip,
-        Err(result) => {
-            return result;
-        }
-    };
+    // Validate client
+    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
     HttpResponse::NotFound().content_type(ContentType::json()).json(json!({
         "status": "not found"
     }))
+}
+
+pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
+{
+    match ip {
+        IpAddr::V4(_) => {
+            let data_clone = data.clone();
+            data_clone.update_stats(stats_ipv4, count);
+        }
+        IpAddr::V6(_) => {
+            let data_clone = data.clone();
+            data_clone.update_stats(stat_ipv6, count);
+        }
+    }
+}
+
+pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceData>>) -> Option<HttpResponse>
+{
+    match api_validate_ip(request, data.clone()).await {
+        Ok(ip) => { api_stat_update(ip, data.torrent_tracker.clone(), StatsEvent::Tcp4ApiHandled, StatsEvent::Tcp6ApiHandled, 1); },
+        Err(result) => { return Some(result); }
+    }
+    None
 }

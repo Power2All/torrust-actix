@@ -245,8 +245,6 @@ impl TorrentTracker {
         let mut torrent_peer = TorrentPeer {
             peer_id: announce_query.peer_id,
             peer_addr: SocketAddr::new(announce_query.remote_addr, announce_query.port),
-            peer_offer_id: None,
-            peer_offer: None,
             updated: std::time::Instant::now(),
             uploaded: NumberOfBytes(announce_query.uploaded as i64),
             downloaded: NumberOfBytes(announce_query.downloaded as i64),

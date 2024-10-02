@@ -39,11 +39,21 @@ pub fn http_service_routes(data: Arc<HttpServiceData>) -> Box<dyn Fn(&mut Servic
 {
     Box::new(move |cfg: &mut ServiceConfig| {
         cfg.app_data(Data::new(data.clone()));
-        cfg.service(web::resource("/announce").route(web::get().to(http_service_announce)));
-        cfg.service(web::resource("/announce/{key}").route(web::get().to(http_service_announce_key)));
-        cfg.service(web::resource("/announce/{key}/{userkey}").route(web::get().to(http_service_announce_userkey)));
-        cfg.service(web::resource("/scrape").route(web::get().to(http_service_scrape)));
-        cfg.service(web::resource("/scrape/{key}").route(web::get().to(http_service_scrape_key)));
+        cfg.service(web::resource("/announce")
+            .route(web::get().to(http_service_announce))
+        );
+        cfg.service(web::resource("/announce/{key}")
+            .route(web::get().to(http_service_announce_key))
+        );
+        cfg.service(web::resource("/announce/{key}/{userkey}")
+            .route(web::get().to(http_service_announce_userkey))
+        );
+        cfg.service(web::resource("/scrape")
+            .route(web::get().to(http_service_scrape))
+        );
+        cfg.service(web::resource("/scrape/{key}")
+            .route(web::get().to(http_service_scrape_key))
+        );
         cfg.default_service(web::route().to(http_service_not_found));
     })
 }
