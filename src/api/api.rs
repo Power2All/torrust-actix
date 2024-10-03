@@ -45,28 +45,28 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
         cfg.service(web::resource("stats")
             .route(web::get().to(api_service_stats_get))
         );
-        cfg.service(web::resource(["api/torrent/{info_hash}", "api/torrents"])
+        cfg.service(web::resource(["api/torrents", "api/torrent/{info_hash}"])
             .route(web::get().to(api_service_torrents_get))
             .route(web::post().to(api_service_torrents_post))
             .route(web::delete().to(api_service_torrents_delete))
             .route(web::patch().to(api_service_torrents_patch))
         );
-        cfg.service(web::resource("api/whitelists")
+        cfg.service(web::resource(["api/whitelists", "api/whitelist/{info_hash}"])
             .route(web::get().to(api_service_whitelists_get))
             .route(web::post().to(api_service_whitelists_post))
             .route(web::delete().to(api_service_whitelists_delete))
         );
-        cfg.service(web::resource("api/blacklists")
+        cfg.service(web::resource(["api/blacklists", "api/blacklist/{info_hash}"])
             .route(web::get().to(api_service_blacklists_get))
             .route(web::post().to(api_service_blacklists_post))
             .route(web::delete().to(api_service_blacklists_delete))
         );
-        cfg.service(web::resource("api/keys")
+        cfg.service(web::resource(["api/keys", "api/key/{info_hash}/{timeout}"])
             .route(web::get().to(api_service_keys_get))
             .route(web::post().to(api_service_keys_post))
             .route(web::delete().to(api_service_keys_delete))
         );
-        cfg.service(web::resource("api/users")
+        cfg.service(web::resource(["api/users", "api/user/{id}/{key}/{uploaded}/{downloaded}/{completed}/{updated}/{active}"])
             .route(web::get().to(api_service_users_get))
             .route(web::post().to(api_service_users_post))
             .route(web::delete().to(api_service_users_delete))
@@ -167,13 +167,13 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
 {
     match token {
         None => {
-            Some(HttpResponse::Ok().content_type(ContentType::json()).json(json!({
+            Some(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
                 "status": "missing token"
             })))
         }
         Some(token_code) => {
             if token_code != config.tracker_config.clone()?.api_key? {
-                return Some(HttpResponse::Ok().content_type(ContentType::json()).json(json!({
+                return Some(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
                     "status": "invalid token"
                 })));
             }

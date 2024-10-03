@@ -91,9 +91,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<(Str
 
     let torrents = match serde_json::from_slice::<Vec<String>>(&body) {
         Ok(data) => { data }
-        Err(_) => {
-            return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"}));
-        }
+        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
     };
 
     let mut torrents_output = HashMap::new();
