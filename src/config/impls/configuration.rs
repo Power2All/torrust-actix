@@ -34,7 +34,8 @@ impl Configuration {
                 request_interval_minimum: Some(1800),
                 peers_timeout: Some(2700),
                 peers_cleanup_interval: Some(900),
-                total_downloads: 0
+                total_downloads: 0,
+                swagger: Some(false),
             }),
             database: Some(DatabaseConfig {
                 engine: Some(DatabaseDrivers::sqlite3),

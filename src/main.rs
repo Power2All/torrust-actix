@@ -15,11 +15,7 @@ use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
 use torrust_actix::structs::Cli;
 use torrust_actix::stats::enums::stats_event::StatsEvent;
-use torrust_actix::tracker::structs::info_hash::InfoHash;
-use torrust_actix::tracker::structs::torrent_entry::TorrentEntry;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
-use torrust_actix::tracker::structs::user_entry_item::UserEntryItem;
-use torrust_actix::tracker::structs::user_id::UserId;
 use torrust_actix::udp::udp::udp_service;
 
 #[tokio::main]
@@ -66,34 +62,6 @@ async fn main() -> std::io::Result<()>
     if args.import { tracker.import(&args, tracker.clone()).await; }
 
     let tokio_shutdown = Shutdown::new().expect("shutdown creation works on first call");
-
-    let test_hash1: [u8; 20] =  match hex::decode(String::from("b54377fe6d94aebd1cb25b1489be5f4e1bef001b")) {
-        Ok(hash_result) => { <[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap() }
-        Err(_) => { panic!("[IMPORT] Torrent hash is not hex or invalid!"); }
-    };
-    let test_hash2: [u8; 20] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
-    let test_hash3: [u8; 20] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
-    let test_hash4: [u8; 20] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3];
-    tracker.add_torrent_update(InfoHash(test_hash1), TorrentEntry {
-        seeds: Default::default(),
-        peers: Default::default(),
-        completed: 500,
-        updated: std::time::Instant::now(),
-    });
-    let _ = tracker.add_whitelist(InfoHash(test_hash1));
-    let _ = tracker.add_blacklist(InfoHash(test_hash2));
-    let _ = tracker.add_key(InfoHash(test_hash3), 100);
-    let _ = tracker.add_user_update(UserId(test_hash3), UserEntryItem {
-        key: UserId(test_hash4),
-        user_id: Some(1234),
-        user_uuid: Some(String::from("ef15ea37-436c-435c-a5db-265919b6b75c")),
-        uploaded: 1234,
-        downloaded: 1234,
-        completed: 1234,
-        updated: 1234,
-        active: 1,
-        torrents_active: Default::default(),
-    });
 
     let deadlocks_handler = tokio_shutdown.clone();
     tokio::spawn(async move {

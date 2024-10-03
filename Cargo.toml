@@ -23,7 +23,6 @@ strip = true
 
 [dependencies]
 actix-cors = "^0.7"
-actix-remote-ip = "^0.1"
 actix-web = { version = "^4.9", features = ["rustls-0_23"] }
 async-std = "^1.13"
 binascii = "^0.1"
@@ -52,3 +51,5 @@ thiserror = "^1.0"
 tokio = { version = "^1.40", features = ["full"] }
 tokio-shutdown = "^0.1"
 toml = "^0.8"
+utoipa = { version = "4", features = ["actix_extras"] }
+utoipa-swagger-ui = { version = "^7", features = ["actix-web"] }

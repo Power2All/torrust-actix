@@ -12,5 +12,6 @@ pub struct TrackerConfig {
     pub request_interval_minimum: Option<u64>,
     pub peers_timeout: Option<u64>,
     pub peers_cleanup_interval: Option<u64>,
-    pub total_downloads: u64
+    pub total_downloads: u64,
+    pub swagger: Option<bool>
 }

@@ -28,6 +28,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<(Str
             Ok(hash) => { InfoHash(hash) }
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})); }
         };
+
         match data.torrent_tracker.get_torrent(info_hash) {
             None => {
                 return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"}));
@@ -46,6 +47,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<(Str
                         "left": torrent_peer.left.0 as u64,
                     })
                 }).collect::<Vec<_>>();
+
                 let peers = torrent.peers.iter().map(|(peer_id, torrent_peer)| {
                     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
                     let timestamp_calc: f64 = timestamp as f64 / 2_f64;
@@ -59,6 +61,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<(Str
                         "left": torrent_peer.left.0 as u64,
                     })
                 }).collect::<Vec<_>>();
+
                 let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent.updated.elapsed().as_millis();
                 let timestamp_calc: f64 = timestamp as f64 / 2_f64;
                 let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
@@ -85,6 +88,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<(Str
         }
         body.extend_from_slice(&chunk);
     }
+
     let torrents = match serde_json::from_slice::<Vec<String>>(&body) {
         Ok(data) => { data }
         Err(_) => {
@@ -103,6 +107,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<(Str
                     }))
                 }
             };
+
             match data.torrent_tracker.get_torrent(info_hash) {
                 None => { torrents_output.insert(info_hash, json!({})); }
                 Some(torrent) => {
@@ -119,6 +124,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<(Str
                             "left": torrent_peer.left.0 as u64,
                         })
                     }).collect::<Vec<_>>();
+
                     let peers = torrent.peers.iter().map(|(peer_id, torrent_peer)| {
                         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
                         let timestamp_calc: f64 = timestamp as f64 / 2_f64;
@@ -132,6 +138,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<(Str
                             "left": torrent_peer.left.0 as u64,
                         })
                     }).collect::<Vec<_>>();
+
                     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent.updated.elapsed().as_millis();
                     let timestamp_calc: f64 = timestamp as f64 / 2_f64;
                     let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;

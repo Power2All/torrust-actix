@@ -13,6 +13,7 @@ use actix_web::http::header::ContentType;
 use actix_web::web::{Data, ServiceConfig};
 use log::{error, info};
 use serde_json::json;
+use utoipa_swagger_ui::{Config, SwaggerUi};
 use crate::api::api_blacklists::{api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
 use crate::api::api_keys::{api_service_keys_delete, api_service_keys_get, api_service_keys_post};
 use crate::api::api_stats::api_service_stats_get;
@@ -71,6 +72,12 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::delete().to(api_service_users_delete))
             .route(web::patch().to(api_service_users_patch))
         );
+        if data.torrent_tracker.config.tracker_config.clone().unwrap().swagger.unwrap_or(false) {
+            cfg.service(SwaggerUi::new("/swagger-ui/{_:.*}").config(Config::new(["/api/openapi.json"])));
+            cfg.service(web::resource("/api/openapi.json")
+                .route(web::get().to(api_service_openapi_json))
+            );
+        }
     })
 }
 
@@ -249,4 +256,10 @@ pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceDat
         Err(result) => { return Some(result); }
     }
     None
+}
+
+pub async fn api_service_openapi_json() -> HttpResponse
+{
+    let openapi_file = include_str!("../openapi.json");
+    HttpResponse::Ok().content_type(ContentType::json()).body(openapi_file)
 }

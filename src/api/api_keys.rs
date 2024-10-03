@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use actix_web::{web, HttpRequest, HttpResponse};
-use actix_web::http::header::ContentType;
 use actix_web::web::Data;
 use crate::api::api::{api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
