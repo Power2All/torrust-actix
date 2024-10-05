@@ -46,15 +46,3 @@ pub async fn api_service_users_delete(request: HttpRequest, path: web::Path<Stri
 
     HttpResponse::Ok().body("")
 }
-
-pub async fn api_service_users_patch(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
-{
-    // Validate client
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-
-    // Parse the Params
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
-
-    HttpResponse::Ok().body("")
-}

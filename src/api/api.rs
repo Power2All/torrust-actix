@@ -17,8 +17,8 @@ use utoipa_swagger_ui::{Config, SwaggerUi};
 use crate::api::api_blacklists::{api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
 use crate::api::api_keys::{api_service_keys_delete, api_service_keys_get, api_service_keys_post};
 use crate::api::api_stats::api_service_stats_get;
-use crate::api::api_torrents::{api_service_torrents_delete, api_service_torrents_get, api_service_torrents_patch, api_service_torrents_post};
-use crate::api::api_users::{api_service_users_delete, api_service_users_get, api_service_users_patch, api_service_users_post};
+use crate::api::api_torrents::{api_service_torrents_delete, api_service_torrents_get, api_service_torrents_post};
+use crate::api::api_users::{api_service_users_delete, api_service_users_get, api_service_users_post};
 use crate::api::api_whitelists::{api_service_whitelists_delete, api_service_whitelists_get, api_service_whitelists_post};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
@@ -31,7 +31,7 @@ pub fn api_service_cors() -> Cors
     // This is not a duplicate, each framework has their own CORS configuration.
     Cors::default()
         .send_wildcard()
-        .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH"])
+        .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
         .allowed_headers(vec![http::header::X_FORWARDED_FOR, http::header::ACCEPT])
         .allowed_header(http::header::CONTENT_TYPE)
         .max_age(1)
@@ -49,7 +49,6 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::get().to(api_service_torrents_get))
             .route(web::post().to(api_service_torrents_post))
             .route(web::delete().to(api_service_torrents_delete))
-            .route(web::patch().to(api_service_torrents_patch))
         );
         cfg.service(web::resource(["api/whitelists", "api/whitelist/{info_hash}"])
             .route(web::get().to(api_service_whitelists_get))
@@ -70,7 +69,6 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::get().to(api_service_users_get))
             .route(web::post().to(api_service_users_post))
             .route(web::delete().to(api_service_users_delete))
-            .route(web::patch().to(api_service_users_patch))
         );
         if data.torrent_tracker.config.tracker_config.clone().unwrap().swagger.unwrap_or(false) {
             cfg.service(SwaggerUi::new("/swagger-ui/{_:.*}").config(Config::new(["/api/openapi.json"])));
