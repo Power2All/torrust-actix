@@ -1,21 +1,15 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::web::Data;
-use futures_util::StreamExt;
-use log::info;
 use serde_json::{json, Value};
 use sha1::{Digest, Sha1};
 use crate::api::api::{api_parse_body, api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
-use crate::common::structs::custom_error::CustomError;
-use crate::tracker::structs::info_hash::InfoHash;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
@@ -28,7 +22,6 @@ pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>,
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get the ID or UUID requested, based on configuration
     let id = path.into_inner();
     let (status_code, data) = api_service_users_return_json(id, data.clone());
     match status_code {
@@ -51,22 +44,22 @@ pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, 
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
     };
 
-    let users = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(data) => { data }
+    let ids = match serde_json::from_slice::<Vec<String>>(&body) {
+        Ok(id) => { id }
         Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
     };
 
     let mut users_output = HashMap::new();
-    for users_hash in users {
-        if users_hash.len() == 40 {
-            let (_, data) = api_service_users_return_json(users_hash.clone(), data.clone());
-            users_output.insert(users_hash.clone(), data);
+    for id in ids {
+        if id.len() == 40 {
+            let (_, data) = api_service_users_return_json(id.clone(), data.clone());
+            users_output.insert(id.clone(), data);
         }
     }
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
-        "torrents": users_output
+        "users": users_output
     }))
 }
 
@@ -79,12 +72,11 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate InfoHash if it's in the path
     let (id, key, uploaded, downloaded, completed, updated, active) = path.into_inner();
     if id.len() == 40 && key.len() == 40 {
         let id_hash = match hex2bin(id.clone()) {
             Ok(hash) => { UserId(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid id_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid user_hash"})); }
         };
 
         let key_hash = match hex2bin(key) {
@@ -113,14 +105,17 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
             }
         }
 
-        let _ = data.torrent_tracker.add_user(id_hash, user_entry.clone());
-        return match data.torrent_tracker.add_user_update(id_hash, user_entry.clone()) {
-            (_, true) => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            (_, false) => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "torrent updated"})) }
-        };
+        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            let _ = data.torrent_tracker.add_user_update(id_hash, user_entry.clone());
+        }
+
+        return match data.torrent_tracker.add_user(id_hash, user_entry.clone()) {
+            true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
+            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "user_hash updated"})) }
+        }
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad user_hash or key_hash"}))
 }
 
 pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
@@ -132,7 +127,65 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    HttpResponse::Ok().body("")
+    let body = match api_parse_body(payload).await {
+        Ok(data) => { data }
+        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+    };
+
+    let hashes = match serde_json::from_slice::<Vec<(String, String, u64, u64, u64, u64, u8)>>(&body) {
+        Ok(data) => { data }
+        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
+    };
+
+    let mut users_output = HashMap::new();
+    for (id, key, uploaded, downloaded, completed, updated, active) in hashes {
+        if id.len() == 40 && key.len() == 40 {
+            let id_hash = match hex2bin(id.clone()) {
+                Ok(hash) => { UserId(hash) }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})) }
+            };
+
+            let key_hash = match hex2bin(key) {
+                Ok(hash) => { UserId(hash) }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key_hash"})); }
+            };
+
+            let mut user_entry = UserEntryItem {
+                key: key_hash,
+                user_id: None,
+                user_uuid: None,
+                uploaded,
+                downloaded,
+                completed,
+                updated,
+                active,
+                torrents_active: BTreeMap::new(),
+            };
+
+            match data.torrent_tracker.config.database_structure.clone().unwrap().users.unwrap().id_uuid {
+                true => {
+                    user_entry.user_uuid = Some(id.clone());
+                }
+                false => {
+                    user_entry.user_id = Some(id.clone().parse().unwrap());
+                }
+            }
+
+            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+                let _ = data.torrent_tracker.add_user_update(id_hash, user_entry.clone());
+            }
+
+            match data.torrent_tracker.add_user(id_hash, user_entry.clone()) {
+                true => { users_output.insert(id_hash, json!({"status": "ok"})); }
+                false => { users_output.insert(id_hash, json!({"status": "user_hash updated"})); }
+            }
+        }
+    }
+
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!({
+        "status": "ok",
+        "users": users_output
+    }))
 }
 
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
@@ -144,7 +197,20 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    HttpResponse::Ok().body("")
+    let id = path.into_inner();
+    if id.len() == 40 {
+        let id_hash = match hex2bin(id) {
+            Ok(hash) => { UserId(hash) }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid user_hash"})); }
+        };
+
+        return match data.torrent_tracker.remove_user(id_hash) {
+            None => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "already removed user_hash"})) }
+            Some(_) => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
+        }
+    }
+
+    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad user_hash"}))
 }
 
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
@@ -156,7 +222,35 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    HttpResponse::Ok().body("")
+    let body = match api_parse_body(payload).await {
+        Ok(data) => { data }
+        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+    };
+
+    let ids = match serde_json::from_slice::<Vec<String>>(&body) {
+        Ok(data) => { data }
+        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
+    };
+
+    let mut users_output = HashMap::new();
+    for id in ids {
+        if id.len() == 40 {
+            let id_hash = match hex2bin(id.clone()) {
+                Ok(hash) => { UserId(hash) }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})) }
+            };
+
+            match data.torrent_tracker.remove_user(id_hash) {
+                None => { users_output.insert(id_hash, json!({"status": format!("already removed user_hash {}", id)})); }
+                Some(_) => { users_output.insert(id_hash, json!({"status": "ok"})); }
+            }
+        }
+    }
+
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!({
+        "status": "ok",
+        "users": users_output
+    }))
 }
 
 pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>) -> (StatusCode, Value)
@@ -170,7 +264,7 @@ pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>
 
             match data.torrent_tracker.get_user(UserId(uuid_hashed)) {
                 None => {
-                    (StatusCode::NOT_FOUND, json!({"status": "unknown user"}))
+                    (StatusCode::NOT_FOUND, json!({"status": "unknown user_hash"}))
                 }
                 Some(user_data) => {
                     (StatusCode::OK, json!({
@@ -195,7 +289,7 @@ pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>
 
             match data.torrent_tracker.get_user(UserId(id_hashed)) {
                 None => {
-                    (StatusCode::NOT_FOUND, json!({"status": "unknown user"}))
+                    (StatusCode::NOT_FOUND, json!({"status": "unknown user_hash"}))
                 }
                 Some(user_data) => {
                     (StatusCode::OK, json!({
