@@ -19,17 +19,16 @@ pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<Str
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate InfoHash if it's in the path
-    let path_info_hash = path.into_inner();
-    if path_info_hash.len() == 40 {
-        let info_hash = match hex2bin(path_info_hash) {
+    let info = path.into_inner();
+    if info.len() == 40 {
+        let info_hash = match hex2bin(info.clone()) {
             Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
         match data.torrent_tracker.check_blacklist(info_hash) {
             true => { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})); }
-            false => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "blacklist not found"})); }
+            false => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown blacklist {}", info)})); }
         }
     }
 
@@ -45,7 +44,6 @@ pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payl
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, return a list otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
@@ -57,22 +55,17 @@ pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payl
     };
 
     let mut blacklist_output = HashMap::new();
-    for info_hash_torrent in blacklists {
-        if info_hash_torrent.len() == 40 {
-            let info_hash = match hex2bin(info_hash_torrent.clone()) {
+    for blacklist in blacklists {
+        if blacklist.len() == 40 {
+            let blacklist_hash = match hex2bin(blacklist.clone()) {
                 Ok(hash) => { InfoHash(hash) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid info_hash {}", info_hash_torrent)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", blacklist)})) }
             };
 
-            blacklist_output.insert(info_hash, data.torrent_tracker.check_blacklist(info_hash));
+            blacklist_output.insert(blacklist_hash, data.torrent_tracker.check_blacklist(blacklist_hash));
         }
     }
 
-    // Return the blacklist memory object
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
         "blacklists": blacklist_output
@@ -88,17 +81,16 @@ pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<St
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate InfoHash if it's in the path
-    let path_info_hash = path.into_inner();
-    if path_info_hash.len() == 40 {
-        let info_hash = match hex2bin(path_info_hash) {
+    let info = path.into_inner();
+    if info.len() == 40 {
+        let info_hash = match hex2bin(info.clone()) {
             Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
         return match data.torrent_tracker.add_blacklist(info_hash) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "already blacklisted"})) }
+            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("info_hash updated {}", info)})) }
         }
     }
 
@@ -114,7 +106,6 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, add the list in the body otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
@@ -126,27 +117,23 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
     };
 
     let mut blacklists_output = HashMap::new();
-    for info_hash_torrent in blacklists {
-        if info_hash_torrent.len() == 40 {
-            let info_hash = match hex2bin(info_hash_torrent.clone()) {
+    for info in blacklists {
+        if info.len() == 40 {
+            let info_hash = match hex2bin(info.clone()) {
                 Ok(hash) => { InfoHash(hash) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid info_hash {}", info_hash_torrent)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
 
             match data.torrent_tracker.add_blacklist(info_hash) {
                 true => { blacklists_output.insert(info_hash, json!({"status": "ok"})); }
-                false => { blacklists_output.insert(info_hash, json!({"status": "already blacklisted"})); }
+                false => { blacklists_output.insert(info_hash, json!({"status": "info_hash updated"})); }
             }
         }
     }
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
-        "torrents": blacklists_output
+        "blacklists": blacklists_output
     }))
 }
 
@@ -159,17 +146,16 @@ pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate InfoHash if it's in the path
-    let path_info_hash = path.into_inner();
-    if path_info_hash.len() == 40 {
-        let info_hash = match hex2bin(path_info_hash) {
+    let info = path.into_inner();
+    if info.len() == 40 {
+        let info_hash = match hex2bin(info.clone()) {
             Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
         return match data.torrent_tracker.remove_blacklist(info_hash) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown blacklist"})) }
+            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})) }
         }
     }
 
@@ -185,7 +171,6 @@ pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::P
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, add the list in the body otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
@@ -197,26 +182,22 @@ pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::P
     };
 
     let mut blacklists_output = HashMap::new();
-    for info_hash_torrent in blacklists {
-        if info_hash_torrent.len() == 40 {
-            let info_hash = match hex2bin(info_hash_torrent.clone()) {
+    for info in blacklists {
+        if info.len() == 40 {
+            let info_hash = match hex2bin(info.clone()) {
                 Ok(hash) => { InfoHash(hash) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid info_hash {}", info_hash_torrent)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
 
             match data.torrent_tracker.remove_blacklist(info_hash) {
                 true => { blacklists_output.insert(info_hash, json!({"status": "ok"})); }
-                false => { blacklists_output.insert(info_hash, json!({"status": "unknown blacklist"})); }
+                false => { blacklists_output.insert(info_hash, json!({"status": "unknown info_hash"})); }
             }
         }
     }
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
-        "torrents": blacklists_output
+        "blacklists": blacklists_output
     }))
 }
