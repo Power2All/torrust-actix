@@ -19,17 +19,16 @@ pub async fn api_service_key_get(request: HttpRequest, path: web::Path<String>, 
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate Key hash if it's in the path
-    let path_key_hash = path.into_inner();
-    if path_key_hash.len() == 40 {
-        let key_hash = match hex2bin(path_key_hash) {
+    let key = path.into_inner();
+    if key.len() == 40 {
+        let key_hash = match hex2bin(key.clone()) {
             Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})); }
         };
 
         match data.torrent_tracker.check_key(key_hash) {
             true => { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})); }
-            false => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "key not found"})); }
+            false => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown key_hash {}", key)})); }
         }
     }
 
@@ -45,7 +44,6 @@ pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, d
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, return a list otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
@@ -57,22 +55,17 @@ pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, d
     };
 
     let mut keys_output = HashMap::new();
-    for key_hash in keys {
-        if key_hash.len() == 40 {
-            let key = match hex2bin(key_hash.clone()) {
+    for key in keys {
+        if key.len() == 40 {
+            let key_hash = match hex2bin(key.clone()) {
                 Ok(hash) => { InfoHash(hash) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid key {}", key_hash)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})) }
             };
 
-            keys_output.insert(key_hash, data.torrent_tracker.check_key(key));
+            keys_output.insert(key_hash, data.torrent_tracker.check_key(key_hash));
         }
     }
 
-    // Return the whitelist memory object
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
         "keys": keys_output
@@ -88,17 +81,16 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate InfoHash if it's in the path
-    let (path_key_hash, timeout) = path.into_inner();
-    if path_key_hash.len() == 40 {
-        let key_hash = match hex2bin(path_key_hash) {
+    let (key, timeout) = path.into_inner();
+    if key.len() == 40 {
+        let key_hash = match hex2bin(key.clone()) {
             Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})); }
         };
 
         return match data.torrent_tracker.add_key(key_hash, timeout as i64) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "already added key"})) }
+            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("key_hash updated {}", key)})) }
         }
     }
 
@@ -114,7 +106,6 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, add the list in the body otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
@@ -126,20 +117,16 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
     };
 
     let mut keys_output = HashMap::new();
-    for (key_hash, timeout) in keys {
-        if key_hash.len() == 40 {
-            let key = match hex2bin(key_hash.clone()) {
+    for (key, timeout) in keys {
+        if key.len() == 40 {
+            let key_hash = match hex2bin(key.clone()) {
                 Ok(hash) => { InfoHash(hash) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid key {}", key_hash)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})) }
             };
 
-            match data.torrent_tracker.add_key(key, timeout as i64) {
+            match data.torrent_tracker.add_key(key_hash, timeout as i64) {
                 true => { keys_output.insert(key, json!({"status": "ok"})); }
-                false => { keys_output.insert(key, json!({"status": "already added key"})); }
+                false => { keys_output.insert(key, json!({"status": "key_hash updated"})); }
             }
         }
     }
@@ -159,17 +146,16 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate Key if it's in the path
-    let path_key = path.into_inner();
-    if path_key.len() == 40 {
-        let key = match hex2bin(path_key) {
-            Ok(key) => { InfoHash(key) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key"})); }
+    let key = path.into_inner();
+    if key.len() == 40 {
+        let key_hash = match hex2bin(key.clone()) {
+            Ok(hash) => { InfoHash(hash) }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key {}", key)})); }
         };
 
-        return match data.torrent_tracker.remove_key(key) {
+        return match data.torrent_tracker.remove_key(key_hash) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "already removed key"})) }
+            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("unknown key_hash {}", key)})) }
         }
     }
 
@@ -185,7 +171,6 @@ pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, return a list otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
@@ -201,22 +186,18 @@ pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload
         if key_item.len() == 40 {
             let key = match hex2bin(key_item.clone()) {
                 Ok(key) => { InfoHash(key) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid key {}", key_item)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key {}", key_item)})) }
             };
 
             match data.torrent_tracker.remove_key(key) {
                 true => { keys_output.insert(key, json!({"status": "ok"})); }
-                false => { keys_output.insert(key, json!({"status": "already removed key"})); }
+                false => { keys_output.insert(key, json!({"status": "unknown key_hash"})); }
             }
         }
     }
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
-        "torrents": keys_output
+        "keys": keys_output
     }))
 }
