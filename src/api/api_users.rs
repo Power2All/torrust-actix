@@ -76,12 +76,12 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
     if id.len() == 40 && key.len() == 40 {
         let id_hash = match hex2bin(id.clone()) {
             Ok(hash) => { UserId(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid user_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})); }
         };
 
-        let key_hash = match hex2bin(key) {
+        let key_hash = match hex2bin(key.clone()) {
             Ok(hash) => { UserId(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})); }
         };
 
         let mut user_entry = UserEntryItem {
@@ -111,7 +111,7 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
 
         return match data.torrent_tracker.add_user(id_hash, user_entry.clone()) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "user_hash updated"})) }
+            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("user_hash updated {}", id)})) }
         }
     }
 
@@ -145,9 +145,9 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})) }
             };
 
-            let key_hash = match hex2bin(key) {
+            let key_hash = match hex2bin(key.clone()) {
                 Ok(hash) => { UserId(hash) }
-                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key_hash"})); }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})); }
             };
 
             let mut user_entry = UserEntryItem {
@@ -199,13 +199,13 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
 
     let id = path.into_inner();
     if id.len() == 40 {
-        let id_hash = match hex2bin(id) {
+        let id_hash = match hex2bin(id.clone()) {
             Ok(hash) => { UserId(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid user_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})); }
         };
 
         return match data.torrent_tracker.remove_user(id_hash) {
-            None => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "already removed user_hash"})) }
+            None => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("unknown user_hash {}", id)})) }
             Some(_) => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
         }
     }
@@ -241,7 +241,7 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
             };
 
             match data.torrent_tracker.remove_user(id_hash) {
-                None => { users_output.insert(id_hash, json!({"status": format!("already removed user_hash {}", id)})); }
+                None => { users_output.insert(id_hash, json!({"status": "unknown user_hash"})); }
                 Some(_) => { users_output.insert(id_hash, json!({"status": "ok"})); }
             }
         }
