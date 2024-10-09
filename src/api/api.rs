@@ -10,17 +10,19 @@ use actix_cors::Cors;
 use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
-use actix_web::web::{Data, ServiceConfig};
+use actix_web::web::{BytesMut, Data, ServiceConfig};
+use futures_util::StreamExt;
 use log::{error, info};
 use serde_json::json;
 use utoipa_swagger_ui::{Config, SwaggerUi};
-use crate::api::api_blacklists::{api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
-use crate::api::api_keys::{api_service_keys_delete, api_service_keys_get, api_service_keys_post};
+use crate::api::api_blacklists::{api_service_blacklist_delete, api_service_blacklist_get, api_service_blacklist_post, api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
+use crate::api::api_keys::{api_service_key_delete, api_service_key_get, api_service_key_post, api_service_keys_delete, api_service_keys_get, api_service_keys_post};
 use crate::api::api_stats::api_service_stats_get;
-use crate::api::api_torrents::{api_service_torrents_delete, api_service_torrents_get, api_service_torrents_post};
-use crate::api::api_users::{api_service_users_delete, api_service_users_get, api_service_users_post};
-use crate::api::api_whitelists::{api_service_whitelists_delete, api_service_whitelists_get, api_service_whitelists_post};
+use crate::api::api_torrents::{api_service_torrent_delete, api_service_torrent_get, api_service_torrent_post, api_service_torrents_delete, api_service_torrents_get, api_service_torrents_post};
+use crate::api::api_users::{api_service_user_delete, api_service_user_get, api_service_user_post, api_service_users_delete, api_service_users_get, api_service_users_post};
+use crate::api::api_whitelists::{api_service_whitelist_delete, api_service_whitelist_get, api_service_whitelist_post, api_service_whitelists_delete, api_service_whitelists_get, api_service_whitelists_post};
 use crate::api::structs::api_service_data::ApiServiceData;
+use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
 use crate::stats::enums::stats_event::StatsEvent;
@@ -45,31 +47,48 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
         cfg.service(web::resource("stats")
             .route(web::get().to(api_service_stats_get))
         );
-        cfg.service(web::resource(["api/torrents", "api/torrent/{info_hash}"])
-            .route(web::get().to(api_service_torrents_get))
-            .route(web::post().to(api_service_torrents_post))
-            .route(web::delete().to(api_service_torrents_delete))
-        );
-        cfg.service(web::resource(["api/whitelists", "api/whitelist/{info_hash}"])
-            .route(web::get().to(api_service_whitelists_get))
-            .route(web::post().to(api_service_whitelists_post))
-            .route(web::delete().to(api_service_whitelists_delete))
-        );
-        cfg.service(web::resource(["api/blacklists", "api/blacklist/{info_hash}"])
-            .route(web::get().to(api_service_blacklists_get))
-            .route(web::post().to(api_service_blacklists_post))
-            .route(web::delete().to(api_service_blacklists_delete))
-        );
-        cfg.service(web::resource(["api/keys", "api/key/{info_hash}/{timeout}"])
-            .route(web::get().to(api_service_keys_get))
-            .route(web::post().to(api_service_keys_post))
-            .route(web::delete().to(api_service_keys_delete))
-        );
-        cfg.service(web::resource(["api/users", "api/user/{id}/{key}/{uploaded}/{downloaded}/{completed}/{updated}/{active}"])
-            .route(web::get().to(api_service_users_get))
-            .route(web::post().to(api_service_users_post))
-            .route(web::delete().to(api_service_users_delete))
-        );
+
+        // Torrents API Routing
+        cfg.service(web::resource("api/torrent/{info_hash}").route(web::get().to(api_service_torrent_get)));
+        cfg.service(web::resource("api/torrents").route(web::get().to(api_service_torrents_get)));
+        cfg.service(web::resource("api/torrent/{info_hash}/{completed}").route(web::post().to(api_service_torrent_post)));
+        cfg.service(web::resource("api/torrents").route(web::post().to(api_service_torrents_post)));
+        cfg.service(web::resource("api/torrent/{info_hash}").route(web::delete().to(api_service_torrent_delete)));
+        cfg.service(web::resource("api/torrents").route(web::delete().to(api_service_torrents_delete)));
+
+        // Whitelist API Routing
+        cfg.service(web::resource("api/whitelist/{info_hash}").route(web::get().to(api_service_whitelist_get)));
+        cfg.service(web::resource("api/whitelists").route(web::get().to(api_service_whitelists_get)));
+        cfg.service(web::resource("api/whitelist/{info_hash}").route(web::post().to(api_service_whitelist_post)));
+        cfg.service(web::resource("api/whitelists").route(web::post().to(api_service_whitelists_post)));
+        cfg.service(web::resource("api/whitelist/{info_hash}").route(web::delete().to(api_service_whitelist_delete)));
+        cfg.service(web::resource("api/whitelists").route(web::delete().to(api_service_whitelists_delete)));
+
+        // Blacklist API Routing
+        cfg.service(web::resource("api/blacklist/{info_hash}").route(web::get().to(api_service_blacklist_get)));
+        cfg.service(web::resource("api/blacklists").route(web::get().to(api_service_blacklists_get)));
+        cfg.service(web::resource("api/blacklist/{info_hash}").route(web::post().to(api_service_blacklist_post)));
+        cfg.service(web::resource("api/blacklists").route(web::post().to(api_service_blacklists_post)));
+        cfg.service(web::resource("api/blacklist/{info_hash}").route(web::delete().to(api_service_blacklist_delete)));
+        cfg.service(web::resource("api/blacklists").route(web::delete().to(api_service_blacklists_delete)));
+
+        // Keys API Routing
+        cfg.service(web::resource("api/key/{key_hash}").route(web::get().to(api_service_key_get)));
+        cfg.service(web::resource("api/keys").route(web::get().to(api_service_keys_get)));
+        cfg.service(web::resource("api/key/{key_hash}/{timeout}").route(web::post().to(api_service_key_post)));
+        cfg.service(web::resource("api/keys").route(web::post().to(api_service_keys_post)));
+        cfg.service(web::resource("api/key/{info_hash}").route(web::delete().to(api_service_key_delete)));
+        cfg.service(web::resource("api/keys").route(web::delete().to(api_service_keys_delete)));
+
+        // Users API Routing (SHA1 ID/UUID hashed key)
+        cfg.service(web::resource("api/user/{id}").route(web::get().to(api_service_user_get)));
+        cfg.service(web::resource("api/users").route(web::get().to(api_service_users_get)));
+        cfg.service(web::resource("api/user/{id}/{key}/{uploaded}/{downloaded}/{completed}/{updated}/{active}").route(web::post().to(api_service_user_post)));
+        cfg.service(web::resource("api/keys").route(web::post().to(api_service_users_post)));
+        cfg.service(web::resource("api/key/{info_hash}").route(web::delete().to(api_service_user_delete)));
+        cfg.service(web::resource("api/keys").route(web::delete().to(api_service_users_delete)));
+
+        // Swagger UI Routing
         if data.torrent_tracker.config.tracker_config.clone().unwrap().swagger.unwrap_or(false) {
             cfg.service(SwaggerUi::new("/swagger-ui/{_:.*}").config(Config::new(["/api/openapi.json"])));
             cfg.service(web::resource("/api/openapi.json")
@@ -260,4 +279,22 @@ pub async fn api_service_openapi_json() -> HttpResponse
 {
     let openapi_file = include_str!("../openapi.json");
     HttpResponse::Ok().content_type(ContentType::json()).body(openapi_file)
+}
+
+pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, CustomError>
+{
+    let mut body = web::BytesMut::new();
+    while let Some(chunk) = payload.next().await {
+        let chunk = match chunk {
+            Ok(data) => { data }
+            Err(_) => { return Err(CustomError::new("chunk error")) }
+        };
+
+        if (body.len() + chunk.len()) > 1_048_576 {
+            return Err(CustomError::new("chunk size exceeded"));
+        }
+
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }

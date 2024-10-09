@@ -4,16 +4,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
-use futures_util::StreamExt;
-use serde_json::json;
-use crate::api::api::{api_service_token, api_validation};
+use serde_json::{json, Value};
+use crate::api::api::{api_parse_body, api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 
-pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<String>, mut payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -35,60 +34,28 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<Stri
                 return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"}));
             }
             Some(torrent) => {
-                let seeds = torrent.seeds.iter().map(|(peer_id, torrent_peer)| {
-                    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
-                    let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-                    let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
-                    json!({
-                        "peer_id": peer_id.clone(),
-                        "peer_addr": torrent_peer.peer_addr.clone(),
-                        "updated": timestamp_final,
-                        "uploaded": torrent_peer.uploaded.0 as u64,
-                        "downloaded": torrent_peer.downloaded.0 as u64,
-                        "left": torrent_peer.left.0 as u64,
-                    })
-                }).collect::<Vec<_>>();
-
-                let peers = torrent.peers.iter().map(|(peer_id, torrent_peer)| {
-                    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
-                    let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-                    let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
-                    json!({
-                        "peer_id": peer_id.clone(),
-                        "peer_addr": torrent_peer.peer_addr.clone(),
-                        "updated": timestamp_final,
-                        "uploaded": torrent_peer.uploaded.0 as u64,
-                        "downloaded": torrent_peer.downloaded.0 as u64,
-                        "left": torrent_peer.left.0 as u64,
-                    })
-                }).collect::<Vec<_>>();
-
-                let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent.updated.elapsed().as_millis();
-                let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-                let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
-                return HttpResponse::Ok().content_type(ContentType::json()).json(json!({
-                    "status": "ok",
-                    "seeds": seeds,
-                    "peers": peers,
-                    "completed": torrent.completed,
-                    "updated": timestamp_final
-                }));
+                return HttpResponse::Ok().content_type(ContentType::json()).json(api_service_torrents_return_torrent_json(torrent));
             }
         }
     }
 
+    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+}
+
+pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+{
+    // Validate client
+    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
+
+    // Parse the Params
+    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
+    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+
     // Check if a body was sent without the hash in the path, return a list otherwise
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = match chunk {
-            Ok(data) => { data }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "chunk error"})); }
-        };
-        if (body.len() + chunk.len()) > 1_048_576 {
-            return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "body overflow"}));
-        }
-        body.extend_from_slice(&chunk);
-    }
+    let body = match api_parse_body(payload).await {
+        Ok(data) => { data }
+        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+    };
 
     let torrents = match serde_json::from_slice::<Vec<String>>(&body) {
         Ok(data) => { data }
@@ -110,43 +77,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<Stri
             match data.torrent_tracker.get_torrent(info_hash) {
                 None => {}
                 Some(torrent) => {
-                    let seeds = torrent.seeds.iter().map(|(peer_id, torrent_peer)| {
-                        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
-                        let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-                        let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
-                        json!({
-                            "peer_id": peer_id.clone(),
-                            "peer_addr": torrent_peer.peer_addr.clone(),
-                            "updated": timestamp_final,
-                            "uploaded": torrent_peer.uploaded.0 as u64,
-                            "downloaded": torrent_peer.downloaded.0 as u64,
-                            "left": torrent_peer.left.0 as u64,
-                        })
-                    }).collect::<Vec<_>>();
-
-                    let peers = torrent.peers.iter().map(|(peer_id, torrent_peer)| {
-                        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
-                        let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-                        let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
-                        json!({
-                            "peer_id": peer_id.clone(),
-                            "peer_addr": torrent_peer.peer_addr.clone(),
-                            "updated": timestamp_final,
-                            "uploaded": torrent_peer.uploaded.0 as u64,
-                            "downloaded": torrent_peer.downloaded.0 as u64,
-                            "left": torrent_peer.left.0 as u64,
-                        })
-                    }).collect::<Vec<_>>();
-
-                    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent.updated.elapsed().as_millis();
-                    let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-                    let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
-                    torrents_output.insert(info_hash, json!({
-                        "seeds": seeds,
-                        "peers": peers,
-                        "completed": torrent.completed,
-                        "updated": timestamp_final
-                    }));
+                    torrents_output.insert(info_hash, api_service_torrents_return_torrent_json(torrent));
                 }
             }
         }
@@ -158,7 +89,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, path: web::Path<Stri
     }))
 }
 
-pub async fn api_service_torrents_post(request: HttpRequest, path: web::Path<(String, u64)>, mut payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(String, u64)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -189,20 +120,23 @@ pub async fn api_service_torrents_post(request: HttpRequest, path: web::Path<(St
         }
     }
 
+    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+}
+
+pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+{
+    // Validate client
+    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
+
+    // Parse the Params
+    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
+    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+
     // Check if a body was sent without the hash in the path, add the list in the body otherwise
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = match chunk {
-            Ok(data) => { data }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "chunk error"})); }
-        };
-
-        if (body.len() + chunk.len()) > 1_048_576 {
-            return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "body overflow"}));
-        }
-
-        body.extend_from_slice(&chunk);
-    }
+    let body = match api_parse_body(payload).await {
+        Ok(data) => { data }
+        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+    };
 
     let hashes = match serde_json::from_slice::<HashMap<String, u64>>(&body) {
         Ok(data) => { data }
@@ -242,7 +176,7 @@ pub async fn api_service_torrents_post(request: HttpRequest, path: web::Path<(St
     }))
 }
 
-pub async fn api_service_torrents_delete(request: HttpRequest, path: web::Path<String>, mut payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -272,20 +206,23 @@ pub async fn api_service_torrents_delete(request: HttpRequest, path: web::Path<S
         }
     }
 
+    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+}
+
+pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+{
+    // Validate client
+    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
+
+    // Parse the Params
+    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
+    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+
     // Check if a body was sent without the hash in the path, add the list in the body otherwise
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = match chunk {
-            Ok(data) => { data }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "chunk error"})); }
-        };
-
-        if (body.len() + chunk.len()) > 1_048_576 {
-            return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "body overflow"}));
-        }
-
-        body.extend_from_slice(&chunk);
-    }
+    let body = match api_parse_body(payload).await {
+        Ok(data) => { data }
+        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+    };
 
     let hashes = match serde_json::from_slice::<Vec<String>>(&body) {
         Ok(data) => { data }
@@ -322,4 +259,46 @@ pub async fn api_service_torrents_delete(request: HttpRequest, path: web::Path<S
         "status": "ok",
         "torrents": torrents_output
     }))
+}
+
+pub fn api_service_torrents_return_torrent_json(torrent: TorrentEntry) -> Value
+{
+    let seeds = torrent.seeds.iter().map(|(peer_id, torrent_peer)| {
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
+        let timestamp_calc: f64 = timestamp as f64 / 2_f64;
+        let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
+        json!({
+            "peer_id": peer_id.clone(),
+            "peer_addr": torrent_peer.peer_addr.clone(),
+            "updated": timestamp_final,
+            "uploaded": torrent_peer.uploaded.0 as u64,
+            "downloaded": torrent_peer.downloaded.0 as u64,
+            "left": torrent_peer.left.0 as u64,
+        })
+    }).collect::<Vec<_>>();
+
+    let peers = torrent.peers.iter().map(|(peer_id, torrent_peer)| {
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
+        let timestamp_calc: f64 = timestamp as f64 / 2_f64;
+        let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
+        json!({
+            "peer_id": peer_id.clone(),
+            "peer_addr": torrent_peer.peer_addr.clone(),
+            "updated": timestamp_final,
+            "uploaded": torrent_peer.uploaded.0 as u64,
+            "downloaded": torrent_peer.downloaded.0 as u64,
+            "left": torrent_peer.left.0 as u64,
+        })
+    }).collect::<Vec<_>>();
+
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent.updated.elapsed().as_millis();
+    let timestamp_calc: f64 = timestamp as f64 / 2_f64;
+    let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
+    json!({
+        "status": "ok",
+        "seeds": seeds,
+        "peers": peers,
+        "completed": torrent.completed,
+        "updated": timestamp_final
+    })
 }
