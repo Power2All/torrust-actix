@@ -8,22 +8,22 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
+    pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> bool
     {
         let map = self.torrents_updates.clone();
         let mut lock = map.write();
         match lock.insert(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos(), (info_hash, torrent_entry.clone())) {
             None => {
                 self.update_stats(StatsEvent::TorrentsUpdates, 1);
-                (torrent_entry, true)
+                true
             }
             Some(_) => {
-                (torrent_entry, false)
+                false
             }
         }
     }
 
-    pub fn add_torrent_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentEntry)>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
+    pub fn add_torrent_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentEntry)>) -> BTreeMap<InfoHash, bool>
     {
         let mut returned_data = BTreeMap::new();
         for (timestamp, (info_hash, torrent_entry)) in hashes.iter() {

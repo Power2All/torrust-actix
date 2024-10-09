@@ -21,21 +21,16 @@ pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<Strin
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate InfoHash if it's in the path
-    let path_info_hash = path.into_inner();
-    if path_info_hash.len() == 40 {
-        let info_hash = match hex2bin(path_info_hash) {
+    let info = path.into_inner();
+    if info.len() == 40 {
+        let info_hash = match hex2bin(info.clone()) {
             Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
         match data.torrent_tracker.get_torrent(info_hash) {
-            None => {
-                return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"}));
-            }
-            Some(torrent) => {
-                return HttpResponse::Ok().content_type(ContentType::json()).json(api_service_torrents_return_torrent_json(torrent));
-            }
+            None => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})); }
+            Some(torrent) => { return HttpResponse::Ok().content_type(ContentType::json()).json(api_service_torrents_return_torrent_json(torrent)); }
         }
     }
 
@@ -51,34 +46,27 @@ pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payloa
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, return a list otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
     };
 
-    let torrents = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(data) => { data }
+    let info_hashes = match serde_json::from_slice::<Vec<String>>(&body) {
+        Ok(hash) => { hash }
         Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
     };
 
     let mut torrents_output = HashMap::new();
-    for info_hash_torrent in torrents {
-        if info_hash_torrent.len() == 40 {
-            let info_hash = match hex2bin(info_hash_torrent.clone()) {
+    for info in info_hashes {
+        if info.len() == 40 {
+            let info_hash = match hex2bin(info.clone()) {
                 Ok(hash) => { InfoHash(hash) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid info_hash {}", info_hash_torrent)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
 
             match data.torrent_tracker.get_torrent(info_hash) {
                 None => {}
-                Some(torrent) => {
-                    torrents_output.insert(info_hash, api_service_torrents_return_torrent_json(torrent));
-                }
+                Some(torrent) => { torrents_output.insert(info_hash, api_service_torrents_return_torrent_json(torrent)); }
             }
         }
     }
@@ -98,12 +86,11 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate InfoHash if it's in the path
-    let (path_info_hash, completed) = path.into_inner();
-    if path_info_hash.len() == 40 {
-        let info_hash = match hex2bin(path_info_hash) {
+    let (info, completed) = path.into_inner();
+    if info.len() == 40 {
+        let info_hash = match hex2bin(info.clone()) {
             Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
         let torrent_entry = TorrentEntry {
@@ -113,10 +100,13 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
             updated: std::time::Instant::now(),
         };
 
-        let _ = data.torrent_tracker.add_torrent(info_hash, torrent_entry.clone());
-        return match data.torrent_tracker.add_torrent_update(info_hash, torrent_entry) {
+        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone());
+        }
+
+        return match data.torrent_tracker.add_torrent(info_hash, torrent_entry.clone()) {
             (_, true) => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            (_, false) => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "torrent updated"})) }
+            (_, false) => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("info_hash updated {}", info)})) }
         }
     }
 
@@ -132,27 +122,22 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, add the list in the body otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
     };
 
-    let hashes = match serde_json::from_slice::<HashMap<String, u64>>(&body) {
+    let info_hashmap = match serde_json::from_slice::<HashMap<String, u64>>(&body) {
         Ok(data) => { data }
         Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
     };
 
     let mut torrents_output = HashMap::new();
-    for (info_hash_torrent, completed) in hashes {
-        if info_hash_torrent.len() == 40 {
-            let info_hash = match hex2bin(info_hash_torrent.clone()) {
+    for (info, completed) in info_hashmap {
+        if info.len() == 40 {
+            let info_hash = match hex2bin(info.clone()) {
                 Ok(hash) => { InfoHash(hash) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid info_hash {}", info_hash_torrent)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info) })) }
             };
 
             let torrent_entry = TorrentEntry {
@@ -162,10 +147,13 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
                 updated: std::time::Instant::now(),
             };
 
-            let _ = data.torrent_tracker.add_torrent(info_hash, torrent_entry.clone());
-            match data.torrent_tracker.add_torrent_update(info_hash, torrent_entry) {
+            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+                let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone());
+            }
+
+            match data.torrent_tracker.add_torrent(info_hash, torrent_entry.clone()) {
                 (_, true) => { torrents_output.insert(info_hash, json!({"status": "ok"})); }
-                (_, false) => { torrents_output.insert(info_hash, json!({"status": "torrent already added"})); }
+                (_, false) => { torrents_output.insert(info_hash, json!({"status": "info_hash updated"})); }
             }
         }
     }
@@ -185,24 +173,16 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Get and validate InfoHash if it's in the path
-    let path_info_hash = path.into_inner();
-    if path_info_hash.len() == 40 {
-        let info_hash = match hex2bin(path_info_hash) {
+    let info = path.into_inner();
+    if info.len() == 40 {
+        let info_hash = match hex2bin(info.clone()) {
             Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})); }
+            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
-        match data.torrent_tracker.remove_torrent(info_hash) {
-            None => {
-                return HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "torrent already removed"}))
-            }
-            Some(torrent_entry) => {
-                return match data.torrent_tracker.add_torrent_update(info_hash, torrent_entry) {
-                    (_, true) => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-                    (_, false) => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "torrent updated"})) }
-                }
-            }
+        return match data.torrent_tracker.remove_torrent(info_hash) {
+            None => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})) }
+            Some(_) => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
         }
     }
 
@@ -218,7 +198,6 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
-    // Check if a body was sent without the hash in the path, add the list in the body otherwise
     let body = match api_parse_body(payload).await {
         Ok(data) => { data }
         Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
@@ -230,27 +209,16 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
     };
 
     let mut torrents_output = HashMap::new();
-    for info_hash_torrent in hashes {
-        if info_hash_torrent.len() == 40 {
-            let info_hash = match hex2bin(info_hash_torrent.clone()) {
+    for info in hashes {
+        if info.len() == 40 {
+            let info_hash = match hex2bin(info.clone()) {
                 Ok(hash) => { InfoHash(hash) }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
-                        "status": format!("invalid info_hash {}", info_hash_torrent)
-                    }))
-                }
+                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
 
             match data.torrent_tracker.remove_torrent(info_hash) {
-                None => {
-                    torrents_output.insert(info_hash, json!({"status": "torrent already added"}));
-                }
-                Some(torrent_entry) => {
-                    match data.torrent_tracker.add_torrent_update(info_hash, torrent_entry) {
-                        (_, true) => { torrents_output.insert(info_hash, json!({"status": "ok"})); }
-                        (_, false) => { torrents_output.insert(info_hash, json!({"status": "torrent already added"})); }
-                    }
-                }
+                None => { torrents_output.insert(info_hash, json!({"status": format!("unknown info_hash {}", info)})); }
+                Some(_) => { torrents_output.insert(info_hash, json!({"status": "ok"})); }
             }
         }
     }

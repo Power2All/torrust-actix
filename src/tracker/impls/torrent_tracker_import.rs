@@ -26,7 +26,7 @@ impl TorrentTracker {
                         Ok(hash_result) => { InfoHash(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap()) }
                         Err(_) => { panic!("[IMPORT] Torrent hash is not hex or invalid!"); }
                     };
-                    tracker.add_torrent_update(info_hash, TorrentEntry {
+                    let _ = tracker.add_torrent_update(info_hash, TorrentEntry {
                         seeds: Default::default(),
                         peers: Default::default(),
                         completed,
