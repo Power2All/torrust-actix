@@ -217,7 +217,7 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
             };
 
             match data.torrent_tracker.remove_torrent(info_hash) {
-                None => { torrents_output.insert(info_hash, json!({"status": format!("unknown info_hash {}", info)})); }
+                None => { torrents_output.insert(info_hash, json!({"status": "unknown info_hash"})); }
                 Some(_) => { torrents_output.insert(info_hash, json!({"status": "ok"})); }
             }
         }

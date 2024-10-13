@@ -49,6 +49,13 @@ impl TorrentTracker {
         }
     }
 
+    pub fn get_key(&self, hash: InfoHash) -> Option<(InfoHash, i64)>
+    {
+        let map = self.keys.clone();
+        let lock = map.read_recursive();
+        lock.get(&hash).map(|data| (hash, *data))
+    }
+
     pub fn get_keys(&self) -> BTreeMap<InfoHash, i64>
     {
         let map = self.keys.clone();

@@ -28,7 +28,7 @@ pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<Str
 
         match data.torrent_tracker.check_blacklist(info_hash) {
             true => { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})); }
-            false => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown blacklist {}", info)})); }
+            false => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})); }
         }
     }
 

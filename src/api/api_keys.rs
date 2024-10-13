@@ -26,13 +26,20 @@ pub async fn api_service_key_get(request: HttpRequest, path: web::Path<String>, 
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})); }
         };
 
-        match data.torrent_tracker.check_key(key_hash) {
-            true => { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})); }
-            false => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown key_hash {}", key)})); }
+        return match data.torrent_tracker.get_key(key_hash) {
+            None => {
+                HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown key_hash {}", key)}))
+            }
+            Some((_, timeout)) => {
+                HttpResponse::Ok().content_type(ContentType::json()).json(json!({
+                    "status": "ok",
+                    "timeout": timeout
+                }))
+            }
         }
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key"}))
+    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key_hash"}))
 }
 
 pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
@@ -62,7 +69,10 @@ pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, d
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})) }
             };
 
-            keys_output.insert(key_hash, data.torrent_tracker.check_key(key_hash));
+            keys_output.insert(key_hash, match data.torrent_tracker.get_key(key_hash) {
+                None => { 0u64 }
+                Some((_, timeout)) => { timeout as u64 }
+            });
         }
     }
 
@@ -94,7 +104,7 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
         }
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key"}))
+    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key_hash"}))
 }
 
 pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
@@ -159,7 +169,7 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
         }
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key"}))
+    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key_hash"}))
 }
 
 pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
