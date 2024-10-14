@@ -1,3 +1,3 @@
-pub mod mysql;
-pub mod postgresql;
-pub mod sqlite;
+pub mod enums;
+pub mod impls;
+pub mod structs;

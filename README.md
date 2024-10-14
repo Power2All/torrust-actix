@@ -6,23 +6,20 @@
 ## Project Description
 Torrust-Actix Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
 
-Currently, it's being actively used at https://www.gbitt.info/ which as of current writing has 200+ million torrent hashes loaded and hitting 5+ million peers.
+Currently, it's being actively used at https://www.gbitt.info/.
 
 This project originated from Torrust-Tracker code originally developed by Mick van Dijke, further developed by Power2All as alternative for OpenTracker and other tracker code available on GitHub.
 
 ## Features
-* [X] Multiple UDP server and HTTP(S) server blocks for socket binding possibilities
-* [X] Full IPv4 and IPv6 support for both UDP and HTTP(S)
-* [X] Built-in API on a separate port in HTTP
-* [X] Toggle maintenance mode through API and WebGUI
+* [X] Block array for TCP tracking (HTTP/HTTPS), UDP tracking and API (HTTP/HTTPS)
+* [X] Full IPv4 and IPv6 support
 * [X] Persistence saving supported using SQLite3, MySQL or PostgresSQL database
-* [X] Customize table and database names in the configuration file for persistence
-* [X] Whitelist system, which can be used to make the tracker private
-* [X] Blacklist system, to block and ban hashes
-* [X] Web Interface (through API) to control the tracker software
-* [X] Torrent key support, for private tracking support
-* [X] Optional: User account tracking support, will push updates to database of individual users
-* [X] Dockerfile to build an image for Docker, and pushed to Docker Hub
+* [X] Customize table and database structure in the configuration
+* [X] Whitelist system for private tracking
+* [X] Blacklist system for blocking unwelcome hashes
+* [X] Torrent key support for locking access to announcement through keys as info_hash with a timeout
+* [X] User account support, configurable for also database support
+* [X] Swagger UI built-in in the API (toggleable), useful both for testing API and documentation for API
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -45,409 +42,35 @@ cd torrust-actix
 2. Build the source code using Rust (make sure you have installed rustup with stable branch)
 #### Using build script
 ```bash
-chmod +x build.sh && ./build.sh
-```
-
-#### Manual Building (`/webgui/index.htm` needs to be modified)
-```bash
 cargo build --release
 ```
 
 ### Usage
-* Running the code will create a `config.toml` file when it doesn't exist yet. The configuration will be filled with default values, and will use SQLite3 in memory as default persistence. Persistence is turned OFF by default, so you need to activate that manually:
+Run the code using `--help` argument for using in your enironment:
 ```bash
-./target/release/torrust-actix
+./target/release/torrust-actix --help
 ```
+Before you can run the server, you need to either have persietency turned off, and when enabled, make sure your database is created and working. See the help argument above how to fix your setup as you wish.
 
-* Modify the newly created `config.toml` file according to your liking. (ToDo: Create extended documentation)
-```toml
-log_level = "info"
-log_console_interval = 60
-statistics_enabled = true
-db_driver = "SQLite3"
-db_path = "sqlite://:memory:"
-persistence = false
-persistence_interval = 60
-api_key = "MyAccessToken"
-whitelist = false
-blacklist = false
-keys = false
-keys_cleanup_interval = 10
-users = false
-maintenance_mode_enabled = false
-interval = 1800
-interval_minimum = 1800
-interval_cleanup = 900
-peer_timeout = 2700
-peers_returned = 200
-
-[[udp_server]]
-enabled = true
-bind_address = "127.0.0.1:6969"
-
-[[http_server]]
-enabled = true
-bind_address = "127.0.0.1:6969"
-ssl = false
-ssl_key = ""
-ssl_cert = ""
-
-[[api_server]]
-enabled = true
-bind_address = "127.0.0.1:8080"
-ssl = false
-ssl_key = ""
-ssl_cert = ""
-
-[db_structure]
-db_torrents = "torrents"
-table_torrents_info_hash = "info_hash"
-table_torrents_completed = "completed"
-db_whitelist = "whitelist"
-table_whitelist_info_hash = "info_hash"
-db_blacklist = "blacklist"
-table_blacklist_info_hash = "info_hash"
-db_keys = "keys"
-table_keys_hash = "hash"
-table_keys_timeout = "timeout"
-db_users = "users"
-table_users_uuid = "uuid"
-table_users_key = "key"
-table_users_uploaded = "uploaded"
-table_users_downloaded = "downloaded"
-table_users_completed = "completed"
-table_users_updated = "updated"
-table_users_active = "active"
-```
-
-* Run the torrust-actix again after finishing the configuration:
-```bash
-./target/release/torrust-actix
-```
-
-## Tracker URL
-Your tracker announce URL will be the following, depending on what blocks you have enabled:
-* `udp://127.0.0.1:6969/announce`
-* `http://127.0.0.1:6969/announce`
-* `https://127.0.0.1:6969/announce`
-
-#### When Keys system is enabled, following announce URLs should be used:
-
-* `udp://127.0.0.1:6969/announce/1234567890123456789012345678901234567890`
-* `http://127.0.0.1:6969/announce/1234567890123456789012345678901234567890`
-* `https://127.0.0.1:6969/announce/1234567890123456789012345678901234567890`
-
-## Built-in API
-The following URLs are available if you have enabled the API block.
-Also, the following URL is enabled for the Web Interface: `http(s)://127.0.0.1:8080/webgui/`
-Replace ``[TOKENID]`` with the token set in the configuration file.
-Replace ``[TORRENT_HASH]`` with a hex 40 character info_hash.
-Also depends on if you have HTTP and/or HTTPS enabled.
-If an error occurred for whatever reason, the status key will not contain "ok", but the reason:
-
-```json
-{
-  "status":"FAILURE REASON"
-}
-```
-
-### Statistics
-
-#### GET `http(s)://127.0.0.1:8080/api/stats?token=[TOKENID]`
-This will show statistics of the tracker in JSON format.
-
-```json
-{
-  "started":1234567890,
-  "timestamp_run_save":1234567890,
-  "timestamp_run_timeout":1234567890,
-  "timestamp_run_console":1234567890,
-  "torrents":0,
-  "torrents_updates":0,
-  "torrents_shadow":0,
-  "maintenance_mode":false,
-  "seeds":0,
-  "peers":0,
-  "completed":0,
-  "whitelist_enabled":true,
-  "whitelist":0,
-  "blacklist_enabled":true,
-  "blacklist":0,
-  "keys_enabled":true,
-  "keys":0,
-  "tcp4_connections_handled":0,
-  "tcp4_api_handled":0,
-  "tcp4_announces_handled":0,
-  "tcp4_scrapes_handled":0,
-  "tcp6_connections_handled":0,
-  "tcp6_api_handled":0,
-  "tcp6_announces_handled":0,
-  "tcp6_scrapes_handled":0,
-  "udp4_connections_handled":0,
-  "udp4_announces_handled":0,
-  "udp4_scrapes_handled":0,
-  "udp6_connections_handled":0,
-  "udp6_announces_handled":0,
-  "udp6_scrapes_handled":0
-}
-```
-
-### Torrents
-
-#### GET `http(s)://127.0.0.1:8080/api/torrent/[TORRENT_HASH]?token=[TOKENID]`
-This will show the content of the torrent, including peers.
-
-```json
-{
-  "info_hash":"1234567890123456789012345678901234567890",
-  "completed":0,
-  "seeders":1,
-  "leechers":0,
-  "peers": [
-    [
-      {
-        "client":"",
-        "id":"1234567890123456789012345678901234567890"
-      },
-      {
-        "downloaded":0,
-        "event":"Started",
-        "ip":"127.0.0.1:1234",
-        "left":0,
-        "updated":0,
-        "uploaded":0
-      }
-    ]
-  ]
-}
-```
-
-#### DELETE `http(s)://127.0.0.1:8080/api/torrent/[TORRENT_HASH]?token=[TOKENID]`
-This will remove the torrent and it's peers from the memory.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-### Whitelist
-
-#### GET `http(s)://127.0.0.1:8080/api/whitelist?token=[TOKENID]`
-This will get the whole whitelist in list format.
-
-```json
-[
-  "1234567890123456789012345678901234567890",
-  "0987654321098765432109876543210987654321"
-]
-```
-
-#### GET `http(s)://127.0.0.1:8080/api/whitelist/[TORRENT_HASH]?token=[TOKENID]`
-This will check if an info_hash exists in the whitelist, and returns if true.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-#### POST `http(s)://127.0.0.1:8080/api/whitelist/[TORRENT_HASH]?token=[TOKENID]`
-This will insert an info_hash in the whitelist, and returns status if successful.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-#### DELETE `http(s)://127.0.0.1:8080/api/whitelist/[TORRENT_HASH]?token=[TOKENID]`
-This will remove an info_hash from the whitelist, and returns status if successful or failure reason.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-### Blacklist
-
-#### GET `http(s)://127.0.0.1:8080/api/blacklist?token=[TOKENID]`
-This will get the whole blacklist in list format.
-
-```json
-[
-  "1234567890123456789012345678901234567890",
-  "0987654321098765432109876543210987654321"
-]
-```
-
-#### GET `http(s)://127.0.0.1:8080/api/blacklist/[TORRENT_HASH]?token=[TOKENID]`
-This will check if an info_hash exists in the blacklist, and returns if true.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-#### POST `http(s)://127.0.0.1:8080/api/blacklist/[TORRENT_HASH]?token=[TOKENID]`
-This will insert an info_hash in the blacklist, and returns status if successful.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-#### DELETE `http(s)://127.0.0.1:8080/api/blacklist/[TORRENT_HASH]?token=[TOKENID]`
-This will remove an info_hash from the blacklist, and returns status if successful or failure reason.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-### Keys
-
-#### GET `http(s)://127.0.0.1:8080/api/keys?token=[TOKENID]`
-This will get the whole keys in list format. 1st value is the key itself, 2nd value is the timestamp in UNIX format (seconds).
-
-```json
-[
-  [
-    "1234567890123456789012345678901234567890",
-    "1234567890"
-  ]
-]
-```
-
-#### GET `http(s)://127.0.0.1:8080/api/keys/[KEY]?token=[TOKENID]`
-This will check if a key exists in the keys list, and returns if true.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-#### POST `http(s)://127.0.0.1:8080/api/keys/[KEY]/[TIMEOUT]?token=[TOKENID]`
-This will insert or update a key in the keys list, and returns status if successful. The `[TIMEOUT]` is a number in seconds. Make this 0 to keep the key permanent.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-#### DELETE `http(s)://127.0.0.1:8080/api/keys/[KEY]?token=[TOKENID]`
-This will remove a key from the keys list, and returns status if successful or failure reason.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-### Users
-
-#### GET `http(s)://127.0.0.1:8080/api/users?token=[TOKENID]`
-This will return all the users in an array, including which torrents are being used actively by the user.
-
-```json
-[
-  {
-    "uuid": "cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
-    "key": "1234567890123456789012345678901234567890",
-    "uploaded": 0,
-    "downloaded": 0,
-    "completed": 0,
-    "updated": 1686302997,
-    "active": 1,
-    "torrents_active": [
-      [
-        "1234567890123456789012345678901234567890",
-        1686302997
-      ]
-    ]
-  }
-]
-```
-
-#### GET `http(s)://127.0.0.1:8080/api/user/[USER_HASH]?token=[TOKENID]`
-This will return the user containing hashed key (not the uuid) in an array, including which torrents are being used actively by the user.
-
-```json
-{
-  "uuid":"cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
-  "key":"1234567890123456789012345678901234567890",
-  "uploaded":0,
-  "downloaded":0,
-  "completed":0,
-  "updated":1686302997,
-  "active":1,
-  "torrents_active":[
-    [
-      "1234567890123456789012345678901234567890",
-      1686302997
-    ]
-  ]
-}
-```
-
-#### POST `http(s)://127.0.0.1:8080/api/user?token=[TOKENID]`
-This will insert a user in the user memory database, and returns status if successful.
-Body data must be in valid JSON as shown below, otherwise it will return a error.
-
-Send:
-```json
-{
-  "uuid":"cbeca840-e9f7-44d5-a1e4-51e9aef864a7",
-  "key":"1234567890123456789012345678901234567890",
-  "uploaded":0,
-  "downloaded":0,
-  "completed":0,
-  "updated":1686302997,
-  "active":1
-}
-```
-
-Response:
-```json
-{
-  "status":"ok"
-}
-```
-
-#### DELETE `http(s)://127.0.0.1:8080/api/user/[USER_HASH]?token=[TOKENID]`
-This will remove the user from the memory.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-#### GET `http(s)://127.0.0.1:8080/api/maintenance/enable?token=[TOKENID]`
-This will enable the maintenance mode.
-
-```json
-{
-  "status":"ok"
-}
-```
-
-#### GET `http(s)://127.0.0.1:8080/api/maintenance/disable?token=[TOKENID]`
-This will disable the maintenance mode.
-
-```json
-{
-  "status":"ok"
-}
-```
+Swagger UI is introduced, and when enabled in the configuration, is accessible through the API via `/swagger-ui/`.
 
 ### ChangeLog
+
+#### v4.0.0
+* Completely rebuilt of the tracker code, for readability.
+* Moved to Actix v4, thus versioning this software to v4.0.0 as well.
+* Rebuilt and remade the way configuration file is created (you need to give the command as argument for it).
+* Redone the whole database system, is tested with the latest versions available at this time.
+* API has gone through a lot of work and tested.
+* Introduced Swagger UI as testing and documentation.
+* A lot of improvements in speed and performance applied further.
+* Import and Export function added, will dump or import from JSON files, handy for when making a backup from your existing database, or when migrating to a other database engine.
+* Removed WebGUI, was outdated and not really useful.
+
+#### v3.2.2
+* Bumped library versions significantly, including security patches.
+* Fixed changes in libraries to work properly.
+* Tuned the non-persistence code to use less memory.
 
 #### v3.2.1
 * Bumped library versions, including security patches.
