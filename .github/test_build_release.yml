@@ -34,13 +34,13 @@ jobs:
           profile: minimal
           toolchain: stable
       - uses: Swatinem/rust-cache@v1
-      - name: Build Torrust-Axum Tracker
+      - name: Build Torrust-Actix Tracker
         run: cargo build --release
       - name: Upload build artifact
         uses: actions/upload-artifact@v2
         with:
-          name: torrust-axum tracker
-          path: ./target/release/torrust-axum
+          name: torrust-actix tracker
+          path: ./target/release/torrust-actix
 
   release:
     needs: build
@@ -49,6 +49,6 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v2
         with:
-          name: torrust-axum tracker
+          name: torrust-actix tracker
       - name: Release
         uses: softprops/action-gh-release@v1
