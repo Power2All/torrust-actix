@@ -48,8 +48,10 @@ async fn main() -> std::io::Result<()>
         if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
             tracker.load_users(tracker.clone()).await;
         }
-        if !tracker.reset_seeds_peers(tracker.clone()).await {
-            panic!("[RESET SEEDS PEERS] Unable to continue loading");
+        if tracker.config.database.clone().unwrap().update_peers {
+            if !tracker.reset_seeds_peers(tracker.clone()).await {
+                panic!("[RESET SEEDS PEERS] Unable to continue loading");
+            }
         }
     } else {
         tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().unwrap().total_downloads as i64);
@@ -255,24 +257,6 @@ async fn main() -> std::io::Result<()>
                 info!("[TORRENTS UPDATES] Start updating torrents into the DB.");
                 let _ = tracker_spawn_updates.save_torrent_updates(tracker_spawn_updates.clone()).await;
                 info!("[TORRENTS UPDATES] Torrent updates inserted into DB.");
-
-                // if tracker_spawn_updates.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() {
-                //     info!("[WHITELIST UPDATES] Start updating whitelist into the DB.");
-                //     let _ = tracker_spawn_updates.save_whitelist(tracker_spawn_updates.clone(), tracker_spawn_updates.get_whitelist()).await;
-                //     info!("[WHITELIST UPDATES] Whitelist updates inserted into DB.");
-                // }
-                //
-                // if tracker_spawn_updates.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() {
-                //     info!("[BLACKLIST UPDATES] Start updating whitelist into the DB.");
-                //     let _ = tracker_spawn_updates.save_blacklist(tracker_spawn_updates.clone(), tracker_spawn_updates.get_blacklist()).await;
-                //     info!("[BLACKLIST UPDATES] Blacklist updates inserted into DB.");
-                // }
-                //
-                // if tracker_spawn_updates.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
-                //     info!("[KEYS UPDATES] Start updating whitelist into the DB.");
-                //     let _ = tracker_spawn_updates.save_keys(tracker_spawn_updates.clone(), tracker_spawn_updates.get_keys()).await;
-                //     info!("[KEYS UPDATES] Keys updates inserted into DB.");
-                // }
 
                 if tracker_spawn_updates.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
                     info!("[USERS UPDATES] Start updating users into the DB.");
