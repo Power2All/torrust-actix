@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::Write;
+use std::sync::Arc;
 use std::thread::available_parallelism;
 use regex::Regex;
 use crate::common::structs::custom_error::CustomError;
@@ -154,6 +155,15 @@ impl Configuration {
                 }
             }
             Err(e) => Err(ConfigurationError::IOError(e))
+        }
+    }
+
+    pub fn save_from_config(config: Arc<Configuration>, path: &str)
+    {
+        let config_toml = toml::to_string(&config).unwrap();
+        match Self::save_file(path, config_toml) {
+            Ok(_) => { eprintln!("[CONFIG SAVE] Config file is saved"); }
+            Err(_) => { eprintln!("[CONFIG SAVE] Unable to save to {}", path); }
         }
     }
 

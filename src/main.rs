@@ -293,6 +293,9 @@ async fn main() -> std::io::Result<()>
             task::sleep(Duration::from_secs(1)).await;
 
             if tracker.config.database.clone().unwrap().persistent {
+                tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().unwrap().total_downloads as i64);
+                Configuration::save_from_config(tracker.config.clone(), "config.toml");
+                info!("Saving completed data to an INI...");
                 info!("Saving data to the database...");
                 let _ = tracker.save_torrent_updates(tracker.clone()).await;
                 if tracker.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() {
@@ -308,8 +311,9 @@ async fn main() -> std::io::Result<()>
                     let _ = tracker.save_user_updates(tracker.clone()).await;
                 }
             } else {
-                info!("Saving completed data to an INI...");
                 tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().unwrap().total_downloads as i64);
+                Configuration::save_from_config(tracker.config.clone(), "config.toml");
+                info!("Saving completed data to an INI...");
             }
 
             task::sleep(Duration::from_secs(1)).await;
