@@ -308,7 +308,6 @@ impl DatabaseConnectorSQLite {
                 }
             };
             let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
-            let torrents_start = torrents;
             while let Some(result) = rows.try_next().await? {
                 let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
                 let info_hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref()).unwrap();
@@ -324,9 +323,9 @@ impl DatabaseConnectorSQLite {
                 );
                 torrents += 1;
                 completed += completed_count as u64;
-                start += length;
             }
-            if torrents_start == torrents {
+            start += length;
+            if torrents < start {
                 break;
             }
         }
@@ -542,15 +541,14 @@ impl DatabaseConnectorSQLite {
                 }
             };
             let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
-            let hashes_start = hashes;
             while let Some(result) = rows.try_next().await? {
                 let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
                 let info_hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref()).unwrap();
                 tracker.add_whitelist(InfoHash(info_hash));
                 hashes += 1;
-                start += length;
             }
-            if hashes_start == hashes {
+            start += length;
+            if hashes < start {
                 break;
             }
         }
@@ -638,15 +636,14 @@ impl DatabaseConnectorSQLite {
                 }
             };
             let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
-            let hashes_start = hashes;
             while let Some(result) = rows.try_next().await? {
                 let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
                 let info_hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref()).unwrap();
                 tracker.add_blacklist(InfoHash(info_hash));
                 hashes += 1;
-                start += length;
             }
-            if hashes_start == hashes {
+            start += length;
+            if hashes < start {
                 break;
             }
         }
@@ -736,16 +733,15 @@ impl DatabaseConnectorSQLite {
                 }
             };
             let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
-            let hashes_start = hashes;
             while let Some(result) = rows.try_next().await? {
                 let hash_data: &[u8] = result.get(structure.column_hash.as_str());
                 let hash: [u8; 20] = <[u8; 20]>::try_from(hex::decode(hash_data).unwrap()[0..20].as_ref()).unwrap();
                 let timeout: i64 = result.get(structure.column_timeout.as_str());
                 tracker.add_key(InfoHash(hash), timeout);
                 hashes += 1;
-                start += length;
             }
-            if hashes_start == hashes {
+            start += length;
+            if hashes < start {
                 break;
             }
         }
@@ -892,7 +888,6 @@ impl DatabaseConnectorSQLite {
                 }
             };
             let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
-            let hashes_start = hashes;
             while let Some(result) = rows.try_next().await? {
                 let hash = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                     true => {
@@ -928,9 +923,9 @@ impl DatabaseConnectorSQLite {
                     torrents_active: Default::default(),
                 });
                 hashes += 1;
-                start += length;
             }
-            if hashes_start == hashes {
+            start += length;
+            if hashes < start {
                 break;
             }
         }

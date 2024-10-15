@@ -51,5 +51,5 @@ thiserror = "^1.0"
 tokio = { version = "^1.40", features = ["full"] }
 tokio-shutdown = "^0.1"
 toml = "^0.8"
-utoipa = { version = "^4", features = ["actix_extras"] }
-utoipa-swagger-ui = { version = "^7", features = ["actix-web"] }
+utoipa = { version = "^5", features = ["actix_extras"] }
+utoipa-swagger-ui = { version = "^8", features = ["actix-web"] }

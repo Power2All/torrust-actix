@@ -48,10 +48,8 @@ async fn main() -> std::io::Result<()>
         if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
             tracker.load_users(tracker.clone()).await;
         }
-        if tracker.config.database.clone().unwrap().update_peers {
-            if !tracker.reset_seeds_peers(tracker.clone()).await {
-                panic!("[RESET SEEDS PEERS] Unable to continue loading");
-            }
+        if tracker.config.database.clone().unwrap().update_peers && !tracker.reset_seeds_peers(tracker.clone()).await {
+            panic!("[RESET SEEDS PEERS] Unable to continue loading");
         }
     } else {
         tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().unwrap().total_downloads as i64);
