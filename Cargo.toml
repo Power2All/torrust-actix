@@ -53,3 +53,6 @@ tokio-shutdown = "^0.1"
 toml = "^0.8"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^8", features = ["actix-web"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"
