@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DatabaseStructureConfigUsers {
-    pub database_name: String,
+    pub table_name: String,
     pub id_uuid: bool,
     pub column_uuid: String,
     pub column_id: String,

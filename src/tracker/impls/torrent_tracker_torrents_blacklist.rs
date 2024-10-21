@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
@@ -12,15 +13,15 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<InfoHash>) -> Result<(), ()>
+    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_blacklist(tracker.clone(), hashes.clone()).await {
             Ok(_) => {
-                info!("[SAVE BLACKLIST] Saved {} blacklists", hashes.len());
+                info!("[SYNC BLACKLIST] Synced {} blacklists", hashes.len());
                 Ok(())
             }
             Err(_) => {
-                error!("[SAVE BLACKLIST] Unable to save {} blacklists", hashes.len());
+                error!("[SYNC BLACKLIST] Unable to sync {} blacklists", hashes.len());
                 Err(())
             }
         }

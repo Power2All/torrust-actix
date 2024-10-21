@@ -7,6 +7,7 @@ use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
 use crate::database::structs::database_connector_pgsql::DatabaseConnectorPgSQL;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -100,7 +101,7 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<InfoHash>) -> Result<u64, Error>
+    pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
@@ -113,7 +114,7 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<InfoHash>) -> Result<u64, Error>
+    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
@@ -126,7 +127,7 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, i64>) -> Result<u64, Error>
+    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<u64, Error>
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
@@ -139,7 +140,7 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, TorrentEntry>) -> Result<(), Error>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), Error>
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {
@@ -152,7 +153,7 @@ impl DatabaseConnector {
         Err(Error::RowNotFound)
     }
 
-    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, UserEntryItem>) -> Result<(), Error>
+    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), Error>
     {
         if self.engine.is_some() {
             return match self.engine.clone().unwrap() {

@@ -1,17 +1,20 @@
 use std::collections::{BTreeMap, HashMap};
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::SystemTime;
+use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
 impl TorrentTracker {
-    pub fn add_user_update(&self, user_id: UserId, user_entry_item: UserEntryItem) -> (UserEntryItem, bool)
+    pub fn add_user_update(&self, user_id: UserId, user_entry_item: UserEntryItem, updates_action: UpdatesAction) -> (UserEntryItem, bool)
     {
         let map = self.users_updates.clone();
         let mut lock = map.write();
-        match lock.insert(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos(), (user_id, user_entry_item.clone())) {
+        match lock.insert(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos(), (user_id, user_entry_item.clone(), updates_action)) {
             None => {
                 self.update_stats(StatsEvent::UsersUpdates, 1);
                 (user_entry_item, true)
@@ -22,7 +25,7 @@ impl TorrentTracker {
         }
     }
 
-    pub fn get_user_updates(&self) -> HashMap<u128, (UserId, UserEntryItem)>
+    pub fn get_user_updates(&self) -> HashMap<u128, (UserId, UserEntryItem, UpdatesAction)>
     {
         let map = self.users_updates.clone();
         let lock = map.read_recursive();
@@ -50,35 +53,33 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::UsersUpdates, 0);
     }
 
-    pub async fn save_user_updates(&self, torrent_tracker: Arc<TorrentTracker>)
+    pub async fn save_user_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
-        let mut hashmapping: HashMap<UserId, (Vec<u128>, UserEntryItem)> = HashMap::new();
-        let mut hashmap: BTreeMap<UserId, UserEntryItem> = BTreeMap::new();
-        let updates = self.get_user_updates();
-
-        // Build the actually updates for SQL, adding the timestamps into a vector for removal afterward.
-        for (timestamp, (user_id, user_entry_item)) in updates.iter() {
-            match hashmapping.get_mut(user_id) {
-                None => {
-                    hashmapping.insert(*user_id, (vec![*timestamp], user_entry_item.clone()));
-                    hashmap.insert(*user_id, user_entry_item.clone());
+        let mut mapping: HashMap<UserId, (u128, UserEntryItem, UpdatesAction)> = HashMap::new();
+        for (timestamp, (user_id, user_entry_item, updates_action)) in self.get_user_updates().iter() {
+            match mapping.entry(*user_id) {
+                Entry::Occupied(mut o) => {
+                    o.insert((o.get().0, user_entry_item.clone(), *updates_action));
+                    self.remove_user_update(timestamp);
                 }
-                Some((timestamps, _)) => {
-                    if !timestamps.contains(timestamp) {
-                        timestamps.push(*timestamp);
-                    }
-                    hashmap.insert(*user_id, user_entry_item.clone());
+                Entry::Vacant(v) => {
+                    v.insert((*timestamp, user_entry_item.clone(), *updates_action));
                 }
             }
         }
-
-        // Now we're going to save the torrents in a list, and depending on what we get returned, we remove them from the updates list.
-        if self.save_users(torrent_tracker.clone(), hashmap).await.is_ok() {
-            // We can remove the updates keys, since they are updated.
-            for (_, (timestamps, _)) in hashmapping.iter() {
-                for timestamp in timestamps.iter() {
-                    self.remove_user_update(timestamp);
+        match self.save_users(torrent_tracker.clone(), mapping.clone().into_iter().map(|(user_id, (_, user_entry_item, updates_action))| {
+            (user_id, (user_entry_item.clone(), updates_action))
+        }).collect::<BTreeMap<UserId, (UserEntryItem, UpdatesAction)>>()).await {
+            Ok(_) => {
+                info!("[SYNC USER UPDATES] Synced {} users", mapping.len());
+                for (_, (timestamp, _, _)) in mapping.into_iter() {
+                    self.remove_user_update(&timestamp);
                 }
+                Ok(())
+            }
+            Err(_) => {
+                error!("[SYNC USER UPDATES] Unable to sync {} users", mapping.len());
+                Err(())
             }
         }
     }

@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use chrono::{TimeZone, Utc};
 use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
@@ -18,32 +19,18 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, UserEntryItem>) -> Result<(), ()>
+    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_users(tracker.clone(), users.clone()).await {
             Ok(_) => {
-                info!("[SAVE USERS] Saved {} users", users.len());
+                info!("[SYNC USERS] Synced {} users", users.len());
                 Ok(())
             }
             Err(_) => {
-                error!("[SAVE USERS] Unable to save {} users", users.len());
+                error!("[SYNC USERS] Unable to sync {} users", users.len());
                 Err(())
             }
         }
-    }
-
-    pub fn get_user(&self, id: UserId) -> Option<UserEntryItem>
-    {
-        let map = self.users.clone();
-        let lock = map.read_recursive();
-        lock.get(&id).cloned()
-    }
-
-    pub fn get_users(&self) -> BTreeMap<UserId, UserEntryItem>
-    {
-        let map = self.users.clone();
-        let lock = map.read_recursive();
-        lock.clone()
     }
 
     pub fn add_user(&self, user_id: UserId, user_entry_item: UserEntryItem) -> bool
@@ -78,6 +65,20 @@ impl TorrentTracker {
                 true
             }
         }
+    }
+
+    pub fn get_user(&self, id: UserId) -> Option<UserEntryItem>
+    {
+        let map = self.users.clone();
+        let lock = map.read_recursive();
+        lock.get(&id).cloned()
+    }
+
+    pub fn get_users(&self) -> BTreeMap<UserId, UserEntryItem>
+    {
+        let map = self.users.clone();
+        let lock = map.read_recursive();
+        lock.clone()
     }
 
     pub fn remove_user(&self, user_id: UserId) -> Option<UserEntryItem>

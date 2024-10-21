@@ -8,7 +8,9 @@ use crate::api::api::{api_parse_body, api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
+use crate::tracker::structs::torrent_entry::TorrentEntry;
 
 pub async fn api_service_whitelist_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
@@ -88,6 +90,10 @@ pub async fn api_service_whitelist_post(request: HttpRequest, path: web::Path<St
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
+        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Add);
+        }
+
         return match data.torrent_tracker.add_whitelist(info_hash) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
             false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("info_hash updated {}", info)})) }
@@ -124,6 +130,10 @@ pub async fn api_service_whitelists_post(request: HttpRequest, payload: web::Pay
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
 
+            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+                let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Add);
+            }
+
             match data.torrent_tracker.add_whitelist(info_hash) {
                 true => { whitelists_output.insert(info_hash, json!({"status": "ok"})); }
                 false => { whitelists_output.insert(info_hash, json!({"status": "info_hash updated"})); }
@@ -152,6 +162,10 @@ pub async fn api_service_whitelist_delete(request: HttpRequest, path: web::Path<
             Ok(hash) => { InfoHash(hash) }
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
+
+        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
+        }
 
         return match data.torrent_tracker.remove_whitelist(info_hash) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
@@ -188,6 +202,10 @@ pub async fn api_service_whitelists_delete(request: HttpRequest, payload: web::P
                 Ok(hash) => { InfoHash(hash) }
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
+
+            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+                let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Remove);
+            }
 
             match data.torrent_tracker.remove_whitelist(info_hash) {
                 true => { whitelists_output.insert(info_hash, json!({"status": "ok"})); }

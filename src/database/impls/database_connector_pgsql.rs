@@ -15,6 +15,7 @@ use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_pgsql::DatabaseConnectorPgSQL;
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -48,13 +49,13 @@ impl DatabaseConnectorPgSQL {
             info!("[BOOT] Database creation triggered for PgSQL.");
 
             // Create Torrent DB
-            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().torrents.unwrap().database_name);
+            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().torrents.unwrap().table_name);
             match config.database_structure.clone().unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, {} integer NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                            config.database_structure.clone().unwrap().torrents.unwrap().database_name,
+                            config.database_structure.clone().unwrap().torrents.unwrap().table_name,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
@@ -70,7 +71,7 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, {} integer NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                            config.database_structure.clone().unwrap().torrents.unwrap().database_name,
+                            config.database_structure.clone().unwrap().torrents.unwrap().table_name,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
@@ -85,13 +86,13 @@ impl DatabaseConnectorPgSQL {
             }
 
             // Create Whitelist DB
-            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().whitelist.unwrap().database_name);
+            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().whitelist.unwrap().table_name);
             match config.database_structure.clone().unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, CONSTRAINT whitelist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                            config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().whitelist.unwrap().table_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
@@ -104,7 +105,7 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, CONSTRAINT whitelist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                            config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().whitelist.unwrap().table_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
@@ -116,13 +117,13 @@ impl DatabaseConnectorPgSQL {
             }
 
             // Create Blacklist DB
-            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().blacklist.unwrap().database_name);
+            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().blacklist.unwrap().table_name);
             match config.database_structure.clone().unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, CONSTRAINT blacklist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                            config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().blacklist.unwrap().table_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
@@ -135,7 +136,7 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, CONSTRAINT blacklist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                            config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().blacklist.unwrap().table_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
@@ -147,13 +148,13 @@ impl DatabaseConnectorPgSQL {
             }
 
             // Create Keys DB
-            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().keys.unwrap().database_name);
+            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().keys.unwrap().table_name);
             match config.database_structure.clone().unwrap().keys.unwrap().bin_type_hash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} bytea NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT keys_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                            config.database_structure.clone().unwrap().keys.unwrap().database_name,
+                            config.database_structure.clone().unwrap().keys.unwrap().table_name,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash,
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash
@@ -167,7 +168,7 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE IF NOT EXISTS public.{} ({} character(40) NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT keys_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                            config.database_structure.clone().unwrap().keys.unwrap().database_name,
+                            config.database_structure.clone().unwrap().keys.unwrap().table_name,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash,
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash
@@ -180,7 +181,7 @@ impl DatabaseConnectorPgSQL {
             }
 
             // Create Users DB
-            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().users.unwrap().database_name);
+            info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().unwrap().users.unwrap().table_name);
             match config.database_structure.clone().unwrap().users.unwrap().id_uuid {
                 true => {
                     match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
@@ -188,7 +189,7 @@ impl DatabaseConnectorPgSQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS public.{} ({} character(36) NOT NULL, {} bytea NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT uuid_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
@@ -207,7 +208,7 @@ impl DatabaseConnectorPgSQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS public.{} ({} character(36) NOT NULL, {} character(40) NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT uuid_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
@@ -230,7 +231,7 @@ impl DatabaseConnectorPgSQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS public.{} ({} bigserial NOT NULL, {} bytea NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT id_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
@@ -249,7 +250,7 @@ impl DatabaseConnectorPgSQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE IF NOT EXISTS public.{} ({} bigserial NOT NULL, {} character(40) NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT id_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
-                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
@@ -286,18 +287,13 @@ impl DatabaseConnectorPgSQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[PgSQL] Trying to querying {} torrents - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
                     format!(
                         "SELECT encode({}::bytea, 'hex'), {} FROM {} LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_completed,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -307,7 +303,7 @@ impl DatabaseConnectorPgSQL {
                         "SELECT {}, {} FROM {} LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_completed,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -334,12 +330,14 @@ impl DatabaseConnectorPgSQL {
             if torrents < start {
                 break;
             }
+            info!("[PgSQL] Loaded {} torrents", torrents);
         }
         tracker.set_stats(StatsEvent::Completed, completed as i64);
+        info!("[PgSQL] Loaded {} torrents with {} completed", torrents, completed);
         Ok((torrents, completed))
     }
 
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, TorrentEntry>) -> Result<(), Error>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), Error>
     {
         let mut torrents_transaction = self.pool.begin().await?;
         let mut torrents_handled_entries = 0u64;
@@ -347,81 +345,26 @@ impl DatabaseConnectorPgSQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for (info_hash, torrent_entry) in torrents.iter() {
+        for (info_hash, (torrent_entry, updates_action)) in torrents.iter() {
             torrents_handled_entries += 1;
-            match tracker.config.deref().clone().database.unwrap().insert_vacant {
-                true => {
-                    if tracker.config.deref().clone().database.unwrap().update_peers {
+            match updates_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
                         let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                             true => {
                                 format!(
-                                    "INSERT INTO {} ({}, {}, {}) VALUES (decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}",
-                                    structure.database_name,
+                                    "DELETE FROM {} WHERE {}=decode('{}', 'hex')",
+                                    structure.table_name,
                                     structure.column_infohash,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    info_hash,
-                                    torrent_entry.seeds.len(),
-                                    torrent_entry.peers.len(),
-                                    structure.column_infohash,
-                                    structure.column_seeds,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    structure.column_peers
+                                    info_hash
                                 )
                             }
                             false => {
                                 format!(
-                                    "INSERT INTO {} ({}, {}, {}) VALUES ('{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}",
-                                    structure.database_name,
+                                    "DELETE FROM {} WHERE {}='{}'",
+                                    structure.table_name,
                                     structure.column_infohash,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    info_hash,
-                                    torrent_entry.seeds.len(),
-                                    torrent_entry.peers.len(),
-                                    structure.column_infohash,
-                                    structure.column_seeds,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    structure.column_peers
-                                )
-                            }
-                        };
-                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
-                                return Err(e);
-                            }
-                        }
-                    }
-                    if tracker.config.deref().clone().database.unwrap().update_completed {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
-                            true => {
-                                format!(
-                                    "INSERT INTO {} ({}, {}) VALUES (decode('{}', 'hex'), {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
-                                    structure.database_name,
-                                    structure.column_infohash,
-                                    structure.column_completed,
-                                    info_hash,
-                                    torrent_entry.completed,
-                                    structure.column_infohash,
-                                    structure.column_completed,
-                                    structure.column_completed
-                                )
-                            }
-                            false => {
-                                format!(
-                                    "INSERT INTO {} ({}, {}) VALUES ('{}', {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
-                                    structure.database_name,
-                                    structure.column_infohash,
-                                    structure.column_completed,
-                                    info_hash,
-                                    torrent_entry.completed,
-                                    structure.column_infohash,
-                                    structure.column_completed,
-                                    structure.column_completed
+                                    info_hash
                                 )
                             }
                         };
@@ -434,82 +377,170 @@ impl DatabaseConnectorPgSQL {
                         }
                     }
                 }
-                false => {
-                    if tracker.config.deref().clone().database.unwrap().update_peers {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
-                            true => {
-                                format!(
-                                    "UPDATE {} SET ({}, {}) = ({}, {}) WHERE {}=decode('{}', 'hex') AND NOT EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
-                                    structure.database_name,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    torrent_entry.seeds.len(),
-                                    torrent_entry.peers.len(),
-                                    structure.column_infohash,
-                                    info_hash,
-                                    structure.database_name,
-                                    structure.column_infohash,
-                                    info_hash
-                                )
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    match tracker.config.deref().clone().database.unwrap().insert_vacant {
+                        true => {
+                            if tracker.config.deref().clone().database.unwrap().update_peers {
+                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                                    true => {
+                                        format!(
+                                            "INSERT INTO {} ({}, {}, {}) VALUES (decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}",
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            info_hash,
+                                            torrent_entry.seeds.len(),
+                                            torrent_entry.peers.len(),
+                                            structure.column_infohash,
+                                            structure.column_seeds,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            structure.column_peers
+                                        )
+                                    }
+                                    false => {
+                                        format!(
+                                            "INSERT INTO {} ({}, {}, {}) VALUES ('{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}",
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            info_hash,
+                                            torrent_entry.seeds.len(),
+                                            torrent_entry.peers.len(),
+                                            structure.column_infohash,
+                                            structure.column_seeds,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            structure.column_peers
+                                        )
+                                    }
+                                };
+                                match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("[PgSQL] Error: {}", e.to_string());
+                                        return Err(e);
+                                    }
+                                }
                             }
-                            false => {
-                                format!(
-                                    "UPDATE {} SET ({}, {}) = ({}, {}) WHERE {}='{}' AND NOT EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
-                                    structure.database_name,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    torrent_entry.seeds.len(),
-                                    torrent_entry.peers.len(),
-                                    structure.column_infohash,
-                                    info_hash,
-                                    structure.database_name,
-                                    structure.column_infohash,
-                                    info_hash
-                                )
-                            }
-                        };
-                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
-                                return Err(e);
+                            if tracker.config.deref().clone().database.unwrap().update_completed {
+                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                                    true => {
+                                        format!(
+                                            "INSERT INTO {} ({}, {}) VALUES (decode('{}', 'hex'), {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            structure.column_completed,
+                                            info_hash,
+                                            torrent_entry.completed,
+                                            structure.column_infohash,
+                                            structure.column_completed,
+                                            structure.column_completed
+                                        )
+                                    }
+                                    false => {
+                                        format!(
+                                            "INSERT INTO {} ({}, {}) VALUES ('{}', {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            structure.column_completed,
+                                            info_hash,
+                                            torrent_entry.completed,
+                                            structure.column_infohash,
+                                            structure.column_completed,
+                                            structure.column_completed
+                                        )
+                                    }
+                                };
+                                match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("[PgSQL] Error: {}", e.to_string());
+                                        return Err(e);
+                                    }
+                                }
                             }
                         }
-                    }
-                    if tracker.config.deref().clone().database.unwrap().update_completed {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
-                            true => {
-                                format!(
-                                    "UPDATE {} SET {}={} WHERE {}=decode('{}', 'hex') AND EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
-                                    structure.database_name,
-                                    structure.column_completed,
-                                    torrent_entry.completed,
-                                    structure.column_infohash,
-                                    info_hash,
-                                    structure.database_name,
-                                    structure.column_infohash,
-                                    info_hash
-                                )
+                        false => {
+                            if tracker.config.deref().clone().database.unwrap().update_peers {
+                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                                    true => {
+                                        format!(
+                                            "UPDATE {} SET ({}, {}) = ({}, {}) WHERE {}=decode('{}', 'hex') AND NOT EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
+                                            structure.table_name,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            torrent_entry.seeds.len(),
+                                            torrent_entry.peers.len(),
+                                            structure.column_infohash,
+                                            info_hash,
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            info_hash
+                                        )
+                                    }
+                                    false => {
+                                        format!(
+                                            "UPDATE {} SET ({}, {}) = ({}, {}) WHERE {}='{}' AND NOT EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
+                                            structure.table_name,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            torrent_entry.seeds.len(),
+                                            torrent_entry.peers.len(),
+                                            structure.column_infohash,
+                                            info_hash,
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            info_hash
+                                        )
+                                    }
+                                };
+                                match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("[PgSQL] Error: {}", e.to_string());
+                                        return Err(e);
+                                    }
+                                }
                             }
-                            false => {
-                                format!(
-                                    "UPDATE {} SET {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
-                                    structure.database_name,
-                                    structure.column_completed,
-                                    torrent_entry.completed,
-                                    structure.column_infohash,
-                                    info_hash,
-                                    structure.database_name,
-                                    structure.column_infohash,
-                                    info_hash
-                                )
-                            }
-                        };
-                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
-                                return Err(e);
+                            if tracker.config.deref().clone().database.unwrap().update_completed {
+                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                                    true => {
+                                        format!(
+                                            "UPDATE {} SET {}={} WHERE {}=decode('{}', 'hex') AND EXISTS (SELECT 1 FROM {} WHERE {}=decode('{}', 'hex'))",
+                                            structure.table_name,
+                                            structure.column_completed,
+                                            torrent_entry.completed,
+                                            structure.column_infohash,
+                                            info_hash,
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            info_hash
+                                        )
+                                    }
+                                    false => {
+                                        format!(
+                                            "UPDATE {} SET {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
+                                            structure.table_name,
+                                            structure.column_completed,
+                                            torrent_entry.completed,
+                                            structure.column_infohash,
+                                            info_hash,
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            info_hash
+                                        )
+                                    }
+                                };
+                                match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("[PgSQL] Error: {}", e.to_string());
+                                        return Err(e);
+                                    }
+                                }
                             }
                         }
                     }
@@ -519,6 +550,7 @@ impl DatabaseConnectorPgSQL {
                 info!("[PgSQL] Handled {} torrents", torrents_handled_entries);
             }
         }
+        info!("[PgSQL] Handled {} torrents", torrents_handled_entries);
         self.commit(torrents_transaction).await
     }
 
@@ -532,17 +564,12 @@ impl DatabaseConnectorPgSQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[PgSQL] Trying to querying {} whitelisted hashes - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     format!(
                         "SELECT encode({}::bytea, 'hex') FROM {} LIMIT {}, {}",
                         structure.column_infohash,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -551,7 +578,7 @@ impl DatabaseConnectorPgSQL {
                     format!(
                         "SELECT {} FROM {} LIMIT {}, {}",
                         structure.column_infohash,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -568,11 +595,13 @@ impl DatabaseConnectorPgSQL {
             if hashes < start {
                 break;
             }
+            info!("[PgSQL] Handled {} whitelisted torrents", hashes);
         }
+        info!("[PgSQL] Loaded {} whitelisted torrents", hashes);
         Ok(hashes)
     }
 
-    pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<InfoHash>) -> Result<u64, Error>
+    pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut whitelist_transaction = self.pool.begin().await?;
         let mut whitelist_handled_entries = 0u64;
@@ -580,38 +609,71 @@ impl DatabaseConnectorPgSQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for info_hash in whitelists.iter() {
+        for (info_hash, updates_action) in whitelists.iter() {
             whitelist_handled_entries += 1;
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
-                true => {
-                    format!(
-                        "INSERT INTO {} ({}) VALUES (decode('{}', 'hex')) ON CONFLICT DO NOTHING",
-                        structure.database_name,
-                        structure.column_infohash,
-                        info_hash
-                    )
+            match updates_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+                            true => {
+                                format!(
+                                    "DELETE FROM {} WHERE {}=decode('{}', 'hex')",
+                                    structure.table_name,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "DELETE FROM {} WHERE {}='{}'",
+                                    structure.table_name,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[PgSQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
                 }
-                false => {
-                    format!(
-                        "INSERT INTO {} ({}) VALUES ('{}') ON CONFLICT DO NOTHING",
-                        structure.database_name,
-                        structure.column_infohash,
-                        info_hash
-                    )
-                }
-            };
-            match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[PgSQL] Error: {}", e.to_string());
-                    return Err(e);
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+                        true => {
+                            format!(
+                                "INSERT INTO {} ({}) VALUES (decode('{}', 'hex')) ON CONFLICT DO NOTHING",
+                                structure.table_name,
+                                structure.column_infohash,
+                                info_hash
+                            )
+                        }
+                        false => {
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ('{}') ON CONFLICT DO NOTHING",
+                                structure.table_name,
+                                structure.column_infohash,
+                                info_hash
+                            )
+                        }
+                    };
+                    match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[PgSQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    }
                 }
             }
             if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 {
                 info!("[PgSQL] Handled {} torrents", whitelist_handled_entries);
             }
         }
-        info!("[PgSQL] Saved {} whitelisted torrents", whitelist_handled_entries);
+        info!("[PgSQL] Handled {} whitelisted torrents", whitelist_handled_entries);
         let _ = self.commit(whitelist_transaction).await;
         Ok(whitelist_handled_entries)
     }
@@ -626,17 +688,12 @@ impl DatabaseConnectorPgSQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[PgSQL] Trying to querying {} blacklisted hashes - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     format!(
                         "SELECT encode({}::bytea, 'hex') FROM {} LIMIT {}, {}",
                         structure.column_infohash,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -645,7 +702,7 @@ impl DatabaseConnectorPgSQL {
                     format!(
                         "SELECT {} FROM {} LIMIT {}, {}",
                         structure.column_infohash,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -662,11 +719,13 @@ impl DatabaseConnectorPgSQL {
             if hashes < start {
                 break;
             }
+            info!("[PgSQL] Loaded {} blacklisted torrents", hashes);
         }
+        info!("[PgSQL] Loaded {} blacklisted torrents", hashes);
         Ok(hashes)
     }
 
-    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<InfoHash>) -> Result<u64, Error>
+    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut blacklist_transaction = self.pool.begin().await?;
         let mut blacklist_handled_entries = 0u64;
@@ -674,38 +733,71 @@ impl DatabaseConnectorPgSQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for info_hash in blacklists.iter() {
+        for (info_hash, updates_action) in blacklists.iter() {
             blacklist_handled_entries += 1;
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
-                true => {
-                    format!(
-                        "INSERT INTO {} ({}) VALUES (decode('{}', 'hex')) ON CONFLICT DO NOTHING",
-                        structure.database_name,
-                        structure.column_infohash,
-                        info_hash
-                    )
+            match updates_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+                            true => {
+                                format!(
+                                    "DELETE FROM {} WHERE {}=decode('{}', 'hex')",
+                                    structure.table_name,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "DELETE FROM {} WHERE {}='{}'",
+                                    structure.table_name,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[PgSQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
                 }
-                false => {
-                    format!(
-                        "INSERT INTO {} ({}) VALUES ('{}') ON CONFLICT DO NOTHING",
-                        structure.database_name,
-                        structure.column_infohash,
-                        info_hash
-                    )
-                }
-            };
-            match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[PgSQL] Error: {}", e.to_string());
-                    return Err(e);
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+                        true => {
+                            format!(
+                                "INSERT INTO {} ({}) VALUES (decode('{}', 'hex')) ON CONFLICT DO NOTHING",
+                                structure.table_name,
+                                structure.column_infohash,
+                                info_hash
+                            )
+                        }
+                        false => {
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ('{}') ON CONFLICT DO NOTHING",
+                                structure.table_name,
+                                structure.column_infohash,
+                                info_hash
+                            )
+                        }
+                    };
+                    match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[PgSQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    }
                 }
             }
             if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[PgSQL] Handled {} torrents", blacklist_handled_entries);
+                info!("[PgSQL] Handled {} blacklisted torrents", blacklist_handled_entries);
             }
         }
-        info!("[PgSQL] Saved {} blacklisted torrents", blacklist_handled_entries);
+        info!("[PgSQL] Handled {} blacklisted torrents", blacklist_handled_entries);
         let _ = self.commit(blacklist_transaction).await;
         Ok(blacklist_handled_entries)
     }
@@ -720,18 +812,13 @@ impl DatabaseConnectorPgSQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[PgSQL] Trying to querying {} keys hashes - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
                 true => {
                     format!(
                         "SELECT encode({}::bytea, 'hex'), {} FROM {} LIMIT {}, {}",
                         structure.column_hash,
                         structure.column_timeout,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -741,7 +828,7 @@ impl DatabaseConnectorPgSQL {
                         "SELECT {}, {} FROM {} LIMIT {}, {}",
                         structure.column_hash,
                         structure.column_timeout,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -759,11 +846,13 @@ impl DatabaseConnectorPgSQL {
             if hashes < start {
                 break;
             }
+            info!("[PgSQL] Handled {} keys", hashes);
         }
+        info!("[PgSQL] Handled {} keys", hashes);
         Ok(hashes)
     }
 
-    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, i64>) -> Result<u64, Error>
+    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut keys_transaction = self.pool.begin().await?;
         let mut keys_handled_entries = 0u64;
@@ -771,48 +860,81 @@ impl DatabaseConnectorPgSQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for (hash, timeout) in keys.iter() {
+        for (hash, (timeout, update_action)) in keys.iter() {
             keys_handled_entries += 1;
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
-                true => {
-                    format!(
-                        "INSERT INTO {} ({}, {}) VALUES (decode('{}', 'hex'), {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
-                        structure.database_name,
-                        structure.column_hash,
-                        structure.column_timeout,
-                        hash,
-                        timeout,
-                        structure.column_hash,
-                        structure.column_timeout,
-                        structure.column_timeout
-                    )
+            match update_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+                            true => {
+                                format!(
+                                    "DELETE FROM {} WHERE {}=decode('{}', 'hex')",
+                                    structure.table_name,
+                                    structure.column_hash,
+                                    hash
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "DELETE FROM {} WHERE {}='{}'",
+                                    structure.table_name,
+                                    structure.column_hash,
+                                    hash
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[PgSQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
                 }
-                false => {
-                    format!(
-                        "INSERT INTO {} ({}, {}) VALUES ('{}', {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
-                        structure.database_name,
-                        structure.column_hash,
-                        structure.column_timeout,
-                        hash,
-                        timeout,
-                        structure.column_hash,
-                        structure.column_timeout,
-                        structure.column_timeout
-                    )
-                }
-            };
-            match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[PgSQL] Error: {}", e.to_string());
-                    return Err(e);
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+                        true => {
+                            format!(
+                                "INSERT INTO {} ({}, {}) VALUES (decode('{}', 'hex'), {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                                structure.table_name,
+                                structure.column_hash,
+                                structure.column_timeout,
+                                hash,
+                                timeout,
+                                structure.column_hash,
+                                structure.column_timeout,
+                                structure.column_timeout
+                            )
+                        }
+                        false => {
+                            format!(
+                                "INSERT INTO {} ({}, {}) VALUES ('{}', {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}",
+                                structure.table_name,
+                                structure.column_hash,
+                                structure.column_timeout,
+                                hash,
+                                timeout,
+                                structure.column_hash,
+                                structure.column_timeout,
+                                structure.column_timeout
+                            )
+                        }
+                    };
+                    match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[PgSQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    }
                 }
             }
             if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 {
                 info!("[PgSQL] Handled {} keys", keys_handled_entries);
             }
         }
-        info!("[PgSQL] Saved {} keys", keys_handled_entries);
+        info!("[PgSQL] Handled {} keys", keys_handled_entries);
         let _ = self.commit(keys_transaction).await;
         Ok(keys_handled_entries)
     }
@@ -827,11 +949,6 @@ impl DatabaseConnectorPgSQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[PgSQL] Trying to querying {} users - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                 true => {
                     match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
@@ -845,7 +962,7 @@ impl DatabaseConnectorPgSQL {
                                 structure.column_completed,
                                 structure.column_updated,
                                 structure.column_active,
-                                structure.database_name,
+                                structure.table_name,
                                 start,
                                 length
                             )
@@ -860,7 +977,7 @@ impl DatabaseConnectorPgSQL {
                                 structure.column_completed,
                                 structure.column_updated,
                                 structure.column_active,
-                                structure.database_name,
+                                structure.table_name,
                                 start,
                                 length
                             )
@@ -879,7 +996,7 @@ impl DatabaseConnectorPgSQL {
                                 structure.column_completed,
                                 structure.column_updated,
                                 structure.column_active,
-                                structure.database_name,
+                                structure.table_name,
                                 start,
                                 length
                             )
@@ -894,7 +1011,7 @@ impl DatabaseConnectorPgSQL {
                                 structure.column_completed,
                                 structure.column_updated,
                                 structure.column_active,
-                                structure.database_name,
+                                structure.table_name,
                                 start,
                                 length
                             )
@@ -934,7 +1051,7 @@ impl DatabaseConnectorPgSQL {
                     downloaded: result.get::<i64, &str>(structure.column_downloaded.as_str()) as u64,
                     completed: result.get::<i64, &str>(structure.column_completed.as_str()) as u64,
                     updated: result.get::<i32, &str>(structure.column_updated.as_str()) as u64,
-                    active: result.get::<i16, &str>(structure.column_active.as_str()) as u8,
+                    active: result.get::<i8, &str>(structure.column_active.as_str()) as u8,
                     torrents_active: Default::default(),
                 });
                 hashes += 1;
@@ -943,11 +1060,13 @@ impl DatabaseConnectorPgSQL {
             if hashes < start {
                 break;
             }
+            info!("[PgSQL] Loaded {} users", hashes);
         }
+        info!("[PgSQL] Loaded {} users", hashes);
         Ok(hashes)
     }
 
-    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, UserEntryItem>) -> Result<(), Error>
+    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), Error>
     {
         let mut users_transaction = self.pool.begin().await?;
         let mut users_handled_entries = 0u64;
@@ -955,269 +1074,303 @@ impl DatabaseConnectorPgSQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for (_, user_entry_item) in users.iter() {
+        for (_, (user_entry_item, updates_action)) in users.iter() {
             users_handled_entries += 1;
-            let string_format = match  tracker.config.deref().clone().database.unwrap().insert_vacant {
-                true => {
-                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
-                        true => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
-                                true => {
-                                    format!(
-                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
-                                        structure.database_name,
-                                        structure.column_uuid,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.user_uuid.clone().unwrap(),
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.downloaded,
-                                        user_entry_item.key,
-                                        user_entry_item.uploaded,
-                                        user_entry_item.updated,
-                                        structure.column_uuid,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        structure.column_updated
-                                    )
-                                }
-                                false => {
-                                    format!(
-                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, '{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
-                                        structure.database_name,
-                                        structure.column_uuid,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.user_uuid.clone().unwrap(),
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.downloaded,
-                                        user_entry_item.key,
-                                        user_entry_item.uploaded,
-                                        user_entry_item.updated,
-                                        structure.column_uuid,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        structure.column_updated
-                                    )
-                                }
+            match updates_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                            true => {
+                                format!(
+                                    "DELETE FROM {} WHERE {}='{}'",
+                                    structure.table_name,
+                                    structure.column_uuid,
+                                    user_entry_item.user_uuid.clone().unwrap()
+                                )
                             }
-                        }
-                        false => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
-                                true => {
-                                    format!(
-                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
-                                        structure.database_name,
-                                        structure.column_id,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.user_id.unwrap(),
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.downloaded,
-                                        user_entry_item.key,
-                                        user_entry_item.uploaded,
-                                        user_entry_item.updated,
-                                        structure.column_id,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        structure.column_updated
-                                    )
-                                }
-                                false => {
-                                    format!(
-                                        "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, '{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
-                                        structure.database_name,
-                                        structure.column_id,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.user_id.unwrap(),
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.downloaded,
-                                        user_entry_item.key,
-                                        user_entry_item.uploaded,
-                                        user_entry_item.updated,
-                                        structure.column_id,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        structure.column_updated
-                                    )
-                                }
+                            false => {
+                                format!(
+                                    "DELETE FROM {} WHERE {}='{}'",
+                                    structure.table_name,
+                                    structure.column_id,
+                                    user_entry_item.user_id.unwrap()
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[PgSQL] Error: {}", e.to_string());
+                                return Err(e);
                             }
                         }
                     }
                 }
-                false => {
-                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    let string_format = match  tracker.config.deref().clone().database.unwrap().insert_vacant {
                         true => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                                 true => {
-                                    format!(
-                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}=decode('{}', 'hex'), {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
-                                        structure.database_name,
-                                        structure.column_completed,
-                                        user_entry_item.completed,
-                                        structure.column_active,
-                                        user_entry_item.active,
-                                        structure.column_downloaded,
-                                        user_entry_item.downloaded,
-                                        structure.column_key,
-                                        user_entry_item.key,
-                                        structure.column_uploaded,
-                                        user_entry_item.uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.updated,
-                                        structure.column_uuid,
-                                        user_entry_item.user_uuid.clone().unwrap(),
-                                        structure.database_name,
-                                        structure.column_uuid,
-                                        user_entry_item.user_uuid.clone().unwrap()
-                                    )
+                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                        true => {
+                                            format!(
+                                                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
+                                                structure.table_name,
+                                                structure.column_uuid,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.user_uuid.clone().unwrap(),
+                                                user_entry_item.completed,
+                                                user_entry_item.active,
+                                                user_entry_item.downloaded,
+                                                user_entry_item.key,
+                                                user_entry_item.uploaded,
+                                                user_entry_item.updated,
+                                                structure.column_uuid,
+                                                structure.column_completed,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                structure.column_updated
+                                            )
+                                        }
+                                        false => {
+                                            format!(
+                                                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, '{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
+                                                structure.table_name,
+                                                structure.column_uuid,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.user_uuid.clone().unwrap(),
+                                                user_entry_item.completed,
+                                                user_entry_item.active,
+                                                user_entry_item.downloaded,
+                                                user_entry_item.key,
+                                                user_entry_item.uploaded,
+                                                user_entry_item.updated,
+                                                structure.column_uuid,
+                                                structure.column_completed,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                structure.column_updated
+                                            )
+                                        }
+                                    }
                                 }
                                 false => {
-                                    format!(
-                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}='{}', {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
-                                        structure.database_name,
-                                        structure.column_completed,
-                                        user_entry_item.completed,
-                                        structure.column_active,
-                                        user_entry_item.active,
-                                        structure.column_downloaded,
-                                        user_entry_item.downloaded,
-                                        structure.column_key,
-                                        user_entry_item.key,
-                                        structure.column_uploaded,
-                                        user_entry_item.uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.updated,
-                                        structure.column_uuid,
-                                        user_entry_item.user_uuid.clone().unwrap(),
-                                        structure.database_name,
-                                        structure.column_uuid,
-                                        user_entry_item.user_uuid.clone().unwrap()
-                                    )
+                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                        true => {
+                                            format!(
+                                                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, decode('{}', 'hex'), {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
+                                                structure.table_name,
+                                                structure.column_id,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.user_id.unwrap(),
+                                                user_entry_item.completed,
+                                                user_entry_item.active,
+                                                user_entry_item.downloaded,
+                                                user_entry_item.key,
+                                                user_entry_item.uploaded,
+                                                user_entry_item.updated,
+                                                structure.column_id,
+                                                structure.column_completed,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                structure.column_updated
+                                            )
+                                        }
+                                        false => {
+                                            format!(
+                                                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ('{}', {}, {}, {}, '{}', {}, {}) ON CONFLICT ({}) DO UPDATE SET {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}, {}=excluded.{}",
+                                                structure.table_name,
+                                                structure.column_id,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.user_id.unwrap(),
+                                                user_entry_item.completed,
+                                                user_entry_item.active,
+                                                user_entry_item.downloaded,
+                                                user_entry_item.key,
+                                                user_entry_item.uploaded,
+                                                user_entry_item.updated,
+                                                structure.column_id,
+                                                structure.column_completed,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                structure.column_updated
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                         false => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                                 true => {
-                                    format!(
-                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}=decode('{}', 'hex'), {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
-                                        structure.database_name,
-                                        structure.column_completed,
-                                        user_entry_item.completed,
-                                        structure.column_active,
-                                        user_entry_item.active,
-                                        structure.column_downloaded,
-                                        user_entry_item.downloaded,
-                                        structure.column_key,
-                                        user_entry_item.key,
-                                        structure.column_uploaded,
-                                        user_entry_item.uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.updated,
-                                        structure.column_id,
-                                        user_entry_item.user_id.unwrap(),
-                                        structure.database_name,
-                                        structure.column_id,
-                                        user_entry_item.user_id.unwrap()
-                                    )
+                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                        true => {
+                                            format!(
+                                                "UPDATE {} SET {}={}, {}={}, {}={}, {}=decode('{}', 'hex'), {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
+                                                structure.table_name,
+                                                structure.column_completed,
+                                                user_entry_item.completed,
+                                                structure.column_active,
+                                                user_entry_item.active,
+                                                structure.column_downloaded,
+                                                user_entry_item.downloaded,
+                                                structure.column_key,
+                                                user_entry_item.key,
+                                                structure.column_uploaded,
+                                                user_entry_item.uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.updated,
+                                                structure.column_uuid,
+                                                user_entry_item.user_uuid.clone().unwrap(),
+                                                structure.table_name,
+                                                structure.column_uuid,
+                                                user_entry_item.user_uuid.clone().unwrap()
+                                            )
+                                        }
+                                        false => {
+                                            format!(
+                                                "UPDATE {} SET {}={}, {}={}, {}={}, {}='{}', {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
+                                                structure.table_name,
+                                                structure.column_completed,
+                                                user_entry_item.completed,
+                                                structure.column_active,
+                                                user_entry_item.active,
+                                                structure.column_downloaded,
+                                                user_entry_item.downloaded,
+                                                structure.column_key,
+                                                user_entry_item.key,
+                                                structure.column_uploaded,
+                                                user_entry_item.uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.updated,
+                                                structure.column_uuid,
+                                                user_entry_item.user_uuid.clone().unwrap(),
+                                                structure.table_name,
+                                                structure.column_uuid,
+                                                user_entry_item.user_uuid.clone().unwrap()
+                                            )
+                                        }
+                                    }
                                 }
                                 false => {
-                                    format!(
-                                        "UPDATE {} SET {}={}, {}={}, {}={}, {}='{}', {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
-                                        structure.database_name,
-                                        structure.column_completed,
-                                        user_entry_item.completed,
-                                        structure.column_active,
-                                        user_entry_item.active,
-                                        structure.column_downloaded,
-                                        user_entry_item.downloaded,
-                                        structure.column_key,
-                                        user_entry_item.key,
-                                        structure.column_uploaded,
-                                        user_entry_item.uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.updated,
-                                        structure.column_id,
-                                        user_entry_item.user_id.unwrap(),
-                                        structure.database_name,
-                                        structure.column_id,
-                                        user_entry_item.user_id.unwrap()
-                                    )
+                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                        true => {
+                                            format!(
+                                                "UPDATE {} SET {}={}, {}={}, {}={}, {}=decode('{}', 'hex'), {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
+                                                structure.table_name,
+                                                structure.column_completed,
+                                                user_entry_item.completed,
+                                                structure.column_active,
+                                                user_entry_item.active,
+                                                structure.column_downloaded,
+                                                user_entry_item.downloaded,
+                                                structure.column_key,
+                                                user_entry_item.key,
+                                                structure.column_uploaded,
+                                                user_entry_item.uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.updated,
+                                                structure.column_id,
+                                                user_entry_item.user_id.unwrap(),
+                                                structure.table_name,
+                                                structure.column_id,
+                                                user_entry_item.user_id.unwrap()
+                                            )
+                                        }
+                                        false => {
+                                            format!(
+                                                "UPDATE {} SET {}={}, {}={}, {}={}, {}='{}', {}={}, {}={} WHERE {}='{}' AND EXISTS (SELECT 1 FROM {} WHERE {}='{}')",
+                                                structure.table_name,
+                                                structure.column_completed,
+                                                user_entry_item.completed,
+                                                structure.column_active,
+                                                user_entry_item.active,
+                                                structure.column_downloaded,
+                                                user_entry_item.downloaded,
+                                                structure.column_key,
+                                                user_entry_item.key,
+                                                structure.column_uploaded,
+                                                user_entry_item.uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.updated,
+                                                structure.column_id,
+                                                user_entry_item.user_id.unwrap(),
+                                                structure.table_name,
+                                                structure.column_id,
+                                                user_entry_item.user_id.unwrap()
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
+                    };
+                    match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[PgSQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
                     }
-                }
-            };
-            match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[PgSQL] Error: {}", e.to_string());
-                    return Err(e);
                 }
             }
             if (users_handled_entries as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
                 info!("[PgSQL] Handled {} users", users_handled_entries);
             }
         }
+        info!("[PgSQL] Handled {} users", users_handled_entries);
         self.commit(users_transaction).await
     }
 
@@ -1230,7 +1383,7 @@ impl DatabaseConnectorPgSQL {
         };
         let string_format = format!(
             "UPDATE {} SET ({}, {}) = (0, 0)",
-            structure.database_name,
+            structure.table_name,
             structure.column_seeds,
             structure.column_peers
         );
@@ -1252,7 +1405,7 @@ impl DatabaseConnectorPgSQL {
                 Ok(())
             }
             Err(e) => {
-                error!("[PgSQL3] Error: {}", e.to_string());
+                error!("[PgSQL] Error: {}", e.to_string());
                 Err(e)
             }
         }

@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{TimeZone, Utc};
 use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
@@ -16,15 +17,15 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, i64>) -> Result<(), ()>
+    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_keys(tracker.clone(), keys.clone()).await {
             Ok(keys_count) => {
-                info!("[SAVE BLACKLIST] Saved {} keys", keys_count);
+                info!("[SYNC KEYS] Synced {} keys", keys_count);
                 Ok(())
             }
             Err(_) => {
-                error!("[SAVE BLACKLIST] Unable to save {} keys", keys.len());
+                error!("[SYNC KEYS] Unable to sync {} keys", keys.len());
                 Err(())
             }
         }

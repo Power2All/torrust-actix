@@ -3,6 +3,7 @@ use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -15,15 +16,15 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, TorrentEntry>) -> Result<(), ()>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_torrents(tracker.clone(), torrents.clone()).await {
             Ok(_) => {
-                info!("[SAVE TORRENTS] Saved {} torrents", torrents.len());
+                info!("[SYNC TORRENTS] Synced {} torrents", torrents.len());
                 Ok(())
             }
             Err(_) => {
-                error!("[SAVE TORRENTS] Unable to save {} torrents", torrents.len());
+                error!("[SYNC TORRENTS] Unable to sync {} torrents", torrents.len());
                 Err(())
             }
         }
@@ -50,10 +51,23 @@ impl TorrentTracker {
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Torrents, 1);
+                self.update_stats(StatsEvent::Completed, torrent_entry.completed as i64);
+                self.update_stats(StatsEvent::Seeds, torrent_entry.seeds.len() as i64);
+                self.update_stats(StatsEvent::Peers, torrent_entry.peers.len() as i64);
                 (v.insert(torrent_entry).clone(), true)
             }
-            Entry::Occupied(o) => {
-                (o.get().clone(), false)
+            Entry::Occupied(mut o) => {
+                self.update_stats(StatsEvent::Completed, 0i64 - o.get().completed as i64);
+                self.update_stats(StatsEvent::Completed, torrent_entry.completed as i64);
+                o.get_mut().completed = torrent_entry.completed;
+                self.update_stats(StatsEvent::Seeds, 0i64 - o.get().seeds.len() as i64);
+                self.update_stats(StatsEvent::Seeds, torrent_entry.seeds.len() as i64);
+                o.get_mut().seeds = torrent_entry.seeds.clone();
+                self.update_stats(StatsEvent::Peers, 0i64 - o.get().peers.len() as i64);
+                self.update_stats(StatsEvent::Peers, torrent_entry.peers.len() as i64);
+                o.get_mut().peers = torrent_entry.peers.clone();
+                o.get_mut().updated = torrent_entry.updated;
+                (torrent_entry.clone(), false)
             }
         }
     }

@@ -8,6 +8,7 @@ pub struct DatabaseConfig {
     pub persistent: bool,
     pub persistent_interval: Option<u64>,
     pub insert_vacant: bool,
+    pub remove_action: bool,
     pub update_completed: bool,
     pub update_peers: bool
 }

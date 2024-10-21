@@ -21,3 +21,6 @@ pub mod torrent_sharding;
 pub mod torrent_tracker_import;
 pub mod torrent_tracker_export;
 pub mod torrent_tracker_cert_gen;
+pub mod torrent_tracker_torrents_blacklist_updates;
+pub mod torrent_tracker_torrents_whitelist_updates;
+pub mod torrent_tracker_keys_updates;
