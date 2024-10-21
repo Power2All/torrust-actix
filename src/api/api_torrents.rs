@@ -9,6 +9,7 @@ use crate::api::api::{api_parse_body, api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 
@@ -101,7 +102,7 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
         };
 
         if data.torrent_tracker.config.database.clone().unwrap().persistent {
-            let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone());
+            let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
         }
 
         return match data.torrent_tracker.add_torrent(info_hash, torrent_entry.clone()) {
@@ -148,7 +149,7 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
             };
 
             if data.torrent_tracker.config.database.clone().unwrap().persistent {
-                let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone());
+                let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
             }
 
             match data.torrent_tracker.add_torrent(info_hash, torrent_entry.clone()) {
@@ -179,6 +180,10 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
             Ok(hash) => { InfoHash(hash) }
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
+
+        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
+        }
 
         return match data.torrent_tracker.remove_torrent(info_hash) {
             None => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})) }
@@ -215,6 +220,10 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
                 Ok(hash) => { InfoHash(hash) }
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
+
+            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+                let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
+            }
 
             match data.torrent_tracker.remove_torrent(info_hash) {
                 None => { torrents_output.insert(info_hash, json!({"status": "unknown info_hash"})); }

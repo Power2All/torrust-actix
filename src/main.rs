@@ -189,8 +189,8 @@ async fn main() -> std::io::Result<()>
             }
 
             let stats = tracker_spawn_stats.get_stats();
-            info!("[STATS] Torrents: {} - Updates: {} - Shadow {}: - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.torrents_shadow, stats.seeds, stats.peers, stats.completed);
-            info!("[STATS] Whitelists: {} - Blacklists: {} - Keys: {}", stats.whitelist, stats.blacklist, stats.keys);
+            info!("[STATS] Torrents: {} - Updates: {} - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.seeds, stats.peers, stats.completed);
+            info!("[STATS] WList: {} - WList Updates: {} - BLists: {} - BLists Updates: {} - Keys: {} - Keys Updates {}", stats.whitelist, stats.whitelist_updates, stats.blacklist, stats.blacklist_updates, stats.keys, stats.keys_updates);
             info!("[STATS TCP IPv4] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled, stats.tcp4_failure, stats.tcp4_not_found);
             info!("[STATS TCP IPv6] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found);
             info!("[STATS UDP IPv4] Connect: {} - A: {} - S: {} - IR: {} - BR: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled, stats.udp4_invalid_request, stats.udp4_bad_request);
@@ -256,6 +256,24 @@ async fn main() -> std::io::Result<()>
                 let _ = tracker_spawn_updates.save_torrent_updates(tracker_spawn_updates.clone()).await;
                 info!("[TORRENTS UPDATES] Torrent updates inserted into DB.");
 
+                if tracker_spawn_updates.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() {
+                    info!("[WHITELIST UPDATES] Start updating whitelists into the DB.");
+                    let _ = tracker_spawn_updates.save_whitelist_updates(tracker_spawn_updates.clone()).await;
+                    info!("[WHITELIST UPDATES] Whitelists updates inserted into DB.");
+                }
+
+                if tracker_spawn_updates.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() {
+                    info!("[BLACKLIST UPDATES] Start updating blacklists into the DB.");
+                    let _ = tracker_spawn_updates.save_blacklist_updates(tracker_spawn_updates.clone()).await;
+                    info!("[BLACKLIST UPDATES] Blacklists updates inserted into DB.");
+                }
+
+                if tracker_spawn_updates.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+                    info!("[KEY UPDATES] Start updating keys into the DB.");
+                    let _ = tracker_spawn_updates.save_key_updates(tracker_spawn_updates.clone()).await;
+                    info!("[KEY UPDATES] Keys updates inserted into DB.");
+                }
+
                 if tracker_spawn_updates.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
                     info!("[USERS UPDATES] Start updating users into the DB.");
                     let _ = tracker_spawn_updates.save_user_updates(tracker_spawn_updates.clone()).await;
@@ -293,23 +311,27 @@ async fn main() -> std::io::Result<()>
             task::sleep(Duration::from_secs(1)).await;
 
             if tracker.config.database.clone().unwrap().persistent {
+                tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().unwrap().total_downloads as i64);
+                Configuration::save_from_config(tracker.config.clone(), "config.toml");
+                info!("Saving completed data to an INI...");
                 info!("Saving data to the database...");
                 let _ = tracker.save_torrent_updates(tracker.clone()).await;
                 if tracker.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() {
-                    let _ = tracker.save_whitelist(tracker.clone(), tracker.get_whitelist()).await;
+                    let _ = tracker.save_whitelist_updates(tracker.clone()).await;
                 }
                 if tracker.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() {
-                    let _ = tracker.save_blacklist(tracker.clone(), tracker.get_blacklist()).await;
+                    let _ = tracker.save_blacklist_updates(tracker.clone()).await;
                 }
                 if tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
-                    let _ = tracker.save_keys(tracker.clone(), tracker.get_keys()).await;
+                    let _ = tracker.save_key_updates(tracker.clone()).await;
                 }
                 if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
                     let _ = tracker.save_user_updates(tracker.clone()).await;
                 }
             } else {
-                info!("Saving completed data to an INI...");
                 tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().unwrap().total_downloads as i64);
+                Configuration::save_from_config(tracker.config.clone(), "config.toml");
+                info!("Saving completed data to an INI...");
             }
 
             task::sleep(Duration::from_secs(1)).await;

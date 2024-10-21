@@ -8,6 +8,7 @@ use crate::api::api::{api_parse_body, api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 
 pub async fn api_service_key_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
@@ -98,6 +99,10 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})); }
         };
 
+        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            let _ = data.torrent_tracker.add_key_update(key_hash, timeout as i64, UpdatesAction::Add);
+        }
+
         return match data.torrent_tracker.add_key(key_hash, timeout as i64) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
             false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("key_hash updated {}", key)})) }
@@ -134,6 +139,10 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})) }
             };
 
+            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+                let _ = data.torrent_tracker.add_key_update(key_hash, timeout as i64, UpdatesAction::Add);
+            }
+
             match data.torrent_tracker.add_key(key_hash, timeout as i64) {
                 true => { keys_output.insert(key, json!({"status": "ok"})); }
                 false => { keys_output.insert(key, json!({"status": "key_hash updated"})); }
@@ -162,6 +171,10 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
             Ok(hash) => { InfoHash(hash) }
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key {}", key)})); }
         };
+
+        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            let _ = data.torrent_tracker.add_key_update(key_hash, 0i64, UpdatesAction::Remove);
+        }
 
         return match data.torrent_tracker.remove_key(key_hash) {
             true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
@@ -194,14 +207,18 @@ pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload
     let mut keys_output = HashMap::new();
     for key_item in keys {
         if key_item.len() == 40 {
-            let key = match hex2bin(key_item.clone()) {
+            let key_hash = match hex2bin(key_item.clone()) {
                 Ok(key) => { InfoHash(key) }
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key {}", key_item)})) }
             };
 
-            match data.torrent_tracker.remove_key(key) {
-                true => { keys_output.insert(key, json!({"status": "ok"})); }
-                false => { keys_output.insert(key, json!({"status": "unknown key_hash"})); }
+            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+                let _ = data.torrent_tracker.add_key_update(key_hash, 0i64, UpdatesAction::Remove);
+            }
+
+            match data.torrent_tracker.remove_key(key_hash) {
+                true => { keys_output.insert(key_hash, json!({"status": "ok"})); }
+                false => { keys_output.insert(key_hash, json!({"status": "unknown key_hash"})); }
             }
         }
     }

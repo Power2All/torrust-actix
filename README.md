@@ -56,6 +56,12 @@ Swagger UI is introduced, and when enabled in the configuration, is accessible t
 
 ### ChangeLog
 
+#### v4.0.2
+* Added option that the system will remove data from database.
+* Added updates variables for the white/black list and keys tables.
+* Renaming the "database" naming which should be "tables".
+* A lot of fixes and bugs I stumbled upon.
+
 #### v4.0.0
 * Completely rebuilt of the tracker code, for readability.
 * Moved to Actix v4, thus versioning this software to v4.0.0 as well.

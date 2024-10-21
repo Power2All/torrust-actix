@@ -15,6 +15,7 @@ use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -46,14 +47,16 @@ impl DatabaseConnectorMySQL {
 
         if create_database {
             let pool = &structure.mysql.clone().unwrap().pool;
+            info!("[BOOT] Database creation triggered for MySQL.");
 
             // Create Torrent DB
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().torrents.unwrap().table_name);
             match config.database_structure.clone().unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().torrents.unwrap().database_name,
+                            config.database_structure.clone().unwrap().torrents.unwrap().table_name,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
@@ -69,7 +72,7 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().torrents.unwrap().database_name,
+                            config.database_structure.clone().unwrap().torrents.unwrap().table_name,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
                             config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
@@ -84,12 +87,13 @@ impl DatabaseConnectorMySQL {
             }
 
             // Create Whitelist DB
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().whitelist.unwrap().table_name);
             match config.database_structure.clone().unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().whitelist.unwrap().table_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
@@ -102,7 +106,7 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().whitelist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().whitelist.unwrap().table_name,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
                         ).as_str()
@@ -114,12 +118,13 @@ impl DatabaseConnectorMySQL {
             }
 
             // Create Blacklist DB
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().blacklist.unwrap().table_name);
             match config.database_structure.clone().unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().blacklist.unwrap().table_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
@@ -132,7 +137,7 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().blacklist.unwrap().database_name,
+                            config.database_structure.clone().unwrap().blacklist.unwrap().table_name,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
                             config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
                         ).as_str()
@@ -144,12 +149,13 @@ impl DatabaseConnectorMySQL {
             }
 
             // Create Keys DB
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().keys.unwrap().table_name);
             match config.database_structure.clone().unwrap().keys.unwrap().bin_type_hash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().keys.unwrap().database_name,
+                            config.database_structure.clone().unwrap().keys.unwrap().table_name,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash,
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash
@@ -163,7 +169,7 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().keys.unwrap().database_name,
+                            config.database_structure.clone().unwrap().keys.unwrap().table_name,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash,
                             config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
                             config.database_structure.clone().unwrap().keys.unwrap().column_hash
@@ -176,6 +182,7 @@ impl DatabaseConnectorMySQL {
             }
 
             // Create Users DB
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().users.unwrap().table_name);
             match config.database_structure.clone().unwrap().users.unwrap().id_uuid {
                 true => {
                     match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
@@ -183,7 +190,7 @@ impl DatabaseConnectorMySQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` BINARY(20) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
@@ -202,7 +209,7 @@ impl DatabaseConnectorMySQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` VARCHAR(40) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uuid,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
@@ -225,7 +232,7 @@ impl DatabaseConnectorMySQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` BINARY(20) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
@@ -244,7 +251,7 @@ impl DatabaseConnectorMySQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` VARCHAR(40) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                                    config.database_structure.clone().unwrap().users.unwrap().database_name,
+                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
                                     config.database_structure.clone().unwrap().users.unwrap().column_id,
                                     config.database_structure.clone().unwrap().users.unwrap().column_key,
                                     config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
@@ -281,11 +288,6 @@ impl DatabaseConnectorMySQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[MySQL] Trying to querying {} torrents - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                 true => {
                     format!(
@@ -293,7 +295,7 @@ impl DatabaseConnectorMySQL {
                         structure.column_infohash,
                         structure.column_infohash,
                         structure.column_completed,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -303,7 +305,7 @@ impl DatabaseConnectorMySQL {
                         "SELECT `{}`, `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_completed,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -330,13 +332,14 @@ impl DatabaseConnectorMySQL {
             if torrents < start {
                 break;
             }
+            info!("[MySQL] Handled {} torrents", torrents);
         }
         tracker.set_stats(StatsEvent::Completed, completed as i64);
         info!("[MySQL] Loaded {} torrents with {} completed", torrents, completed);
         Ok((torrents, completed))
     }
 
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, TorrentEntry>) -> Result<(), Error>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), Error>
     {
         let mut torrents_transaction = self.pool.begin().await?;
         let mut torrents_handled_entries = 0u64;
@@ -344,77 +347,26 @@ impl DatabaseConnectorMySQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for (info_hash, torrent_entry) in torrents.iter() {
+        for (info_hash, (torrent_entry, updates_action)) in torrents.iter() {
             torrents_handled_entries += 1;
-            match tracker.config.deref().clone().database.unwrap().insert_vacant {
-                true => {
-                    if tracker.config.deref().clone().database.unwrap().update_peers {
+            match updates_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
                         let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
                             true => {
                                 format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES (UNHEX('{}'), {}, {}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`), `{}`=VALUES(`{}`)",
-                                    structure.database_name,
+                                    "DELETE FROM `{}` WHERE `{}`=UNHEX('{}')",
+                                    structure.table_name,
                                     structure.column_infohash,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    info_hash,
-                                    torrent_entry.seeds.len(),
-                                    torrent_entry.peers.len(),
-                                    structure.column_seeds,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    structure.column_peers
+                                    info_hash
                                 )
                             }
                             false => {
                                 format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES ('{}', {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
-                                    structure.database_name,
+                                    "DELETE FROM `{}` WHERE `{}`='{}'",
+                                    structure.table_name,
                                     structure.column_infohash,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    info_hash,
-                                    torrent_entry.seeds.len(),
-                                    torrent_entry.peers.len(),
-                                    structure.column_seeds,
-                                    structure.column_seeds,
-                                    structure.column_peers,
-                                    structure.column_peers
-                                )
-                            }
-                        };
-                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[MySQL] Error: {}", e.to_string());
-                                return Err(e);
-                            }
-                        }
-                    }
-                    if tracker.config.deref().clone().database.unwrap().update_completed {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
-                            true => {
-                                format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`) VALUES (UNHEX('{}'), {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
-                                    structure.database_name,
-                                    structure.column_infohash,
-                                    structure.column_completed,
-                                    info_hash,
-                                    torrent_entry.completed,
-                                    structure.column_completed,
-                                    structure.column_completed
-                                )
-                            }
-                            false => {
-                                format!(
-                                    "INSERT INTO `{}` (`{}`, `{}`) VALUES ('{}', {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
-                                    structure.database_name,
-                                    structure.column_infohash,
-                                    structure.column_completed,
-                                    info_hash,
-                                    torrent_entry.completed,
-                                    structure.column_completed,
-                                    structure.column_completed
+                                    info_hash
                                 )
                             }
                         };
@@ -427,70 +379,154 @@ impl DatabaseConnectorMySQL {
                         }
                     }
                 }
-                false => {
-                    if tracker.config.deref().clone().database.unwrap().update_peers {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
-                            true => {
-                                format!(
-                                    "UPDATE IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
-                                    structure.database_name,
-                                    structure.column_seeds,
-                                    torrent_entry.seeds.len(),
-                                    structure.column_peers,
-                                    torrent_entry.peers.len(),
-                                    structure.column_infohash,
-                                    info_hash
-                                )
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    match tracker.config.deref().clone().database.unwrap().insert_vacant {
+                        true => {
+                            if tracker.config.deref().clone().database.unwrap().update_peers {
+                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                                    true => {
+                                        format!(
+                                            "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES (UNHEX('{}'), {}, {}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            info_hash,
+                                            torrent_entry.seeds.len(),
+                                            torrent_entry.peers.len(),
+                                            structure.column_seeds,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            structure.column_peers
+                                        )
+                                    }
+                                    false => {
+                                        format!(
+                                            "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES ('{}', {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            info_hash,
+                                            torrent_entry.seeds.len(),
+                                            torrent_entry.peers.len(),
+                                            structure.column_seeds,
+                                            structure.column_seeds,
+                                            structure.column_peers,
+                                            structure.column_peers
+                                        )
+                                    }
+                                };
+                                match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("[MySQL] Error: {}", e.to_string());
+                                        return Err(e);
+                                    }
+                                }
                             }
-                            false => {
-                                format!(
-                                    "UPDATE IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`='{}'",
-                                    structure.database_name,
-                                    structure.column_seeds,
-                                    torrent_entry.seeds.len(),
-                                    structure.column_peers,
-                                    torrent_entry.peers.len(),
-                                    structure.column_infohash,
-                                    info_hash
-                                )
-                            }
-                        };
-                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[MySQL] Error: {}", e.to_string());
-                                return Err(e);
+                            if tracker.config.deref().clone().database.unwrap().update_completed {
+                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                                    true => {
+                                        format!(
+                                            "INSERT INTO `{}` (`{}`, `{}`) VALUES (UNHEX('{}'), {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            structure.column_completed,
+                                            info_hash,
+                                            torrent_entry.completed,
+                                            structure.column_completed,
+                                            structure.column_completed
+                                        )
+                                    }
+                                    false => {
+                                        format!(
+                                            "INSERT INTO `{}` (`{}`, `{}`) VALUES ('{}', {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
+                                            structure.table_name,
+                                            structure.column_infohash,
+                                            structure.column_completed,
+                                            info_hash,
+                                            torrent_entry.completed,
+                                            structure.column_completed,
+                                            structure.column_completed
+                                        )
+                                    }
+                                };
+                                match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("[MySQL] Error: {}", e.to_string());
+                                        return Err(e);
+                                    }
+                                }
                             }
                         }
-                    }
-                    if tracker.config.deref().clone().database.unwrap().update_completed {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
-                            true => {
-                                format!(
-                                    "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`=UNHEX('{}')",
-                                    structure.database_name,
-                                    structure.column_completed,
-                                    torrent_entry.completed,
-                                    structure.column_infohash,
-                                    info_hash
-                                )
+                        false => {
+                            if tracker.config.deref().clone().database.unwrap().update_peers {
+                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                                    true => {
+                                        format!(
+                                            "UPDATE IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
+                                            structure.table_name,
+                                            structure.column_seeds,
+                                            torrent_entry.seeds.len(),
+                                            structure.column_peers,
+                                            torrent_entry.peers.len(),
+                                            structure.column_infohash,
+                                            info_hash
+                                        )
+                                    }
+                                    false => {
+                                        format!(
+                                            "UPDATE IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`='{}'",
+                                            structure.table_name,
+                                            structure.column_seeds,
+                                            torrent_entry.seeds.len(),
+                                            structure.column_peers,
+                                            torrent_entry.peers.len(),
+                                            structure.column_infohash,
+                                            info_hash
+                                        )
+                                    }
+                                };
+                                match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("[MySQL] Error: {}", e.to_string());
+                                        return Err(e);
+                                    }
+                                }
                             }
-                            false => {
-                                format!(
-                                    "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`='{}'",
-                                    structure.database_name,
-                                    structure.column_completed,
-                                    torrent_entry.completed,
-                                    structure.column_infohash,
-                                    info_hash
-                                )
-                            }
-                        };
-                        match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("[MySQL] Error: {}", e.to_string());
-                                return Err(e);
+                            if tracker.config.deref().clone().database.unwrap().update_completed {
+                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                                    true => {
+                                        format!(
+                                            "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`=UNHEX('{}')",
+                                            structure.table_name,
+                                            structure.column_completed,
+                                            torrent_entry.completed,
+                                            structure.column_infohash,
+                                            info_hash
+                                        )
+                                    }
+                                    false => {
+                                        format!(
+                                            "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`='{}'",
+                                            structure.table_name,
+                                            structure.column_completed,
+                                            torrent_entry.completed,
+                                            structure.column_infohash,
+                                            info_hash
+                                        )
+                                    }
+                                };
+                                match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("[MySQL] Error: {}", e.to_string());
+                                        return Err(e);
+                                    }
+                                }
                             }
                         }
                     }
@@ -500,6 +536,7 @@ impl DatabaseConnectorMySQL {
                 info!("[MySQL] Handled {} torrents", torrents_handled_entries);
             }
         }
+        info!("[MySQL] Handled {} torrents", torrents_handled_entries);
         self.commit(torrents_transaction).await
     }
 
@@ -513,18 +550,13 @@ impl DatabaseConnectorMySQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[MySQL] Trying to querying {} whitelisted hashes - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
                 true => {
                     format!(
                         "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_infohash,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -533,7 +565,7 @@ impl DatabaseConnectorMySQL {
                     format!(
                         "SELECT `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -550,12 +582,13 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
+            info!("[MySQL] Handled {} whitelisted torrents", hashes);
         }
-        info!("[MySQL] Loaded {} whitelisted torrents", hashes);
+        info!("[MySQL] Handled {} whitelisted torrents", hashes);
         Ok(hashes)
     }
 
-    pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<InfoHash>) -> Result<u64, Error>
+    pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut whitelist_transaction = self.pool.begin().await?;
         let mut whitelist_handled_entries = 0u64;
@@ -563,38 +596,71 @@ impl DatabaseConnectorMySQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for info_hash in whitelists.iter() {
+        for (info_hash, updates_action) in whitelists.iter() {
             whitelist_handled_entries += 1;
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
-                true => {
-                    format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
-                        structure.database_name,
-                        structure.column_infohash,
-                        info_hash
-                    )
+            match updates_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+                            true => {
+                                format!(
+                                    "DELETE FROM `{}` WHERE `{}`=UNHEX('{}')",
+                                    structure.table_name,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "DELETE FROM `{}` WHERE `{}`='{}'",
+                                    structure.table_name,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[MySQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
                 }
-                false => {
-                    format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES ('{}')",
-                        structure.database_name,
-                        structure.column_infohash,
-                        info_hash
-                    )
-                }
-            };
-            match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[MySQL] Error: {}", e.to_string());
-                    return Err(e);
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+                        true => {
+                            format!(
+                                "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
+                                structure.table_name,
+                                structure.column_infohash,
+                                info_hash
+                            )
+                        }
+                        false => {
+                            format!(
+                                "INSERT IGNORE INTO `{}` (`{}`) VALUES ('{}')",
+                                structure.table_name,
+                                structure.column_infohash,
+                                info_hash
+                            )
+                        }
+                    };
+                    match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[MySQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    }
                 }
             }
             if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[MySQL] Handled {} torrents", whitelist_handled_entries);
+                info!("[MySQL] Handled {} whitelisted torrents", whitelist_handled_entries);
             }
         }
-        info!("[MySQL] Saved {} whitelisted torrents", whitelist_handled_entries);
+        info!("[MySQL] Handled {} whitelisted torrents", whitelist_handled_entries);
         let _ = self.commit(whitelist_transaction).await;
         Ok(whitelist_handled_entries)
     }
@@ -609,18 +675,13 @@ impl DatabaseConnectorMySQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[MySQL] Trying to querying {} blacklisted hashes - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
                 true => {
                     format!(
                         "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
                         structure.column_infohash,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -629,7 +690,7 @@ impl DatabaseConnectorMySQL {
                     format!(
                         "SELECT `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_infohash,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -646,12 +707,13 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
+            info!("[MySQL] Handled {} blacklisted torrents", hashes);
         }
-        info!("[MySQL] Loaded {} blacklisted torrents", hashes);
+        info!("[MySQL] Handled {} blacklisted torrents", hashes);
         Ok(hashes)
     }
 
-    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<InfoHash>) -> Result<u64, Error>
+    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut blacklist_transaction = self.pool.begin().await?;
         let mut blacklist_handled_entries = 0u64;
@@ -659,38 +721,71 @@ impl DatabaseConnectorMySQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for info_hash in blacklists.iter() {
+        for (info_hash, updates_action) in blacklists.iter() {
             blacklist_handled_entries += 1;
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
-                true => {
-                    format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
-                        structure.database_name,
-                        structure.column_infohash,
-                        info_hash
-                    )
+            match updates_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+                            true => {
+                                format!(
+                                    "DELETE FROM `{}` WHERE `{}`=UNHEX('{}')",
+                                    structure.table_name,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "DELETE FROM `{}` WHERE `{}`='{}'",
+                                    structure.table_name,
+                                    structure.column_infohash,
+                                    info_hash
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[MySQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
                 }
-                false => {
-                    format!(
-                        "INSERT IGNORE INTO `{}` (`{}`) VALUES ('{}')",
-                        structure.database_name,
-                        structure.column_infohash,
-                        info_hash
-                    )
-                }
-            };
-            match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[MySQL] Error: {}", e.to_string());
-                    return Err(e);
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+                        true => {
+                            format!(
+                                "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
+                                structure.table_name,
+                                structure.column_infohash,
+                                info_hash
+                            )
+                        }
+                        false => {
+                            format!(
+                                "INSERT IGNORE INTO `{}` (`{}`) VALUES ('{}')",
+                                structure.table_name,
+                                structure.column_infohash,
+                                info_hash
+                            )
+                        }
+                    };
+                    match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[MySQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    }
                 }
             }
             if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[MySQL] Handled {} torrents", blacklist_handled_entries);
+                info!("[MySQL] Handled {} blacklisted torrents", blacklist_handled_entries);
             }
         }
-        info!("[MySQL] Saved {} blacklisted torrents", blacklist_handled_entries);
+        info!("[MySQL] Handled {} blacklisted torrents", blacklist_handled_entries);
         let _ = self.commit(blacklist_transaction).await;
         Ok(blacklist_handled_entries)
     }
@@ -705,11 +800,6 @@ impl DatabaseConnectorMySQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[MySQL] Trying to querying {} keys hashes - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
                 true => {
                     format!(
@@ -717,7 +807,7 @@ impl DatabaseConnectorMySQL {
                         structure.column_hash,
                         structure.column_hash,
                         structure.column_timeout,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -727,7 +817,7 @@ impl DatabaseConnectorMySQL {
                         "SELECT `{}`, `{}` FROM `{}` LIMIT {}, {}",
                         structure.column_hash,
                         structure.column_timeout,
-                        structure.database_name,
+                        structure.table_name,
                         start,
                         length
                     )
@@ -745,12 +835,13 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
+            info!("[MySQL] Handled {} keys", hashes);
         }
-        info!("[MySQL] Loaded {} blacklisted torrents", hashes);
+        info!("[MySQL] Handled {} keys", hashes);
         Ok(hashes)
     }
 
-    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, i64>) -> Result<u64, Error>
+    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut keys_transaction = self.pool.begin().await?;
         let mut keys_handled_entries = 0u64;
@@ -758,50 +849,83 @@ impl DatabaseConnectorMySQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for (hash, timeout) in keys.iter() {
+        for (hash, (timeout, update_action)) in keys.iter() {
             keys_handled_entries += 1;
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
-                true => {
-                    format!(
-                        "INSERT INTO `{}` (`{}`, `{}`) VALUES (UNHEX('{}'), {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
-                        structure.database_name,
-                        structure.column_hash,
-                        structure.column_timeout,
-                        hash,
-                        timeout,
-                        structure.column_hash,
-                        structure.column_hash,
-                        structure.column_timeout,
-                        structure.column_timeout
-                    )
+            match update_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+                            true => {
+                                format!(
+                                    "DELETE FROM `{}` WHERE `{}`=UNHEX('{}')",
+                                    structure.table_name,
+                                    structure.column_hash,
+                                    hash
+                                )
+                            }
+                            false => {
+                                format!(
+                                    "DELETE FROM `{}` WHERE `{}`='{}'",
+                                    structure.table_name,
+                                    structure.column_hash,
+                                    hash
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[MySQL] Error: {}", e.to_string());
+                                return Err(e);
+                            }
+                        }
+                    }
                 }
-                false => {
-                    format!(
-                        "INSERT INTO `{}` (`{}`, `{}`) VALUES ('{}', {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
-                        structure.database_name,
-                        structure.column_hash,
-                        structure.column_timeout,
-                        hash,
-                        timeout,
-                        structure.column_hash,
-                        structure.column_hash,
-                        structure.column_timeout,
-                        structure.column_timeout
-                    )
-                }
-            };
-            match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[MySQL] Error: {}", e.to_string());
-                    return Err(e);
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+                        true => {
+                            format!(
+                                "INSERT INTO `{}` (`{}`, `{}`) VALUES (UNHEX('{}'), {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                structure.table_name,
+                                structure.column_hash,
+                                structure.column_timeout,
+                                hash,
+                                timeout,
+                                structure.column_hash,
+                                structure.column_hash,
+                                structure.column_timeout,
+                                structure.column_timeout
+                            )
+                        }
+                        false => {
+                            format!(
+                                "INSERT INTO `{}` (`{}`, `{}`) VALUES ('{}', {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                structure.table_name,
+                                structure.column_hash,
+                                structure.column_timeout,
+                                hash,
+                                timeout,
+                                structure.column_hash,
+                                structure.column_hash,
+                                structure.column_timeout,
+                                structure.column_timeout
+                            )
+                        }
+                    };
+                    match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[MySQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
+                    }
                 }
             }
             if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 {
                 info!("[MySQL] Handled {} keys", keys_handled_entries);
             }
         }
-        info!("[MySQL] Saved {} keys", keys_handled_entries);
+        info!("[MySQL] Handled {} keys", keys_handled_entries);
         let _ = self.commit(keys_transaction).await;
         Ok(keys_handled_entries)
     }
@@ -816,11 +940,6 @@ impl DatabaseConnectorMySQL {
             Some(db_structure) => { db_structure }
         };
         loop {
-            info!(
-                "[MySQL] Trying to querying {} users - Skip: {}",
-                length,
-                start
-            );
             let string_format = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                 true => {
                     match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
@@ -835,7 +954,7 @@ impl DatabaseConnectorMySQL {
                                 structure.column_completed,
                                 structure.column_updated,
                                 structure.column_active,
-                                structure.database_name,
+                                structure.table_name,
                                 start,
                                 length
                             )
@@ -850,7 +969,7 @@ impl DatabaseConnectorMySQL {
                                 structure.column_completed,
                                 structure.column_updated,
                                 structure.column_active,
-                                structure.database_name,
+                                structure.table_name,
                                 start,
                                 length
                             )
@@ -870,7 +989,7 @@ impl DatabaseConnectorMySQL {
                                 structure.column_completed,
                                 structure.column_updated,
                                 structure.column_active,
-                                structure.database_name,
+                                structure.table_name,
                                 start,
                                 length
                             )
@@ -885,7 +1004,7 @@ impl DatabaseConnectorMySQL {
                                 structure.column_completed,
                                 structure.column_updated,
                                 structure.column_active,
-                                structure.database_name,
+                                structure.table_name,
                                 start,
                                 length
                             )
@@ -921,9 +1040,9 @@ impl DatabaseConnectorMySQL {
                         true => { Some(result.get(structure.column_uuid.as_str())) }
                         false => { None }
                     },
-                    uploaded: result.get(structure.column_uploaded.as_str()),
-                    downloaded: result.get(structure.column_downloaded.as_str()),
-                    completed: result.get(structure.column_completed.as_str()),
+                    uploaded: result.get::<i64, &str>(structure.column_uploaded.as_str()) as u64,
+                    downloaded: result.get::<i64, &str>(structure.column_downloaded.as_str()) as u64,
+                    completed: result.get::<i64, &str>(structure.column_completed.as_str()) as u64,
                     updated: result.get::<i32, &str>(structure.column_updated.as_str()) as u64,
                     active: result.get::<i8, &str>(structure.column_active.as_str()) as u8,
                     torrents_active: Default::default(),
@@ -934,12 +1053,13 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
+            info!("[MySQL] Loaded {} users", hashes);
         }
-        info!("[MySQL] Loaded {} blacklisted torrents", hashes);
+        info!("[MySQL] Loaded {} users", hashes);
         Ok(hashes)
     }
 
-    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, UserEntryItem>) -> Result<(), Error>
+    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), Error>
     {
         let mut users_transaction = self.pool.begin().await?;
         let mut users_handled_entries = 0u64;
@@ -947,253 +1067,287 @@ impl DatabaseConnectorMySQL {
             None => { return Err(Error::RowNotFound); }
             Some(db_structure) => { db_structure }
         };
-        for (_, user_entry_item) in users.iter() {
+        for (_, (user_entry_item, updates_action)) in users.iter() {
             users_handled_entries += 1;
-            let string_format = match  tracker.config.deref().clone().database.unwrap().insert_vacant {
-                true => {
-                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
-                        true => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
-                                true => {
-                                    format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
-                                        structure.database_name,
-                                        structure.column_uuid,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_downloaded,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_updated,
-                                        user_entry_item.user_uuid.clone().unwrap(),
-                                        user_entry_item.key,
-                                        user_entry_item.uploaded,
-                                        user_entry_item.downloaded,
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.updated,
-                                        structure.column_key,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_uploaded,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_updated,
-                                        structure.column_updated
-                                    )
-                                }
-                                false => {
-                                    format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', '{}', {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
-                                        structure.database_name,
-                                        structure.column_uuid,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_downloaded,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_updated,
-                                        user_entry_item.user_uuid.clone().unwrap(),
-                                        user_entry_item.key,
-                                        user_entry_item.uploaded,
-                                        user_entry_item.downloaded,
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.updated,
-                                        structure.column_key,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_uploaded,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_updated,
-                                        structure.column_updated
-                                    )
-                                }
+            match updates_action {
+                UpdatesAction::Remove => {
+                    if tracker.config.deref().clone().database.unwrap().remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                            true => {
+                                format!(
+                                    "DELETE FROM `{}` WHERE `{}`='{}'",
+                                    structure.table_name,
+                                    structure.column_uuid,
+                                    user_entry_item.user_uuid.clone().unwrap()
+                                )
                             }
-                        }
-                        false => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
-                                true => {
-                                    format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
-                                        structure.database_name,
-                                        structure.column_id,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_downloaded,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_updated,
-                                        user_entry_item.user_id.unwrap(),
-                                        user_entry_item.key,
-                                        user_entry_item.uploaded,
-                                        user_entry_item.downloaded,
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.updated,
-                                        structure.column_key,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_uploaded,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_updated,
-                                        structure.column_updated
-                                    )
-                                }
-                                false => {
-                                    format!(
-                                        "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', '{}', {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
-                                        structure.database_name,
-                                        structure.column_id,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.user_id.unwrap(),
-                                        user_entry_item.completed,
-                                        user_entry_item.active,
-                                        user_entry_item.downloaded,
-                                        user_entry_item.key,
-                                        user_entry_item.uploaded,
-                                        user_entry_item.updated,
-                                        structure.column_completed,
-                                        structure.column_completed,
-                                        structure.column_active,
-                                        structure.column_active,
-                                        structure.column_downloaded,
-                                        structure.column_downloaded,
-                                        structure.column_key,
-                                        structure.column_key,
-                                        structure.column_uploaded,
-                                        structure.column_uploaded,
-                                        structure.column_updated,
-                                        structure.column_updated
-                                    )
-                                }
+                            false => {
+                                format!(
+                                    "DELETE FROM `{}` WHERE `{}`='{}'",
+                                    structure.table_name,
+                                    structure.column_id,
+                                    user_entry_item.user_id.unwrap()
+                                )
+                            }
+                        };
+                        match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("[MySQL] Error: {}", e.to_string());
+                                return Err(e);
                             }
                         }
                     }
                 }
-                false => {
-                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                UpdatesAction::Add | UpdatesAction::Update => {
+                    let string_format = match  tracker.config.deref().clone().database.unwrap().insert_vacant {
                         true => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                                 true => {
-                                    format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=UNHEX('{}'), `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
-                                        structure.database_name,
-                                        structure.column_completed,
-                                        user_entry_item.completed,
-                                        structure.column_active,
-                                        user_entry_item.active,
-                                        structure.column_downloaded,
-                                        user_entry_item.downloaded,
-                                        structure.column_key,
-                                        user_entry_item.key,
-                                        structure.column_uploaded,
-                                        user_entry_item.uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.updated,
-                                        structure.column_uuid,
-                                        user_entry_item.user_uuid.clone().unwrap(),
-                                    )
+                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                        true => {
+                                            format!(
+                                                "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                                structure.table_name,
+                                                structure.column_uuid,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_downloaded,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_updated,
+                                                user_entry_item.user_uuid.clone().unwrap(),
+                                                user_entry_item.key,
+                                                user_entry_item.uploaded,
+                                                user_entry_item.downloaded,
+                                                user_entry_item.completed,
+                                                user_entry_item.active,
+                                                user_entry_item.updated,
+                                                structure.column_key,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_uploaded,
+                                                structure.column_downloaded,
+                                                structure.column_downloaded,
+                                                structure.column_completed,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_active,
+                                                structure.column_updated,
+                                                structure.column_updated
+                                            )
+                                        }
+                                        false => {
+                                            format!(
+                                                "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', '{}', {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                                structure.table_name,
+                                                structure.column_uuid,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_downloaded,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_updated,
+                                                user_entry_item.user_uuid.clone().unwrap(),
+                                                user_entry_item.key,
+                                                user_entry_item.uploaded,
+                                                user_entry_item.downloaded,
+                                                user_entry_item.completed,
+                                                user_entry_item.active,
+                                                user_entry_item.updated,
+                                                structure.column_key,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_uploaded,
+                                                structure.column_downloaded,
+                                                structure.column_downloaded,
+                                                structure.column_completed,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_active,
+                                                structure.column_updated,
+                                                structure.column_updated
+                                            )
+                                        }
+                                    }
                                 }
                                 false => {
-                                    format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`='{}', `{}`={}, `{}`={} WHERE `{}`='{}'",
-                                        structure.database_name,
-                                        structure.column_completed,
-                                        user_entry_item.completed,
-                                        structure.column_active,
-                                        user_entry_item.active,
-                                        structure.column_downloaded,
-                                        user_entry_item.downloaded,
-                                        structure.column_key,
-                                        user_entry_item.key,
-                                        structure.column_uploaded,
-                                        user_entry_item.uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.updated,
-                                        structure.column_uuid,
-                                        user_entry_item.user_uuid.clone().unwrap(),
-                                    )
+                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                        true => {
+                                            format!(
+                                                "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                                structure.table_name,
+                                                structure.column_id,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_downloaded,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_updated,
+                                                user_entry_item.user_id.unwrap(),
+                                                user_entry_item.key,
+                                                user_entry_item.uploaded,
+                                                user_entry_item.downloaded,
+                                                user_entry_item.completed,
+                                                user_entry_item.active,
+                                                user_entry_item.updated,
+                                                structure.column_key,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_uploaded,
+                                                structure.column_downloaded,
+                                                structure.column_downloaded,
+                                                structure.column_completed,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_active,
+                                                structure.column_updated,
+                                                structure.column_updated
+                                            )
+                                        }
+                                        false => {
+                                            format!(
+                                                "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', '{}', {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
+                                                structure.table_name,
+                                                structure.column_id,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.user_id.unwrap(),
+                                                user_entry_item.completed,
+                                                user_entry_item.active,
+                                                user_entry_item.downloaded,
+                                                user_entry_item.key,
+                                                user_entry_item.uploaded,
+                                                user_entry_item.updated,
+                                                structure.column_completed,
+                                                structure.column_completed,
+                                                structure.column_active,
+                                                structure.column_active,
+                                                structure.column_downloaded,
+                                                structure.column_downloaded,
+                                                structure.column_key,
+                                                structure.column_key,
+                                                structure.column_uploaded,
+                                                structure.column_uploaded,
+                                                structure.column_updated,
+                                                structure.column_updated
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                         false => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
                                 true => {
-                                    format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=UNHEX('{}'), `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
-                                        structure.database_name,
-                                        structure.column_completed,
-                                        user_entry_item.completed,
-                                        structure.column_active,
-                                        user_entry_item.active,
-                                        structure.column_downloaded,
-                                        user_entry_item.downloaded,
-                                        structure.column_key,
-                                        user_entry_item.key,
-                                        structure.column_uploaded,
-                                        user_entry_item.uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.updated,
-                                        structure.column_id,
-                                        user_entry_item.user_id.unwrap(),
-                                    )
+                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                        true => {
+                                            format!(
+                                                "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=UNHEX('{}'), `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
+                                                structure.table_name,
+                                                structure.column_completed,
+                                                user_entry_item.completed,
+                                                structure.column_active,
+                                                user_entry_item.active,
+                                                structure.column_downloaded,
+                                                user_entry_item.downloaded,
+                                                structure.column_key,
+                                                user_entry_item.key,
+                                                structure.column_uploaded,
+                                                user_entry_item.uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.updated,
+                                                structure.column_uuid,
+                                                user_entry_item.user_uuid.clone().unwrap(),
+                                            )
+                                        }
+                                        false => {
+                                            format!(
+                                                "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`='{}', `{}`={}, `{}`={} WHERE `{}`='{}'",
+                                                structure.table_name,
+                                                structure.column_completed,
+                                                user_entry_item.completed,
+                                                structure.column_active,
+                                                user_entry_item.active,
+                                                structure.column_downloaded,
+                                                user_entry_item.downloaded,
+                                                structure.column_key,
+                                                user_entry_item.key,
+                                                structure.column_uploaded,
+                                                user_entry_item.uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.updated,
+                                                structure.column_uuid,
+                                                user_entry_item.user_uuid.clone().unwrap(),
+                                            )
+                                        }
+                                    }
                                 }
                                 false => {
-                                    format!(
-                                        "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`='{}', `{}`={}, `{}`={} WHERE `{}`='{}'",
-                                        structure.database_name,
-                                        structure.column_completed,
-                                        user_entry_item.completed,
-                                        structure.column_active,
-                                        user_entry_item.active,
-                                        structure.column_downloaded,
-                                        user_entry_item.downloaded,
-                                        structure.column_key,
-                                        user_entry_item.key,
-                                        structure.column_uploaded,
-                                        user_entry_item.uploaded,
-                                        structure.column_updated,
-                                        user_entry_item.updated,
-                                        structure.column_id,
-                                        user_entry_item.user_id.unwrap(),
-                                    )
+                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                        true => {
+                                            format!(
+                                                "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=UNHEX('{}'), `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
+                                                structure.table_name,
+                                                structure.column_completed,
+                                                user_entry_item.completed,
+                                                structure.column_active,
+                                                user_entry_item.active,
+                                                structure.column_downloaded,
+                                                user_entry_item.downloaded,
+                                                structure.column_key,
+                                                user_entry_item.key,
+                                                structure.column_uploaded,
+                                                user_entry_item.uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.updated,
+                                                structure.column_id,
+                                                user_entry_item.user_id.unwrap(),
+                                            )
+                                        }
+                                        false => {
+                                            format!(
+                                                "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`='{}', `{}`={}, `{}`={} WHERE `{}`='{}'",
+                                                structure.table_name,
+                                                structure.column_completed,
+                                                user_entry_item.completed,
+                                                structure.column_active,
+                                                user_entry_item.active,
+                                                structure.column_downloaded,
+                                                user_entry_item.downloaded,
+                                                structure.column_key,
+                                                user_entry_item.key,
+                                                structure.column_uploaded,
+                                                user_entry_item.uploaded,
+                                                structure.column_updated,
+                                                user_entry_item.updated,
+                                                structure.column_id,
+                                                user_entry_item.user_id.unwrap(),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
+                    };
+                    match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("[MySQL] Error: {}", e.to_string());
+                            return Err(e);
+                        }
                     }
-                }
-            };
-            match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[MySQL] Error: {}", e.to_string());
-                    return Err(e);
                 }
             }
             if (users_handled_entries as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
                 info!("[MySQL] Handled {} users", users_handled_entries);
             }
         }
+        info!("[MySQL] Handled {} users", users_handled_entries);
         self.commit(users_transaction).await
     }
 
@@ -1206,7 +1360,7 @@ impl DatabaseConnectorMySQL {
         };
         let string_format = format!(
             "UPDATE `{}` SET `{}`=0, `{}`=0",
-            structure.database_name,
+            structure.table_name,
             structure.column_seeds,
             structure.column_peers
         );

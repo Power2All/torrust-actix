@@ -49,44 +49,68 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
         );
 
         // Torrents API Routing
-        cfg.service(web::resource("api/torrent/{info_hash}").route(web::get().to(api_service_torrent_get)));
-        cfg.service(web::resource("api/torrents").route(web::get().to(api_service_torrents_get)));
+        cfg.service(web::resource("api/torrent/{info_hash}")
+            .route(web::get().to(api_service_torrent_get))
+            .route(web::delete().to(api_service_torrent_delete))
+        );
         cfg.service(web::resource("api/torrent/{info_hash}/{completed}").route(web::post().to(api_service_torrent_post)));
-        cfg.service(web::resource("api/torrents").route(web::post().to(api_service_torrents_post)));
-        cfg.service(web::resource("api/torrent/{info_hash}").route(web::delete().to(api_service_torrent_delete)));
-        cfg.service(web::resource("api/torrents").route(web::delete().to(api_service_torrents_delete)));
+        cfg.service(web::resource("api/torrents")
+            .route(web::get().to(api_service_torrents_get))
+            .route(web::post().to(api_service_torrents_post))
+            .route(web::delete().to(api_service_torrents_delete))
+        );
 
         // Whitelist API Routing
-        cfg.service(web::resource("api/whitelist/{info_hash}").route(web::get().to(api_service_whitelist_get)));
-        cfg.service(web::resource("api/whitelists").route(web::get().to(api_service_whitelists_get)));
-        cfg.service(web::resource("api/whitelist/{info_hash}").route(web::post().to(api_service_whitelist_post)));
-        cfg.service(web::resource("api/whitelists").route(web::post().to(api_service_whitelists_post)));
-        cfg.service(web::resource("api/whitelist/{info_hash}").route(web::delete().to(api_service_whitelist_delete)));
-        cfg.service(web::resource("api/whitelists").route(web::delete().to(api_service_whitelists_delete)));
+        cfg.service(web::resource("api/whitelist/{info_hash}")
+            .route(web::get().to(api_service_whitelist_get))
+            .route(web::post().to(api_service_whitelist_post))
+            .route(web::delete().to(api_service_whitelist_delete))
+        );
+        cfg.service(web::resource("api/whitelists")
+            .route(web::get().to(api_service_whitelists_get))
+            .route(web::post().to(api_service_whitelists_post))
+            .route(web::delete().to(api_service_whitelists_delete))
+        );
 
         // Blacklist API Routing
-        cfg.service(web::resource("api/blacklist/{info_hash}").route(web::get().to(api_service_blacklist_get)));
-        cfg.service(web::resource("api/blacklists").route(web::get().to(api_service_blacklists_get)));
-        cfg.service(web::resource("api/blacklist/{info_hash}").route(web::post().to(api_service_blacklist_post)));
-        cfg.service(web::resource("api/blacklists").route(web::post().to(api_service_blacklists_post)));
-        cfg.service(web::resource("api/blacklist/{info_hash}").route(web::delete().to(api_service_blacklist_delete)));
-        cfg.service(web::resource("api/blacklists").route(web::delete().to(api_service_blacklists_delete)));
+        cfg.service(web::resource("api/blacklist/{info_hash}")
+            .route(web::get().to(api_service_blacklist_get))
+            .route(web::post().to(api_service_blacklist_post))
+            .route(web::delete().to(api_service_blacklist_delete))
+        );
+        cfg.service(web::resource("api/blacklists")
+            .route(web::get().to(api_service_blacklists_get))
+            .route(web::post().to(api_service_blacklists_post))
+            .route(web::delete().to(api_service_blacklists_delete))
+        );
 
         // Keys API Routing
-        cfg.service(web::resource("api/key/{key_hash}").route(web::get().to(api_service_key_get)));
-        cfg.service(web::resource("api/keys").route(web::get().to(api_service_keys_get)));
-        cfg.service(web::resource("api/key/{key_hash}/{timeout}").route(web::post().to(api_service_key_post)));
-        cfg.service(web::resource("api/keys").route(web::post().to(api_service_keys_post)));
-        cfg.service(web::resource("api/key/{info_hash}").route(web::delete().to(api_service_key_delete)));
-        cfg.service(web::resource("api/keys").route(web::delete().to(api_service_keys_delete)));
+        cfg.service(web::resource("api/key/{key_hash}")
+            .route(web::get().to(api_service_key_get))
+            .route(web::delete().to(api_service_key_delete))
+        );
+        cfg.service(web::resource("api/key/{key_hash}/{timeout}")
+            .route(web::post().to(api_service_key_post))
+        );
+        cfg.service(web::resource("api/keys")
+            .route(web::get().to(api_service_keys_get))
+            .route(web::post().to(api_service_keys_post))
+            .route(web::delete().to(api_service_keys_delete))
+        );
 
         // Users API Routing (SHA1 ID/UUID hashed key)
-        cfg.service(web::resource("api/user/{id}").route(web::get().to(api_service_user_get)));
-        cfg.service(web::resource("api/users").route(web::get().to(api_service_users_get)));
-        cfg.service(web::resource("api/user/{id}/{key}/{uploaded}/{downloaded}/{completed}/{updated}/{active}").route(web::post().to(api_service_user_post)));
-        cfg.service(web::resource("api/keys").route(web::post().to(api_service_users_post)));
-        cfg.service(web::resource("api/key/{info_hash}").route(web::delete().to(api_service_user_delete)));
-        cfg.service(web::resource("api/keys").route(web::delete().to(api_service_users_delete)));
+        cfg.service(web::resource("api/user/{id}")
+            .route(web::get().to(api_service_user_get))
+            .route(web::delete().to(api_service_user_delete))
+        );
+        cfg.service(web::resource("api/user/{id}/{key}/{uploaded}/{downloaded}/{completed}/{updated}/{active}")
+            .route(web::post().to(api_service_user_post))
+        );
+        cfg.service(web::resource("api/users")
+            .route(web::get().to(api_service_users_get))
+            .route(web::post().to(api_service_users_post))
+            .route(web::delete().to(api_service_users_delete))
+        );
 
         // Swagger UI Routing
         if data.torrent_tracker.config.tracker_config.clone().unwrap().swagger.unwrap_or(false) {

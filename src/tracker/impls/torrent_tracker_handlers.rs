@@ -6,6 +6,7 @@ use log::debug;
 use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::tracker::enums::announce_event::AnnounceEvent;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
@@ -268,7 +269,8 @@ impl TorrentTracker {
                 if data.config.database.clone().unwrap().persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
-                        torrent_entry.1.clone()
+                        torrent_entry.1.clone(),
+                        UpdatesAction::Add
                     );
                 }
 
@@ -278,7 +280,7 @@ impl TorrentTracker {
                         user.torrents_active.insert(announce_query.info_hash, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs());
                         data.add_user(user_key.unwrap(), user.clone());
                         if data.config.database.clone().unwrap().persistent {
-                            data.add_user_update(user_key.unwrap(), user);
+                            data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
                         }
                     }
                 }
@@ -312,7 +314,7 @@ impl TorrentTracker {
                                 user.torrents_active.remove(&announce_query.info_hash);
                                 data.add_user(user_key.unwrap(), user.clone());
                                 if data.config.database.clone().unwrap().persistent {
-                                    data.add_user_update(user_key.unwrap(), user);
+                                    data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
                                 }
                             }
                         }
@@ -326,7 +328,8 @@ impl TorrentTracker {
                 if data.config.database.clone().unwrap().persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
-                        torrent_entry.clone()
+                        torrent_entry.clone(),
+                        UpdatesAction::Add
                     );
                 }
 
@@ -347,7 +350,8 @@ impl TorrentTracker {
                 if data.config.database.clone().unwrap().persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
-                        torrent_entry.1.clone()
+                        torrent_entry.1.clone(),
+                        UpdatesAction::Add
                     );
                 }
 
@@ -357,7 +361,7 @@ impl TorrentTracker {
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                         data.add_user(user_key.unwrap(), user.clone());
                         if data.config.database.clone().unwrap().persistent {
-                            data.add_user_update(user_key.unwrap(), user);
+                            data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
                         }
                     }
                 }

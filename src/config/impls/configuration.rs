@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::Write;
+use std::sync::Arc;
 use std::thread::available_parallelism;
 use regex::Regex;
 use crate::common::structs::custom_error::CustomError;
@@ -43,12 +44,13 @@ impl Configuration {
                 persistent: false,
                 persistent_interval: Some(60),
                 insert_vacant: false,
+                remove_action: false,
                 update_completed: true,
                 update_peers: false,
             }),
             database_structure: Some(DatabaseStructureConfig {
                 torrents: Some(DatabaseStructureConfigTorrents {
-                    database_name: String::from("torrents"),
+                    table_name: String::from("torrents"),
                     column_infohash: String::from("infohash"),
                     bin_type_infohash: true,
                     column_seeds: String::from("seeds"),
@@ -56,23 +58,23 @@ impl Configuration {
                     column_completed: String::from("completed")
                 }),
                 whitelist: Some(DatabaseStructureConfigWhitelist {
-                    database_name: String::from("whitelist"),
+                    table_name: String::from("whitelist"),
                     column_infohash: String::from("infohash"),
                     bin_type_infohash: true,
                 }),
                 blacklist: Some(DatabaseStructureConfigBlacklist {
-                    database_name: String::from("blacklist"),
+                    table_name: String::from("blacklist"),
                     column_infohash: String::from("infohash"),
                     bin_type_infohash: true,
                 }),
                 keys: Some(DatabaseStructureConfigKeys {
-                    database_name: String::from("keys"),
+                    table_name: String::from("keys"),
                     column_hash: String::from("hash"),
                     bin_type_hash: true,
                     column_timeout: String::from("timeout")
                 }),
                 users: Some(DatabaseStructureConfigUsers {
-                    database_name: String::from("users"),
+                    table_name: String::from("users"),
                     id_uuid: true,
                     column_uuid: String::from("uuid"),
                     column_id: "id".to_string(),
@@ -157,6 +159,15 @@ impl Configuration {
         }
     }
 
+    pub fn save_from_config(config: Arc<Configuration>, path: &str)
+    {
+        let config_toml = toml::to_string(&config).unwrap();
+        match Self::save_file(path, config_toml) {
+            Ok(_) => { eprintln!("[CONFIG SAVE] Config file is saved"); }
+            Err(_) => { eprintln!("[CONFIG SAVE] Unable to save to {}", path); }
+        }
+    }
+
     pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
         let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
@@ -195,19 +206,19 @@ impl Configuration {
     pub fn validate(config: Configuration) {
         // Check Map
         let check_map = vec![
-            ("[DB: torrents]", config.database_structure.clone().unwrap().torrents.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: torrents]", config.database_structure.clone().unwrap().torrents.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: infohash", config.database_structure.clone().unwrap().torrents.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: seeds", config.database_structure.clone().unwrap().torrents.unwrap().column_seeds, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: peers", config.database_structure.clone().unwrap().torrents.unwrap().column_peers, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: completed", config.database_structure.clone().unwrap().torrents.unwrap().column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: whitelist]", config.database_structure.clone().unwrap().whitelist.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: whitelist]", config.database_structure.clone().unwrap().whitelist.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: whitelist] Column: infohash", config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: blacklist]", config.database_structure.clone().unwrap().blacklist.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: blacklist]", config.database_structure.clone().unwrap().blacklist.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: blacklist] Column: infohash", config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: keys]", config.database_structure.clone().unwrap().keys.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: keys]", config.database_structure.clone().unwrap().keys.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: keys] Column: hash", config.database_structure.clone().unwrap().keys.unwrap().column_hash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: keys] Column: timeout", config.database_structure.clone().unwrap().keys.unwrap().column_timeout, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users]", config.database_structure.clone().unwrap().users.unwrap().database_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users]", config.database_structure.clone().unwrap().users.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: users] Column: id", config.database_structure.clone().unwrap().users.unwrap().column_id, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: users] Column: uuid", config.database_structure.clone().unwrap().users.unwrap().column_uuid, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: users] Column: key", config.database_structure.clone().unwrap().users.unwrap().column_key, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),

@@ -2,7 +2,7 @@ FROM rust:alpine
 
 RUN apk add git musl-dev curl
 RUN git clone https://github.com/Power2All/torrust-actix.git /tmp/torrust-actix
-RUN cd /tmp/torrust-actix && git checkout tags/v4.0.1
+RUN cd /tmp/torrust-actix && git checkout tags/v4.0.2
 WORKDIR /tmp/torrust-actix
 RUN cd /tmp/torrust-actix
 RUN cargo build --release && rm -Rf target/release/.fingerprint target/release/build target/release/deps target/release/examples target/release/incremental

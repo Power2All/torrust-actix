@@ -11,6 +11,7 @@ use crate::api::api::{api_parse_body, api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
@@ -114,7 +115,7 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
         let id_hash = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
 
         if data.torrent_tracker.config.database.clone().unwrap().persistent {
-            let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone());
+            let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
         }
 
         return match data.torrent_tracker.add_user(UserId(id_hash), user_entry.clone()) {
@@ -187,7 +188,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
             let id_hash = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
 
             if data.torrent_tracker.config.database.clone().unwrap().persistent {
-                let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone());
+                let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
             }
 
             match data.torrent_tracker.add_user(UserId(id_hash), user_entry.clone()) {
@@ -218,6 +219,20 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
             Ok(hash) => { UserId(hash) }
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})); }
         };
+
+        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            let _ = data.torrent_tracker.add_user_update(id_hash, UserEntryItem {
+                key: UserId([0u8; 20]),
+                user_id: None,
+                user_uuid: None,
+                uploaded: 0,
+                downloaded: 0,
+                completed: 0,
+                updated: 0,
+                active: 0,
+                torrents_active: Default::default(),
+            }, UpdatesAction::Remove);
+        }
 
         return match data.torrent_tracker.remove_user(id_hash) {
             None => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("unknown user_hash {}", id)})) }
@@ -254,6 +269,20 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
                 Ok(hash) => { UserId(hash) }
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})) }
             };
+
+            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+                let _ = data.torrent_tracker.add_user_update(id_hash, UserEntryItem {
+                    key: UserId([0u8; 20]),
+                    user_id: None,
+                    user_uuid: None,
+                    uploaded: 0,
+                    downloaded: 0,
+                    completed: 0,
+                    updated: 0,
+                    active: 0,
+                    torrents_active: Default::default(),
+                }, UpdatesAction::Remove);
+            }
 
             match data.torrent_tracker.remove_user(id_hash) {
                 None => { users_output.insert(id_hash, json!({"status": "unknown user_hash"})); }
