@@ -56,6 +56,11 @@ Swagger UI is introduced, and when enabled in the configuration, is accessible t
 
 ### ChangeLog
 
+#### v4.0.3
+* Fixing announce and scrape paths, since it is the wrong way.
+* Fixing various smaller bugs that isn't app-breaking, but should be handled better.
+* Preparing work for version v4.1.0, which will introduce LUA support for middleware.
+
 #### v4.0.2
 * Added option that the system will remove data from database.
 * Added updates variables for the white/black list and keys tables.
