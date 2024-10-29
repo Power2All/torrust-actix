@@ -140,19 +140,34 @@ pub async fn api_service(
             exit(1);
         }
 
-        let key_file = &mut BufReader::new(File::open(api_server_object.ssl_key.clone().unwrap()).unwrap());
-        let certs_file = &mut BufReader::new(File::open(api_server_object.ssl_cert.clone().unwrap()).unwrap());
-
-        let tls_certs = rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>().unwrap();
-        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
-            Err(_) => { exit(1); }
+        let key_file = &mut BufReader::new(match File::open(match api_server_object.ssl_key.clone() {
+            None => { panic!("[APIS] SSL key not set!"); }
+            Some(data) => { data }
+        }) {
             Ok(data) => { data }
+            Err(data) => { panic!("[APIS] SSL key unreadable: {}", data.to_string()); }
+        });
+        let certs_file = &mut BufReader::new(match File::open(match api_server_object.ssl_cert.clone() {
+            None => { panic!("[APIS] SSL cert not set!"); }
+            Some(data) => { data }
+        }) {
+            Ok(data) => { data }
+            Err(data) => { panic!("[APIS] SSL cert unreadable: {}", data.to_string()); }
+        });
+
+        let tls_certs = match rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>() {
+            Ok(data) => { data }
+            Err(data) => { panic!("[APIS] SSL cert couldn't be extracted: {}", data.to_string()); }
+        };
+        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
+            Ok(data) => { data }
+            Err(data) => { panic!("[APIS] SSL key couldn't be extracted: {}", data.to_string()); }
         };
 
-        let tls_config = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key))
-            .unwrap();
+        let tls_config = match rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key)) {
+            Ok(data) => { data }
+            Err(data) => { panic!("[APIS] SSL config couldn't be created: {}", data.to_string()); }
+        };
 
         let server = HttpServer::new(move || {
             App::new()
