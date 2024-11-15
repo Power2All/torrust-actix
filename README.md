@@ -54,11 +54,14 @@ Before you can run the server, you need to either have persietency turned off, a
 
 Swagger UI is introduced, and when enabled in the configuration, is accessible through the API via `/swagger-ui/`.
 
+Sentry.io support is introduced, you can enable it in the configuration and the URL where to push the data to.
+
 ### ChangeLog
 
 #### v4.0.3
 * Fixing announce and scrape paths, since it is the wrong way.
 * Fixing various smaller bugs that isn't app-breaking, but should be handled better.
+* Added support for Sentry.io SaaS and self-hosted setup.
 * Preparing work for version v4.1.0, which will introduce LUA support for middleware.
 
 #### v4.0.2
