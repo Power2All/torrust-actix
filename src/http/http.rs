@@ -42,16 +42,16 @@ pub fn http_service_routes(data: Arc<HttpServiceData>) -> Box<dyn Fn(&mut Servic
         cfg.service(web::resource("/announce")
             .route(web::get().to(http_service_announce))
         );
-        cfg.service(web::resource("/announce/{key}")
+        cfg.service(web::resource("/{key/announce")
             .route(web::get().to(http_service_announce_key))
         );
-        cfg.service(web::resource("/announce/{key}/{userkey}")
+        cfg.service(web::resource("/{key}/{userkey}announce")
             .route(web::get().to(http_service_announce_userkey))
         );
         cfg.service(web::resource("/scrape")
             .route(web::get().to(http_service_scrape))
         );
-        cfg.service(web::resource("/scrape/{key}")
+        cfg.service(web::resource("/{key}/scrape")
             .route(web::get().to(http_service_scrape_key))
         );
         cfg.default_service(web::route().to(http_service_not_found));
@@ -76,22 +76,38 @@ pub async fn http_service(
             exit(1);
         }
 
-        let key_file = &mut BufReader::new(File::open(http_server_object.ssl_key.clone().unwrap()).unwrap());
-        let certs_file = &mut BufReader::new(File::open(http_server_object.ssl_cert.clone().unwrap()).unwrap());
-
-        let tls_certs = rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>().unwrap();
-        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
-            Err(_) => { exit(1); }
+        let key_file = &mut BufReader::new(match File::open(match http_server_object.ssl_key.clone() {
+            None => { panic!("[HTTPS] SSL key not set!"); }
+            Some(data) => { data }
+        }) {
             Ok(data) => { data }
+            Err(data) => { panic!("[HTTPS] SSL key unreadable: {}", data); }
+        });
+        let certs_file = &mut BufReader::new(match File::open(match http_server_object.ssl_cert.clone() {
+            None => { panic!("[HTTPS] SSL cert not set!"); }
+            Some(data) => { data }
+        }) {
+            Ok(data) => { data }
+            Err(data) => { panic!("[HTTPS] SSL cert unreadable: {}", data); }
+        });
+
+        let tls_certs = match rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>() {
+            Ok(data) => { data }
+            Err(data) => { panic!("[HTTPS] SSL cert couldn't be extracted: {}", data); }
+        };
+        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
+            Ok(data) => { data }
+            Err(data) => { panic!("[HTTPS] SSL key couldn't be extracted: {}", data); }
         };
 
-        let tls_config = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key))
-            .unwrap();
+        let tls_config = match rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key)) {
+            Ok(data) => { data }
+            Err(data) => { panic!("[HTTPS] SSL config couldn't be created: {}", data); }
+        };
 
         let server = HttpServer::new(move || {
             App::new()
+                .wrap(sentry_actix::Sentry::new())
                 .wrap(http_service_cors())
                 .configure(http_service_routes(Arc::new(HttpServiceData {
                     torrent_tracker: data.clone(),
@@ -113,6 +129,7 @@ pub async fn http_service(
     info!("[HTTP] Starting server listener on {}", addr);
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(sentry_actix::Sentry::new())
             .wrap(http_service_cors())
             .configure(http_service_routes(Arc::new(HttpServiceData {
                 torrent_tracker: data.clone(),
