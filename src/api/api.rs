@@ -145,32 +145,33 @@ pub async fn api_service(
             Some(data) => { data }
         }) {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL key unreadable: {}", data.to_string()); }
+            Err(data) => { panic!("[APIS] SSL key unreadable: {}", data); }
         });
         let certs_file = &mut BufReader::new(match File::open(match api_server_object.ssl_cert.clone() {
             None => { panic!("[APIS] SSL cert not set!"); }
             Some(data) => { data }
         }) {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL cert unreadable: {}", data.to_string()); }
+            Err(data) => { panic!("[APIS] SSL cert unreadable: {}", data); }
         });
 
         let tls_certs = match rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>() {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL cert couldn't be extracted: {}", data.to_string()); }
+            Err(data) => { panic!("[APIS] SSL cert couldn't be extracted: {}", data); }
         };
         let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL key couldn't be extracted: {}", data.to_string()); }
+            Err(data) => { panic!("[APIS] SSL key couldn't be extracted: {}", data); }
         };
 
         let tls_config = match rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key)) {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL config couldn't be created: {}", data.to_string()); }
+            Err(data) => { panic!("[APIS] SSL config couldn't be created: {}", data); }
         };
 
         let server = HttpServer::new(move || {
             App::new()
+                .wrap(sentry_actix::Sentry::new())
                 .wrap(api_service_cors())
                 .configure(api_service_routes(Arc::new(ApiServiceData {
                     torrent_tracker: data.clone(),
@@ -192,6 +193,7 @@ pub async fn api_service(
     info!("[API] Starting server listener on {}", addr);
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(sentry_actix::Sentry::new())
             .wrap(api_service_cors())
             .configure(api_service_routes(Arc::new(ApiServiceData {
                 torrent_tracker: data.clone(),

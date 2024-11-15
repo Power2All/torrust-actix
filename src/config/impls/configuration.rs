@@ -37,6 +37,8 @@ impl Configuration {
                 peers_cleanup_interval: Some(900),
                 total_downloads: 0,
                 swagger: Some(false),
+                sentry: Some(false),
+                sentry_url: None
             }),
             database: Some(DatabaseConfig {
                 engine: Some(DatabaseDrivers::sqlite3),
