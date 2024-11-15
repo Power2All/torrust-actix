@@ -47,8 +47,7 @@ fn main() -> std::io::Result<()>
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .build()
-        .unwrap()
+        .build()?
         .block_on(async {
             let tracker = Arc::new(TorrentTracker::new(config.clone(), args.create_database).await);
 

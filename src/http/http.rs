@@ -105,45 +105,127 @@ pub async fn http_service(
             Err(data) => { panic!("[HTTPS] SSL config couldn't be created: {}", data); }
         };
 
-        let server = HttpServer::new(move || {
-            App::new()
-                .wrap(sentry_actix::Sentry::new())
-                .wrap(http_service_cors())
-                .configure(http_service_routes(Arc::new(HttpServiceData {
-                    torrent_tracker: data.clone(),
-                    http_trackers_config: Arc::new(http_server_object.clone())
-                })))
-        })
-            .keep_alive(Duration::from_secs(keep_alive))
-            .client_request_timeout(Duration::from_secs(request_timeout))
-            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-            .workers(worker_threads)
-            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-            .unwrap()
-            .disable_signals()
-            .run();
+        let server = match data.config.tracker_config.clone().unwrap().sentry {
+            None => {
+                HttpServer::new(move || {
+                    App::new()
+                        .wrap(http_service_cors())
+                        .configure(http_service_routes(Arc::new(HttpServiceData {
+                            torrent_tracker: data.clone(),
+                            http_trackers_config: Arc::new(http_server_object.clone())
+                        })))
+                })
+                    .keep_alive(Duration::from_secs(keep_alive))
+                    .client_request_timeout(Duration::from_secs(request_timeout))
+                    .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                    .workers(worker_threads)
+                    .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
+                    .unwrap()
+                    .disable_signals()
+                    .run()
+            }
+            Some(bool) => {
+                match bool {
+                    true => {
+                        HttpServer::new(move || {
+                            App::new()
+                                .wrap(sentry_actix::Sentry::new())
+                                .wrap(http_service_cors())
+                                .configure(http_service_routes(Arc::new(HttpServiceData {
+                                    torrent_tracker: data.clone(),
+                                    http_trackers_config: Arc::new(http_server_object.clone())
+                                })))
+                        })
+                            .keep_alive(Duration::from_secs(keep_alive))
+                            .client_request_timeout(Duration::from_secs(request_timeout))
+                            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                            .workers(worker_threads)
+                            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
+                            .unwrap()
+                            .disable_signals()
+                            .run()
+                    }
+                    false => {
+                        HttpServer::new(move || {
+                            App::new()
+                                .wrap(http_service_cors())
+                                .configure(http_service_routes(Arc::new(HttpServiceData {
+                                    torrent_tracker: data.clone(),
+                                    http_trackers_config: Arc::new(http_server_object.clone())
+                                })))
+                        })
+                            .keep_alive(Duration::from_secs(keep_alive))
+                            .client_request_timeout(Duration::from_secs(request_timeout))
+                            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                            .workers(worker_threads)
+                            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
+                            .unwrap()
+                            .disable_signals()
+                            .run()
+                    }
+                }
+            }
+        };
 
         return (server.handle(), server);
     }
 
     info!("[HTTP] Starting server listener on {}", addr);
-    let server = HttpServer::new(move || {
-        App::new()
-            .wrap(sentry_actix::Sentry::new())
-            .wrap(http_service_cors())
-            .configure(http_service_routes(Arc::new(HttpServiceData {
-                torrent_tracker: data.clone(),
-                http_trackers_config: Arc::new(http_server_object.clone())
-            })))
-    })
-        .keep_alive(Duration::from_secs(keep_alive))
-        .client_request_timeout(Duration::from_secs(request_timeout))
-        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-        .workers(worker_threads)
-        .bind((addr.ip(), addr.port()))
-        .unwrap()
-        .disable_signals()
-        .run();
+    let server = match data.config.tracker_config.clone().unwrap().sentry {
+        None => {
+            HttpServer::new(move || {
+                App::new()
+                    .wrap(http_service_cors())
+                    .configure(http_service_routes(Arc::new(HttpServiceData {
+                        torrent_tracker: data.clone(),
+                        http_trackers_config: Arc::new(http_server_object.clone())
+                    })))
+            })
+                .keep_alive(Duration::from_secs(keep_alive))
+                .client_request_timeout(Duration::from_secs(request_timeout))
+                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                .workers(worker_threads)
+                .disable_signals()
+                .run()
+        }
+        Some(bool) => {
+            match bool {
+                true => {
+                    HttpServer::new(move || {
+                        App::new()
+                            .wrap(sentry_actix::Sentry::new())
+                            .wrap(http_service_cors())
+                            .configure(http_service_routes(Arc::new(HttpServiceData {
+                                torrent_tracker: data.clone(),
+                                http_trackers_config: Arc::new(http_server_object.clone())
+                            })))
+                    })
+                        .keep_alive(Duration::from_secs(keep_alive))
+                        .client_request_timeout(Duration::from_secs(request_timeout))
+                        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                        .workers(worker_threads)
+                        .disable_signals()
+                        .run()
+                }
+                false => {
+                    HttpServer::new(move || {
+                        App::new()
+                            .wrap(http_service_cors())
+                            .configure(http_service_routes(Arc::new(HttpServiceData {
+                                torrent_tracker: data.clone(),
+                                http_trackers_config: Arc::new(http_server_object.clone())
+                            })))
+                    })
+                        .keep_alive(Duration::from_secs(keep_alive))
+                        .client_request_timeout(Duration::from_secs(request_timeout))
+                        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                        .workers(worker_threads)
+                        .disable_signals()
+                        .run()
+                }
+            }
+        }
+    };
 
     (server.handle(), server)
 }
