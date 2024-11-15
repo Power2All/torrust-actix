@@ -211,11 +211,13 @@ pub async fn api_service(
                 .configure(api_service_routes(Arc::new(ApiServiceData {
                     torrent_tracker: data.clone(),
                     api_trackers_config: Arc::new(api_server_object.clone())
-                }))) })
+            }))) })
                 .keep_alive(Duration::from_secs(keep_alive))
                 .client_request_timeout(Duration::from_secs(request_timeout))
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
                 .workers(worker_threads)
+                .bind((addr.ip(), addr.port()))
+                .unwrap()
                 .disable_signals()
                 .run()
         }
@@ -230,6 +232,8 @@ pub async fn api_service(
                 .client_request_timeout(Duration::from_secs(request_timeout))
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
                 .workers(worker_threads)
+                .bind((addr.ip(), addr.port()))
+                .unwrap()
                 .disable_signals()
                 .run()
         }

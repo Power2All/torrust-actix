@@ -158,6 +158,8 @@ pub async fn http_service(
                 .client_request_timeout(Duration::from_secs(request_timeout))
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
                 .workers(worker_threads)
+                .bind((addr.ip(), addr.port()))
+                .unwrap()
                 .disable_signals()
                 .run()
         }
@@ -174,6 +176,8 @@ pub async fn http_service(
                 .client_request_timeout(Duration::from_secs(request_timeout))
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
                 .workers(worker_threads)
+                .bind((addr.ip(), addr.port()))
+                .unwrap()
                 .disable_signals()
                 .run()
         }
