@@ -7,9 +7,9 @@ use crate::config::structs::database_structure_config_whitelist::DatabaseStructu
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DatabaseStructureConfig {
-    pub torrents: Option<DatabaseStructureConfigTorrents>,
-    pub whitelist: Option<DatabaseStructureConfigWhitelist>,
-    pub blacklist: Option<DatabaseStructureConfigBlacklist>,
-    pub keys: Option<DatabaseStructureConfigKeys>,
-    pub users: Option<DatabaseStructureConfigUsers>
+    pub torrents: DatabaseStructureConfigTorrents,
+    pub whitelist: DatabaseStructureConfigWhitelist,
+    pub blacklist: DatabaseStructureConfigBlacklist,
+    pub keys: DatabaseStructureConfigKeys,
+    pub users: DatabaseStructureConfigUsers
 }

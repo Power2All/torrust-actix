@@ -34,9 +34,9 @@ impl DatabaseConnectorMySQL {
 
     pub async fn database_connector(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
-        let mysql_connect = DatabaseConnectorMySQL::create(config.database.clone().unwrap().path.unwrap().as_str()).await;
+        let mysql_connect = DatabaseConnectorMySQL::create(config.database.clone().path.as_str()).await;
         if mysql_connect.is_err() {
-            error!("[MySQL] Unable to connect to MySQL on DSL {}", config.database.clone().unwrap().path.unwrap());
+            error!("[MySQL] Unable to connect to MySQL on DSL {}", config.database.clone().path);
             error!("[MySQL] Message: {:#?}", mysql_connect.unwrap_err().into_database_error().unwrap().message());
             exit(1);
         }
@@ -50,18 +50,18 @@ impl DatabaseConnectorMySQL {
             info!("[BOOT] Database creation triggered for MySQL.");
 
             // Create Torrent DB
-            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().torrents.unwrap().table_name);
-            match config.database_structure.clone().unwrap().torrents.unwrap().bin_type_infohash {
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().torrents.table_name);
+            match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().torrents.unwrap().table_name,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_completed,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_infohash
+                            config.database_structure.clone().torrents.table_name,
+                            config.database_structure.clone().torrents.column_infohash,
+                            config.database_structure.clone().torrents.column_seeds,
+                            config.database_structure.clone().torrents.column_peers,
+                            config.database_structure.clone().torrents.column_completed,
+                            config.database_structure.clone().torrents.column_infohash
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
@@ -72,12 +72,12 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().torrents.unwrap().table_name,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_infohash,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_seeds,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_peers,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_completed,
-                            config.database_structure.clone().unwrap().torrents.unwrap().column_infohash
+                            config.database_structure.clone().torrents.table_name,
+                            config.database_structure.clone().torrents.column_infohash,
+                            config.database_structure.clone().torrents.column_seeds,
+                            config.database_structure.clone().torrents.column_peers,
+                            config.database_structure.clone().torrents.column_completed,
+                            config.database_structure.clone().torrents.column_infohash
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
@@ -87,15 +87,15 @@ impl DatabaseConnectorMySQL {
             }
 
             // Create Whitelist DB
-            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().whitelist.unwrap().table_name);
-            match config.database_structure.clone().unwrap().whitelist.unwrap().bin_type_infohash {
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().whitelist.table_name);
+            match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().whitelist.unwrap().table_name,
-                            config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
-                            config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
+                            config.database_structure.clone().whitelist.table_name,
+                            config.database_structure.clone().whitelist.column_infohash,
+                            config.database_structure.clone().whitelist.column_infohash
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
@@ -106,9 +106,9 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().whitelist.unwrap().table_name,
-                            config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash,
-                            config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash
+                            config.database_structure.clone().whitelist.table_name,
+                            config.database_structure.clone().whitelist.column_infohash,
+                            config.database_structure.clone().whitelist.column_infohash
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
@@ -118,15 +118,15 @@ impl DatabaseConnectorMySQL {
             }
 
             // Create Blacklist DB
-            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().blacklist.unwrap().table_name);
-            match config.database_structure.clone().unwrap().blacklist.unwrap().bin_type_infohash {
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().blacklist.table_name);
+            match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().blacklist.unwrap().table_name,
-                            config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
-                            config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
+                            config.database_structure.clone().blacklist.table_name,
+                            config.database_structure.clone().blacklist.column_infohash,
+                            config.database_structure.clone().blacklist.column_infohash
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
@@ -137,9 +137,9 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().blacklist.unwrap().table_name,
-                            config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash,
-                            config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash
+                            config.database_structure.clone().blacklist.table_name,
+                            config.database_structure.clone().blacklist.column_infohash,
+                            config.database_structure.clone().blacklist.column_infohash
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
@@ -149,16 +149,16 @@ impl DatabaseConnectorMySQL {
             }
 
             // Create Keys DB
-            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().keys.unwrap().table_name);
-            match config.database_structure.clone().unwrap().keys.unwrap().bin_type_hash {
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().keys.table_name);
+            match config.database_structure.clone().keys.bin_type_hash {
                 true => {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` BINARY(20) NOT NULL, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().keys.unwrap().table_name,
-                            config.database_structure.clone().unwrap().keys.unwrap().column_hash,
-                            config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
-                            config.database_structure.clone().unwrap().keys.unwrap().column_hash
+                            config.database_structure.clone().keys.table_name,
+                            config.database_structure.clone().keys.column_hash,
+                            config.database_structure.clone().keys.column_timeout,
+                            config.database_structure.clone().keys.column_hash
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
@@ -169,10 +169,10 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(
                         format!(
                             "CREATE TABLE `{}` (`{}` VARCHAR(40) NOT NULL, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                            config.database_structure.clone().unwrap().keys.unwrap().table_name,
-                            config.database_structure.clone().unwrap().keys.unwrap().column_hash,
-                            config.database_structure.clone().unwrap().keys.unwrap().column_timeout,
-                            config.database_structure.clone().unwrap().keys.unwrap().column_hash
+                            config.database_structure.clone().keys.table_name,
+                            config.database_structure.clone().keys.column_hash,
+                            config.database_structure.clone().keys.column_timeout,
+                            config.database_structure.clone().keys.column_hash
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
@@ -182,23 +182,23 @@ impl DatabaseConnectorMySQL {
             }
 
             // Create Users DB
-            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().unwrap().users.unwrap().table_name);
-            match config.database_structure.clone().unwrap().users.unwrap().id_uuid {
+            info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().users.table_name);
+            match config.database_structure.clone().users.id_uuid {
                 true => {
-                    match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
+                    match config.database_structure.clone().users.bin_type_key {
                         true => {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` BINARY(20) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_uuid,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_key,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_downloaded,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_completed,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_active,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_updated,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_uuid
+                                    config.database_structure.clone().users.table_name,
+                                    config.database_structure.clone().users.column_uuid,
+                                    config.database_structure.clone().users.column_key,
+                                    config.database_structure.clone().users.column_uploaded,
+                                    config.database_structure.clone().users.column_downloaded,
+                                    config.database_structure.clone().users.column_completed,
+                                    config.database_structure.clone().users.column_active,
+                                    config.database_structure.clone().users.column_updated,
+                                    config.database_structure.clone().users.column_uuid
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
@@ -209,15 +209,15 @@ impl DatabaseConnectorMySQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` VARCHAR(36) NOT NULL, `{}` VARCHAR(40) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_uuid,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_key,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_downloaded,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_completed,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_active,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_updated,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_uuid
+                                    config.database_structure.clone().users.table_name,
+                                    config.database_structure.clone().users.column_uuid,
+                                    config.database_structure.clone().users.column_key,
+                                    config.database_structure.clone().users.column_uploaded,
+                                    config.database_structure.clone().users.column_downloaded,
+                                    config.database_structure.clone().users.column_completed,
+                                    config.database_structure.clone().users.column_active,
+                                    config.database_structure.clone().users.column_updated,
+                                    config.database_structure.clone().users.column_uuid
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
@@ -227,20 +227,20 @@ impl DatabaseConnectorMySQL {
                     }
                 }
                 false => {
-                    match config.database_structure.clone().unwrap().users.unwrap().bin_type_key {
+                    match config.database_structure.clone().users.bin_type_key {
                         true => {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` BINARY(20) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_id,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_key,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_downloaded,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_completed,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_active,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_updated,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_id
+                                    config.database_structure.clone().users.table_name,
+                                    config.database_structure.clone().users.column_id,
+                                    config.database_structure.clone().users.column_key,
+                                    config.database_structure.clone().users.column_uploaded,
+                                    config.database_structure.clone().users.column_downloaded,
+                                    config.database_structure.clone().users.column_completed,
+                                    config.database_structure.clone().users.column_active,
+                                    config.database_structure.clone().users.column_updated,
+                                    config.database_structure.clone().users.column_id
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
@@ -251,15 +251,15 @@ impl DatabaseConnectorMySQL {
                             match sqlx::query(
                                 format!(
                                     "CREATE TABLE `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` VARCHAR(40) NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
-                                    config.database_structure.clone().unwrap().users.unwrap().table_name,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_id,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_key,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_uploaded,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_downloaded,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_completed,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_active,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_updated,
-                                    config.database_structure.clone().unwrap().users.unwrap().column_id
+                                    config.database_structure.clone().users.table_name,
+                                    config.database_structure.clone().users.column_id,
+                                    config.database_structure.clone().users.column_key,
+                                    config.database_structure.clone().users.column_uploaded,
+                                    config.database_structure.clone().users.column_downloaded,
+                                    config.database_structure.clone().users.column_completed,
+                                    config.database_structure.clone().users.column_active,
+                                    config.database_structure.clone().users.column_updated,
+                                    config.database_structure.clone().users.column_id
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
@@ -283,12 +283,9 @@ impl DatabaseConnectorMySQL {
         let length = 100000u64;
         let mut torrents = 0u64;
         let mut completed = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().torrents {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().torrents;
         loop {
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+            let string_format = match tracker.config.deref().clone().database_structure.torrents.bin_type_infohash {
                 true => {
                     format!(
                         "SELECT HEX(`{}`) AS `{}`, `{}` FROM `{}` LIMIT {}, {}",
@@ -343,16 +340,13 @@ impl DatabaseConnectorMySQL {
     {
         let mut torrents_transaction = self.pool.begin().await?;
         let mut torrents_handled_entries = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().torrents {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().torrents;
         for (info_hash, (torrent_entry, updates_action)) in torrents.iter() {
             torrents_handled_entries += 1;
             match updates_action {
                 UpdatesAction::Remove => {
-                    if tracker.config.deref().clone().database.unwrap().remove_action {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                    if tracker.config.deref().clone().database.remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.torrents.bin_type_infohash {
                             true => {
                                 format!(
                                     "DELETE FROM `{}` WHERE `{}`=UNHEX('{}')",
@@ -380,10 +374,10 @@ impl DatabaseConnectorMySQL {
                     }
                 }
                 UpdatesAction::Add | UpdatesAction::Update => {
-                    match tracker.config.deref().clone().database.unwrap().insert_vacant {
+                    match tracker.config.deref().clone().database.insert_vacant {
                         true => {
-                            if tracker.config.deref().clone().database.unwrap().update_peers {
-                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                            if tracker.config.deref().clone().database.update_peers {
+                                let string_format = match tracker.config.deref().clone().database_structure.torrents.bin_type_infohash {
                                     true => {
                                         format!(
                                             "INSERT INTO `{}` (`{}`, `{}`, `{}`) VALUES (UNHEX('{}'), {}, {}) ON DUPLICATE KEY UPDATE `{}` = VALUES(`{}`), `{}`=VALUES(`{}`)",
@@ -425,8 +419,8 @@ impl DatabaseConnectorMySQL {
                                     }
                                 }
                             }
-                            if tracker.config.deref().clone().database.unwrap().update_completed {
-                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                            if tracker.config.deref().clone().database.update_completed {
+                                let string_format = match tracker.config.deref().clone().database_structure.torrents.bin_type_infohash {
                                     true => {
                                         format!(
                                             "INSERT INTO `{}` (`{}`, `{}`) VALUES (UNHEX('{}'), {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`)",
@@ -462,8 +456,8 @@ impl DatabaseConnectorMySQL {
                             }
                         }
                         false => {
-                            if tracker.config.deref().clone().database.unwrap().update_peers {
-                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                            if tracker.config.deref().clone().database.update_peers {
+                                let string_format = match tracker.config.deref().clone().database_structure.torrents.bin_type_infohash {
                                     true => {
                                         format!(
                                             "UPDATE IGNORE `{}` SET `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
@@ -497,8 +491,8 @@ impl DatabaseConnectorMySQL {
                                     }
                                 }
                             }
-                            if tracker.config.deref().clone().database.unwrap().update_completed {
-                                let string_format = match tracker.config.deref().clone().database_structure.unwrap().torrents.unwrap().bin_type_infohash {
+                            if tracker.config.deref().clone().database.update_completed {
+                                let string_format = match tracker.config.deref().clone().database_structure.torrents.bin_type_infohash {
                                     true => {
                                         format!(
                                             "UPDATE IGNORE `{}` SET `{}`={} WHERE `{}`=UNHEX('{}')",
@@ -545,12 +539,9 @@ impl DatabaseConnectorMySQL {
         let mut start = 0u64;
         let length = 100000u64;
         let mut hashes = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().whitelist {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().whitelist;
         loop {
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+            let string_format = match tracker.config.deref().clone().database_structure.whitelist.bin_type_infohash {
                 true => {
                     format!(
                         "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {}, {}",
@@ -592,16 +583,13 @@ impl DatabaseConnectorMySQL {
     {
         let mut whitelist_transaction = self.pool.begin().await?;
         let mut whitelist_handled_entries = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().whitelist {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().whitelist;
         for (info_hash, updates_action) in whitelists.iter() {
             whitelist_handled_entries += 1;
             match updates_action {
                 UpdatesAction::Remove => {
-                    if tracker.config.deref().clone().database.unwrap().remove_action {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+                    if tracker.config.deref().clone().database.remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.whitelist.bin_type_infohash {
                             true => {
                                 format!(
                                     "DELETE FROM `{}` WHERE `{}`=UNHEX('{}')",
@@ -629,7 +617,7 @@ impl DatabaseConnectorMySQL {
                     }
                 }
                 UpdatesAction::Add | UpdatesAction::Update => {
-                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().whitelist.unwrap().bin_type_infohash {
+                    let string_format = match tracker.config.deref().clone().database_structure.whitelist.bin_type_infohash {
                         true => {
                             format!(
                                 "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
@@ -670,12 +658,9 @@ impl DatabaseConnectorMySQL {
         let mut start = 0u64;
         let length = 100000u64;
         let mut hashes = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().blacklist {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().blacklist;
         loop {
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+            let string_format = match tracker.config.deref().clone().database_structure.blacklist.bin_type_infohash {
                 true => {
                     format!(
                         "SELECT HEX(`{}`) AS `{}` FROM `{}` LIMIT {}, {}",
@@ -717,16 +702,13 @@ impl DatabaseConnectorMySQL {
     {
         let mut blacklist_transaction = self.pool.begin().await?;
         let mut blacklist_handled_entries = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().blacklist {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().blacklist;
         for (info_hash, updates_action) in blacklists.iter() {
             blacklist_handled_entries += 1;
             match updates_action {
                 UpdatesAction::Remove => {
-                    if tracker.config.deref().clone().database.unwrap().remove_action {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+                    if tracker.config.deref().clone().database.remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.blacklist.bin_type_infohash {
                             true => {
                                 format!(
                                     "DELETE FROM `{}` WHERE `{}`=UNHEX('{}')",
@@ -754,7 +736,7 @@ impl DatabaseConnectorMySQL {
                     }
                 }
                 UpdatesAction::Add | UpdatesAction::Update => {
-                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().blacklist.unwrap().bin_type_infohash {
+                    let string_format = match tracker.config.deref().clone().database_structure.blacklist.bin_type_infohash {
                         true => {
                             format!(
                                 "INSERT IGNORE INTO `{}` (`{}`) VALUES (UNHEX('{}'))",
@@ -795,12 +777,9 @@ impl DatabaseConnectorMySQL {
         let mut start = 0u64;
         let length = 100000u64;
         let mut hashes = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().keys {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().keys;
         loop {
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+            let string_format = match tracker.config.deref().clone().database_structure.keys.bin_type_hash {
                 true => {
                     format!(
                         "SELECT HEX(`{}`) AS `{}`,`{}` FROM `{}` LIMIT {}, {}",
@@ -845,16 +824,13 @@ impl DatabaseConnectorMySQL {
     {
         let mut keys_transaction = self.pool.begin().await?;
         let mut keys_handled_entries = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().keys {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().keys;
         for (hash, (timeout, update_action)) in keys.iter() {
             keys_handled_entries += 1;
             match update_action {
                 UpdatesAction::Remove => {
-                    if tracker.config.deref().clone().database.unwrap().remove_action {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+                    if tracker.config.deref().clone().database.remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.keys.bin_type_hash {
                             true => {
                                 format!(
                                     "DELETE FROM `{}` WHERE `{}`=UNHEX('{}')",
@@ -882,7 +858,7 @@ impl DatabaseConnectorMySQL {
                     }
                 }
                 UpdatesAction::Add | UpdatesAction::Update => {
-                    let string_format = match tracker.config.deref().clone().database_structure.unwrap().keys.unwrap().bin_type_hash {
+                    let string_format = match tracker.config.deref().clone().database_structure.keys.bin_type_hash {
                         true => {
                             format!(
                                 "INSERT INTO `{}` (`{}`, `{}`) VALUES (UNHEX('{}'), {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
@@ -935,14 +911,11 @@ impl DatabaseConnectorMySQL {
         let mut start = 0u64;
         let length = 100000u64;
         let mut hashes = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().users {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().users;
         loop {
-            let string_format = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+            let string_format = match tracker.config.deref().clone().database_structure.users.id_uuid {
                 true => {
-                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                    match tracker.config.deref().clone().database_structure.users.bin_type_key {
                         true => {
                             format!(
                                 "SELECT `{}`, HEX(`{}`) AS `{}`, `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
@@ -977,7 +950,7 @@ impl DatabaseConnectorMySQL {
                     }
                 }
                 false => {
-                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                    match tracker.config.deref().clone().database_structure.users.bin_type_key {
                         true => {
                             format!(
                                 "SELECT `{}`, HEX(`{}`) AS `{}`, `{}`, `{}`, `{}`, `{}`, `{}` FROM `{}` LIMIT {}, {}",
@@ -1014,7 +987,7 @@ impl DatabaseConnectorMySQL {
             };
             let mut rows = sqlx::query(string_format.as_str()).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
-                let hash = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                let hash = match tracker.config.deref().clone().database_structure.users.id_uuid {
                     true => {
                         let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
                         let mut hasher = Sha1::new();
@@ -1032,11 +1005,11 @@ impl DatabaseConnectorMySQL {
                 };
                 tracker.add_user(UserId(hash), UserEntryItem {
                     key: UserId::from_str(result.get(structure.column_key.as_str())).unwrap(),
-                    user_id: match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                    user_id: match tracker.config.deref().clone().database_structure.users.id_uuid {
                         true => { None }
                         false => { Some(result.get(structure.column_id.as_str())) }
                     },
-                    user_uuid: match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                    user_uuid: match tracker.config.deref().clone().database_structure.users.id_uuid {
                         true => { Some(result.get(structure.column_uuid.as_str())) }
                         false => { None }
                     },
@@ -1063,16 +1036,13 @@ impl DatabaseConnectorMySQL {
     {
         let mut users_transaction = self.pool.begin().await?;
         let mut users_handled_entries = 0u64;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().users {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().users;
         for (_, (user_entry_item, updates_action)) in users.iter() {
             users_handled_entries += 1;
             match updates_action {
                 UpdatesAction::Remove => {
-                    if tracker.config.deref().clone().database.unwrap().remove_action {
-                        let string_format = match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                    if tracker.config.deref().clone().database.remove_action {
+                        let string_format = match tracker.config.deref().clone().database_structure.users.id_uuid {
                             true => {
                                 format!(
                                     "DELETE FROM `{}` WHERE `{}`='{}'",
@@ -1100,11 +1070,11 @@ impl DatabaseConnectorMySQL {
                     }
                 }
                 UpdatesAction::Add | UpdatesAction::Update => {
-                    let string_format = match  tracker.config.deref().clone().database.unwrap().insert_vacant {
+                    let string_format = match  tracker.config.deref().clone().database.insert_vacant {
                         true => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                            match tracker.config.deref().clone().database_structure.users.id_uuid {
                                 true => {
-                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                    match tracker.config.deref().clone().database_structure.users.bin_type_key {
                                         true => {
                                             format!(
                                                 "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
@@ -1172,7 +1142,7 @@ impl DatabaseConnectorMySQL {
                                     }
                                 }
                                 false => {
-                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                    match tracker.config.deref().clone().database_structure.users.bin_type_key {
                                         true => {
                                             format!(
                                                 "INSERT INTO `{}` (`{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`) VALUES ('{}', UNHEX('{}'), {}, {}, {}, {}, {}) ON DUPLICATE KEY UPDATE `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`), `{}`=VALUES(`{}`)",
@@ -1242,9 +1212,9 @@ impl DatabaseConnectorMySQL {
                             }
                         }
                         false => {
-                            match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().id_uuid {
+                            match tracker.config.deref().clone().database_structure.users.id_uuid {
                                 true => {
-                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                    match tracker.config.deref().clone().database_structure.users.bin_type_key {
                                         true => {
                                             format!(
                                                 "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=UNHEX('{}'), `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
@@ -1288,7 +1258,7 @@ impl DatabaseConnectorMySQL {
                                     }
                                 }
                                 false => {
-                                    match tracker.config.deref().clone().database_structure.unwrap().users.unwrap().bin_type_key {
+                                    match tracker.config.deref().clone().database_structure.users.bin_type_key {
                                         true => {
                                             format!(
                                                 "UPDATE IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`=UNHEX('{}'), `{}`={}, `{}`={} WHERE `{}`=UNHEX('{}')",
@@ -1354,10 +1324,7 @@ impl DatabaseConnectorMySQL {
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error>
     {
         let mut reset_seeds_peers_transaction = self.pool.begin().await?;
-        let structure = match tracker.config.deref().clone().database_structure.clone().unwrap().torrents {
-            None => { return Err(Error::RowNotFound); }
-            Some(db_structure) => { db_structure }
-        };
+        let structure = tracker.config.deref().clone().database_structure.clone().torrents;
         let string_format = format!(
             "UPDATE `{}` SET `{}`=0, `{}`=0",
             structure.table_name,

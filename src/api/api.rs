@@ -113,7 +113,7 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
         );
 
         // Swagger UI Routing
-        if data.torrent_tracker.config.tracker_config.clone().unwrap().swagger.unwrap_or(false) {
+        if data.torrent_tracker.config.tracker_config.clone().swagger {
             cfg.service(SwaggerUi::new("/swagger-ui/{_:.*}").config(Config::new(["/api/openapi.json"])));
             cfg.service(web::resource("/api/openapi.json")
                 .route(web::get().to(api_service_openapi_json))
@@ -128,29 +128,23 @@ pub async fn api_service(
     api_server_object: ApiTrackersConfig
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
-    let keep_alive = api_server_object.keep_alive.unwrap();
-    let request_timeout = api_server_object.request_timeout.unwrap();
-    let disconnect_timeout = api_server_object.disconnect_timeout.unwrap();
-    let worker_threads = api_server_object.threads.unwrap() as usize;
+    let keep_alive = api_server_object.keep_alive;
+    let request_timeout = api_server_object.request_timeout;
+    let disconnect_timeout = api_server_object.disconnect_timeout;
+    let worker_threads = api_server_object.threads as usize;
 
-    if api_server_object.ssl.unwrap() {
+    if api_server_object.ssl {
         info!("[APIS] Starting server listener with SSL on {}", addr);
-        if api_server_object.ssl_key.is_none() || api_server_object.ssl_cert.is_none() {
+        if api_server_object.ssl_key.is_empty() || api_server_object.ssl_cert.is_empty() {
             error!("[APIS] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
 
-        let key_file = &mut BufReader::new(match File::open(match api_server_object.ssl_key.clone() {
-            None => { panic!("[APIS] SSL key not set!"); }
-            Some(data) => { data }
-        }) {
+        let key_file = &mut BufReader::new(match File::open(api_server_object.ssl_key.clone()) {
             Ok(data) => { data }
             Err(data) => { panic!("[APIS] SSL key unreadable: {}", data); }
         });
-        let certs_file = &mut BufReader::new(match File::open(match api_server_object.ssl_cert.clone() {
-            None => { panic!("[APIS] SSL cert not set!"); }
-            Some(data) => { data }
-        }) {
+        let certs_file = &mut BufReader::new(match File::open(api_server_object.ssl_cert.clone()) {
             Ok(data) => { data }
             Err(data) => { panic!("[APIS] SSL cert unreadable: {}", data); }
         });
@@ -169,8 +163,25 @@ pub async fn api_service(
             Err(data) => { panic!("[APIS] SSL config couldn't be created: {}", data); }
         };
 
-        let server = match data.config.tracker_config.clone().unwrap().sentry {
-            None => {
+        let server = match data.config.tracker_config.clone().sentry {
+            true => {
+                HttpServer::new(move || { App::new()
+                    .wrap(sentry_actix::Sentry::new())
+                    .wrap(api_service_cors())
+                    .configure(api_service_routes(Arc::new(ApiServiceData {
+                        torrent_tracker: data.clone(),
+                        api_trackers_config: Arc::new(api_server_object.clone())
+                    }))) })
+                    .keep_alive(Duration::from_secs(keep_alive))
+                    .client_request_timeout(Duration::from_secs(request_timeout))
+                    .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                    .workers(worker_threads)
+                    .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
+                    .unwrap()
+                    .disable_signals()
+                    .run()
+            }
+            false => {
                 HttpServer::new(move || { App::new()
                     .wrap(api_service_cors())
                     .configure(api_service_routes(Arc::new(ApiServiceData {
@@ -186,52 +197,16 @@ pub async fn api_service(
                     .disable_signals()
                     .run()
             }
-            Some(bool) => {
-                match bool {
-                    true => {
-                        HttpServer::new(move || { App::new()
-                            .wrap(sentry_actix::Sentry::new())
-                            .wrap(api_service_cors())
-                            .configure(api_service_routes(Arc::new(ApiServiceData {
-                                torrent_tracker: data.clone(),
-                                api_trackers_config: Arc::new(api_server_object.clone())
-                            }))) })
-                            .keep_alive(Duration::from_secs(keep_alive))
-                            .client_request_timeout(Duration::from_secs(request_timeout))
-                            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                            .workers(worker_threads)
-                            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                            .unwrap()
-                            .disable_signals()
-                            .run()
-                    }
-                    false => {
-                        HttpServer::new(move || { App::new()
-                            .wrap(api_service_cors())
-                            .configure(api_service_routes(Arc::new(ApiServiceData {
-                                torrent_tracker: data.clone(),
-                                api_trackers_config: Arc::new(api_server_object.clone())
-                            }))) })
-                            .keep_alive(Duration::from_secs(keep_alive))
-                            .client_request_timeout(Duration::from_secs(request_timeout))
-                            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                            .workers(worker_threads)
-                            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                            .unwrap()
-                            .disable_signals()
-                            .run()
-                    }
-                }
-            }
         };
 
         return (server.handle(), server);
     }
 
     info!("[API] Starting server listener on {}", addr);
-    let server = match data.config.tracker_config.clone().unwrap().sentry {
-        None => {
+    let server = match data.config.tracker_config.clone().sentry {
+        true => {
             HttpServer::new(move || { App::new()
+                .wrap(sentry_actix::Sentry::new())
                 .wrap(api_service_cors())
                 .configure(api_service_routes(Arc::new(ApiServiceData {
                     torrent_tracker: data.clone(),
@@ -244,38 +219,19 @@ pub async fn api_service(
                 .disable_signals()
                 .run()
         }
-        Some(bool) => {
-            match bool {
-                true => {
-                    HttpServer::new(move || { App::new()
-                        .wrap(sentry_actix::Sentry::new())
-                        .wrap(api_service_cors())
-                        .configure(api_service_routes(Arc::new(ApiServiceData {
-                            torrent_tracker: data.clone(),
-                            api_trackers_config: Arc::new(api_server_object.clone())
-                        }))) })
-                        .keep_alive(Duration::from_secs(keep_alive))
-                        .client_request_timeout(Duration::from_secs(request_timeout))
-                        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                        .workers(worker_threads)
-                        .disable_signals()
-                        .run()
-                }
-                false => {
-                    HttpServer::new(move || { App::new()
-                        .wrap(api_service_cors())
-                        .configure(api_service_routes(Arc::new(ApiServiceData {
-                            torrent_tracker: data.clone(),
-                            api_trackers_config: Arc::new(api_server_object.clone())
-                        }))) })
-                        .keep_alive(Duration::from_secs(keep_alive))
-                        .client_request_timeout(Duration::from_secs(request_timeout))
-                        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                        .workers(worker_threads)
-                        .disable_signals()
-                        .run()
-                }
-            }
+        false => {
+            HttpServer::new(move || { App::new()
+                .wrap(api_service_cors())
+                .configure(api_service_routes(Arc::new(ApiServiceData {
+                    torrent_tracker: data.clone(),
+                    api_trackers_config: Arc::new(api_server_object.clone())
+                }))) })
+                .keep_alive(Duration::from_secs(keep_alive))
+                .client_request_timeout(Duration::from_secs(request_timeout))
+                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                .workers(worker_threads)
+                .disable_signals()
+                .run()
         }
     };
 
@@ -300,7 +256,7 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
             })))
         }
         Some(token_code) => {
-            if token_code != config.tracker_config.clone()?.api_key? {
+            if token_code != config.tracker_config.clone().api_key {
                 return Some(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
                     "status": "invalid token"
                 })));
@@ -320,7 +276,7 @@ pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<Api
             ip.ip()
         }
     };
-    match request.headers().get(data.real_ip.clone().unwrap()) {
+    match request.headers().get(data.real_ip.clone()) {
         Some(header) => {
             if header.to_str().is_ok() {
                 if let Ok(ip) = IpAddr::from_str(header.to_str().unwrap()) {

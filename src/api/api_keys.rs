@@ -99,7 +99,7 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})); }
         };
 
-        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+        if data.torrent_tracker.config.database.clone().persistent {
             let _ = data.torrent_tracker.add_key_update(key_hash, timeout as i64, UpdatesAction::Add);
         }
 
@@ -139,7 +139,7 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key_hash {}", key)})) }
             };
 
-            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            if data.torrent_tracker.config.database.clone().persistent {
                 let _ = data.torrent_tracker.add_key_update(key_hash, timeout as i64, UpdatesAction::Add);
             }
 
@@ -172,7 +172,7 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key {}", key)})); }
         };
 
-        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+        if data.torrent_tracker.config.database.clone().persistent {
             let _ = data.torrent_tracker.add_key_update(key_hash, 0i64, UpdatesAction::Remove);
         }
 
@@ -212,7 +212,7 @@ pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid key {}", key_item)})) }
             };
 
-            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            if data.torrent_tracker.config.database.clone().persistent {
                 let _ = data.torrent_tracker.add_key_update(key_hash, 0i64, UpdatesAction::Remove);
             }
 

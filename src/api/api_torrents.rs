@@ -101,7 +101,7 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
             updated: std::time::Instant::now(),
         };
 
-        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+        if data.torrent_tracker.config.database.clone().persistent {
             let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
         }
 
@@ -148,7 +148,7 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
                 updated: std::time::Instant::now(),
             };
 
-            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            if data.torrent_tracker.config.database.clone().persistent {
                 let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
             }
 
@@ -181,7 +181,7 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
-        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+        if data.torrent_tracker.config.database.clone().persistent {
             let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
         }
 
@@ -221,7 +221,7 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
 
-            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            if data.torrent_tracker.config.database.clone().persistent {
                 let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
             }
 

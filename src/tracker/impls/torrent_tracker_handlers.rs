@@ -266,7 +266,7 @@ impl TorrentTracker {
                     false
                 );
 
-                if data.config.database.clone().unwrap().persistent {
+                if data.config.database.clone().persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.1.clone(),
@@ -274,12 +274,12 @@ impl TorrentTracker {
                     );
                 }
 
-                if data.config.tracker_config.clone().unwrap().users_enabled.unwrap() && user_key.is_some() {
+                if data.config.tracker_config.clone().users_enabled && user_key.is_some() {
                     if let Some(mut user) = data.get_user(user_key.unwrap()) {
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                         user.torrents_active.insert(announce_query.info_hash, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs());
                         data.add_user(user_key.unwrap(), user.clone());
-                        if data.config.database.clone().unwrap().persistent {
+                        if data.config.database.clone().persistent {
                             data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
                         }
                     }
@@ -300,20 +300,20 @@ impl TorrentTracker {
                 let torrent_entry = match data.remove_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
-                    data.config.database.clone().unwrap().persistent
+                    data.config.database.clone().persistent
                 ) {
                     (Some(_), None) => {
                         TorrentEntry::new()
                     }
                     (Some(_), Some(new_torrent)) => {
-                        if data.config.tracker_config.clone().unwrap().users_enabled.unwrap() && user_key.is_some(){
+                        if data.config.tracker_config.clone().users_enabled && user_key.is_some(){
                             if let Some(mut user) = data.get_user(user_key.unwrap()) {
                                 user.uploaded += announce_query.uploaded;
                                 user.downloaded += announce_query.downloaded;
                                 user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                                 user.torrents_active.remove(&announce_query.info_hash);
                                 data.add_user(user_key.unwrap(), user.clone());
-                                if data.config.database.clone().unwrap().persistent {
+                                if data.config.database.clone().persistent {
                                     data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
                                 }
                             }
@@ -325,7 +325,7 @@ impl TorrentTracker {
                     }
                 };
 
-                if data.config.database.clone().unwrap().persistent {
+                if data.config.database.clone().persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.clone(),
@@ -347,7 +347,7 @@ impl TorrentTracker {
                     true
                 );
 
-                if data.config.database.clone().unwrap().persistent {
+                if data.config.database.clone().persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.1.clone(),
@@ -355,12 +355,12 @@ impl TorrentTracker {
                     );
                 }
 
-                if data.config.tracker_config.clone().unwrap().users_enabled.unwrap() && user_key.is_some(){
+                if data.config.tracker_config.clone().users_enabled && user_key.is_some(){
                     if let Some(mut user) = data.get_user(user_key.unwrap()) {
                         user.completed += 1;
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                         data.add_user(user_key.unwrap(), user.clone());
-                        if data.config.database.clone().unwrap().persistent {
+                        if data.config.database.clone().persistent {
                             data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
                         }
                     }

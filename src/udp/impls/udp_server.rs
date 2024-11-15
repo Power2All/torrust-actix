@@ -184,15 +184,15 @@ impl UdpServer {
     }
 
     pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
-        if tracker.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() && !tracker.check_whitelist(InfoHash(request.info_hash.0)) {
+        if tracker.config.tracker_config.clone().whitelist_enabled && !tracker.check_whitelist(InfoHash(request.info_hash.0)) {
             debug!("[UDP ERROR] Torrent Not Whitelisted");
             return Err(ServerError::TorrentNotWhitelisted);
         }
-        if tracker.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() && tracker.check_blacklist(InfoHash(request.info_hash.0)) {
+        if tracker.config.tracker_config.clone().blacklist_enabled && tracker.check_blacklist(InfoHash(request.info_hash.0)) {
             debug!("[UDP ERROR] Torrent Blacklisted");
             return Err(ServerError::TorrentBlacklisted);
         }
-        if tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().keys_enabled {
             if request.path.len() < 50 {
                 debug!("[UDP ERROR] Unknown Key");
                 return Err(ServerError::UnknownKey);
@@ -213,12 +213,12 @@ impl UdpServer {
             }
         }
         let mut user_key: Option<UserId> = None;
-        if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().users_enabled {
             let mut user_key_path_extract = None;
-            if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() && request.path.len() >= 91 {
+            if tracker.config.tracker_config.clone().users_enabled && request.path.len() >= 91 {
                 user_key_path_extract = Some(&request.path[51..=91]);
             }
-            if !tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() && request.path.len() >= 50 {
+            if !tracker.config.tracker_config.clone().users_enabled && request.path.len() >= 50 {
                 user_key_path_extract = Some(&request.path[10..=50])
             }
             if user_key_path_extract.is_some() {
@@ -338,7 +338,7 @@ impl UdpServer {
 
         let mut announce_response = Response::from(AnnounceResponse {
             transaction_id: request.transaction_id,
-            announce_interval: AnnounceInterval(tracker.config.tracker_config.clone().unwrap().request_interval.unwrap() as i32),
+            announce_interval: AnnounceInterval(tracker.config.tracker_config.clone().request_interval as i32),
             leechers: NumberOfPeers(torrent.peers.len() as i32),
             seeders: NumberOfPeers(torrent.seeds.len() as i32),
             peers,
@@ -346,7 +346,7 @@ impl UdpServer {
         if remote_addr.is_ipv6() {
             announce_response = Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
-                announce_interval: AnnounceInterval(tracker.config.tracker_config.clone().unwrap().request_interval.unwrap() as i32),
+                announce_interval: AnnounceInterval(tracker.config.tracker_config.clone().request_interval as i32),
                 leechers: NumberOfPeers(torrent.peers.len() as i32),
                 seeders: NumberOfPeers(torrent.seeds.len() as i32),
                 peers: peers6

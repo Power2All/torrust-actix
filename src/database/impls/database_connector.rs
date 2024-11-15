@@ -17,22 +17,10 @@ use crate::tracker::structs::user_id::UserId;
 impl DatabaseConnector {
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
-        match &config.database {
-            None => { DatabaseConnectorSQLite::database_connector(config, create_database).await }
-            Some(db) => {
-                match &db.engine {
-                    None => {
-                        DatabaseConnectorSQLite::database_connector(config, create_database).await
-                    }
-                    Some(db_engine) => {
-                        match db_engine {
-                            DatabaseDrivers::sqlite3 => { DatabaseConnectorSQLite::database_connector(config, create_database).await }
-                            DatabaseDrivers::mysql => { DatabaseConnectorMySQL::database_connector(config, create_database).await }
-                            DatabaseDrivers::pgsql => { DatabaseConnectorPgSQL::database_connector(config, create_database).await }
-                        }
-                    }
-                }
-            }
+        match &config.database.engine {
+            DatabaseDrivers::sqlite3 => { DatabaseConnectorSQLite::database_connector(config, create_database).await }
+            DatabaseDrivers::mysql => { DatabaseConnectorMySQL::database_connector(config, create_database).await }
+            DatabaseDrivers::pgsql => { DatabaseConnectorPgSQL::database_connector(config, create_database).await }
         }
     }
 

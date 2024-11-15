@@ -2,18 +2,18 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackerConfig {
-    pub api_key: Option<String>,
-    pub whitelist_enabled: Option<bool>,
-    pub blacklist_enabled: Option<bool>,
-    pub keys_enabled: Option<bool>,
-    pub keys_cleanup_interval: Option<u64>,
-    pub users_enabled: Option<bool>,
-    pub request_interval: Option<u64>,
-    pub request_interval_minimum: Option<u64>,
-    pub peers_timeout: Option<u64>,
-    pub peers_cleanup_interval: Option<u64>,
+    pub api_key: String,
+    pub whitelist_enabled: bool,
+    pub blacklist_enabled: bool,
+    pub keys_enabled: bool,
+    pub keys_cleanup_interval: u64,
+    pub users_enabled: bool,
+    pub request_interval: u64,
+    pub request_interval_minimum: u64,
+    pub peers_timeout: u64,
+    pub peers_cleanup_interval: u64,
     pub total_downloads: u64,
-    pub swagger: Option<bool>,
-    pub sentry: Option<bool>,
-    pub sentry_url: Option<String>
+    pub swagger: bool,
+    pub sentry: bool,
+    pub sentry_url: String
 }

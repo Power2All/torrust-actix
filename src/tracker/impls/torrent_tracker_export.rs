@@ -21,7 +21,7 @@ impl TorrentTracker {
             }
         }
 
-        if tracker.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().whitelist_enabled {
             info!("[EXPORT] Exporting whitelists to file {}", args.export_file_whitelists.as_str());
             match fs::write(args.export_file_whitelists.as_str(), serde_json::to_vec(&tracker.clone().get_whitelist()).unwrap()) {
                 Ok(_) => {
@@ -34,7 +34,7 @@ impl TorrentTracker {
             }
         }
 
-        if tracker.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().blacklist_enabled {
             info!("[EXPORT] Exporting blacklists to file {}", args.export_file_blacklists.as_str());
             match fs::write(args.export_file_blacklists.as_str(), serde_json::to_vec(&tracker.clone().get_blacklist()).unwrap()) {
                 Ok(_) => {
@@ -47,7 +47,7 @@ impl TorrentTracker {
             }
         }
 
-        if tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().keys_enabled {
             info!("[EXPORT] Exporting keys to file {}", args.export_file_keys.as_str());
             match fs::write(args.export_file_keys.as_str(), serde_json::to_vec(&tracker.clone().get_keys()).unwrap()) {
                 Ok(_) => {
@@ -60,7 +60,7 @@ impl TorrentTracker {
             }
         }
 
-        if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().users_enabled {
             info!("[EXPORT] Exporting users to file {}", args.export_file_users.as_str());
             match fs::write(args.export_file_users.as_str(), serde_json::to_vec(&tracker.clone().get_users()).unwrap()) {
                 Ok(_) => {

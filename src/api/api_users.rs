@@ -93,7 +93,7 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
             torrents_active: BTreeMap::new(),
         };
 
-        match data.torrent_tracker.config.database_structure.clone().unwrap().users.unwrap().id_uuid {
+        match data.torrent_tracker.config.database_structure.clone().users.id_uuid {
             true => {
                 let regex_check = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
                 if !regex_check.is_match(id.as_str()) {
@@ -114,7 +114,7 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
         hasher.update(id_data);
         let id_hash = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
 
-        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+        if data.torrent_tracker.config.database.clone().persistent {
             let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
         }
 
@@ -166,7 +166,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
                 torrents_active: BTreeMap::new(),
             };
 
-            match data.torrent_tracker.config.database_structure.clone().unwrap().users.unwrap().id_uuid {
+            match data.torrent_tracker.config.database_structure.clone().users.id_uuid {
                 true => {
                     let regex_check = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
                     if !regex_check.is_match(id.as_str()) {
@@ -187,7 +187,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
             hasher.update(id_data);
             let id_hash = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
 
-            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            if data.torrent_tracker.config.database.clone().persistent {
                 let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
             }
 
@@ -220,7 +220,7 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})); }
         };
 
-        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+        if data.torrent_tracker.config.database.clone().persistent {
             let _ = data.torrent_tracker.add_user_update(id_hash, UserEntryItem {
                 key: UserId([0u8; 20]),
                 user_id: None,
@@ -270,7 +270,7 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid user_hash {}", id)})) }
             };
 
-            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            if data.torrent_tracker.config.database.clone().persistent {
                 let _ = data.torrent_tracker.add_user_update(id_hash, UserEntryItem {
                     key: UserId([0u8; 20]),
                     user_id: None,
@@ -299,7 +299,7 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
 
 pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>) -> (StatusCode, Value)
 {
-    match data.torrent_tracker.config.database_structure.clone().unwrap().users.unwrap().id_uuid {
+    match data.torrent_tracker.config.database_structure.clone().users.id_uuid {
         true => {
             let uuid_data: &[u8] = id.as_bytes();
             let mut hasher = Sha1::new();

@@ -4,14 +4,14 @@ use serde::{Deserialize, Serialize};
 pub struct ApiTrackersConfig {
     pub enabled: bool,
     pub bind_address: String,
-    pub real_ip: Option<String>,
-    pub keep_alive: Option<u64>,
-    pub request_timeout: Option<u64>,
-    pub disconnect_timeout: Option<u64>,
-    pub max_connections: Option<u64>,
-    pub threads: Option<u64>,
-    pub ssl: Option<bool>,
-    pub ssl_key: Option<String>,
-    pub ssl_cert: Option<String>,
-    pub tls_connection_rate: Option<u64>
+    pub real_ip: String,
+    pub keep_alive: u64,
+    pub request_timeout: u64,
+    pub disconnect_timeout: u64,
+    pub max_connections: u64,
+    pub threads: u64,
+    pub ssl: bool,
+    pub ssl_key: String,
+    pub ssl_cert: String,
+    pub tls_connection_rate: u64
 }

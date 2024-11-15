@@ -23,59 +23,59 @@ impl Configuration {
     pub fn init() -> Configuration {
         Configuration {
             log_level: String::from("info"),
-            log_console_interval: Some(60),
-            tracker_config: Some(TrackerConfig {
-                api_key: Some(String::from("MyApiKey")),
-                whitelist_enabled: Some(false),
-                blacklist_enabled: Some(false),
-                keys_enabled: Some(false),
-                keys_cleanup_interval: Some(60),
-                users_enabled: Some(false),
-                request_interval: Some(1800),
-                request_interval_minimum: Some(1800),
-                peers_timeout: Some(2700),
-                peers_cleanup_interval: Some(900),
+            log_console_interval: 60,
+            tracker_config: TrackerConfig {
+                api_key: String::from("MyApiKey"),
+                whitelist_enabled: false,
+                blacklist_enabled: false,
+                keys_enabled: false,
+                keys_cleanup_interval: 60,
+                users_enabled: false,
+                request_interval: 1800,
+                request_interval_minimum: 1800,
+                peers_timeout: 2700,
+                peers_cleanup_interval: 900,
                 total_downloads: 0,
-                swagger: Some(false),
-                sentry: Some(false),
-                sentry_url: None
-            }),
-            database: Some(DatabaseConfig {
-                engine: Some(DatabaseDrivers::sqlite3),
-                path: Some(String::from("sqlite://data.db")),
+                swagger: false,
+                sentry: false,
+                sentry_url: String::from(""),
+            },
+            database: DatabaseConfig {
+                engine: DatabaseDrivers::sqlite3,
+                path: String::from("sqlite://data.db"),
                 persistent: false,
-                persistent_interval: Some(60),
+                persistent_interval: 60,
                 insert_vacant: false,
                 remove_action: false,
                 update_completed: true,
                 update_peers: false,
-            }),
-            database_structure: Some(DatabaseStructureConfig {
-                torrents: Some(DatabaseStructureConfigTorrents {
+            },
+            database_structure: DatabaseStructureConfig {
+                torrents: DatabaseStructureConfigTorrents {
                     table_name: String::from("torrents"),
                     column_infohash: String::from("infohash"),
                     bin_type_infohash: true,
                     column_seeds: String::from("seeds"),
                     column_peers: String::from("peers"),
                     column_completed: String::from("completed")
-                }),
-                whitelist: Some(DatabaseStructureConfigWhitelist {
+                },
+                whitelist: DatabaseStructureConfigWhitelist {
                     table_name: String::from("whitelist"),
                     column_infohash: String::from("infohash"),
                     bin_type_infohash: true,
-                }),
-                blacklist: Some(DatabaseStructureConfigBlacklist {
+                },
+                blacklist: DatabaseStructureConfigBlacklist {
                     table_name: String::from("blacklist"),
                     column_infohash: String::from("infohash"),
                     bin_type_infohash: true,
-                }),
-                keys: Some(DatabaseStructureConfigKeys {
+                },
+                keys: DatabaseStructureConfigKeys {
                     table_name: String::from("keys"),
                     column_hash: String::from("hash"),
                     bin_type_hash: true,
                     column_timeout: String::from("timeout")
-                }),
-                users: Some(DatabaseStructureConfigUsers {
+                },
+                users: DatabaseStructureConfigUsers {
                     table_name: String::from("users"),
                     id_uuid: true,
                     column_uuid: String::from("uuid"),
@@ -87,45 +87,45 @@ impl Configuration {
                     column_downloaded: String::from("downloaded"),
                     column_completed: String::from("completed"),
                     column_updated: String::from("updated"),
-                })
-            }),
+                }
+            },
             http_server: vec!(
                 HttpTrackersConfig {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:6969"),
-                    real_ip: Some(String::from("X-Real-IP")),
-                    keep_alive: Some(60),
-                    request_timeout: Some(15),
-                    disconnect_timeout: Some(15),
-                    max_connections: Some(25000),
-                    threads: Some(available_parallelism().unwrap().get() as u64),
-                    ssl: Some(false),
-                    ssl_key: Some(String::from("")),
-                    ssl_cert: Some(String::from("")),
-                    tls_connection_rate: Some(256)
+                    real_ip: String::from("X-Real-IP"),
+                    keep_alive: 60,
+                    request_timeout: 15,
+                    disconnect_timeout: 15,
+                    max_connections: 25000,
+                    threads: available_parallelism().unwrap().get() as u64,
+                    ssl: false,
+                    ssl_key: String::from(""),
+                    ssl_cert: String::from(""),
+                    tls_connection_rate: 256
                 }
             ),
             udp_server: vec!(
                 UdpTrackersConfig {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:6969"),
-                    threads: Some(available_parallelism().unwrap().get() as u64),
+                    threads: available_parallelism().unwrap().get() as u64,
                 }
             ),
             api_server: vec!(
                 ApiTrackersConfig {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:8080"),
-                    real_ip: Some(String::from("X-Real-IP")),
-                    keep_alive: Some(60),
-                    request_timeout: Some(30),
-                    disconnect_timeout: Some(30),
-                    max_connections: Some(25000),
-                    threads: Some(available_parallelism().unwrap().get() as u64),
-                    ssl: Some(false),
-                    ssl_key: Some(String::from("")),
-                    ssl_cert: Some(String::from("")),
-                    tls_connection_rate: Some(256)
+                    real_ip: String::from("X-Real-IP"),
+                    keep_alive: 60,
+                    request_timeout: 30,
+                    disconnect_timeout: 30,
+                    max_connections: 25000,
+                    threads: available_parallelism().unwrap().get() as u64,
+                    ssl: false,
+                    ssl_key: String::from(""),
+                    ssl_cert: String::from(""),
+                    tls_connection_rate: 256
                 }
             )
         }
@@ -208,27 +208,27 @@ impl Configuration {
     pub fn validate(config: Configuration) {
         // Check Map
         let check_map = vec![
-            ("[DB: torrents]", config.database_structure.clone().unwrap().torrents.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: torrents] Column: infohash", config.database_structure.clone().unwrap().torrents.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: torrents] Column: seeds", config.database_structure.clone().unwrap().torrents.unwrap().column_seeds, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: torrents] Column: peers", config.database_structure.clone().unwrap().torrents.unwrap().column_peers, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: torrents] Column: completed", config.database_structure.clone().unwrap().torrents.unwrap().column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: whitelist]", config.database_structure.clone().unwrap().whitelist.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: whitelist] Column: infohash", config.database_structure.clone().unwrap().whitelist.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: blacklist]", config.database_structure.clone().unwrap().blacklist.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: blacklist] Column: infohash", config.database_structure.clone().unwrap().blacklist.unwrap().column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: keys]", config.database_structure.clone().unwrap().keys.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: keys] Column: hash", config.database_structure.clone().unwrap().keys.unwrap().column_hash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: keys] Column: timeout", config.database_structure.clone().unwrap().keys.unwrap().column_timeout, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users]", config.database_structure.clone().unwrap().users.unwrap().table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: id", config.database_structure.clone().unwrap().users.unwrap().column_id, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: uuid", config.database_structure.clone().unwrap().users.unwrap().column_uuid, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: key", config.database_structure.clone().unwrap().users.unwrap().column_key, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: uploaded", config.database_structure.clone().unwrap().users.unwrap().column_uploaded, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: downloaded", config.database_structure.clone().unwrap().users.unwrap().column_downloaded, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: completed", config.database_structure.clone().unwrap().users.unwrap().column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: active", config.database_structure.clone().unwrap().users.unwrap().column_active, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: updated", config.database_structure.clone().unwrap().users.unwrap().column_updated, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: torrents]", config.database_structure.clone().torrents.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: torrents] Column: infohash", config.database_structure.clone().torrents.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: torrents] Column: seeds", config.database_structure.clone().torrents.column_seeds, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: torrents] Column: peers", config.database_structure.clone().torrents.column_peers, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: torrents] Column: completed", config.database_structure.clone().torrents.column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: whitelist]", config.database_structure.clone().whitelist.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: whitelist] Column: infohash", config.database_structure.clone().whitelist.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: blacklist]", config.database_structure.clone().blacklist.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: blacklist] Column: infohash", config.database_structure.clone().blacklist.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: keys]", config.database_structure.clone().keys.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: keys] Column: hash", config.database_structure.clone().keys.column_hash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: keys] Column: timeout", config.database_structure.clone().keys.column_timeout, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users]", config.database_structure.clone().users.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users] Column: id", config.database_structure.clone().users.column_id, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users] Column: uuid", config.database_structure.clone().users.column_uuid, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users] Column: key", config.database_structure.clone().users.column_key, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users] Column: uploaded", config.database_structure.clone().users.column_uploaded, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users] Column: downloaded", config.database_structure.clone().users.column_downloaded, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users] Column: completed", config.database_structure.clone().users.column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users] Column: active", config.database_structure.clone().users.column_active, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+            ("[DB: users] Column: updated", config.database_structure.clone().users.column_updated, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
         ];
 
         // Validation

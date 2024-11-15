@@ -64,29 +64,23 @@ pub async fn http_service(
     http_server_object: HttpTrackersConfig,
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
-    let keep_alive = http_server_object.keep_alive.unwrap();
-    let request_timeout = http_server_object.request_timeout.unwrap();
-    let disconnect_timeout = http_server_object.disconnect_timeout.unwrap();
-    let worker_threads = http_server_object.threads.unwrap() as usize;
+    let keep_alive = http_server_object.keep_alive;
+    let request_timeout = http_server_object.request_timeout;
+    let disconnect_timeout = http_server_object.disconnect_timeout;
+    let worker_threads = http_server_object.threads as usize;
 
-    if http_server_object.ssl.unwrap() {
+    if http_server_object.ssl {
         info!("[HTTPS] Starting server listener with SSL on {}", addr);
-        if http_server_object.ssl_key.is_none() || http_server_object.ssl_cert.is_none() {
+        if http_server_object.ssl_key.is_empty() || http_server_object.ssl_cert.is_empty() {
             error!("[HTTPS] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
 
-        let key_file = &mut BufReader::new(match File::open(match http_server_object.ssl_key.clone() {
-            None => { panic!("[HTTPS] SSL key not set!"); }
-            Some(data) => { data }
-        }) {
+        let key_file = &mut BufReader::new(match File::open(http_server_object.ssl_key.clone()) {
             Ok(data) => { data }
             Err(data) => { panic!("[HTTPS] SSL key unreadable: {}", data); }
         });
-        let certs_file = &mut BufReader::new(match File::open(match http_server_object.ssl_cert.clone() {
-            None => { panic!("[HTTPS] SSL cert not set!"); }
-            Some(data) => { data }
-        }) {
+        let certs_file = &mut BufReader::new(match File::open(http_server_object.ssl_cert.clone()) {
             Ok(data) => { data }
             Err(data) => { panic!("[HTTPS] SSL cert unreadable: {}", data); }
         });
@@ -105,8 +99,27 @@ pub async fn http_service(
             Err(data) => { panic!("[HTTPS] SSL config couldn't be created: {}", data); }
         };
 
-        let server = match data.config.tracker_config.clone().unwrap().sentry {
-            None => {
+        let server = match data.config.tracker_config.clone().sentry {
+            true => {
+                HttpServer::new(move || {
+                    App::new()
+                        .wrap(sentry_actix::Sentry::new())
+                        .wrap(http_service_cors())
+                        .configure(http_service_routes(Arc::new(HttpServiceData {
+                            torrent_tracker: data.clone(),
+                            http_trackers_config: Arc::new(http_server_object.clone())
+                        })))
+                })
+                    .keep_alive(Duration::from_secs(keep_alive))
+                    .client_request_timeout(Duration::from_secs(request_timeout))
+                    .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                    .workers(worker_threads)
+                    .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
+                    .unwrap()
+                    .disable_signals()
+                    .run()
+            }
+            false => {
                 HttpServer::new(move || {
                     App::new()
                         .wrap(http_service_cors())
@@ -124,55 +137,31 @@ pub async fn http_service(
                     .disable_signals()
                     .run()
             }
-            Some(bool) => {
-                match bool {
-                    true => {
-                        HttpServer::new(move || {
-                            App::new()
-                                .wrap(sentry_actix::Sentry::new())
-                                .wrap(http_service_cors())
-                                .configure(http_service_routes(Arc::new(HttpServiceData {
-                                    torrent_tracker: data.clone(),
-                                    http_trackers_config: Arc::new(http_server_object.clone())
-                                })))
-                        })
-                            .keep_alive(Duration::from_secs(keep_alive))
-                            .client_request_timeout(Duration::from_secs(request_timeout))
-                            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                            .workers(worker_threads)
-                            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                            .unwrap()
-                            .disable_signals()
-                            .run()
-                    }
-                    false => {
-                        HttpServer::new(move || {
-                            App::new()
-                                .wrap(http_service_cors())
-                                .configure(http_service_routes(Arc::new(HttpServiceData {
-                                    torrent_tracker: data.clone(),
-                                    http_trackers_config: Arc::new(http_server_object.clone())
-                                })))
-                        })
-                            .keep_alive(Duration::from_secs(keep_alive))
-                            .client_request_timeout(Duration::from_secs(request_timeout))
-                            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                            .workers(worker_threads)
-                            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                            .unwrap()
-                            .disable_signals()
-                            .run()
-                    }
-                }
-            }
         };
 
         return (server.handle(), server);
     }
 
     info!("[HTTP] Starting server listener on {}", addr);
-    let server = match data.config.tracker_config.clone().unwrap().sentry {
-        None => {
+    let server = match data.config.tracker_config.clone().sentry {
+        true => {
+            HttpServer::new(move || {
+                App::new()
+                    .wrap(sentry_actix::Sentry::new())
+                    .wrap(http_service_cors())
+                    .configure(http_service_routes(Arc::new(HttpServiceData {
+                        torrent_tracker: data.clone(),
+                        http_trackers_config: Arc::new(http_server_object.clone())
+                    })))
+            })
+                .keep_alive(Duration::from_secs(keep_alive))
+                .client_request_timeout(Duration::from_secs(request_timeout))
+                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                .workers(worker_threads)
+                .disable_signals()
+                .run()
+        }
+        false => {
             HttpServer::new(move || {
                 App::new()
                     .wrap(http_service_cors())
@@ -187,43 +176,6 @@ pub async fn http_service(
                 .workers(worker_threads)
                 .disable_signals()
                 .run()
-        }
-        Some(bool) => {
-            match bool {
-                true => {
-                    HttpServer::new(move || {
-                        App::new()
-                            .wrap(sentry_actix::Sentry::new())
-                            .wrap(http_service_cors())
-                            .configure(http_service_routes(Arc::new(HttpServiceData {
-                                torrent_tracker: data.clone(),
-                                http_trackers_config: Arc::new(http_server_object.clone())
-                            })))
-                    })
-                        .keep_alive(Duration::from_secs(keep_alive))
-                        .client_request_timeout(Duration::from_secs(request_timeout))
-                        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                        .workers(worker_threads)
-                        .disable_signals()
-                        .run()
-                }
-                false => {
-                    HttpServer::new(move || {
-                        App::new()
-                            .wrap(http_service_cors())
-                            .configure(http_service_routes(Arc::new(HttpServiceData {
-                                torrent_tracker: data.clone(),
-                                http_trackers_config: Arc::new(http_server_object.clone())
-                            })))
-                    })
-                        .keep_alive(Duration::from_secs(keep_alive))
-                        .client_request_timeout(Duration::from_secs(request_timeout))
-                        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                        .workers(worker_threads)
-                        .disable_signals()
-                        .run()
-                }
-            }
         }
     };
 
@@ -240,7 +192,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
         Err(result) => { return result; }
     };
 
-    if data.torrent_tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+    if data.torrent_tracker.config.tracker_config.clone().keys_enabled {
         let key = path.clone();
         let key_check = http_service_check_key_validation(data.torrent_tracker.clone(), key).await;
         if let Some(value) = key_check {
@@ -249,7 +201,7 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
         }
     }
 
-    if data.torrent_tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() && !data.torrent_tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+    if data.torrent_tracker.config.tracker_config.clone().users_enabled && !data.torrent_tracker.config.tracker_config.clone().keys_enabled {
         let user_key = path.clone();
         let user_key_check = http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key.clone()).await;
         if user_key_check.is_none() {
@@ -270,7 +222,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
         Err(result) => { return result; }
     };
 
-    if data.torrent_tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+    if data.torrent_tracker.config.tracker_config.clone().keys_enabled {
         let key = path.clone().0;
         let key_check = http_service_check_key_validation(data.torrent_tracker.clone(), key).await;
         if let Some(value) = key_check {
@@ -279,7 +231,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
         }
     }
 
-    if data.torrent_tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
+    if data.torrent_tracker.config.tracker_config.clone().users_enabled {
         let user_key = path.clone().1;
         let user_key_check = http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key.clone()).await;
         if user_key_check.is_none() {
@@ -303,7 +255,7 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<HttpServ
         }
     };
 
-    if data.torrent_tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+    if data.torrent_tracker.config.tracker_config.clone().keys_enabled {
         http_stat_update(ip, data.torrent_tracker.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map!{
             "failure reason" => ben_bytes!("missing key")
@@ -334,13 +286,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         }
     };
 
-    if data.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() && !data.check_whitelist(announce_unwrapped.info_hash) {
+    if data.config.tracker_config.clone().whitelist_enabled && !data.check_whitelist(announce_unwrapped.info_hash) {
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
             "failure reason" => ben_bytes!("unknown info_hash")
         }.encode());
     }
 
-    if data.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() && data.check_blacklist(announce_unwrapped.info_hash) {
+    if data.config.tracker_config.clone().blacklist_enabled && data.check_blacklist(announce_unwrapped.info_hash) {
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
             "failure reason" => ben_bytes!("forbidden info_hash")
         }.encode());
@@ -411,8 +363,8 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     }
                 }
                 HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                    "interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval.unwrap() as i64),
-                    "min interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval_minimum.unwrap() as i64),
+                    "interval" => ben_int!(data.config.tracker_config.clone().request_interval as i64),
+                    "min interval" => ben_int!(data.config.tracker_config.clone().request_interval_minimum as i64),
                     "complete" => ben_int!(torrent_entry.seeds.len() as i64),
                     "incomplete" => ben_int!(torrent_entry.clone().peers.len() as i64),
                     "downloaded" => ben_int!(torrent_entry.completed as i64),
@@ -471,8 +423,8 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     }
                 }
                 HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                    "interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval.unwrap() as i64),
-                    "min interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval_minimum.unwrap() as i64),
+                    "interval" => ben_int!(data.config.tracker_config.clone().request_interval as i64),
+                    "min interval" => ben_int!(data.config.tracker_config.clone().request_interval_minimum as i64),
                     "complete" => ben_int!(torrent_entry.seeds.len() as i64),
                     "incomplete" => ben_int!(torrent_entry.peers.len() as i64),
                     "downloaded" => ben_int!(torrent_entry.completed as i64),
@@ -525,8 +477,8 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 }
             }
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                "interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval.unwrap() as i64),
-                "min interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval_minimum.unwrap() as i64),
+                "interval" => ben_int!(data.config.tracker_config.clone().request_interval as i64),
+                "min interval" => ben_int!(data.config.tracker_config.clone().request_interval_minimum as i64),
                 "complete" => ben_int!(torrent_entry.seeds.len() as i64),
                 "incomplete" => ben_int!(torrent_entry.peers.len() as i64),
                 "downloaded" => ben_int!(torrent_entry.completed as i64),
@@ -573,8 +525,8 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 }
             }
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                "interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval.unwrap() as i64),
-                "min interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval_minimum.unwrap() as i64),
+                "interval" => ben_int!(data.config.tracker_config.clone().request_interval as i64),
+                "min interval" => ben_int!(data.config.tracker_config.clone().request_interval_minimum as i64),
                 "complete" => ben_int!(torrent_entry.seeds.len() as i64),
                 "incomplete" => ben_int!(torrent_entry.peers.len() as i64),
                 "downloaded" => ben_int!(torrent_entry.completed as i64),
@@ -605,7 +557,7 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
 
     debug!("[DEBUG] Request from {}: Scrape with Key", ip);
 
-    if data.torrent_tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+    if data.torrent_tracker.config.tracker_config.clone().keys_enabled {
         let key = path.into_inner();
         let key_check = http_service_check_key_validation(data.torrent_tracker.clone(), key).await;
         if let Some(value) = key_check { return value; }
@@ -646,8 +598,8 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
                 });
             }
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                "interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval.unwrap() as i64),
-                "min interval" => ben_int!(data.config.tracker_config.clone().unwrap().request_interval_minimum.unwrap() as i64),
+                "interval" => ben_int!(data.config.tracker_config.clone().request_interval as i64),
+                "min interval" => ben_int!(data.config.tracker_config.clone().request_interval_minimum as i64),
                 "files" => scrape_list
             }.encode())
         }
@@ -748,7 +700,7 @@ pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<Htt
             ip.ip()
         }
     };
-    match request.headers().get(data.real_ip.clone().unwrap()) {
+    match request.headers().get(data.real_ip.clone()) {
         Some(header) => {
             if header.to_str().is_ok() {
                 if let Ok(ip) = IpAddr::from_str(header.to_str().unwrap()) {

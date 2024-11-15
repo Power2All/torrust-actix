@@ -9,10 +9,10 @@ use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub log_level: String,
-    pub log_console_interval: Option<u64>,
-    pub tracker_config: Option<TrackerConfig>,
-    pub database: Option<DatabaseConfig>,
-    pub database_structure: Option<DatabaseStructureConfig>,
+    pub log_console_interval: u64,
+    pub tracker_config: TrackerConfig,
+    pub database: DatabaseConfig,
+    pub database_structure: DatabaseStructureConfig,
     pub http_server: Vec<HttpTrackersConfig>,
     pub udp_server: Vec<UdpTrackersConfig>,
     pub api_server: Vec<ApiTrackersConfig>

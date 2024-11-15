@@ -89,7 +89,7 @@ pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<St
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
-        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+        if data.torrent_tracker.config.database.clone().persistent {
             let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
         }
 
@@ -129,7 +129,7 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
 
-            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            if data.torrent_tracker.config.database.clone().persistent {
                 let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
             }
 
@@ -162,7 +162,7 @@ pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<
             Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
         };
 
-        if data.torrent_tracker.config.database.clone().unwrap().persistent {
+        if data.torrent_tracker.config.database.clone().persistent {
             let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
         }
 
@@ -202,7 +202,7 @@ pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::P
                 Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
             };
 
-            if data.torrent_tracker.config.database.clone().unwrap().persistent {
+            if data.torrent_tracker.config.database.clone().persistent {
                 let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
             }
 

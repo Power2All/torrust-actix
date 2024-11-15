@@ -50,7 +50,7 @@ impl TorrentTracker {
             }
         }
 
-        if tracker.config.tracker_config.clone().unwrap().whitelist_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().whitelist_enabled {
             info!("[IMPORT] Importing whitelists to memory {}", args.import_file_whitelists.as_str());
             match fs::read(args.import_file_whitelists.as_str()) {
                 Ok(data) => {
@@ -76,7 +76,7 @@ impl TorrentTracker {
             }
         }
 
-        if tracker.config.tracker_config.clone().unwrap().blacklist_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().blacklist_enabled {
             info!("[IMPORT] Importing blacklists to memory {}", args.import_file_blacklists.as_str());
             match fs::read(args.import_file_blacklists.as_str()) {
                 Ok(data) => {
@@ -100,7 +100,7 @@ impl TorrentTracker {
             }
         }
 
-        if tracker.config.tracker_config.clone().unwrap().keys_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().keys_enabled {
             info!("[IMPORT] Importing keys to memory {}", args.import_file_keys.as_str());
             match fs::read(args.import_file_keys.as_str()) {
                 Ok(data) => {
@@ -128,7 +128,7 @@ impl TorrentTracker {
             }
         }
 
-        if tracker.config.tracker_config.clone().unwrap().users_enabled.unwrap() {
+        if tracker.config.tracker_config.clone().users_enabled {
             info!("[IMPORT] Importing users to memory {}", args.import_file_users.as_str());
             match fs::read(args.import_file_users.as_str()) {
                 Ok(data) => {
