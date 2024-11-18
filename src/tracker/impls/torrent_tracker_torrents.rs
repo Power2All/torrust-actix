@@ -9,7 +9,7 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker.clone()).await {
@@ -17,7 +17,7 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_torrents(tracker.clone(), torrents.clone()).await {
@@ -32,7 +32,7 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> bool
     {
         match self.sqlx.reset_seeds_peers(tracker.clone()).await {
@@ -47,7 +47,7 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
@@ -76,7 +76,7 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn add_torrents(&self, hashes: BTreeMap<InfoHash, TorrentEntry>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
     {
         let mut returned_data = BTreeMap::new();
@@ -86,7 +86,7 @@ impl TorrentTracker {
         returned_data
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
@@ -99,7 +99,7 @@ impl TorrentTracker {
         })
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         let mut returned_data = BTreeMap::new();
@@ -109,7 +109,7 @@ impl TorrentTracker {
         returned_data
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
@@ -125,7 +125,7 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         let mut returned_data = BTreeMap::new();

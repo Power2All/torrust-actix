@@ -105,7 +105,7 @@ pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<St
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
-#[tracing::instrument(skip(payload, level = "debug"))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client

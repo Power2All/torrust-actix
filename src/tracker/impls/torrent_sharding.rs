@@ -545,7 +545,7 @@ impl TorrentSharding {
         self.get_shard(shard).unwrap().read().clone()
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry>
     {
         let mut torrents_return = BTreeMap::new();
@@ -556,7 +556,7 @@ impl TorrentSharding {
         torrents_return
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn get_torrents_amount(&self) -> u64
     {
         let mut torrents = 0u64;
