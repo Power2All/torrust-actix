@@ -7,6 +7,7 @@ use clap::Parser;
 use futures_util::future::{try_join_all, TryJoinAll};
 use log::{error, info};
 use parking_lot::deadlock;
+use sentry::ClientInitGuard;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
@@ -31,8 +32,9 @@ fn main() -> std::io::Result<()>
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
+    let sentry_guard: ClientInitGuard;
     if config.sentry_config.clone().enabled {
-        let _guard = sentry::init((config.sentry_config.clone().dsn, sentry::ClientOptions {
+        sentry_guard = sentry::init((config.sentry_config.clone().dsn, sentry::ClientOptions {
             release: sentry::release_name!(),
             debug: config.sentry_config.clone().debug,
             sample_rate: config.sentry_config.clone().sample_rate,
