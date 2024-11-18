@@ -181,7 +181,7 @@ pub async fn api_service(
             }
         };
 
-        let server = match data.config.tracker_config.clone().sentry {
+        let server = match data.config.sentry_config.clone().enabled {
             true => {
                 HttpServer::new(move || { App::new()
                     .wrap(sentry_actix::Sentry::new())
@@ -221,7 +221,7 @@ pub async fn api_service(
     }
 
     info!("[API] Starting server listener on {}", addr);
-    let server = match data.config.tracker_config.clone().sentry {
+    let server = match data.config.sentry_config.clone().enabled {
         true => {
             HttpServer::new(move || { App::new()
                 .wrap(sentry_actix::Sentry::new())

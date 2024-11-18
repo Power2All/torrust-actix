@@ -31,7 +31,7 @@ fn main() -> std::io::Result<()>
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    if config.tracker_config.clone().sentry {
+    if config.sentry_config.clone().enabled {
         let _guard = sentry::init((config.sentry_config.clone().dsn, sentry::ClientOptions {
             release: sentry::release_name!(),
             debug: config.sentry_config.clone().debug,

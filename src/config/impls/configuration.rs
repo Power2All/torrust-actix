@@ -39,8 +39,6 @@ impl Configuration {
                 peers_cleanup_interval: 900,
                 total_downloads: 0,
                 swagger: false,
-                sentry: false,
-                sentry_url: String::from(""),
             },
             sentry_config: SentryConfig {
                 enabled: false,

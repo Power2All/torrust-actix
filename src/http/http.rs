@@ -105,7 +105,7 @@ pub async fn http_service(
             Err(data) => { panic!("[HTTPS] SSL config couldn't be created: {}", data); }
         };
 
-        let server = match data.config.tracker_config.clone().sentry {
+        let server = match data.config.sentry_config.clone().enabled {
             true => {
                 HttpServer::new(move || {
                     App::new()
@@ -149,7 +149,7 @@ pub async fn http_service(
     }
 
     info!("[HTTP] Starting server listener on {}", addr);
-    let server = match data.config.tracker_config.clone().sentry {
+    let server = match data.config.sentry_config.clone().enabled {
         true => {
             HttpServer::new(move || {
                 App::new()
