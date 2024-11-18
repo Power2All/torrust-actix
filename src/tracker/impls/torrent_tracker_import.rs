@@ -13,7 +13,7 @@ use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
 impl TorrentTracker {
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub async fn import(&self, args: &Cli, tracker: Arc<TorrentTracker>)
     {
         info!("[IMPORT] Requesting to import data");

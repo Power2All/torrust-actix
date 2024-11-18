@@ -21,7 +21,7 @@ use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 
 impl Configuration {
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn init() -> Configuration {
         Configuration {
             log_level: String::from("info"),
@@ -141,12 +141,12 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn load(data: &[u8]) -> Result<Configuration, toml::de::Error> {
         toml::from_str(&String::from_utf8_lossy(data))
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn load_file(path: &str) -> Result<Configuration, ConfigurationError> {
         match std::fs::read(path) {
             Err(e) => Err(ConfigurationError::IOError(e)),
@@ -161,7 +161,7 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn save_file(path: &str, data: String) -> Result<(), ConfigurationError> {
         match File::create(path) {
             Ok(mut file) => {
@@ -174,7 +174,7 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn save_from_config(config: Arc<Configuration>, path: &str)
     {
         let config_toml = toml::to_string(&config).unwrap();
@@ -184,7 +184,7 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
         let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
@@ -220,7 +220,7 @@ impl Configuration {
         Ok(config)
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn validate(config: Configuration) {
         // Check Map
         let check_map = vec![
@@ -253,7 +253,7 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn validate_value(name: &str, value: String, regex: String)
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();

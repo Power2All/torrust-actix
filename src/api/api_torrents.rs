@@ -13,7 +13,7 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -39,7 +39,7 @@ pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<Strin
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -80,7 +80,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payloa
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(String, u64)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client

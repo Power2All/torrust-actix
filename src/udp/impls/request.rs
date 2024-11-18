@@ -37,7 +37,7 @@ impl From<ScrapeRequest> for Request {
 }
 
 impl Request {
-    #[tracing::instrument(skip(bytes))]
+    #[tracing::instrument(skip(bytes), level = "debug")]
     pub fn write(self, bytes: &mut impl Write) -> Result<(), io::Error> {
         match self {
             Request::Connect(r) => {
@@ -81,7 +81,7 @@ impl Request {
         Ok(())
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub fn from_bytes(bytes: &[u8], max_scrape_torrents: u8) -> Result<Self, RequestParseError> {
         let mut cursor = Cursor::new(bytes);
 

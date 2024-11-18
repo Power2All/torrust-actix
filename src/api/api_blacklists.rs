@@ -11,7 +11,7 @@ use crate::common::common::hex2bin;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -37,7 +37,7 @@ pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<Str
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -75,7 +75,7 @@ pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payl
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client

@@ -6,7 +6,7 @@ use crate::structs::Cli;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub async fn export(&self, args: &Cli, tracker: Arc<TorrentTracker>)
     {
         info!("[EXPORT] Requesting to export data");

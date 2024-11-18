@@ -15,7 +15,7 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -33,7 +33,7 @@ pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>,
     }
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -67,7 +67,7 @@ pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, 
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String, String, u64, u64, u64, u64, u8)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -130,7 +130,7 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -208,7 +208,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -248,7 +248,7 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad user_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -303,7 +303,7 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>) -> (StatusCode, Value)
 {
     match data.torrent_tracker.config.database_structure.clone().users.id_uuid {

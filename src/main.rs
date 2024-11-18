@@ -17,7 +17,7 @@ use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 fn main() -> std::io::Result<()>
 {
     let args = Cli::parse();

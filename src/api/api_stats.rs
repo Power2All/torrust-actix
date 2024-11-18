@@ -6,7 +6,7 @@ use crate::api::api::{api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client

@@ -25,7 +25,7 @@ use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub fn http_service_cors() -> Cors
 {
     Cors::default()
@@ -36,7 +36,7 @@ pub fn http_service_cors() -> Cors
         .max_age(1)
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub fn http_service_routes(data: Arc<HttpServiceData>) -> Box<dyn Fn(&mut ServiceConfig)>
 {
     Box::new(move |cfg: &mut ServiceConfig| {
@@ -60,7 +60,7 @@ pub fn http_service_routes(data: Arc<HttpServiceData>) -> Box<dyn Fn(&mut Servic
     })
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn http_service(
     addr: SocketAddr,
     data: Arc<TorrentTracker>,
@@ -192,7 +192,7 @@ pub async fn http_service(
     (server.handle(), server)
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
