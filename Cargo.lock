@@ -3340,7 +3340,7 @@ dependencies = [
 
 [[package]]
 name = "torrust-actix"
-version = "4.0.3"
+version = "4.0.4"
 dependencies = [
  "actix-cors",
  "actix-web",

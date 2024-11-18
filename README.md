@@ -20,6 +20,7 @@ This project originated from Torrust-Tracker code originally developed by Mick v
 * [X] Torrent key support for locking access to announcement through keys as info_hash with a timeout
 * [X] User account support, configurable for also database support
 * [X] Swagger UI built-in in the API (toggleable), useful both for testing API and documentation for API
+* [X] Sentry SaaS and self-hosted support
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -57,6 +58,9 @@ Swagger UI is introduced, and when enabled in the configuration, is accessible t
 Sentry.io support is introduced, you can enable it in the configuration and the URL where to push the data to.
 
 ### ChangeLog
+
+#### v4.0.4
+* Further implementation of Sentry (trace logging)
 
 #### v4.0.3
 * Fixing announce and scrape paths, since it is the wrong way.
