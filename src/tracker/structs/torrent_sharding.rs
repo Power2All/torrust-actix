@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct TorrentSharding {
     pub shard_000: Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>,
     pub shard_001: Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>,

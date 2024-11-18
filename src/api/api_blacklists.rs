@@ -11,6 +11,7 @@ use crate::common::common::hex2bin;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 
+#[tracing::instrument]
 pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -36,6 +37,7 @@ pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<Str
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
+#[tracing::instrument(skip(payload))]
 pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -73,6 +75,7 @@ pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payl
     }))
 }
 
+#[tracing::instrument]
 pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -102,6 +105,7 @@ pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<St
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
+#[tracing::instrument(skip(payload))]
 pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -146,6 +150,7 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
     }))
 }
 
+#[tracing::instrument]
 pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -175,6 +180,7 @@ pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
+#[tracing::instrument(skip(payload))]
 pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client

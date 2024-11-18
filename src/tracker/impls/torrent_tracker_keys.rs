@@ -10,6 +10,7 @@ use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
+    #[tracing::instrument]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(keys) = self.sqlx.load_keys(tracker.clone()).await {
@@ -17,6 +18,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_keys(tracker.clone(), keys.clone()).await {
@@ -31,6 +33,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn add_key(&self, hash: InfoHash, timeout: i64) -> bool
     {
         let map = self.keys.clone();
@@ -50,6 +53,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn get_key(&self, hash: InfoHash) -> Option<(InfoHash, i64)>
     {
         let map = self.keys.clone();
@@ -57,6 +61,7 @@ impl TorrentTracker {
         lock.get(&hash).map(|data| (hash, *data))
     }
 
+    #[tracing::instrument]
     pub fn get_keys(&self) -> BTreeMap<InfoHash, i64>
     {
         let map = self.keys.clone();
@@ -64,6 +69,7 @@ impl TorrentTracker {
         lock.clone()
     }
 
+    #[tracing::instrument]
     pub fn remove_key(&self, hash: InfoHash) -> bool
     {
         let map = self.keys.clone();
@@ -79,6 +85,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn check_key(&self, hash: InfoHash) -> bool
     {
         let map = self.keys.clone();
@@ -101,6 +108,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn clear_keys(&self)
     {
         let map = self.keys.clone();
@@ -109,6 +117,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::Key, 0);
     }
 
+    #[tracing::instrument]
     pub fn clean_keys(&self)
     {
         let keys = self.get_keys();

@@ -28,6 +28,7 @@ use crate::config::structs::configuration::Configuration;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
+#[tracing::instrument]
 pub fn api_service_cors() -> Cors
 {
     // This is not a duplicate, each framework has their own CORS configuration.
@@ -39,6 +40,7 @@ pub fn api_service_cors() -> Cors
         .max_age(1)
 }
 
+#[tracing::instrument]
 pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceConfig)>
 {
     Box::new(move |cfg: &mut ServiceConfig| {
@@ -122,6 +124,7 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
     })
 }
 
+#[tracing::instrument]
 pub async fn api_service(
     addr: SocketAddr,
     data: Arc<TorrentTracker>,
@@ -142,25 +145,40 @@ pub async fn api_service(
 
         let key_file = &mut BufReader::new(match File::open(api_server_object.ssl_key.clone()) {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL key unreadable: {}", data); }
+            Err(data) => {
+                sentry::capture_error(&data);
+                panic!("[APIS] SSL key unreadable: {}", data);
+            }
         });
         let certs_file = &mut BufReader::new(match File::open(api_server_object.ssl_cert.clone()) {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL cert unreadable: {}", data); }
+            Err(data) => {
+                sentry::capture_error(&data);
+                panic!("[APIS] SSL cert unreadable: {}", data);
+            }
         });
 
         let tls_certs = match rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>() {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL cert couldn't be extracted: {}", data); }
+            Err(data) => {
+                sentry::capture_error(&data);
+                panic!("[APIS] SSL cert couldn't be extracted: {}", data);
+            }
         };
         let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL key couldn't be extracted: {}", data); }
+            Err(data) => {
+                sentry::capture_error(&data);
+                panic!("[APIS] SSL key couldn't be extracted: {}", data);
+            }
         };
 
         let tls_config = match rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key)) {
             Ok(data) => { data }
-            Err(data) => { panic!("[APIS] SSL config couldn't be created: {}", data); }
+            Err(data) => {
+                sentry::capture_error(&data);
+                panic!("[APIS] SSL config couldn't be created: {}", data);
+            }
         };
 
         let server = match data.config.tracker_config.clone().sentry {
@@ -242,6 +260,7 @@ pub async fn api_service(
     (server.handle(), server)
 }
 
+#[tracing::instrument]
 pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
 {
     if ip.is_ipv4() {
@@ -251,6 +270,7 @@ pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     }
 }
 
+#[tracing::instrument]
 pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>) -> Option<HttpResponse>
 {
     match token {
@@ -270,6 +290,7 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
     }
 }
 
+#[tracing::instrument]
 pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = match request.peer_addr() {
@@ -298,6 +319,7 @@ pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<Api
     }
 }
 
+#[tracing::instrument]
 pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceData>>) -> Result<IpAddr, HttpResponse>
 {
     match api_service_retrieve_remote_ip(request, data.api_trackers_config.clone()).await {
@@ -313,6 +335,7 @@ pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceDat
     }
 }
 
+#[tracing::instrument]
 pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -323,6 +346,7 @@ pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServi
     }))
 }
 
+#[tracing::instrument]
 pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
 {
     match ip {
@@ -337,6 +361,7 @@ pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsE
     }
 }
 
+#[tracing::instrument]
 pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceData>>) -> Option<HttpResponse>
 {
     match api_validate_ip(request, data.clone()).await {
@@ -346,12 +371,14 @@ pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceDat
     None
 }
 
+#[tracing::instrument]
 pub async fn api_service_openapi_json() -> HttpResponse
 {
     let openapi_file = include_str!("../openapi.json");
     HttpResponse::Ok().content_type(ContentType::json()).body(openapi_file)
 }
 
+#[tracing::instrument(skip(payload))]
 pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, CustomError>
 {
     let mut body = web::BytesMut::new();

@@ -15,11 +15,13 @@ use crate::config::structs::database_structure_config_torrents::DatabaseStructur
 use crate::config::structs::database_structure_config_users::DatabaseStructureConfigUsers;
 use crate::config::structs::database_structure_config_whitelist::DatabaseStructureConfigWhitelist;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
+use crate::config::structs::sentry_config::SentryConfig;
 use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 
 impl Configuration {
+    #[tracing::instrument]
     pub fn init() -> Configuration {
         Configuration {
             log_level: String::from("info"),
@@ -39,6 +41,16 @@ impl Configuration {
                 swagger: false,
                 sentry: false,
                 sentry_url: String::from(""),
+            },
+            sentry_config: SentryConfig {
+                enabled: false,
+                dsn: "".to_string(),
+                debug: false,
+                sample_rate: 1.0,
+                max_breadcrumbs: 100,
+                attach_stacktrace: true,
+                send_default_pii: false,
+                traces_sample_rate: 1.0,
             },
             database: DatabaseConfig {
                 engine: DatabaseDrivers::sqlite3,
@@ -131,10 +143,12 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument]
     pub fn load(data: &[u8]) -> Result<Configuration, toml::de::Error> {
         toml::from_str(&String::from_utf8_lossy(data))
     }
 
+    #[tracing::instrument]
     pub fn load_file(path: &str) -> Result<Configuration, ConfigurationError> {
         match std::fs::read(path) {
             Err(e) => Err(ConfigurationError::IOError(e)),
@@ -149,6 +163,7 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument]
     pub fn save_file(path: &str, data: String) -> Result<(), ConfigurationError> {
         match File::create(path) {
             Ok(mut file) => {
@@ -161,6 +176,7 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument]
     pub fn save_from_config(config: Arc<Configuration>, path: &str)
     {
         let config_toml = toml::to_string(&config).unwrap();
@@ -170,6 +186,7 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument]
     pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
         let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
@@ -205,6 +222,7 @@ impl Configuration {
         Ok(config)
     }
 
+    #[tracing::instrument]
     pub fn validate(config: Configuration) {
         // Check Map
         let check_map = vec![
@@ -237,6 +255,7 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument]
     pub fn validate_value(name: &str, value: String, regex: String)
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();

@@ -33,6 +33,7 @@ use crate::udp::structs::udp_server::UdpServer;
 use crate::udp::udp::{MAX_PACKET_SIZE, MAX_SCRAPE_TORRENTS};
 
 impl UdpServer {
+    #[tracing::instrument]
     pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, threads: u64) -> tokio::io::Result<UdpServer>
     {
         let socket = UdpSocket::bind(bind_address).await?;
@@ -44,6 +45,7 @@ impl UdpServer {
         })
     }
 
+    #[tracing::instrument]
     pub async fn start(&self, rx: tokio::sync::watch::Receiver<bool>)
     {
         let threads = self.threads;
@@ -81,6 +83,7 @@ impl UdpServer {
         }
     }
 
+    #[tracing::instrument]
     pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
         debug!("sending response to: {:?}", &remote_addr);
 
@@ -95,7 +98,8 @@ impl UdpServer {
                 debug!("{:?}", &inner[..position]);
                 UdpServer::send_packet(socket, &remote_addr, &inner[..position]).await;
             }
-            Err(_) => {
+            Err(error) => {
+                sentry::capture_error(&error);
                 match remote_addr {
                     SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4InvalidRequest, 1); }
                     SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6InvalidRequest, 1); }
@@ -105,10 +109,12 @@ impl UdpServer {
         }
     }
 
+    #[tracing::instrument]
     pub async fn send_packet(socket: Arc<UdpSocket>, remote_addr: &SocketAddr, payload: &[u8]) {
         let _ = socket.send_to(payload, remote_addr).await;
     }
 
+    #[tracing::instrument]
     pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
         match SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
             Ok(duration) => ConnectionId(((duration.as_secs() / 3600) | ((remote_address.port() as u64) << 36)) as i64),
@@ -116,6 +122,7 @@ impl UdpServer {
         }
     }
 
+    #[tracing::instrument]
     pub async fn handle_packet(remote_addr: SocketAddr, payload: Vec<u8>, tracker: Arc<TorrentTracker>) -> Response {
         match Request::from_bytes(&payload[..payload.len()], MAX_SCRAPE_TORRENTS).map_err(|_| ServerError::InternalServerError) {
             Ok(request) => {
@@ -152,6 +159,7 @@ impl UdpServer {
         }
     }
 
+    #[tracing::instrument]
     pub async fn handle_request(request: Request, remote_addr: SocketAddr, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         match request {
             Request::Connect(connect_request) => {
@@ -166,6 +174,7 @@ impl UdpServer {
         }
     }
 
+    #[tracing::instrument]
     pub async fn handle_udp_connect(remote_addr: SocketAddr, request: &ConnectRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let connection_id = UdpServer::get_connection_id(&remote_addr).await;
         let response = Response::from(ConnectResponse {
@@ -183,6 +192,7 @@ impl UdpServer {
         Ok(response)
     }
 
+    #[tracing::instrument]
     pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         if tracker.config.tracker_config.clone().whitelist_enabled && !tracker.check_whitelist(InfoHash(request.info_hash.0)) {
             debug!("[UDP ERROR] Torrent Not Whitelisted");
@@ -360,6 +370,7 @@ impl UdpServer {
         Ok(announce_response)
     }
 
+    #[tracing::instrument]
     pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let mut torrent_stats: Vec<TorrentScrapeStatistics> = Vec::new();
         for info_hash in request.info_hashes.iter() {
@@ -393,6 +404,7 @@ impl UdpServer {
         }))
     }
 
+    #[tracing::instrument]
     pub async fn handle_udp_error(e: ServerError, transaction_id: TransactionId) -> Response {
         let message = e.to_string();
         Response::from(ErrorResponse { transaction_id, message: message.into() })

@@ -1,3 +1,5 @@
+
+#[derive(Debug)]
 pub enum TorrentPeersType {
     All,
     IPv4,

@@ -48,6 +48,7 @@ impl From<ErrorResponse> for Response {
 }
 
 impl Response {
+    #[tracing::instrument(skip(bytes))]
     #[inline]
     pub fn write(&self, bytes: &mut impl Write) -> Result<(), io::Error> {
         match self {
@@ -101,6 +102,7 @@ impl Response {
         Ok(())
     }
 
+    #[tracing::instrument]
     #[inline]
     pub fn from_bytes(bytes: &[u8], ipv4: bool) -> Result<Self, io::Error> {
         let mut cursor = Cursor::new(bytes);

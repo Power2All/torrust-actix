@@ -43,7 +43,7 @@ regex = "^1.11"
 rustls = { version = "^0.23", default-features = false, features = ["std", "ring"] }
 rustls-pemfile = "^2.2"
 sentry = { version = "^0.34", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
-sentry-actix = "0.34.0"
+sentry-actix = "^0.34"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = { version = "^1.0", features = ["preserve_order"] }
 serde_millis = "^0.1"
@@ -55,6 +55,7 @@ tokio-shutdown = "^0.1"
 toml = "^0.8"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^8", features = ["actix-web"] }
+tracing = "^0.1"
 
 [target.'cfg(windows)'.build-dependencies]
-winres = "0.1.12"
+winres = "^0.1"

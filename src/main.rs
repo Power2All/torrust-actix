@@ -17,6 +17,7 @@ use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
 
+#[tracing::instrument]
 fn main() -> std::io::Result<()>
 {
     let args = Cli::parse();
@@ -31,8 +32,14 @@ fn main() -> std::io::Result<()>
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
     if config.tracker_config.clone().sentry {
-        let _guard = sentry::init((config.tracker_config.clone().sentry_url, sentry::ClientOptions {
+        let _guard = sentry::init((config.sentry_config.clone().dsn, sentry::ClientOptions {
             release: sentry::release_name!(),
+            debug: config.sentry_config.clone().debug,
+            sample_rate: config.sentry_config.clone().sample_rate,
+            max_breadcrumbs: config.sentry_config.clone().max_breadcrumbs,
+            attach_stacktrace: config.sentry_config.clone().attach_stacktrace,
+            send_default_pii: config.sentry_config.clone().send_default_pii,
+            traces_sample_rate: config.sentry_config.clone().traces_sample_rate,
             ..Default::default()
         }));
     }
@@ -308,6 +315,7 @@ fn main() -> std::io::Result<()>
                     match udp_futures.into_iter().collect::<TryJoinAll<_>>().await {
                         Ok(_) => {}
                         Err(error) => {
+                            sentry::capture_error(&error);
                             error!("Errors happened on shutting down UDP sockets!");
                             error!("{}", error.to_string());
                         }

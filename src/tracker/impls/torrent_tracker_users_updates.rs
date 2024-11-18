@@ -10,6 +10,7 @@ use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
 impl TorrentTracker {
+    #[tracing::instrument]
     pub fn add_user_update(&self, user_id: UserId, user_entry_item: UserEntryItem, updates_action: UpdatesAction) -> (UserEntryItem, bool)
     {
         let map = self.users_updates.clone();
@@ -25,6 +26,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn get_user_updates(&self) -> HashMap<u128, (UserId, UserEntryItem, UpdatesAction)>
     {
         let map = self.users_updates.clone();
@@ -32,6 +34,7 @@ impl TorrentTracker {
         lock.clone()
     }
 
+    #[tracing::instrument]
     pub fn remove_user_update(&self, timestamp: &u128) -> bool
     {
         let map = self.users_updates.clone();
@@ -45,6 +48,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn clear_user_updates(&self)
     {
         let map = self.users_updates.clone();
@@ -53,6 +57,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::UsersUpdates, 0);
     }
 
+    #[tracing::instrument]
     pub async fn save_user_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let mut mapping: HashMap<UserId, (u128, UserEntryItem, UpdatesAction)> = HashMap::new();

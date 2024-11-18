@@ -12,6 +12,7 @@ use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
 impl TorrentTracker {
+    #[tracing::instrument]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(users) = self.sqlx.load_users(tracker.clone()).await {
@@ -19,6 +20,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_users(tracker.clone(), users.clone()).await {
@@ -33,6 +35,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn add_user(&self, user_id: UserId, user_entry_item: UserEntryItem) -> bool
     {
         let map = self.users.clone();
@@ -50,6 +53,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn add_user_active_torrent(&self, user_id: UserId, info_hash: InfoHash) -> bool
     {
         let map = self.users.clone();
@@ -67,6 +71,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn get_user(&self, id: UserId) -> Option<UserEntryItem>
     {
         let map = self.users.clone();
@@ -74,6 +79,7 @@ impl TorrentTracker {
         lock.get(&id).cloned()
     }
 
+    #[tracing::instrument]
     pub fn get_users(&self) -> BTreeMap<UserId, UserEntryItem>
     {
         let map = self.users.clone();
@@ -81,6 +87,7 @@ impl TorrentTracker {
         lock.clone()
     }
 
+    #[tracing::instrument]
     pub fn remove_user(&self, user_id: UserId) -> Option<UserEntryItem>
     {
         let map = self.users.clone();
@@ -94,6 +101,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn remove_user_active_torrent(&self, user_id: UserId, info_hash: InfoHash) -> bool
     {
         let map = self.users.clone();
@@ -111,6 +119,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument]
     pub fn check_user_key(&self, key: UserId) -> Option<UserId>
     {
         let map = self.users.clone();
@@ -123,6 +132,7 @@ impl TorrentTracker {
         None
     }
 
+    #[tracing::instrument]
     pub fn clean_user_active_torrents(&self, peer_timeout: Duration)
     {
         let mut torrents_cleaned = 0u64;

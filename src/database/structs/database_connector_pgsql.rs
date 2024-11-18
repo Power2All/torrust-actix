@@ -1,6 +1,6 @@
 use sqlx::{Pool, Postgres};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DatabaseConnectorPgSQL {
     pub(crate) pool: Pool<Postgres>,
 }
