@@ -115,7 +115,7 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -160,7 +160,7 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -190,7 +190,7 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client

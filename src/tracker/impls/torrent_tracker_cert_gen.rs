@@ -6,7 +6,7 @@ use crate::structs::Cli;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
-    #[tracing::instrument]
+    #[tracing::instrument(level = "debug")]
     pub async fn cert_gen(&self, args: &Cli)
     {
         info!("[CERTGEN] Requesting to generate a self-signed key and certificate file");

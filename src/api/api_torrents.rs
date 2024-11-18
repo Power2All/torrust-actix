@@ -117,7 +117,7 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -169,7 +169,7 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -199,7 +199,7 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -244,7 +244,7 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub fn api_service_torrents_return_torrent_json(torrent: TorrentEntry) -> Value
 {
     let seeds = torrent.seeds.iter().map(|(peer_id, torrent_peer)| {

@@ -105,7 +105,7 @@ pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<St
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload, level = "debug"))]
 pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -150,7 +150,7 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
     }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -180,7 +180,7 @@ pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<
     HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
 }
 
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
