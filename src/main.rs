@@ -32,9 +32,10 @@ fn main() -> std::io::Result<()>
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    let sentry_guard: ClientInitGuard;
+    #[warn(unused_variables)]
+    let _sentry_guard: ClientInitGuard;
     if config.sentry_config.clone().enabled {
-        sentry_guard = sentry::init((config.sentry_config.clone().dsn, sentry::ClientOptions {
+        _sentry_guard = sentry::init((config.sentry_config.clone().dsn, sentry::ClientOptions {
             release: sentry::release_name!(),
             debug: config.sentry_config.clone().debug,
             sample_rate: config.sentry_config.clone().sample_rate,
