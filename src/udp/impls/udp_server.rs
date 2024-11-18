@@ -84,8 +84,11 @@ impl UdpServer {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
+    pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response)
+    {
         debug!("sending response to: {:?}", &remote_addr);
+        let sentry = sentry::TransactionContext::new("udp server", "send response");
+        let transaction = sentry::start_transaction(sentry);
 
         let buffer = vec![0u8; MAX_PACKET_SIZE];
         let mut cursor = Cursor::new(buffer);
@@ -107,6 +110,8 @@ impl UdpServer {
                 debug!("could not write response to bytes.");
             }
         }
+
+        transaction.finish();
     }
 
     #[tracing::instrument(level = "debug")]
@@ -161,14 +166,20 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn handle_request(request: Request, remote_addr: SocketAddr, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+        let sentry = sentry::TransactionContext::new("udp server", "handle packet");
+        let transaction = sentry::start_transaction(sentry);
+
         match request {
             Request::Connect(connect_request) => {
+                transaction.finish();
                 UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await
             }
             Request::Announce(announce_request) => {
+                transaction.finish();
                 UdpServer::handle_udp_announce(remote_addr, &announce_request, tracker).await
             }
             Request::Scrape(scrape_request) => {
+                transaction.finish();
                 UdpServer::handle_udp_scrape(remote_addr, &scrape_request, tracker).await
             }
         }

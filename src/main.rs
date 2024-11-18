@@ -42,6 +42,8 @@ fn main() -> std::io::Result<()>
             attach_stacktrace: config.sentry_config.clone().attach_stacktrace,
             send_default_pii: config.sentry_config.clone().send_default_pii,
             traces_sample_rate: config.sentry_config.clone().traces_sample_rate,
+            session_mode: sentry::SessionMode::Request,
+            auto_session_tracking: true,
             ..Default::default()
         }));
     }
