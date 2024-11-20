@@ -70,7 +70,7 @@ pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServic
     string_output.extend(api_service_prom_generate_line("udp4_scrapes_handled", "Counter of IPv4 UDP Scrapes handled", "counter", stats.tcp4_scrapes_handled));
     string_output.extend(vec!["".to_string()]);
 
-    HttpResponse::Ok().content_type(ContentType::plaintext()).body(string_output.join("\r\n"))
+    HttpResponse::Ok().content_type(ContentType::plaintext()).body(string_output.join("\n"))
 }
 
 pub fn api_service_prom_generate_line(key: &str, description: &str, type_metric: &str, value: i64) -> Vec<String>
