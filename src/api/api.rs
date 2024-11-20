@@ -11,6 +11,7 @@ use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
 use actix_web::web::{BytesMut, Data, ServiceConfig};
+use actix_web_prom::PrometheusMetricsBuilder;
 use futures_util::StreamExt;
 use log::{error, info};
 use serde_json::json;
@@ -38,6 +39,14 @@ pub fn api_service_cors() -> Cors
         .allowed_headers(vec![http::header::X_FORWARDED_FOR, http::header::ACCEPT])
         .allowed_header(http::header::CONTENT_TYPE)
         .max_age(1)
+}
+
+pub fn api_service_prometheus() -> actix_web_prom::PrometheusMetrics
+{
+    PrometheusMetricsBuilder::new("api")
+        .endpoint("/metrics")
+        .build()
+        .unwrap()
 }
 
 #[tracing::instrument(level = "debug")]
@@ -184,12 +193,14 @@ pub async fn api_service(
         let server = match data.config.sentry_config.clone().enabled {
             true => {
                 HttpServer::new(move || { App::new()
-                    .wrap(sentry_actix::Sentry::new())
                     .wrap(api_service_cors())
+                    .wrap(sentry_actix::Sentry::new())
+                    .wrap(api_service_prometheus())
+                    .wrap(sentry_actix::Sentry::new())
                     .configure(api_service_routes(Arc::new(ApiServiceData {
                         torrent_tracker: data.clone(),
                         api_trackers_config: Arc::new(api_server_object.clone())
-                    }))) })
+                    })))})
                     .keep_alive(Duration::from_secs(keep_alive))
                     .client_request_timeout(Duration::from_secs(request_timeout))
                     .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
@@ -202,10 +213,12 @@ pub async fn api_service(
             false => {
                 HttpServer::new(move || { App::new()
                     .wrap(api_service_cors())
+                    .wrap(api_service_prometheus())
+                    .wrap(sentry_actix::Sentry::new())
                     .configure(api_service_routes(Arc::new(ApiServiceData {
                         torrent_tracker: data.clone(),
                         api_trackers_config: Arc::new(api_server_object.clone())
-                    }))) })
+                    })))})
                     .keep_alive(Duration::from_secs(keep_alive))
                     .client_request_timeout(Duration::from_secs(request_timeout))
                     .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
@@ -221,15 +234,18 @@ pub async fn api_service(
     }
 
     info!("[API] Starting server listener on {}", addr);
+    
     let server = match data.config.sentry_config.clone().enabled {
         true => {
             HttpServer::new(move || { App::new()
-                .wrap(sentry_actix::Sentry::new())
                 .wrap(api_service_cors())
+                .wrap(sentry_actix::Sentry::new())
+                .wrap(api_service_prometheus())
+                .wrap(sentry_actix::Sentry::new())
                 .configure(api_service_routes(Arc::new(ApiServiceData {
                     torrent_tracker: data.clone(),
                     api_trackers_config: Arc::new(api_server_object.clone())
-            }))) })
+                })))})
                 .keep_alive(Duration::from_secs(keep_alive))
                 .client_request_timeout(Duration::from_secs(request_timeout))
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
@@ -242,10 +258,12 @@ pub async fn api_service(
         false => {
             HttpServer::new(move || { App::new()
                 .wrap(api_service_cors())
+                .wrap(api_service_prometheus())
+                .wrap(sentry_actix::Sentry::new())
                 .configure(api_service_routes(Arc::new(ApiServiceData {
                     torrent_tracker: data.clone(),
                     api_trackers_config: Arc::new(api_server_object.clone())
-                }))) })
+                })))})
                 .keep_alive(Duration::from_secs(keep_alive))
                 .client_request_timeout(Duration::from_secs(request_timeout))
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))

@@ -56,6 +56,7 @@ toml = "^0.8"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^8", features = ["actix-web"] }
 tracing = "^0.1"
+actix-web-prom = "^0.9"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"
