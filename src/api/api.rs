@@ -11,14 +11,13 @@ use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
 use actix_web::web::{BytesMut, Data, ServiceConfig};
-use actix_web_prom::PrometheusMetricsBuilder;
 use futures_util::StreamExt;
 use log::{error, info};
 use serde_json::json;
 use utoipa_swagger_ui::{Config, SwaggerUi};
 use crate::api::api_blacklists::{api_service_blacklist_delete, api_service_blacklist_get, api_service_blacklist_post, api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
 use crate::api::api_keys::{api_service_key_delete, api_service_key_get, api_service_key_post, api_service_keys_delete, api_service_keys_get, api_service_keys_post};
-use crate::api::api_stats::api_service_stats_get;
+use crate::api::api_stats::{api_service_prom_get, api_service_stats_get};
 use crate::api::api_torrents::{api_service_torrent_delete, api_service_torrent_get, api_service_torrent_post, api_service_torrents_delete, api_service_torrents_get, api_service_torrents_post};
 use crate::api::api_users::{api_service_user_delete, api_service_user_get, api_service_user_post, api_service_users_delete, api_service_users_get, api_service_users_post};
 use crate::api::api_whitelists::{api_service_whitelist_delete, api_service_whitelist_get, api_service_whitelist_post, api_service_whitelists_delete, api_service_whitelists_get, api_service_whitelists_post};
@@ -41,14 +40,6 @@ pub fn api_service_cors() -> Cors
         .max_age(1)
 }
 
-pub fn api_service_prometheus() -> actix_web_prom::PrometheusMetrics
-{
-    PrometheusMetricsBuilder::new("api")
-        .endpoint("/metrics")
-        .build()
-        .unwrap()
-}
-
 #[tracing::instrument(level = "debug")]
 pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceConfig)>
 {
@@ -57,6 +48,9 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
         cfg.default_service(web::route().to(api_service_not_found));
         cfg.service(web::resource("stats")
             .route(web::get().to(api_service_stats_get))
+        );
+        cfg.service(web::resource("metrics")
+            .route(web::get().to(api_service_prom_get))
         );
 
         // Torrents API Routing
@@ -195,8 +189,6 @@ pub async fn api_service(
                 HttpServer::new(move || { App::new()
                     .wrap(api_service_cors())
                     .wrap(sentry_actix::Sentry::new())
-                    .wrap(api_service_prometheus())
-                    .wrap(sentry_actix::Sentry::new())
                     .configure(api_service_routes(Arc::new(ApiServiceData {
                         torrent_tracker: data.clone(),
                         api_trackers_config: Arc::new(api_server_object.clone())
@@ -213,7 +205,6 @@ pub async fn api_service(
             false => {
                 HttpServer::new(move || { App::new()
                     .wrap(api_service_cors())
-                    .wrap(api_service_prometheus())
                     .wrap(sentry_actix::Sentry::new())
                     .configure(api_service_routes(Arc::new(ApiServiceData {
                         torrent_tracker: data.clone(),
@@ -234,13 +225,12 @@ pub async fn api_service(
     }
 
     info!("[API] Starting server listener on {}", addr);
-    
+
     let server = match data.config.sentry_config.clone().enabled {
         true => {
             HttpServer::new(move || { App::new()
                 .wrap(api_service_cors())
                 .wrap(sentry_actix::Sentry::new())
-                .wrap(api_service_prometheus())
                 .wrap(sentry_actix::Sentry::new())
                 .configure(api_service_routes(Arc::new(ApiServiceData {
                     torrent_tracker: data.clone(),
@@ -258,7 +248,6 @@ pub async fn api_service(
         false => {
             HttpServer::new(move || { App::new()
                 .wrap(api_service_cors())
-                .wrap(api_service_prometheus())
                 .wrap(sentry_actix::Sentry::new())
                 .configure(api_service_routes(Arc::new(ApiServiceData {
                     torrent_tracker: data.clone(),
