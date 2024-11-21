@@ -44,7 +44,7 @@ pub fn http_service_routes(data: Arc<HttpServiceData>) -> Box<dyn Fn(&mut Servic
         cfg.service(web::resource("/announce")
             .route(web::get().to(http_service_announce))
         );
-        cfg.service(web::resource("/{key/announce")
+        cfg.service(web::resource("/{key}/announce")
             .route(web::get().to(http_service_announce_key))
         );
         cfg.service(web::resource("/{key}/{userkey}announce")
