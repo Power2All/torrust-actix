@@ -39,6 +39,7 @@ impl Configuration {
                 peers_cleanup_interval: 900,
                 total_downloads: 0,
                 swagger: false,
+                prometheus_id: String::from("torrust_actix")
             },
             sentry_config: SentryConfig {
                 enabled: false,
@@ -224,6 +225,8 @@ impl Configuration {
     pub fn validate(config: Configuration) {
         // Check Map
         let check_map = vec![
+            ("[TRACKER_CONFIG] prometheus_id", config.tracker_config.clone().prometheus_id, r"^[a-zA-Z0-9_]+$".to_string()),
+            
             ("[DB: torrents]", config.database_structure.clone().torrents.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: infohash", config.database_structure.clone().torrents.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: seeds", config.database_structure.clone().torrents.column_seeds, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
