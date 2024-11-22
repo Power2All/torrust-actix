@@ -3,6 +3,7 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::SystemTime;
 use log::{debug, info};
+use net2::UdpBuilder;
 use tokio::net::UdpSocket;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
@@ -36,10 +37,16 @@ impl UdpServer {
     #[tracing::instrument(level = "debug")]
     pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, threads: u64) -> tokio::io::Result<UdpServer>
     {
-        let socket = UdpSocket::bind(bind_address).await?;
+        let socket = match bind_address {
+            SocketAddr::V4(_) => { UdpBuilder::new_v4()? }
+            SocketAddr::V6(_) => { UdpBuilder::new_v6()? }
+        };
+        socket.reuse_address(true)?;
+        
+        let udp_socket = socket.bind(bind_address)?;
 
         Ok(UdpServer {
-            socket: Arc::new(socket),
+            socket: Arc::new(UdpSocket::try_from(udp_socket)?),
             threads,
             tracker,
         })
