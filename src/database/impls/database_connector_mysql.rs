@@ -342,11 +342,9 @@ impl DatabaseConnectorMySQL {
     #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), Error>
     {
-        info!("[MySQL] Starting connection pool");
         let mut torrents_transaction = self.pool.begin().await?;
         let mut torrents_handled_entries = 0u64;
         let structure = tracker.config.deref().clone().database_structure.clone().torrents;
-        info!("[MySQL] Parsing torrents into the database");
         for (info_hash, (torrent_entry, updates_action)) in torrents.iter() {
             torrents_handled_entries += 1;
             match updates_action {
