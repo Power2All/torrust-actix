@@ -1,0 +1,26 @@
+name: CI_Update
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v1
+      - uses: oleksiyrudenko/gha-git-credentials@v2-latest
+        with:
+          token: '${{ secrets.GITHUB_TOKEN }}'
+      - name: Build Torrust-Actix Tracker
+        run: cargo build --release
+      - name: Push the changes of Cargo.lock
+        run: |
+          git add -A
+          git commit -m "Updating Cargo.lock"
+          git push
+      - name: Update cargo crate
+        run: cargo update
