@@ -36,6 +36,9 @@ jobs:
       - name: Update Cargo.lock
         run: cargo update --verbose
 
+      - name: Build
+        run: cargo build --release --verbose
+
       - name: Push changes
         run: |
           git config user.name ${{ secrets.GH_USER }}
