@@ -1,0 +1,36 @@
+name: Weekly Update
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  
+jobs:
+  upgrade:
+    name: Build on Ubuntu Latest (Stable)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: setup
+        name: Setup Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          
+      - name: Update Cargo.lock
+        run: cargo update --verbose
+
+      - name: Push changes
+        run: |
+          git config user.name ${{ secrets.GH_USER }}
+          git config user.email "${{ secrets.GH_MAIL }}"
+          git add Cargo.lock
+          git commit -m "Weekly Cargo.lock update"
+          git push
+          
