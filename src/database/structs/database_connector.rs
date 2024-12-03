@@ -3,7 +3,7 @@ use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
 use crate::database::structs::database_connector_pgsql::DatabaseConnectorPgSQL;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DatabaseConnector {
     pub(crate) mysql: Option<DatabaseConnectorMySQL>,
     pub(crate) sqlite: Option<DatabaseConnectorSQLite>,

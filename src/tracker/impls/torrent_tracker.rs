@@ -9,6 +9,7 @@ use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
+    #[tracing::instrument(level = "debug")]
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
         TorrentTracker {

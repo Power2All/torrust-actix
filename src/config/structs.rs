@@ -10,3 +10,4 @@ pub mod database_structure_config_users;
 pub mod database_structure_config_whitelist;
 pub mod database_config;
 pub mod tracker_config;
+pub mod sentry_config;

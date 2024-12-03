@@ -11,6 +11,7 @@ impl TorrentSharding {
         Self::new()
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn new() -> TorrentSharding
     {
         TorrentSharding {
@@ -273,6 +274,7 @@ impl TorrentSharding {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     #[allow(unreachable_patterns)]
     pub fn get_shard(&self, shard: u8) -> Option<Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>>
     {
@@ -537,11 +539,13 @@ impl TorrentSharding {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry>
     {
         self.get_shard(shard).unwrap().read().clone()
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry>
     {
         let mut torrents_return = BTreeMap::new();
@@ -552,6 +556,7 @@ impl TorrentSharding {
         torrents_return
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn get_torrents_amount(&self) -> u64
     {
         let mut torrents = 0u64;

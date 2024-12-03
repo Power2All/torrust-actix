@@ -14,6 +14,7 @@ use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
+    #[tracing::instrument(level = "debug")]
     pub fn get_torrent_peers(&self, info_hash: InfoHash, amount: usize, ip_type: TorrentPeersType, self_ip: Option<IpAddr>) -> Option<TorrentPeers>
     {
         let mut returned_data = TorrentPeers {
@@ -46,6 +47,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn get_peers(&self, peers: BTreeMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_ip: Option<IpAddr>, amount: usize) -> Option<BTreeMap<PeerId, TorrentPeer>>
     {
         if amount != 0 {
@@ -142,6 +144,7 @@ impl TorrentTracker {
         }).collect()
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> (Option<TorrentEntry>, TorrentEntry)
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
@@ -195,6 +198,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
@@ -221,6 +225,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn torrent_peers_cleanup(&self, peer_timeout: Duration, persistent: bool) -> (u64, u64, u64)
     {
         let mut torrents_removed = 0u64;

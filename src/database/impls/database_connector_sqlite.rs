@@ -23,6 +23,7 @@ use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
 impl DatabaseConnectorSQLite {
+    #[tracing::instrument(level = "debug")]
     pub async fn create(dsl: &str) -> Result<Pool<Sqlite>, Error>
     {
         let options = SqliteConnectOptions::from_str(dsl)?
@@ -31,6 +32,7 @@ impl DatabaseConnectorSQLite {
         SqlitePoolOptions::new().connect_with(options.create_if_missing(true)).await
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn database_connector(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
         let sqlite_connect = DatabaseConnectorSQLite::create(config.database.clone().path.as_str()).await;
@@ -270,6 +272,7 @@ impl DatabaseConnectorSQLite {
         structure
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error>
     {
         let mut start = 0u64;
@@ -329,6 +332,7 @@ impl DatabaseConnectorSQLite {
         Ok((torrents, completed))
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), Error>
     {
         let mut torrents_transaction = self.pool.begin().await?;
@@ -531,6 +535,7 @@ impl DatabaseConnectorSQLite {
         self.commit(torrents_transaction).await
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
         let mut start = 0u64;
@@ -576,6 +581,7 @@ impl DatabaseConnectorSQLite {
         Ok(hashes)
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut whitelist_transaction = self.pool.begin().await?;
@@ -650,6 +656,7 @@ impl DatabaseConnectorSQLite {
         Ok(whitelist_handled_entries)
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
         let mut start = 0u64;
@@ -695,6 +702,7 @@ impl DatabaseConnectorSQLite {
         Ok(hashes)
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut blacklist_transaction = self.pool.begin().await?;
@@ -769,6 +777,7 @@ impl DatabaseConnectorSQLite {
         Ok(blacklist_handled_entries)
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
         let mut start = 0u64;
@@ -817,6 +826,7 @@ impl DatabaseConnectorSQLite {
         Ok(hashes)
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<u64, Error>
     {
         let mut keys_transaction = self.pool.begin().await?;
@@ -901,6 +911,7 @@ impl DatabaseConnectorSQLite {
         Ok(keys_handled_entries)
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
         let mut start = 0u64;
@@ -1027,6 +1038,7 @@ impl DatabaseConnectorSQLite {
         Ok(hashes)
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), Error>
     {
         let mut users_transaction = self.pool.begin().await?;
@@ -1320,6 +1332,7 @@ impl DatabaseConnectorSQLite {
         self.commit(users_transaction).await
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error>
     {
         let mut reset_seeds_peers_transaction = self.pool.begin().await?;
@@ -1341,6 +1354,7 @@ impl DatabaseConnectorSQLite {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn commit(&self, transaction: Transaction<'_, Sqlite>) -> Result<(), Error>
     {
         match transaction.commit().await {

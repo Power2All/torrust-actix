@@ -14,6 +14,5 @@ pub struct TrackerConfig {
     pub peers_cleanup_interval: u64,
     pub total_downloads: u64,
     pub swagger: bool,
-    pub sentry: bool,
-    pub sentry_url: String
+    pub prometheus_id: String,
 }

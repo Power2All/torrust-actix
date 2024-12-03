@@ -15,11 +15,13 @@ use crate::config::structs::database_structure_config_torrents::DatabaseStructur
 use crate::config::structs::database_structure_config_users::DatabaseStructureConfigUsers;
 use crate::config::structs::database_structure_config_whitelist::DatabaseStructureConfigWhitelist;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
+use crate::config::structs::sentry_config::SentryConfig;
 use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 
 impl Configuration {
+    #[tracing::instrument(level = "debug")]
     pub fn init() -> Configuration {
         Configuration {
             log_level: String::from("info"),
@@ -37,8 +39,17 @@ impl Configuration {
                 peers_cleanup_interval: 900,
                 total_downloads: 0,
                 swagger: false,
-                sentry: false,
-                sentry_url: String::from(""),
+                prometheus_id: String::from("torrust_actix")
+            },
+            sentry_config: SentryConfig {
+                enabled: false,
+                dsn: "".to_string(),
+                debug: false,
+                sample_rate: 1.0,
+                max_breadcrumbs: 100,
+                attach_stacktrace: true,
+                send_default_pii: false,
+                traces_sample_rate: 1.0,
             },
             database: DatabaseConfig {
                 engine: DatabaseDrivers::sqlite3,
@@ -131,10 +142,12 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn load(data: &[u8]) -> Result<Configuration, toml::de::Error> {
         toml::from_str(&String::from_utf8_lossy(data))
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn load_file(path: &str) -> Result<Configuration, ConfigurationError> {
         match std::fs::read(path) {
             Err(e) => Err(ConfigurationError::IOError(e)),
@@ -149,6 +162,7 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn save_file(path: &str, data: String) -> Result<(), ConfigurationError> {
         match File::create(path) {
             Ok(mut file) => {
@@ -161,6 +175,7 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn save_from_config(config: Arc<Configuration>, path: &str)
     {
         let config_toml = toml::to_string(&config).unwrap();
@@ -170,6 +185,7 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
         let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
@@ -205,9 +221,12 @@ impl Configuration {
         Ok(config)
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn validate(config: Configuration) {
         // Check Map
         let check_map = vec![
+            ("[TRACKER_CONFIG] prometheus_id", config.tracker_config.clone().prometheus_id, r"^[a-zA-Z0-9_]+$".to_string()),
+            
             ("[DB: torrents]", config.database_structure.clone().torrents.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: infohash", config.database_structure.clone().torrents.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: seeds", config.database_structure.clone().torrents.column_seeds, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
@@ -237,6 +256,7 @@ impl Configuration {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn validate_value(name: &str, value: String, regex: String)
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();

@@ -9,6 +9,7 @@ use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
+    #[tracing::instrument(level = "debug")]
     pub fn add_key_update(&self, info_hash: InfoHash, timeout: i64, updates_action: UpdatesAction) -> bool
     {
         let map = self.keys_updates.clone();
@@ -24,6 +25,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn get_key_updates(&self) -> HashMap<u128, (InfoHash, i64, UpdatesAction)>
     {
         let map = self.keys_updates.clone();
@@ -31,6 +33,7 @@ impl TorrentTracker {
         lock.clone()
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn remove_key_update(&self, timestamp: &u128) -> bool
     {
         let map = self.keys_updates.clone();
@@ -44,6 +47,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn clear_key_updates(&self)
     {
         let map = self.keys_updates.clone();
@@ -52,6 +56,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::KeyUpdates, 0);
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn save_key_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let mut mapping: HashMap<InfoHash, (u128, i64, UpdatesAction)> = HashMap::new();

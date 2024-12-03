@@ -6,6 +6,7 @@ use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
+    #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(whitelist) = self.sqlx.load_whitelist(tracker.clone()).await {
@@ -13,6 +14,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_whitelist(tracker.clone(), hashes.clone()).await {
@@ -27,6 +29,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn add_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let map = self.torrents_whitelist.clone();
@@ -39,6 +42,7 @@ impl TorrentTracker {
         false
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn get_whitelist(&self) -> Vec<InfoHash>
     {
         let map = self.torrents_whitelist.clone();
@@ -46,6 +50,7 @@ impl TorrentTracker {
         lock.clone()
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let map = self.torrents_whitelist.clone();
@@ -56,6 +61,7 @@ impl TorrentTracker {
         false
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn remove_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let map = self.torrents_whitelist.clone();
@@ -70,6 +76,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn clear_whitelist(&self)
     {
         let map = self.torrents_whitelist.clone();

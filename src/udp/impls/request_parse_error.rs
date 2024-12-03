@@ -5,6 +5,7 @@ use crate::udp::structs::connection_id::ConnectionId;
 use crate::udp::structs::transaction_id::TransactionId;
 
 impl RequestParseError {
+    #[tracing::instrument(level = "debug")]
     pub fn sendable_io(err: io::Error, connection_id: i64, transaction_id: i32) -> Self {
         Self::Sendable {
             connection_id: ConnectionId(connection_id),
@@ -12,6 +13,7 @@ impl RequestParseError {
             err: Either::Left(err),
         }
     }
+    #[tracing::instrument(level = "debug")]
     pub fn sendable_text(text: &'static str, connection_id: i64, transaction_id: i32) -> Self {
         Self::Sendable {
             connection_id: ConnectionId(connection_id),
@@ -19,11 +21,13 @@ impl RequestParseError {
             err: Either::Right(text),
         }
     }
+    #[tracing::instrument(level = "debug")]
     pub fn unsendable_io(err: io::Error) -> Self {
         Self::Unsendable {
             err: Either::Left(err),
         }
     }
+    #[tracing::instrument(level = "debug")]
     pub fn unsendable_text(text: &'static str) -> Self {
         Self::Unsendable {
             err: Either::Right(text),

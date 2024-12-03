@@ -9,6 +9,7 @@ use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
+    #[tracing::instrument(level = "debug")]
     pub fn add_whitelist_update(&self, info_hash: InfoHash, updates_action: UpdatesAction) -> bool
     {
         let map = self.torrents_whitelist_updates.clone();
@@ -24,6 +25,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn add_whitelist_updates(&self, hashes: Vec<(InfoHash, UpdatesAction)>) -> Vec<(InfoHash, bool)>
     {
         let mut returned_data = Vec::new();
@@ -33,6 +35,7 @@ impl TorrentTracker {
         returned_data
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn get_whitelist_updates(&self) -> HashMap<u128, (InfoHash, UpdatesAction)>
     {
         let map = self.torrents_whitelist_updates.clone();
@@ -40,6 +43,7 @@ impl TorrentTracker {
         lock.clone()
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn remove_whitelist_update(&self, timestamp: &u128) -> bool
     {
         let map = self.torrents_whitelist_updates.clone();
@@ -53,6 +57,7 @@ impl TorrentTracker {
         }
     }
 
+    #[tracing::instrument(level = "debug")]
     pub fn clear_whitelist_updates(&self)
     {
         let map = self.torrents_whitelist_updates.clone();
@@ -61,6 +66,7 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::WhitelistUpdates, 0);
     }
 
+    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let mut mapping: HashMap<InfoHash, (u128, UpdatesAction)> = HashMap::new();

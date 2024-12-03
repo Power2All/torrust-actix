@@ -65,7 +65,8 @@ pub fn udp_check_host_and_port_used(bind_address: String) {
     if cfg!(target_os = "windows") {
         match std::net::UdpSocket::bind(&bind_address) {
             Ok(e) => e,
-            Err(_) => {
+            Err(data) => {
+                sentry::capture_error(&data);
                 panic!("Unable to bind to {} ! Exiting...", &bind_address);
             }
         };
@@ -82,7 +83,10 @@ pub fn hex2bin(data: String) -> Result<[u8; 20], CustomError>
 {
     match hex::decode(data) {
         Ok(hash_result) => { Ok(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap()) }
-        Err(_) => { Err(CustomError::new("error converting hex to bin")) }
+        Err(data) => {
+            sentry::capture_error(&data);
+            Err(CustomError::new("error converting hex to bin"))
+        }
     }
 }
 

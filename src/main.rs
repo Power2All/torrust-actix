@@ -7,6 +7,7 @@ use clap::Parser;
 use futures_util::future::{try_join_all, TryJoinAll};
 use log::{error, info};
 use parking_lot::deadlock;
+use sentry::ClientInitGuard;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
@@ -17,6 +18,7 @@ use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
 
+#[tracing::instrument(level = "debug")]
 fn main() -> std::io::Result<()>
 {
     let args = Cli::parse();
@@ -30,9 +32,19 @@ fn main() -> std::io::Result<()>
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    if config.tracker_config.clone().sentry {
-        let _guard = sentry::init((config.tracker_config.clone().sentry_url, sentry::ClientOptions {
+    #[warn(unused_variables)]
+    let _sentry_guard: ClientInitGuard;
+    if config.sentry_config.clone().enabled {
+        _sentry_guard = sentry::init((config.sentry_config.clone().dsn, sentry::ClientOptions {
             release: sentry::release_name!(),
+            debug: config.sentry_config.clone().debug,
+            sample_rate: config.sentry_config.clone().sample_rate,
+            max_breadcrumbs: config.sentry_config.clone().max_breadcrumbs,
+            attach_stacktrace: config.sentry_config.clone().attach_stacktrace,
+            send_default_pii: config.sentry_config.clone().send_default_pii,
+            traces_sample_rate: config.sentry_config.clone().traces_sample_rate,
+            session_mode: sentry::SessionMode::Request,
+            auto_session_tracking: true,
             ..Default::default()
         }));
     }
@@ -308,6 +320,7 @@ fn main() -> std::io::Result<()>
                     match udp_futures.into_iter().collect::<TryJoinAll<_>>().await {
                         Ok(_) => {}
                         Err(error) => {
+                            sentry::capture_error(&error);
                             error!("Errors happened on shutting down UDP sockets!");
                             error!("{}", error.to_string());
                         }
