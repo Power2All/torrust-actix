@@ -46,4 +46,4 @@ jobs:
           git config user.email "${{ secrets.GH_MAIL }}"
           git add Cargo.lock
           git commit -m "Weekly Cargo.lock update"
-          git push
+          git push --force
