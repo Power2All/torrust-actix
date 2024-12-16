@@ -20,6 +20,12 @@ jobs:
         with:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.PRIVATE_APP_KEY }}
+
+      - name: Get GitHub App User ID
+        id: get-user-id
+        run: echo "user-id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
       
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,8 +48,8 @@ jobs:
       - name: Push changes
         continue-on-error: true
         run: |
-          git config user.name ${{ secrets.GH_USER }}
-          git config user.email "${{ secrets.GH_MAIL }}"
+          git config user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
+          git config user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>'
           git add Cargo.lock
           git commit -m "Weekly Cargo.lock update"
           git push --force
