@@ -59,6 +59,9 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 
 ### ChangeLog
 
+#### v4.0.5
+* Library bump
+
 #### v4.0.4
 * Further implementation of Sentry (trace logging)
 
