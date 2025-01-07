@@ -102,6 +102,7 @@ fn main() -> std::io::Result<()>
                         for t in threads {
                             info!("[DEADLOCK] Thread ID: {:#?}", t.thread_id());
                             info!("[DEADLOCK] {:#?}", t.backtrace());
+                            sentry::capture_message(format!("{:#?}", t.backtrace()).as_str(), sentry::Level::Error);
                         }
                     }
                 }
