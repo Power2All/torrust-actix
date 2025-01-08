@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
-use futures_util::future::join_all;
 use log::info;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
@@ -275,7 +274,7 @@ impl TorrentTracker {
                 let torrents_removed_clone = torrents_removed.clone();
                 let seeds_found_clone = seeds_found.clone();
                 let peers_found_clone = peers_found.clone();
-                threads.push(thread::spawn(async move {
+                threads.push(thread::spawn(move || {
                     let mut seeds = 0u64;
                     let mut peers = 0u64;
                     let mut remove_list = vec![];
@@ -313,7 +312,9 @@ impl TorrentTracker {
                 }));
             }
         }
-        join_all(threads).await;
+        for (_index, thread) in threads.into_iter().enumerate() {
+            thread.join().unwrap();
+        }
 
         info!("[PEERS CLEANUP] Removed {} torrents, {} seeds and {} peers", torrents_removed.clone().load(Ordering::SeqCst), seeds_found.clone().load(Ordering::SeqCst), peers_found.clone().load(Ordering::SeqCst));
     }
