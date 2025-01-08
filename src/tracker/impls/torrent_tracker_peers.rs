@@ -292,7 +292,7 @@ impl TorrentTracker {
                             }
                         }
                     }
-                    for (_info_hash, previous, next) in torrent_tracker_clone.remove_torrent_peers(shard, remove_list, persistent).iter() {
+                    for (_, previous, next) in torrent_tracker_clone.remove_torrent_peers(shard, remove_list, persistent).iter() {
                         match (previous, next) {
                             (None, None) => {
                                 torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
@@ -312,7 +312,7 @@ impl TorrentTracker {
                 }));
             }
         }
-        for (_index, thread) in threads.into_iter().enumerate() {
+        for thread in threads.into_iter() {
             thread.join().unwrap();
         }
 
