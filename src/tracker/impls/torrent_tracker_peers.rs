@@ -247,6 +247,7 @@ impl TorrentTracker {
                     let mut peers = 0u64;
                     for (info_hash, torrent_entry) in shard_data.iter() {
                         for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
+                            seeds += 1;
                             if torrent_peer.updated.elapsed() > peer_timeout {
                                 match torrent_tracker_clone.remove_torrent_peer(*info_hash, *peer_id, persistent) {
                                     (None, None) => {
@@ -269,6 +270,7 @@ impl TorrentTracker {
                             }
                         }
                         for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
+                            peers += 1;
                             if torrent_peer.updated.elapsed() > peer_timeout {
                                 match torrent_tracker_clone.remove_torrent_peer(*info_hash, *peer_id, persistent) {
                                     (None, None) => {
