@@ -3,6 +3,7 @@ use std::collections::btree_map::Entry;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
 use std::time::Duration;
 use futures_util::future::join_all;
 use log::info;
@@ -274,7 +275,7 @@ impl TorrentTracker {
                 let torrents_removed_clone = torrents_removed.clone();
                 let seeds_found_clone = seeds_found.clone();
                 let peers_found_clone = peers_found.clone();
-                threads.push(tokio::spawn(async move {
+                threads.push(thread::spawn(async move {
                     let mut seeds = 0u64;
                     let mut peers = 0u64;
                     let mut remove_list = vec![];
