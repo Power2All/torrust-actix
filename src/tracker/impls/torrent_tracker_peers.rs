@@ -4,7 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use futures_util::future::join_all;
+use futures_util::future::{join_all, TryJoinAll};
 use log::info;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
@@ -229,7 +229,7 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn torrent_peers_cleanup(&self, torrent_tracker: Arc<TorrentTracker>, peer_timeout: Duration, persistent: bool) -> (u64, u64, u64)
+    pub async fn torrent_peers_cleanup(&self, torrent_tracker: Arc<TorrentTracker>, peer_timeout: Duration, persistent: bool)
     {
         let torrents_removed = Arc::new(AtomicU64::new(0));
         let seeds_found = Arc::new(AtomicU64::new(0));
@@ -264,10 +264,6 @@ impl TorrentTracker {
                                     }
                                 }
                             }
-                            if seeds == 100000 {
-                                info!("[PEERS CLEANUP] Scanned 100000 seeds");
-                                seeds = 0;
-                            }
                         }
                         for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
                             peers += 1;
@@ -287,18 +283,14 @@ impl TorrentTracker {
                                     }
                                 }
                             }
-                            if peers == 100000 {
-                                info!("[PEERS CLEANUP] Scanned 100000 peers");
-                                peers = 0;
-                            }
                         }
                     }
+                    info!("[PEERS CLEANUP] Scanned {} seeds and {} peers", seeds, peers);
                 }));
             }
         }
         join_all(threads).await;
 
         info!("[PEERS CLEANUP] Removed {} torrents, {} seeds and {} peers", torrents_removed.clone().load(Ordering::SeqCst), seeds_found.clone().load(Ordering::SeqCst), peers_found.clone().load(Ordering::SeqCst));
-        (torrents_removed.load(Ordering::SeqCst), seeds_found.load(Ordering::SeqCst), peers_found.load(Ordering::SeqCst))
     }
 }
