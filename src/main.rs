@@ -229,7 +229,7 @@ fn main() -> std::io::Result<()>
                     }
 
                     info!("[PEERS] Checking now for dead peers.");
-                    let _ = tracker_spawn_cleanup_peers.torrent_peers_cleanup(Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout), tracker_spawn_cleanup_peers.config.database.clone().persistent);
+                    let _ = tracker_spawn_cleanup_peers.torrent_peers_cleanup(tracker_spawn_cleanup_peers.clone(), Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout), tracker_spawn_cleanup_peers.config.database.clone().persistent).await;
                     info!("[PEERS] Peers cleaned up.");
 
                     if tracker_spawn_cleanup_peers.config.tracker_config.clone().users_enabled {

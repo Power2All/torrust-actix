@@ -59,6 +59,10 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 
 ### ChangeLog
 
+#### v4.0.6
+* Fixed some clippy issues
+* Found a performance issue on peers cleanup
+
 #### v4.0.5
 * Library bump
 
