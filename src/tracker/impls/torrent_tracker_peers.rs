@@ -4,7 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use futures_util::future::{join_all, TryJoinAll};
+use futures_util::future::join_all;
 use log::info;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
@@ -202,6 +202,38 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
+    pub fn remove_torrent_peers(&self, shard: u8, peers: Vec<(InfoHash, PeerId)>, persistent: bool) -> Vec<(InfoHash, Option<TorrentEntry>, Option<TorrentEntry>)>
+    {
+        let mut return_data = vec![];
+        let shard = self.torrents_sharding.clone().get_shard(shard).unwrap();
+        let mut lock = shard.write();
+        for (info_hash, peer_id) in peers {
+            match lock.entry(info_hash) {
+                Entry::Vacant(_) => {
+                    return_data.push((info_hash, None, None));
+                }
+                Entry::Occupied(mut o) => {
+                    let previous_torrent = o.get().clone();
+                    if o.get_mut().seeds.remove(&peer_id).is_some() {
+                        self.update_stats(StatsEvent::Seeds, -1);
+                    };
+                    if o.get_mut().peers.remove(&peer_id).is_some() {
+                        self.update_stats(StatsEvent::Peers, -1);
+                    };
+                    if !persistent && o.get().seeds.is_empty() && o.get().peers.is_empty() {
+                        lock.remove(&info_hash);
+                        self.update_stats(StatsEvent::Torrents, -1);
+                        return_data.push((info_hash, Some(previous_torrent), None));
+                    } else {
+                        return_data.push((info_hash, Some(previous_torrent), Some(o.get().clone())));
+                    }
+                }
+            }
+        }
+        return_data
+    }
+
+    #[tracing::instrument(level = "debug")]
     pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
@@ -245,43 +277,34 @@ impl TorrentTracker {
                 threads.push(tokio::spawn(async move {
                     let mut seeds = 0u64;
                     let mut peers = 0u64;
+                    let mut remove_list = vec![];
                     for (info_hash, torrent_entry) in shard_data.iter() {
                         for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
                             seeds += 1;
                             if torrent_peer.updated.elapsed() > peer_timeout {
-                                match torrent_tracker_clone.remove_torrent_peer(*info_hash, *peer_id, persistent) {
-                                    (None, None) => {
-                                        torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
-                                    }
-                                    (previous, None) => {
-                                        torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
-                                        seeds_found_clone.fetch_add(previous.clone().unwrap().seeds.len() as u64, Ordering::SeqCst);
-                                        peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
-                                    }
-                                    (previous, new) => {
-                                        seeds_found_clone.fetch_add(previous.clone().unwrap().seeds.len() as u64 - new.clone().unwrap().seeds.len() as u64, Ordering::SeqCst);
-                                        peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64 - new.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
-                                    }
-                                }
+                                remove_list.push((*info_hash, *peer_id));
                             }
                         }
                         for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
                             peers += 1;
                             if torrent_peer.updated.elapsed() > peer_timeout {
-                                match torrent_tracker_clone.remove_torrent_peer(*info_hash, *peer_id, persistent) {
-                                    (None, None) => {
-                                        torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
-                                    }
-                                    (previous, None) => {
-                                        torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
-                                        seeds_found_clone.fetch_add(previous.clone().unwrap().seeds.len() as u64, Ordering::SeqCst);
-                                        peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
-                                    }
-                                    (previous, new) => {
-                                        seeds_found_clone.fetch_add(previous.clone().unwrap().seeds.len() as u64 - new.clone().unwrap().seeds.len() as u64, Ordering::SeqCst);
-                                        peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64 - new.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
-                                    }
-                                }
+                                remove_list.push((*info_hash, *peer_id));
+                            }
+                        }
+                    }
+                    for (_info_hash, previous, next) in torrent_tracker_clone.remove_torrent_peers(shard, remove_list, persistent).iter() {
+                        match (previous, next) {
+                            (None, None) => {
+                                torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
+                            }
+                            (previous, None) => {
+                                torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
+                                seeds_found_clone.fetch_add(previous.clone().unwrap().seeds.len() as u64, Ordering::SeqCst);
+                                peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
+                            }
+                            (previous, new) => {
+                                seeds_found_clone.fetch_add(previous.clone().unwrap().seeds.len() as u64 - new.clone().unwrap().seeds.len() as u64, Ordering::SeqCst);
+                                peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64 - new.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
                             }
                         }
                     }
