@@ -3,7 +3,7 @@ use std::fmt::Formatter;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::peer_id_visitor::PeerIdVisitor;
 
-impl<'v> serde::de::Visitor<'v> for PeerIdVisitor {
+impl serde::de::Visitor<'_> for PeerIdVisitor {
     type Value = PeerId;
 
     fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {

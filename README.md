@@ -59,6 +59,12 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 
 ### ChangeLog
 
+#### v4.0.6
+* Fixed some clippy issues
+* Found a performance issue on peers cleanup
+* Switched peers cleanup from Tokio spawn to Thread spawn for speedup
+* Bumped version of Tokio
+
 #### v4.0.5
 * Library bump
 

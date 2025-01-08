@@ -3,7 +3,7 @@ use std::fmt::Formatter;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::info_hash_visitor::InfoHashVisitor;
 
-impl<'v> serde::de::Visitor<'v> for InfoHashVisitor {
+impl serde::de::Visitor<'_> for InfoHashVisitor {
     type Value = InfoHash;
 
     fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
