@@ -243,6 +243,8 @@ impl TorrentTracker {
                 let seeds_found_clone = seeds_found.clone();
                 let peers_found_clone = peers_found.clone();
                 threads.push(tokio::spawn(async move {
+                    let mut seeds = 0u64;
+                    let mut peers = 0u64;
                     for (info_hash, torrent_entry) in shard_data.iter() {
                         for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
                             if torrent_peer.updated.elapsed() > peer_timeout {
@@ -261,6 +263,10 @@ impl TorrentTracker {
                                     }
                                 }
                             }
+                            if seeds == 100000 {
+                                info!("[PEERS CLEANUP] Scanned 100000 seeds");
+                                seeds = 0;
+                            }
                         }
                         for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
                             if torrent_peer.updated.elapsed() > peer_timeout {
@@ -278,6 +284,10 @@ impl TorrentTracker {
                                         peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64 - new.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
                                     }
                                 }
+                            }
+                            if peers == 100000 {
+                                info!("[PEERS CLEANUP] Scanned 100000 peers");
+                                peers = 0;
                             }
                         }
                     }
