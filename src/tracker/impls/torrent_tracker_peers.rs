@@ -259,7 +259,7 @@ impl TorrentTracker {
                 peers += torrent_entry.peers.len() as u64;
                 for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
                     if torrent_peer.updated.elapsed() > peer_timeout {
-                        match self.remove_torrent_peer(info_hash, *peer_id, persistent, true) {
+                        match self.remove_torrent_peer(info_hash, *peer_id, persistent, false) {
                             (None, None) => {
                                 torrents_removed += 1;
                             }
