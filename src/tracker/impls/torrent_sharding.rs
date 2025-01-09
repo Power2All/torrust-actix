@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
 use crate::tracker::structs::info_hash::InfoHash;
+use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_sharding::TorrentSharding;
 
@@ -271,6 +272,26 @@ impl TorrentSharding {
             shard_253: Arc::new(RwLock::new(Default::default())),
             shard_254: Arc::new(RwLock::new(Default::default())),
             shard_255: Arc::new(RwLock::new(Default::default())),
+        }
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub fn contains_torrent(&self, info_hash: InfoHash) -> bool
+    {
+        self.get_shard_content(info_hash.0[0]).contains_key(&info_hash)
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub fn contains_peer(&self, info_hash: InfoHash, peer_id: PeerId) -> bool
+    {
+        match self.get_shard_content(info_hash.0[0]).get(&info_hash) {
+            None => { false }
+            Some(torrent_entry) => {
+                if torrent_entry.seeds.contains_key(&peer_id) || torrent_entry.peers.contains_key(&peer_id) {
+                    return true;
+                }
+                false
+            }
         }
     }
 
