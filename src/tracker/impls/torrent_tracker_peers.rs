@@ -2,11 +2,8 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use futures_util::future::join_all;
 use log::info;
-use tokio::runtime::Runtime;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
@@ -241,59 +238,55 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn torrent_peers_cleanup(&self, tokio_threads: Arc<Runtime>, torrent_tracker: Arc<TorrentTracker>, peer_timeout: Duration, persistent: bool)
+    pub async fn torrent_peers_cleanup(&self, torrent_tracker: Arc<TorrentTracker>, peer_timeout: Duration, persistent: bool)
     {
-        let torrents_removed = Arc::new(AtomicU64::new(0));
-        let seeds_found = Arc::new(AtomicU64::new(0));
-        let peers_found = Arc::new(AtomicU64::new(0));
-        let mut threads = vec![];
+        let mut remove_list = vec![];
+        let mut torrents_removed = 0u64;
+        let mut seeds_found = 0u64;
+        let mut peers_found = 0u64;
+        let mut torrents = 0u64;
+        let mut seeds = 0u64;
+        let mut peers = 0u64;
         for shard in 0u8..=255u8 {
-            let torrent_tracker_clone = torrent_tracker.clone();
-            let shard_data = torrent_tracker.torrents_sharding.get_shard_content(shard);
-            if !shard_data.is_empty() {
-                let torrents_removed_clone = torrents_removed.clone();
-                let seeds_found_clone = seeds_found.clone();
-                let peers_found_clone = peers_found.clone();
-                threads.push(tokio_threads.spawn(async move {
-                    let mut seeds = 0u64;
-                    let mut peers = 0u64;
-                    let mut remove_list = vec![];
-                    for (info_hash, torrent_entry) in shard_data.iter() {
-                        for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
-                            seeds += 1;
-                            if torrent_peer.updated.elapsed() > peer_timeout {
-                                remove_list.push((*info_hash, *peer_id));
-                            }
-                        }
-                        for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
-                            peers += 1;
-                            if torrent_peer.updated.elapsed() > peer_timeout {
-                                remove_list.push((*info_hash, *peer_id));
-                            }
-                        }
+            info!("[PEERS CLEANUP]: Scanning shard {}", shard);
+            let shard_pointer = torrent_tracker.torrents_sharding.get_shard(shard).unwrap();
+            let shard_reader = shard_pointer.read();
+            for (info_hash, torrent_entry) in shard_reader.iter() {
+                torrents += 1;
+                for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
+                    seeds += 1;
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        remove_list.push((*info_hash, *peer_id));
                     }
-                    for (_, previous, next) in torrent_tracker_clone.remove_torrent_peers(remove_list, persistent).iter() {
-                        match (previous, next) {
-                            (None, None) => {
-                                torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
-                            }
-                            (previous, None) => {
-                                torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
-                                seeds_found_clone.fetch_add(previous.clone().unwrap().seeds.len() as u64, Ordering::SeqCst);
-                                peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
-                            }
-                            (previous, new) => {
-                                seeds_found_clone.fetch_add(previous.clone().unwrap().seeds.len() as u64 - new.clone().unwrap().seeds.len() as u64, Ordering::SeqCst);
-                                peers_found_clone.fetch_add(previous.clone().unwrap().peers.len() as u64 - new.clone().unwrap().peers.len() as u64, Ordering::SeqCst);
-                            }
-                        }
+                }
+                for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
+                    peers += 1;
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        remove_list.push((*info_hash, *peer_id));
                     }
-                    info!("[PEERS CLEANUP] Scanned {} seeds and {} peers", seeds, peers);
-                }));
+                }
+            }
+            drop(shard_reader);
+            drop(shard_pointer);
+        }
+        info!("[PEERS CLEANUP]: Executing removal of timed out peers...");
+        for (_, previous, next) in torrent_tracker.remove_torrent_peers(remove_list, persistent).iter() {
+            match (previous, next) {
+                (None, None) => {
+                    torrents_removed += 1;
+                }
+                (previous, None) => {
+                    torrents_removed += 1;
+                    seeds_found += previous.clone().unwrap().seeds.len() as u64;
+                    peers_found +=previous.clone().unwrap().peers.len() as u64;
+                }
+                (previous, new) => {
+                    seeds_found += previous.clone().unwrap().seeds.len() as u64 - new.clone().unwrap().seeds.len() as u64;
+                    peers_found += previous.clone().unwrap().peers.len() as u64 - new.clone().unwrap().peers.len() as u64;
+                }
             }
         }
-        join_all(threads).await;
 
-        info!("[PEERS CLEANUP] Removed {} torrents, {} seeds and {} peers", torrents_removed.clone().load(Ordering::SeqCst), seeds_found.clone().load(Ordering::SeqCst), peers_found.clone().load(Ordering::SeqCst));
+        info!("[PEERS CLEANUP] Scanned T: {} S: {} P: {} - Removed T: {} S{} P: {}", torrents, seeds, peers, torrents_removed, seeds_found, peers_found);
     }
 }

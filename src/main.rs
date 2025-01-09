@@ -8,7 +8,6 @@ use futures_util::future::{try_join_all, TryJoinAll};
 use log::{error, info};
 use parking_lot::deadlock;
 use sentry::ClientInitGuard;
-use tokio::runtime;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
@@ -222,23 +221,23 @@ fn main() -> std::io::Result<()>
             let tracker_spawn_cleanup_peers = tracker.clone();
             info!("[BOOT] Starting thread for peers cleanup with {} seconds delay...", tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval);
             tokio::spawn(async move {
-                let tokio_threads = match tracker_spawn_cleanup_peers.config.tracker_config.peers_cleanup_threads {
-                    0 => {
-                        Arc::new(runtime::Builder::new_current_thread()
-                            .thread_name("peer_cleanup")
-                            .enable_all()
-                            .build()
-                            .unwrap())
-                    }
-                    _ => {
-                        Arc::new(runtime::Builder::new_multi_thread()
-                            .thread_name("peer_cleanup")
-                            .enable_all()
-                            .worker_threads(tracker_spawn_cleanup_peers.config.tracker_config.peers_cleanup_threads as usize)
-                            .build()
-                            .unwrap())
-                    }
-                };
+                // let tokio_threads = match tracker_spawn_cleanup_peers.config.tracker_config.peers_cleanup_threads {
+                //     0 => {
+                //         Arc::new(runtime::Builder::new_current_thread()
+                //             .thread_name("peer_cleanup")
+                //             .enable_all()
+                //             .build()
+                //             .unwrap())
+                //     }
+                //     _ => {
+                //         Arc::new(runtime::Builder::new_multi_thread()
+                //             .thread_name("peer_cleanup")
+                //             .enable_all()
+                //             .worker_threads(tracker_spawn_cleanup_peers.config.tracker_config.peers_cleanup_threads as usize)
+                //             .build()
+                //             .unwrap())
+                //     }
+                // };
 
                 loop {
                     tracker_spawn_cleanup_peers.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval as i64);
@@ -248,7 +247,7 @@ fn main() -> std::io::Result<()>
                     }
 
                     info!("[PEERS] Checking now for dead peers.");
-                    let _ = tracker_spawn_cleanup_peers.torrent_peers_cleanup(tokio_threads.clone(), tracker_spawn_cleanup_peers.clone(), Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout), tracker_spawn_cleanup_peers.config.database.clone().persistent).await;
+                    tracker_spawn_cleanup_peers.torrent_peers_cleanup(tracker_spawn_cleanup_peers.clone(), Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout), tracker_spawn_cleanup_peers.config.database.clone().persistent).await;
                     info!("[PEERS] Peers cleaned up.");
 
                     if tracker_spawn_cleanup_peers.config.tracker_config.clone().users_enabled {
