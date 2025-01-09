@@ -256,20 +256,23 @@ impl TorrentTracker {
             for (info_hash, torrent_entry) in shard {
                 seeds += torrent_entry.seeds.len() as u64;
                 peers += torrent_entry.peers.len() as u64;
-                for (peer_id, torrent_peer) in (torrent_entry.seeds.iter(), torrent_entry.peers.iter()) {
+                for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
                     if torrent_peer.updated.elapsed() > peer_timeout {
-                        match self.remove_torrent_peer(info_hash, peer_id, persistent, true) {
+                        match self.remove_torrent_peer(info_hash, *peer_id, persistent, true) {
                             (None, None) => {
                                 torrents_removed += 1;
                             }
                             (previous, None) => {
                                 torrents_removed += 1;
-                                seeds_removed += previous.unwrap().seeds.len() as u64;
-                                peers_removed += previous.unwrap().peers.len() as u64;
+                                let previous_torrent_entry = previous.unwrap();
+                                seeds_removed += previous_torrent_entry.seeds.len() as u64;
+                                peers_removed += previous_torrent_entry.peers.len() as u64;
                             }
                             (previous, new) => {
-                                seeds_removed += previous.unwrap().seeds.len() as u64 - new.unwrap().seeds.len() as u64;
-                                peers_removed += previous.unwrap().peers.len() as u64 - new.unwrap().peers.len() as u64;
+                                let previous_torrent_entry = previous.unwrap();
+                                let new_torrent_entry = new.unwrap();
+                                seeds_removed += previous_torrent_entry.seeds.len() as u64 - new_torrent_entry.seeds.len() as u64;
+                                peers_removed += previous_torrent_entry.peers.len() as u64 - new_torrent_entry.peers.len() as u64;
                             }
                         }
                     }
@@ -277,6 +280,6 @@ impl TorrentTracker {
             }
         }
 
-        info!("[PEERS CLEANUP] Scanned T: {} S: {} P: {} - Removed T: {} S{} P: {}", torrents, seeds, peers, torrents_removed, seeds_removed, peers_removed);
+        info!("[PEERS CLEANUP] Found T: {} S: {} P: {} - Removed T: {} S: {} P: {}", torrents, seeds, peers, torrents_removed, seeds_removed, peers_removed);
     }
 }
