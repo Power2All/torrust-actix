@@ -311,6 +311,8 @@ impl TorrentTracker {
         }
         join_all(threads).await;
 
+        std::mem::forget(tokio_threads);
+
         info!("[PEERS CLEANUP] Removed {} torrents, {} seeds and {} peers", torrents_removed.clone().load(Ordering::SeqCst), seeds_found.clone().load(Ordering::SeqCst), peers_found.clone().load(Ordering::SeqCst));
     }
 }
