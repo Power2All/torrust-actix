@@ -217,9 +217,11 @@ fn main() -> std::io::Result<()>
                 }
             });
 
-            let tracker_spawn_cleanup_peers = tracker.clone();
-            info!("[BOOT] Starting thread for peers cleanup with {} seconds delay...", tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval);
-            tracker.clone().torrents_sharding.cleanup_threads(tracker.clone(), tokio_shutdown.clone(), Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout), tracker_spawn_cleanup_peers.config.database.clone().persistent);
+            let (tracker_cleanup_clone, tokio_shutdown_cleanup_clone) = (tracker.clone(), tokio_shutdown.clone());
+            info!("[BOOT] Starting thread for peers cleanup with {} seconds delay...", tracker_cleanup_clone.config.tracker_config.clone().peers_cleanup_interval);
+            tokio::spawn(async move {
+                tracker_cleanup_clone.clone().torrents_sharding.cleanup_threads(tracker_cleanup_clone.clone(), tokio_shutdown_cleanup_clone, Duration::from_secs(tracker_cleanup_clone.config.tracker_config.clone().peers_timeout), tracker_cleanup_clone.config.database.clone().persistent).await;
+            });
 
             if tracker.config.tracker_config.clone().keys_enabled {
                 let cleanup_keys_handler = tokio_shutdown.clone();

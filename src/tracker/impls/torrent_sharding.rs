@@ -1,5 +1,6 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 use log::info;
@@ -283,7 +284,7 @@ impl TorrentSharding {
         }
     }
 
-    pub fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool)
+    pub async fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool)
     {
         let tokio_threading = match torrent_tracker.clone().config.tracker_config.peers_cleanup_threads {
             0 => {
@@ -334,7 +335,8 @@ impl TorrentSharding {
                 }
             });
         }
-        loop {}
+        shutdown.clone().handle().await;
+        mem::forget(tokio_threading);
     }
 
     #[tracing::instrument(level = "debug")]
