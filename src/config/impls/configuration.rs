@@ -37,6 +37,7 @@ impl Configuration {
                 request_interval_minimum: 1800,
                 peers_timeout: 2700,
                 peers_cleanup_interval: 900,
+                peers_cleanup_threads: 256,
                 total_downloads: 0,
                 swagger: false,
                 prometheus_id: String::from("torrust_actix")

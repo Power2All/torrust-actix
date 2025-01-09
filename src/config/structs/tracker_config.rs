@@ -12,6 +12,7 @@ pub struct TrackerConfig {
     pub request_interval_minimum: u64,
     pub peers_timeout: u64,
     pub peers_cleanup_interval: u64,
+    pub peers_cleanup_threads: u64,
     pub total_downloads: u64,
     pub swagger: bool,
     pub prometheus_id: String,

@@ -1,3 +1,4 @@
+use std::mem;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
@@ -8,6 +9,7 @@ use futures_util::future::{try_join_all, TryJoinAll};
 use log::{error, info};
 use parking_lot::deadlock;
 use sentry::ClientInitGuard;
+use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
@@ -82,10 +84,12 @@ fn main() -> std::io::Result<()>
 
             if args.import { tracker.import(&args, tracker.clone()).await; }
 
+            let tokio_core = Builder::new_multi_thread().thread_name("core").worker_threads(9).enable_all().build()?;
+
             let tokio_shutdown = Shutdown::new().expect("shutdown creation works on first call");
 
             let deadlocks_handler = tokio_shutdown.clone();
-            tokio::spawn(async move {
+            tokio_core.spawn(async move {
                 info!("[BOOT] Starting thread for deadlocks...");
                 loop {
                     if shutdown_waiting(Duration::from_secs(10), deadlocks_handler.clone()).await {
@@ -136,12 +140,12 @@ fn main() -> std::io::Result<()>
                 }
             }
             if !api_futures.is_empty() {
-                tokio::spawn(async move {
+                tokio_core.spawn(async move {
                     let _ = try_join_all(api_futures).await;
                 });
             }
             if !apis_futures.is_empty() {
-                tokio::spawn(async move {
+                tokio_core.spawn(async move {
                     let _ = try_join_all(apis_futures).await;
                 });
             }
@@ -174,12 +178,12 @@ fn main() -> std::io::Result<()>
                 }
             }
             if !http_futures.is_empty() {
-                tokio::spawn(async move {
+                tokio_core.spawn(async move {
                     let _ = try_join_all(http_futures).await;
                 });
             }
             if !https_futures.is_empty() {
-                tokio::spawn(async move {
+                tokio_core.spawn(async move {
                     let _ = try_join_all(https_futures).await;
                 });
             }
@@ -199,7 +203,7 @@ fn main() -> std::io::Result<()>
             let stats_handler = tokio_shutdown.clone();
             let tracker_spawn_stats = tracker.clone();
             info!("[BOOT] Starting thread for console updates with {} seconds delay...", tracker_spawn_stats.config.log_console_interval);
-            tokio::spawn(async move {
+            tokio_core.spawn(async move {
                 loop {
                     tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60i64);
                     if shutdown_waiting(Duration::from_secs(tracker_spawn_stats.config.log_console_interval), stats_handler.clone()).await {
@@ -217,34 +221,17 @@ fn main() -> std::io::Result<()>
                 }
             });
 
-            let cleanup_peers_handler = tokio_shutdown.clone();
-            let tracker_spawn_cleanup_peers = tracker.clone();
-            info!("[BOOT] Starting thread for peers cleanup with {} seconds delay...", tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval);
-            tokio::spawn(async move {
-                loop {
-                    tracker_spawn_cleanup_peers.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval as i64);
-                    if shutdown_waiting(Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval), cleanup_peers_handler.clone()).await {
-                        info!("[BOOT] Shutting down thread for peers cleanup...");
-                        return;
-                    }
-
-                    info!("[PEERS] Checking now for dead peers.");
-                    let _ = tracker_spawn_cleanup_peers.torrent_peers_cleanup(tracker_spawn_cleanup_peers.clone(), Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout), tracker_spawn_cleanup_peers.config.database.clone().persistent).await;
-                    info!("[PEERS] Peers cleaned up.");
-
-                    if tracker_spawn_cleanup_peers.config.tracker_config.clone().users_enabled {
-                        info!("[USERS] Checking now for inactive torrents in users.");
-                        tracker_spawn_cleanup_peers.clean_user_active_torrents(Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout));
-                        info!("[USERS] Inactive torrents in users cleaned up.");
-                    }
-                }
+            let (tracker_cleanup_clone, tokio_shutdown_cleanup_clone) = (tracker.clone(), tokio_shutdown.clone());
+            info!("[BOOT] Starting thread for peers cleanup with {} seconds delay...", tracker_cleanup_clone.config.tracker_config.clone().peers_cleanup_interval);
+            tokio_core.spawn(async move {
+                tracker_cleanup_clone.clone().torrents_sharding.cleanup_threads(tracker_cleanup_clone.clone(), tokio_shutdown_cleanup_clone, Duration::from_secs(tracker_cleanup_clone.config.tracker_config.clone().peers_timeout), tracker_cleanup_clone.config.database.clone().persistent).await;
             });
 
             if tracker.config.tracker_config.clone().keys_enabled {
                 let cleanup_keys_handler = tokio_shutdown.clone();
                 let tracker_spawn_cleanup_keys = tracker.clone();
                 info!("[BOOT] Starting thread for keys cleanup with {} seconds delay...", tracker_spawn_cleanup_keys.config.tracker_config.clone().keys_cleanup_interval);
-                tokio::spawn(async move {
+                tokio_core.spawn(async move {
                     loop {
                         tracker_spawn_cleanup_keys.set_stats(StatsEvent::TimestampKeysTimeout, chrono::Utc::now().timestamp() + tracker_spawn_cleanup_keys.config.tracker_config.clone().keys_cleanup_interval as i64);
                         if shutdown_waiting(Duration::from_secs(tracker_spawn_cleanup_keys.config.tracker_config.clone().keys_cleanup_interval), cleanup_keys_handler.clone()).await {
@@ -263,7 +250,7 @@ fn main() -> std::io::Result<()>
                 let updates_handler = tokio_shutdown.clone();
                 let tracker_spawn_updates = tracker.clone();
                 info!("[BOOT] Starting thread for database updates with {} seconds delay...", tracker_spawn_updates.config.database.clone().persistent_interval);
-                tokio::spawn(async move {
+                tokio_core.spawn(async move {
                     loop {
                         tracker_spawn_updates.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + tracker_spawn_updates.config.database.clone().persistent_interval as i64);
                         if shutdown_waiting(Duration::from_secs(tracker_spawn_updates.config.database.clone().persistent_interval), updates_handler.clone()).await {
@@ -357,6 +344,7 @@ fn main() -> std::io::Result<()>
                     task::sleep(Duration::from_secs(1)).await;
 
                     info!("Server shutting down completed");
+                    mem::forget(tokio_core);
                     Ok(())
                 }
             }

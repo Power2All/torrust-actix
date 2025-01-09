@@ -302,7 +302,8 @@ impl TorrentTracker {
                 let torrent_entry = match data.remove_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
-                    data.config.database.clone().persistent
+                    data.config.database.clone().persistent,
+                    false
                 ) {
                     (Some(_), None) => {
                         TorrentEntry::new()

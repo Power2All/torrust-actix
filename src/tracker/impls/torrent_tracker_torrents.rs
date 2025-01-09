@@ -112,6 +112,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
+        if !self.torrents_sharding.contains_torrent(info_hash) { return None; }
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
         match lock.remove(&info_hash) {

@@ -59,6 +59,11 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 
 ### ChangeLog
 
+#### v4.0.7
+* Cleanup was still broken, did a big rewrite, after testing it works now as expected
+* Did some tokio threading correctly for core threads
+* Added a new configuration key, to set the threads, default for each shard (256), but can be changed
+
 #### v4.0.6
 * Fixed some clippy issues
 * Found a performance issue on peers cleanup
