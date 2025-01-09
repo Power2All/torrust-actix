@@ -563,7 +563,7 @@ impl TorrentSharding {
     #[tracing::instrument(level = "debug")]
     pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry>
     {
-        self.get_shard(shard).unwrap().read().clone()
+        self.get_shard(shard).unwrap().read_recursive().clone()
     }
 
     #[tracing::instrument(level = "debug")]
