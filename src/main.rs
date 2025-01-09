@@ -217,46 +217,9 @@ fn main() -> std::io::Result<()>
                 }
             });
 
-            let cleanup_peers_handler = tokio_shutdown.clone();
             let tracker_spawn_cleanup_peers = tracker.clone();
             info!("[BOOT] Starting thread for peers cleanup with {} seconds delay...", tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval);
-            tokio::spawn(async move {
-                // let tokio_threads = match tracker_spawn_cleanup_peers.config.tracker_config.peers_cleanup_threads {
-                //     0 => {
-                //         Arc::new(runtime::Builder::new_current_thread()
-                //             .thread_name("peer_cleanup")
-                //             .enable_all()
-                //             .build()
-                //             .unwrap())
-                //     }
-                //     _ => {
-                //         Arc::new(runtime::Builder::new_multi_thread()
-                //             .thread_name("peer_cleanup")
-                //             .enable_all()
-                //             .worker_threads(tracker_spawn_cleanup_peers.config.tracker_config.peers_cleanup_threads as usize)
-                //             .build()
-                //             .unwrap())
-                //     }
-                // };
-
-                loop {
-                    tracker_spawn_cleanup_peers.set_stats(StatsEvent::TimestampTimeout, chrono::Utc::now().timestamp() + tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval as i64);
-                    if shutdown_waiting(Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_cleanup_interval), cleanup_peers_handler.clone()).await {
-                        info!("[BOOT] Shutting down thread for peers cleanup...");
-                        return;
-                    }
-
-                    info!("[PEERS] Checking now for dead peers.");
-                    tracker_spawn_cleanup_peers.torrent_peers_cleanup(tracker_spawn_cleanup_peers.clone(), Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout), tracker_spawn_cleanup_peers.config.database.clone().persistent).await;
-                    info!("[PEERS] Peers cleaned up.");
-
-                    if tracker_spawn_cleanup_peers.config.tracker_config.clone().users_enabled {
-                        info!("[USERS] Checking now for inactive torrents in users.");
-                        tracker_spawn_cleanup_peers.clean_user_active_torrents(Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout));
-                        info!("[USERS] Inactive torrents in users cleaned up.");
-                    }
-                }
-            });
+            tracker.clone().torrents_sharding.cleanup_threads(tracker.clone(), tokio_shutdown.clone(), Duration::from_secs(tracker_spawn_cleanup_peers.config.tracker_config.clone().peers_timeout), tracker_spawn_cleanup_peers.config.database.clone().persistent);
 
             if tracker.config.tracker_config.clone().keys_enabled {
                 let cleanup_keys_handler = tokio_shutdown.clone();

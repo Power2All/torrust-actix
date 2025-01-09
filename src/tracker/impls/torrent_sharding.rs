@@ -1,10 +1,17 @@
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
+use log::info;
 use parking_lot::RwLock;
+use tokio_shutdown::Shutdown;
+use crate::common::common::shutdown_waiting;
+use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_sharding::TorrentSharding;
+use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 #[allow(dead_code)]
 impl TorrentSharding {
@@ -272,6 +279,52 @@ impl TorrentSharding {
             shard_253: Arc::new(RwLock::new(Default::default())),
             shard_254: Arc::new(RwLock::new(Default::default())),
             shard_255: Arc::new(RwLock::new(Default::default())),
+        }
+    }
+
+    pub fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool)
+    {
+        for shard in 0u8..=255u8 {
+            let torrent_tracker_clone = torrent_tracker.clone();
+            let shutdown_clone = shutdown.clone();
+            tokio::spawn(async move {
+                loop {
+                    if shutdown_waiting(Duration::from_secs(torrent_tracker_clone.clone().config.tracker_config.peers_cleanup_interval), shutdown_clone.clone()).await {
+                        return;
+                    }
+
+                    info!("[PEERS] Checking now for dead peers in shard {}", shard);
+                    let (mut torrents, mut seeds, mut peers) = (0u64, 0u64, 0u64);
+                    let shard_data = torrent_tracker_clone.clone().torrents_sharding.get_shard_content(shard);
+                    for (info_hash, torrent_entry) in shard_data.iter() {
+                        for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
+                            if torrent_peer.updated.elapsed() > peer_timeout {
+                                let shard = torrent_tracker_clone.clone().torrents_sharding.get_shard(shard).unwrap();
+                                let mut lock = shard.write();
+                                match lock.entry(*info_hash) {
+                                    Entry::Vacant(_) => {}
+                                    Entry::Occupied(mut o) => {
+                                        if o.get_mut().seeds.remove(&peer_id).is_some() {
+                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Seeds, -1);
+                                            seeds += 1;
+                                        };
+                                        if o.get_mut().peers.remove(&peer_id).is_some() {
+                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Peers, -1);
+                                            peers += 1;
+                                        };
+                                        if !persistent && o.get().seeds.is_empty() && o.get().peers.is_empty() {
+                                            lock.remove(info_hash);
+                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Torrents, -1);
+                                            torrents += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    info!("[PEERS] Shard: {} - Torrents: {} - Seeds: {} - Peers: {}", shard, torrents, seeds, peers);
+                }
+            });
         }
     }
 
