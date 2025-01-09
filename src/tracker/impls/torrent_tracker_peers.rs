@@ -204,14 +204,14 @@ impl TorrentTracker {
     {
         let mut return_data = vec![];
         for (info_hash, peer_id) in peers {
-            let remove_torrent = self.remove_torrent_peer(info_hash, peer_id, persistent);
+            let remove_torrent = self.remove_torrent_peer(info_hash, peer_id, persistent, true);
             return_data.push((info_hash, remove_torrent.0, remove_torrent.1));
         }
         return_data
     }
 
     #[tracing::instrument(level = "debug")]
-    pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
+    pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
     {
         let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
@@ -220,7 +220,9 @@ impl TorrentTracker {
                 (None, None)
             }
             Entry::Occupied(mut o) => {
-                info!("[PEERS] Removing from torrent {} peer {}", info_hash, peer_id);
+                if (cleanup) {
+                    info!("[PEERS] Removing from torrent {} peer {}", info_hash, peer_id);
+                }
                 let previous_torrent = o.get().clone();
                 if o.get_mut().seeds.remove(&peer_id).is_some() {
                     self.update_stats(StatsEvent::Seeds, -1);
