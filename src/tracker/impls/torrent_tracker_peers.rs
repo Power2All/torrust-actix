@@ -202,33 +202,12 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub fn remove_torrent_peers(&self, shard: u8, peers: Vec<(InfoHash, PeerId)>, persistent: bool) -> Vec<(InfoHash, Option<TorrentEntry>, Option<TorrentEntry>)>
+    pub fn remove_torrent_peers(&self, peers: Vec<(InfoHash, PeerId)>, persistent: bool) -> Vec<(InfoHash, Option<TorrentEntry>, Option<TorrentEntry>)>
     {
         let mut return_data = vec![];
-        let shard = self.torrents_sharding.clone().get_shard(shard).unwrap();
-        let mut lock = shard.write();
         for (info_hash, peer_id) in peers {
-            match lock.entry(info_hash) {
-                Entry::Vacant(_) => {
-                    return_data.push((info_hash, None, None));
-                }
-                Entry::Occupied(mut o) => {
-                    let previous_torrent = o.get().clone();
-                    if o.get_mut().seeds.remove(&peer_id).is_some() {
-                        self.update_stats(StatsEvent::Seeds, -1);
-                    };
-                    if o.get_mut().peers.remove(&peer_id).is_some() {
-                        self.update_stats(StatsEvent::Peers, -1);
-                    };
-                    if !persistent && o.get().seeds.is_empty() && o.get().peers.is_empty() {
-                        lock.remove(&info_hash);
-                        self.update_stats(StatsEvent::Torrents, -1);
-                        return_data.push((info_hash, Some(previous_torrent), None));
-                    } else {
-                        return_data.push((info_hash, Some(previous_torrent), Some(o.get().clone())));
-                    }
-                }
-            }
+            let remove_torrent = self.remove_torrent_peer(info_hash, peer_id, persistent);
+            return_data.push((info_hash, remove_torrent.0, remove_torrent.1));
         }
         return_data
     }
@@ -292,7 +271,7 @@ impl TorrentTracker {
                             }
                         }
                     }
-                    for (_, previous, next) in torrent_tracker_clone.remove_torrent_peers(shard, remove_list, persistent).iter() {
+                    for (_, previous, next) in torrent_tracker_clone.remove_torrent_peers(remove_list, persistent).iter() {
                         match (previous, next) {
                             (None, None) => {
                                 torrents_removed_clone.fetch_add(1, Ordering::SeqCst);
