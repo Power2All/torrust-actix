@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use futures_util::future::join_all;
 use log::info;
-use tokio::runtime;
+use tokio::runtime::Runtime;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
@@ -241,25 +241,8 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn torrent_peers_cleanup(&self, torrent_tracker: Arc<TorrentTracker>, peer_timeout: Duration, persistent: bool)
+    pub async fn torrent_peers_cleanup(&self, tokio_threads: Arc<Runtime>, torrent_tracker: Arc<TorrentTracker>, peer_timeout: Duration, persistent: bool)
     {
-        let tokio_threads = match torrent_tracker.config.tracker_config.peers_cleanup_threads {
-            0 => {
-                runtime::Builder::new_current_thread()
-                    .thread_name("peer_cleanup")
-                    .enable_all()
-                    .build()
-                    .unwrap()
-            }
-            _ => {
-                runtime::Builder::new_multi_thread()
-                    .thread_name("peer_cleanup")
-                    .enable_all()
-                    .worker_threads(torrent_tracker.config.tracker_config.peers_cleanup_threads as usize)
-                    .build()
-                    .unwrap()
-            }
-        };
         let torrents_removed = Arc::new(AtomicU64::new(0));
         let seeds_found = Arc::new(AtomicU64::new(0));
         let peers_found = Arc::new(AtomicU64::new(0));
@@ -310,8 +293,6 @@ impl TorrentTracker {
             }
         }
         join_all(threads).await;
-
-        std::mem::forget(tokio_threads);
 
         info!("[PEERS CLEANUP] Removed {} torrents, {} seeds and {} peers", torrents_removed.clone().load(Ordering::SeqCst), seeds_found.clone().load(Ordering::SeqCst), peers_found.clone().load(Ordering::SeqCst));
     }
