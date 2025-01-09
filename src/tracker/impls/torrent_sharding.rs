@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use log::info;
 use parking_lot::RwLock;
+use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use crate::common::common::shutdown_waiting;
 use crate::stats::enums::stats_event::StatsEvent;
@@ -284,16 +285,23 @@ impl TorrentSharding {
 
     pub fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool)
     {
+        let tokio_threading = match torrent_tracker.clone().config.tracker_config.peers_cleanup_threads {
+            0 => {
+                Builder::new_current_thread().thread_name("sharding").enable_all().build().unwrap()
+            }
+            _ => {
+                Builder::new_multi_thread().thread_name("sharding").worker_threads(torrent_tracker.clone().config.tracker_config.peers_cleanup_threads as usize).enable_all().build().unwrap()
+            }
+        };
         for shard in 0u8..=255u8 {
             let torrent_tracker_clone = torrent_tracker.clone();
             let shutdown_clone = shutdown.clone();
-            tokio::spawn(async move {
+            tokio_threading.spawn(async move {
                 loop {
                     if shutdown_waiting(Duration::from_secs(torrent_tracker_clone.clone().config.tracker_config.peers_cleanup_interval), shutdown_clone.clone()).await {
                         return;
                     }
 
-                    info!("[PEERS] Checking now for dead peers in shard {}", shard);
                     let (mut torrents, mut seeds, mut peers) = (0u64, 0u64, 0u64);
                     let shard_data = torrent_tracker_clone.clone().torrents_sharding.get_shard_content(shard);
                     for (info_hash, torrent_entry) in shard_data.iter() {
@@ -326,6 +334,7 @@ impl TorrentSharding {
                 }
             });
         }
+        loop {}
     }
 
     #[tracing::instrument(level = "debug")]
