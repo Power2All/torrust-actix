@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
-use std::time::Duration;
 use log::info;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
