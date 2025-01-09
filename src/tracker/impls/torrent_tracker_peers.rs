@@ -200,17 +200,6 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub fn remove_torrent_peers(&self, peers: Vec<(InfoHash, PeerId)>, persistent: bool) -> Vec<(InfoHash, Option<TorrentEntry>, Option<TorrentEntry>)>
-    {
-        let mut return_data = vec![];
-        for (info_hash, peer_id) in peers {
-            let remove_torrent = self.remove_torrent_peer(info_hash, peer_id, persistent, true);
-            return_data.push((info_hash, remove_torrent.0, remove_torrent.1));
-        }
-        return_data
-    }
-
-    #[tracing::instrument(level = "debug")]
     pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
     {
         if !self.torrents_sharding.contains_peer(info_hash, peer_id) { return (None, None); }
@@ -239,48 +228,5 @@ impl TorrentTracker {
                 (Some(previous_torrent), Some(o.get().clone()))
             }
         }
-    }
-
-    #[tracing::instrument(level = "debug")]
-    pub async fn torrent_peers_cleanup(&self, torrent_tracker: Arc<TorrentTracker>, peer_timeout: Duration, persistent: bool)
-    {
-        let mut torrents = 0u64;
-        let mut torrents_removed = 0u64;
-        let mut peers = 0u64;
-        let mut peers_removed = 0u64;
-        let mut seeds = 0u64;
-        let mut seeds_removed = 0u64;
-        for shard in 0u8..=255u8 {
-            info!("[PEERS CLEANUP]: Scanning shard {}", shard);
-            let shard = self.torrents_sharding.clone().get_shard_content(shard);
-            torrents += shard.len() as u64;
-            for (info_hash, torrent_entry) in shard {
-                seeds += torrent_entry.seeds.len() as u64;
-                peers += torrent_entry.peers.len() as u64;
-                for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
-                    if torrent_peer.updated.elapsed() > peer_timeout {
-                        match self.remove_torrent_peer(info_hash, *peer_id, persistent, false) {
-                            (None, None) => {
-                                torrents_removed += 1;
-                            }
-                            (previous, None) => {
-                                torrents_removed += 1;
-                                let previous_torrent_entry = previous.unwrap();
-                                seeds_removed += previous_torrent_entry.seeds.len() as u64;
-                                peers_removed += previous_torrent_entry.peers.len() as u64;
-                            }
-                            (previous, new) => {
-                                let previous_torrent_entry = previous.unwrap();
-                                let new_torrent_entry = new.unwrap();
-                                seeds_removed += previous_torrent_entry.seeds.len() as u64 - new_torrent_entry.seeds.len() as u64;
-                                peers_removed += previous_torrent_entry.peers.len() as u64 - new_torrent_entry.peers.len() as u64;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        info!("[PEERS CLEANUP] Found T: {} S: {} P: {} - Removed T: {} S: {} P: {}", torrents, seeds, peers, torrents_removed, seeds_removed, peers_removed);
     }
 }
