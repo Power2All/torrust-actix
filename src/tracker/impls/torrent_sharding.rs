@@ -330,6 +330,30 @@ impl TorrentSharding {
                                 }
                             }
                         }
+                        for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
+                            if torrent_peer.updated.elapsed() > peer_timeout {
+                                let shard = torrent_tracker_clone.clone().torrents_sharding.get_shard(shard).unwrap();
+                                let mut lock = shard.write();
+                                match lock.entry(*info_hash) {
+                                    Entry::Vacant(_) => {}
+                                    Entry::Occupied(mut o) => {
+                                        if o.get_mut().seeds.remove(&peer_id).is_some() {
+                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Seeds, -1);
+                                            seeds += 1;
+                                        };
+                                        if o.get_mut().peers.remove(&peer_id).is_some() {
+                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Peers, -1);
+                                            peers += 1;
+                                        };
+                                        if !persistent && o.get().seeds.is_empty() && o.get().peers.is_empty() {
+                                            lock.remove(info_hash);
+                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Torrents, -1);
+                                            torrents += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     info!("[PEERS] Shard: {} - Torrents: {} - Seeds: {} - Peers: {}", shard, torrents, seeds, peers);
                 }

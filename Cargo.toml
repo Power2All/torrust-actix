@@ -1,6 +1,6 @@
 [package]
 name = "torrust-actix"
-version = "4.0.6"
+version = "4.0.7"
 edition = "2021"
 license = "AGPL-3.0"
 authors = [
