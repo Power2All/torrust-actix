@@ -220,7 +220,7 @@ impl TorrentTracker {
                 (None, None)
             }
             Entry::Occupied(mut o) => {
-                if (cleanup) {
+                if cleanup {
                     info!("[PEERS] Removing from torrent {} peer {}", info_hash, peer_id);
                 }
                 let previous_torrent = o.get().clone();
