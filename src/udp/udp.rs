@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
 use log::{error, info};
+use tokio::runtime::Builder;
 use tokio::task::JoinHandle;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::udp::structs::udp_server::UdpServer;
@@ -18,7 +19,8 @@ pub async fn udp_service(addr: SocketAddr, threads: u64, data: Arc<TorrentTracke
     });
 
     info!("[UDP] Starting server listener on {} with {} threads", addr, threads);
-    tokio::spawn(async move {
+    let tokio_udp = Builder::new_multi_thread().thread_name("udp").worker_threads(threads as usize).enable_all().build().unwrap();
+    tokio_udp.spawn(async move {
         udp_server.start(rx).await;
     })
 }

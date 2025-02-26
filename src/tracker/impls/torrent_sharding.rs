@@ -313,11 +313,11 @@ impl TorrentSharding {
                                 match lock.entry(*info_hash) {
                                     Entry::Vacant(_) => {}
                                     Entry::Occupied(mut o) => {
-                                        if o.get_mut().seeds.remove(&peer_id).is_some() {
+                                        if o.get_mut().seeds.remove(peer_id).is_some() {
                                             torrent_tracker_clone.clone().update_stats(StatsEvent::Seeds, -1);
                                             seeds += 1;
                                         };
-                                        if o.get_mut().peers.remove(&peer_id).is_some() {
+                                        if o.get_mut().peers.remove(peer_id).is_some() {
                                             torrent_tracker_clone.clone().update_stats(StatsEvent::Peers, -1);
                                             peers += 1;
                                         };
@@ -337,11 +337,11 @@ impl TorrentSharding {
                                 match lock.entry(*info_hash) {
                                     Entry::Vacant(_) => {}
                                     Entry::Occupied(mut o) => {
-                                        if o.get_mut().seeds.remove(&peer_id).is_some() {
+                                        if o.get_mut().seeds.remove(peer_id).is_some() {
                                             torrent_tracker_clone.clone().update_stats(StatsEvent::Seeds, -1);
                                             seeds += 1;
                                         };
-                                        if o.get_mut().peers.remove(&peer_id).is_some() {
+                                        if o.get_mut().peers.remove(peer_id).is_some() {
                                             torrent_tracker_clone.clone().update_stats(StatsEvent::Peers, -1);
                                             peers += 1;
                                         };

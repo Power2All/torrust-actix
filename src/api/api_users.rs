@@ -151,6 +151,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
     };
 
     let mut users_output = HashMap::new();
+    let regex_check = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
     for (id, key, uploaded, downloaded, completed, updated, active) in hashes {
         if key.len() == 40 {
             let key_hash = match hex2bin(key.clone()) {
@@ -172,7 +173,6 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
 
             match data.torrent_tracker.config.database_structure.clone().users.id_uuid {
                 true => {
-                    let regex_check = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
                     if !regex_check.is_match(id.as_str()) {
                         return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid uuid {}", id)}));
                     }

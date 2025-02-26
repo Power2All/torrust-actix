@@ -59,6 +59,10 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 
 ### ChangeLog
 
+#### v4.0.8
+* Updating libraries
+* Fixing threading for UDP
+
 #### v4.0.7
 * Cleanup was still broken, did a big rewrite, after testing it works now as expected
 * Did some tokio threading correctly for core threads
