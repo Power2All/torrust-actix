@@ -34,7 +34,7 @@ fern = { version = "^0.7", features = ["colored"] }
 futures-util = "^0.3"
 hex = "^0.4"
 log = "^0.4"
-parking_lot = { version = "^0.12", features = ["arc_lock", "hardware-lock-elision", "owning_ref", "serde", "deadlock_detection"] }
+parking_lot = { version = "^0.12", features = ["arc_lock", "hardware-lock-elision", "serde", "deadlock_detection"] }
 percent-encoding = "^2.3"
 rcgen = "^0.13"
 regex = "^1.11"

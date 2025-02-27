@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
 use log::{error, info};
-use tokio::runtime::{Builder, Runtime};
+use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::udp::structs::udp_server::UdpServer;
