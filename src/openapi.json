@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.1",
   "info": {
     "title": "Torrust-Actix API Debugger",
     "description": "This swagger debugger page, is used for documentation and testing of the Torrust-Actix API service. Use this page to test and see how the API responses on requests, which can be used for your website or application.",
@@ -7,10 +7,15 @@
   },
   "servers": [
     {
-      "url": "/"
+      "url": "/",
+      "description": "Localhost /"
     }
   ],
   "tags": [
+    {
+      "name": "Prometheus Metrics",
+      "description": "Requests about the Metrics"
+    },
     {
       "name": "Torrent",
       "description": "Requests about the Torrent"
@@ -53,6 +58,31 @@
     }
   ],
   "paths": {
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Prometheus Metrics"
+        ],
+        "summary": "Get prometheus format statistics.",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "token_auth": [
+              "write:apiKey",
+              "read:apiKey"
+            ]
+          }
+        ]
+      }
+    },
     "/api/torrent/{infohash}": {
       "get": {
         "tags": [

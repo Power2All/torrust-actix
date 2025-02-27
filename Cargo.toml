@@ -52,7 +52,7 @@ tokio = { version = "^1.43", features = ["full"] }
 tokio-shutdown = "^0.1"
 toml = "^0.8"
 utoipa = { version = "^5", features = ["actix_extras"] }
-utoipa-swagger-ui = { version = "^8", features = ["actix-web"] }
+utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
 tracing = "^0.1"
 
 [target.'cfg(windows)'.build-dependencies]

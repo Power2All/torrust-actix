@@ -62,6 +62,8 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 #### v4.0.8
 * Updating libraries
 * Fixing threading for UDP
+* Removed a feature from Parking Lot, cause of an unfixed vulnerability
+* Update Swagger UI to version v4.0.0 and OpenAPI version v3.1.1
 
 #### v4.0.7
 * Cleanup was still broken, did a big rewrite, after testing it works now as expected
