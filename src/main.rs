@@ -189,6 +189,7 @@ fn main() -> std::io::Result<()>
             }
 
             let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
+            let mut udp_tokio_threads = Vec::new();
             let mut udp_futures = Vec::new();
             for udp_server_object in &config.udp_server {
                 if udp_server_object.enabled {
@@ -196,7 +197,9 @@ fn main() -> std::io::Result<()>
                     let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
                     let threads: u64 = udp_server_object.threads;
                     let tracker_clone = tracker.clone();
-                    udp_futures.push(udp_service(address, threads, tracker_clone, udp_rx.clone()).await);
+                    let tokio_udp = Arc::new(Builder::new_multi_thread().thread_name("udp").worker_threads(threads as usize).enable_all().build()?);
+                    udp_futures.push(udp_service(address, threads, tracker_clone, udp_rx.clone(), tokio_udp.clone()).await);
+                    udp_tokio_threads.push(tokio_udp.clone());
                 }
             }
 
@@ -345,6 +348,7 @@ fn main() -> std::io::Result<()>
 
                     info!("Server shutting down completed");
                     mem::forget(tokio_core);
+                    mem::forget(udp_tokio_threads);
                     Ok(())
                 }
             }
