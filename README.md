@@ -59,6 +59,11 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 
 ### ChangeLog
 
+#### v4.0.9
+* Updating libraries (Actix 4.9 to 4.10)
+* Some critical exploit in ZIP fixed
+* Some faulty v4.0.8 deployments fixed with Github
+
 #### v4.0.8
 * Updating libraries
 * Fixing threading for UDP

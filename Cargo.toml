@@ -1,7 +1,7 @@
 [package]
 name = "torrust-actix"
-version = "4.0.8"
-edition = "2021"
+version = "4.0.9"
+edition = "2024"
 license = "AGPL-3.0"
 authors = [
     "Jasper Lingers <info@power2all.com>",
@@ -23,7 +23,7 @@ strip = "debuginfo"
 
 [dependencies]
 actix-cors = "^0.7"
-actix-web = { version = "^4.9", features = ["rustls-0_23"] }
+actix-web = { version = "^4.10", features = ["rustls-0_23"] }
 async-std = "^1.13"
 binascii = "^0.1"
 bip_bencode = "^0.4"
