@@ -19,6 +19,7 @@ use crate::config::structs::sentry_config::SentryConfig;
 use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
+use std::env;
 
 impl Configuration {
     #[tracing::instrument(level = "debug")]
@@ -142,6 +143,204 @@ impl Configuration {
             )
         }
     }
+    
+    #[tracing::instrument(level = "debug")]
+    pub fn env_overrides(config: &mut Configuration) -> &mut Configuration {
+        // Config
+        if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
+        if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = value.parse::<u64>().unwrap_or(60u64); }
+        
+        // Tracker config
+        if let Ok(value) = env::var("TRACKER__API_KEY") {
+            config.tracker_config.api_key = value
+        }
+        if let Ok(value) = env::var("TRACKER__WHITELIST_ENABLED") {
+            config.tracker_config.whitelist_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("TRACKER__BLACKLIST_ENABLED") {
+            config.tracker_config.blacklist_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("TRACKER__KEYS_ENABLED") {
+            config.tracker_config.keys_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("TRACKER__USERS_ENABLED") {
+            config.tracker_config.users_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("TRACKER__SWAGGER") {
+            config.tracker_config.swagger = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("TRACKER__KEYS_CLEANUP_INTERVAL") {
+            config.tracker_config.keys_cleanup_interval = value.parse::<u64>().unwrap_or(60u64);
+        }
+        if let Ok(value) = env::var("TRACKER__REQUEST_INTERVAL") {
+            config.tracker_config.request_interval = value.parse::<u64>().unwrap_or(1800u64);
+        }
+        if let Ok(value) = env::var("TRACKER__REQUEST_INTERVAL_MINIMUM") {
+            config.tracker_config.request_interval_minimum = value.parse::<u64>().unwrap_or(1800u64);
+        }
+        if let Ok(value) = env::var("TRACKER__PEERS_TIMEOUT") {
+            config.tracker_config.peers_timeout = value.parse::<u64>().unwrap_or(2700u64);
+        }
+        if let Ok(value) = env::var("TRACKER__PEERS_CLEANUP_INTERVAL") {
+            config.tracker_config.peers_cleanup_interval = value.parse::<u64>().unwrap_or(900u64);
+        }
+        if let Ok(value) = env::var("TRACKER__PEERS_CLEANUP_THREADS") {
+            config.tracker_config.peers_cleanup_threads = value.parse::<u64>().unwrap_or(256u64);
+        }
+        if let Ok(value) = env::var("TRACKER__PROMETHEUS_ID") {
+            config.tracker_config.prometheus_id = value;
+        }
+        
+        // Sentry config
+        if let Ok(value) = env::var("SENTRY__ENABLED") {
+            config.sentry_config.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("SENTRY__DEBUG") {
+            config.sentry_config.debug = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("SENTRY__ATTACH_STACKTRACE") {
+            config.sentry_config.attach_stacktrace = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+        }
+        if let Ok(value) = env::var("SENTRY__SEND_DEFAULT_PII") {
+            config.sentry_config.send_default_pii = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("SENTRY__DSN") {
+            config.sentry_config.dsn = value;
+        }
+        if let Ok(value) = env::var("SENTRY__MAX_BREADCRUMBS") {
+            config.sentry_config.max_breadcrumbs = value.parse::<usize>().unwrap_or(100);
+        }
+        if let Ok(value) = env::var("SENTRY__SAMPLE_RATE") {
+            config.sentry_config.sample_rate = value.parse::<f32>().unwrap_or(1.0);
+        }
+        if let Ok(value) = env::var("SENTRY__TRACES_SAMPLE_RATE") {
+            config.sentry_config.traces_sample_rate = value.parse::<f32>().unwrap_or(1.0);
+        }
+        
+        // Database config
+        if let Ok(value) = env::var("DATABASE__PERSISTENT") {
+            config.database.persistent = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("DATABASE__INSERT_VACANT") {
+            config.database.insert_vacant = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("DATABASE__REMOVE_ACTION") {
+            config.database.remove_action = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("DATABASE__UPDATE_COMPLETED") {
+            config.database.update_completed = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+        }
+        if let Ok(value) = env::var("DATABASE__UPDATE_PEERS") {
+            config.database.update_peers = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+        }
+        if let Ok(value) = env::var("DATABASE__PATH") {
+            config.database.path = value;
+        }
+        if let Ok(value) = env::var("DATABASE__ENGINE") {
+            config.database.engine = match value.as_str() {
+                "sqlite3" => { DatabaseDrivers::sqlite3 }
+                "mysql" => { DatabaseDrivers::mysql }
+                "pgsql" => { DatabaseDrivers::pgsql }
+                _ => { DatabaseDrivers::sqlite3 }
+            };
+        }
+        if let Ok(value) = env::var("DATABASE__PERSISTENT_INTERVAL") {
+            config.database.persistent_interval = value.parse::<u64>().unwrap_or(60u64);
+        }
+
+        // Database Structure Torrents config
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH") {
+            config.database_structure.torrents.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__TABLE_NAME") {
+            config.database_structure.torrents.table_name = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_INFOHASH") {
+            config.database_structure.torrents.column_infohash = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_SEEDS") {
+            config.database_structure.torrents.column_seeds = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_PEERS") {
+            config.database_structure.torrents.column_peers = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_COMPLETED") {
+            config.database_structure.torrents.column_completed = value;
+        }
+
+        // Database Structure Whitelist config
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH") {
+            config.database_structure.whitelist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__TABLE_NAME") {
+            config.database_structure.whitelist.table_name = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__COLUMN_INFOHASH") {
+            config.database_structure.whitelist.column_infohash = value;
+        }
+
+        // Database Structure Blacklist config
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH") {
+            config.database_structure.blacklist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__TABLE_NAME") {
+            config.database_structure.blacklist.table_name = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__COLUMN_INFOHASH") {
+            config.database_structure.blacklist.column_infohash = value;
+        }
+
+        // Database Structure Keys config
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH") {
+            config.database_structure.keys.bin_type_hash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__TABLE_NAME") {
+            config.database_structure.keys.table_name = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__COLUMN_HASH") {
+            config.database_structure.keys.column_hash = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__COLUMN_TIMEOUT") {
+            config.database_structure.keys.column_timeout = value;
+        }
+
+        // Database Structure Users config
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__ID_UUID") {
+            config.database_structure.users.id_uuid = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__BIN_TYPE_KEY") {
+            config.database_structure.users.bin_type_key = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__TABLE_NAME") {
+            config.database_structure.users.table_name = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_UUID") {
+            config.database_structure.users.column_uuid = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_ID") {
+            config.database_structure.users.column_id = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_ACTIVE") {
+            config.database_structure.users.column_active = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_KEY") {
+            config.database_structure.users.column_key = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_UPLOADED") {
+            config.database_structure.users.column_uploaded = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_DOWNLOADED") {
+            config.database_structure.users.column_downloaded = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_COMPLETED") {
+            config.database_structure.users.column_completed = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_UPDATED") {
+            config.database_structure.users.column_updated = value;
+        }
+
+        config
+    }
 
     #[tracing::instrument(level = "debug")]
     pub fn load(data: &[u8]) -> Result<Configuration, toml::de::Error> {
@@ -216,6 +415,7 @@ impl Configuration {
                 };
             }
         };
+        Self::env_overrides(&mut config);
 
         println!("[VALIDATE] Validating configuration...");
         Self::validate(config.clone());

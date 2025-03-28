@@ -1,6 +1,6 @@
 [package]
 name = "torrust-actix"
-version = "4.0.9"
+version = "4.0.10"
 edition = "2024"
 license = "AGPL-3.0"
 authors = [
@@ -51,9 +51,10 @@ thiserror = "^2.0"
 tokio = { version = "^1.43", features = ["full"] }
 tokio-shutdown = "^0.1"
 toml = "^0.8"
+tracing = "^0.1"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
-tracing = "^0.1"
+zip = "2.4.2"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"
