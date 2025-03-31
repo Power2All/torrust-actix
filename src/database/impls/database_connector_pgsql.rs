@@ -369,7 +369,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e);
                                 return Err(e);
                             }
                         }
@@ -418,7 +418,7 @@ impl DatabaseConnectorPgSQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[PgSQL] Error: {}", e.to_string());
+                                        error!("[PgSQL] Error: {}", e);
                                         return Err(e);
                                     }
                                 }
@@ -455,7 +455,7 @@ impl DatabaseConnectorPgSQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[PgSQL] Error: {}", e.to_string());
+                                        error!("[PgSQL] Error: {}", e);
                                         return Err(e);
                                     }
                                 }
@@ -498,7 +498,7 @@ impl DatabaseConnectorPgSQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[PgSQL] Error: {}", e.to_string());
+                                        error!("[PgSQL] Error: {}", e);
                                         return Err(e);
                                     }
                                 }
@@ -535,7 +535,7 @@ impl DatabaseConnectorPgSQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[PgSQL] Error: {}", e.to_string());
+                                        error!("[PgSQL] Error: {}", e);
                                         return Err(e);
                                     }
                                 }
@@ -629,7 +629,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e);
                                 return Err(e);
                             }
                         }
@@ -657,7 +657,7 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[PgSQL] Error: {}", e.to_string());
+                            error!("[PgSQL] Error: {}", e);
                             return Err(e);
                         }
                     }
@@ -749,7 +749,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e);
                                 return Err(e);
                             }
                         }
@@ -777,7 +777,7 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[PgSQL] Error: {}", e.to_string());
+                            error!("[PgSQL] Error: {}", e);
                             return Err(e);
                         }
                     }
@@ -872,7 +872,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e);
                                 return Err(e);
                             }
                         }
@@ -910,7 +910,7 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[PgSQL] Error: {}", e.to_string());
+                            error!("[PgSQL] Error: {}", e);
                             return Err(e);
                         }
                     }
@@ -1082,7 +1082,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e.to_string());
+                                error!("[PgSQL] Error: {}", e);
                                 return Err(e);
                             }
                         }
@@ -1342,7 +1342,7 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[PgSQL] Error: {}", e.to_string());
+                            error!("[PgSQL] Error: {}", e);
                             return Err(e);
                         }
                     }
@@ -1370,7 +1370,7 @@ impl DatabaseConnectorPgSQL {
         match sqlx::query(string_format.as_str()).execute(&mut *reset_seeds_peers_transaction).await {
             Ok(_) => {}
             Err(e) => {
-                error!("[PgSQL] Error: {}", e.to_string());
+                error!("[PgSQL] Error: {}", e);
                 return Err(e);
             }
         }
@@ -1386,7 +1386,7 @@ impl DatabaseConnectorPgSQL {
                 Ok(())
             }
             Err(e) => {
-                error!("[PgSQL] Error: {}", e.to_string());
+                error!("[PgSQL] Error: {}", e);
                 Err(e)
             }
         }
