@@ -23,8 +23,8 @@ strip = "debuginfo"
 
 [dependencies]
 actix-cors = "^0.7"
-actix-web = { version = "^4.10", features = ["rustls-0_23"] }
-async-std = "^1.13"
+actix-web = { version = "^4", features = ["rustls-0_23"] }
+async-std = "^1"
 binascii = "^0.1"
 bip_bencode = "^0.4"
 byteorder = "^1.5"
@@ -40,21 +40,20 @@ rcgen = "^0.13"
 regex = "^1.11"
 rustls = { version = "^0.23", default-features = false, features = ["std", "ring"] }
 rustls-pemfile = "^2.2"
-sentry = { version = "^0.36", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
-sentry-actix = "^0.36"
+sentry = { version = "^0.37", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
+sentry-actix = "^0.37"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = { version = "^1.0", features = ["preserve_order"] }
 serde_millis = "^0.1"
 sha1 = "^0.10"
 sqlx = { version = "^0.8", features = ["mysql", "postgres", "sqlite", "runtime-tokio-rustls"] }
 thiserror = "^2.0"
-tokio = { version = "^1.43", features = ["full"] }
+tokio = { version = "^1.44", features = ["full"] }
 tokio-shutdown = "^0.1"
 toml = "^0.8"
 tracing = "^0.1"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
-zip = "2.4.2"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"

@@ -339,6 +339,125 @@ impl Configuration {
             config.database_structure.users.column_updated = value;
         }
 
+        // Possible overrides for the API stack
+        let mut api_iteration = 0;
+        loop {
+            match config.api_server.get_mut(api_iteration) {
+                None => {
+                    break;
+                }
+                Some(block) => {
+                    if let Ok(value) = env::var(format!("API_{}_ENABLED", api_iteration)) {
+                        block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_SSL", api_iteration)) {
+                        block.ssl = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_BIND_ADDRESS", api_iteration)) {
+                        block.bind_address = value;
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_REAL_IP", api_iteration)) {
+                        block.real_ip = value;
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_SSL_KEY", api_iteration)) {
+                        block.ssl_key = value;
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_SSL_CERT", api_iteration)) {
+                        block.ssl_cert = value;
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_KEEP_ALIVE", api_iteration)) {
+                        block.keep_alive = value.parse::<u64>().unwrap_or(60);
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_REQUEST_TIMEOUT", api_iteration)) {
+                        block.request_timeout = value.parse::<u64>().unwrap_or(30);
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_DISCONNECT_TIMEOUT", api_iteration)) {
+                        block.disconnect_timeout = value.parse::<u64>().unwrap_or(30);
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_MAX_CONNECTIONS", api_iteration)) {
+                        block.max_connections = value.parse::<u64>().unwrap_or(25000);
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_THREADS", api_iteration)) {
+                        block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+                    }
+                    if let Ok(value) = env::var(format!("API_{}_TLS_CONNECTION_RATE", api_iteration)) {
+                        block.tls_connection_rate = value.parse::<u64>().unwrap_or(256);
+                    }
+                }
+            }
+            api_iteration += 1;
+        }
+
+        // Possible overrides for the HTTP stack
+        let mut http_iteration = 0;
+        loop {
+            match config.http_server.get_mut(http_iteration) {
+                None => {
+                    break;
+                }
+                Some(block) => {
+                    if let Ok(value) = env::var(format!("HTTP_{}_ENABLED", http_iteration)) {
+                        block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_SSL", http_iteration)) {
+                        block.ssl = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_BIND_ADDRESS", http_iteration)) {
+                        block.bind_address = value;
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_REAL_IP", http_iteration)) {
+                        block.real_ip = value;
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_SSL_KEY", http_iteration)) {
+                        block.ssl_key = value;
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_SSL_CERT", http_iteration)) {
+                        block.ssl_cert = value;
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_KEEP_ALIVE", http_iteration)) {
+                        block.keep_alive = value.parse::<u64>().unwrap_or(60);
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_REQUEST_TIMEOUT", http_iteration)) {
+                        block.request_timeout = value.parse::<u64>().unwrap_or(30);
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_DISCONNECT_TIMEOUT", http_iteration)) {
+                        block.disconnect_timeout = value.parse::<u64>().unwrap_or(30);
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_MAX_CONNECTIONS", http_iteration)) {
+                        block.max_connections = value.parse::<u64>().unwrap_or(25000);
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_THREADS", http_iteration)) {
+                        block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+                    }
+                    if let Ok(value) = env::var(format!("HTTP_{}_TLS_CONNECTION_RATE", http_iteration)) {
+                        block.tls_connection_rate = value.parse::<u64>().unwrap_or(256);
+                    }
+                }
+            }
+            http_iteration += 1;
+        }
+
+        // Possible overrides for the UDP stack
+        let mut udp_iteration = 0;
+        loop {
+            match config.udp_server.get_mut(udp_iteration) {
+                None => {
+                    break;
+                }
+                Some(block) => {
+                    if let Ok(value) = env::var(format!("UDP_{}_ENABLED", udp_iteration)) {
+                        block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{}_BIND_ADDRESS", udp_iteration)) {
+                        block.bind_address = value;
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{}_THREADS", udp_iteration)) {
+                        block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+                    }
+                }
+            }
+        }
+
         config
     }
 
