@@ -57,12 +57,119 @@ Swagger UI is introduced, and when enabled in the configuration, is accessible t
 
 Sentry.io support is introduced, you can enable it in the configuration and the URL where to push the data to.
 
+### Environment Variable Overrides
+
+Use environment variables to override the configuration settings.
+
+```
+LOG_LEVEL <off | trace | debug | info | warn | error>
+LOG_CONSOLE_INTERVAL <UINT64>
+
+TRACKER__API_KEY <STRING>
+TRACKER__WHITELIST_ENABLED <true | false>
+TRACKER__BLACKLIST_ENABLED <true | false>
+TRACKER__KEYS_ENABLED <true | false>
+TRACKER__USERS_ENABLED <true | false>
+TRACKER__SWAGGER <true | false>
+TRACKER__KEYS_CLEANUP_INTERVAL <UINT64>
+TRACKER__REQUEST_INTERVAL <UINT64>
+TRACKER__REQUEST_INTERVAL_MINIMUM <UINT64>
+TRACKER__PEERS_TIMEOUT <UINT64>
+TRACKER__PEERS_CLEANUP_INTERVAL <UINT64>
+TRACKER__PEERS_CLEANUP_THREADS <UINT64>
+TRACKER__PROMETHEUS_ID <STRING>
+
+SENTRY__ENABLED <true | false>
+SENTRY__DEBUG <true | false>
+SENTRY__ATTACH_STACKTRACE <true | false>
+SENTRY__SEND_DEFAULT_PII <true | false>
+SENTRY__DSN <STRING>
+SENTRY__MAX_BREADCRUMBS <UINT64>
+SENTRY__SAMPLE_RATE <F32>
+SENTRY__TRACES_SAMPLE_RATE <F32>
+
+DATABASE__PERSISTENT <true | false>
+DATABASE__INSERT_VACANT <true | false>
+DATABASE__REMOVE_ACTION <true | false>
+DATABASE__UPDATE_COMPLETED <true | false>
+DATABASE__UPDATE_PEERS <true | false>
+DATABASE__PATH <STRING>
+DATABASE__ENGINE <sqlite3 | mysql | pgsql>
+DATABASE__PERSISTENT_INTERVAL <UINT64>
+
+DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH <true | false>
+DATABASE_STRUCTURE__TORRENTS__TABLE_NAME <STRING>
+DATABASE_STRUCTURE__TORRENTS__COLUMN_INFOHASH <STRING>
+DATABASE_STRUCTURE__TORRENTS__COLUMN_SEEDS <STRING>
+DATABASE_STRUCTURE__TORRENTS__COLUMN_PEERS <STRING>
+DATABASE_STRUCTURE__TORRENTS__COLUMN_COMPLETED <STRING>
+
+DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH <true | false>
+DATABASE_STRUCTURE__WHITELIST__TABLE_NAME <STRING>
+DATABASE_STRUCTURE__WHITELIST__COLUMN_INFOHASH <STRING>
+
+DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH <true | false>
+DATABASE_STRUCTURE__BLACKLIST__TABLE_NAME <STRING>
+DATABASE_STRUCTURE__BLACKLIST__COLUMN_INFOHASH <STRING>
+
+DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH <true | false>
+DATABASE_STRUCTURE__KEYS__TABLE_NAME <STRING>
+DATABASE_STRUCTURE__KEYS__COLUMN_HASH <STRING>
+DATABASE_STRUCTURE__KEYS__COLUMN_TIMEOUT <STRING>
+
+DATABASE_STRUCTURE__USERS__ID_UUID <true | false>
+DATABASE_STRUCTURE__USERS__BIN_TYPE_KEY <true | false>
+DATABASE_STRUCTURE__USERS__TABLE_NAME <STRING>
+DATABASE_STRUCTURE__USERS__COLUMN_UUID <STRING>
+DATABASE_STRUCTURE__USERS__COLUMN_ID <STRING>
+DATABASE_STRUCTURE__USERS__COLUMN_ACTIVE <STRING>
+DATABASE_STRUCTURE__USERS__COLUMN_KEY <STRING>
+DATABASE_STRUCTURE__USERS__COLUMN_UPLOADED <STRING>
+DATABASE_STRUCTURE__USERS__COLUMN_DOWNLOADED <STRING>
+DATABASE_STRUCTURE__USERS__COLUMN_COMPLETED <STRING>
+DATABASE_STRUCTURE__USERS__COLUMN_UPDATED <STRING>
+
+API_0_ENABLED <true | false>
+API_0_SSL <true | false>
+API_0_BIND_ADDRESS <STRING>
+API_0_REAL_IP <STRING>
+API_0_SSL_KEY <STRING>
+API_0_SSL_CERT <STRING>
+API_0_KEEP_ALIVE <UINT64>
+API_0_REQUEST_TIMEOUT <UINT64>
+API_0_DISCONNECT_TIMEOUT <UINT64>
+API_0_MAX_CONNECTIONS <UINT64>
+API_0_THREADS <UINT64>
+API_0_TLS_CONNECTION_RATE <UINT64>
+
+HTTP_0_ENABLED <true | false>
+HTTP_0_SSL <true | false>
+HTTP_0_BIND_ADDRESS <STRING>
+HTTP_0_REAL_IP <STRING>
+HTTP_0_SSL_KEY <STRING>
+HTTP_0_SSL_CERT <STRING>
+HTTP_0_KEEP_ALIVE <UINT64>
+HTTP_0_REQUEST_TIMEOUT <UINT64>
+HTTP_0_DISCONNECT_TIMEOUT <UINT64>
+HTTP_0_MAX_CONNECTIONS <UINT64>
+HTTP_0_THREADS <UINT64>
+HTTP_0_TLS_CONNECTION_RATE <UINT64>
+
+UDP_0_ENABLED <true | false>
+UDP_0_BIND_ADDRESS <STRING>
+UDP_0_THREADS <UINT64>
+```
+
 ### ChangeLog
+
+#### v4.0.10
+* Updating libraries
+* Adding full environment support to override configurations (Thanks tachyon3000 for the idea)
 
 #### v4.0.9
 * Updating libraries (Actix 4.9 to 4.10)
 * Some critical exploit in ZIP fixed
-* Some faulty v4.0.8 deployments fixed with Github
+* Some faulty v4.0.8 deployments fixed with GitHub
 
 #### v4.0.8
 * Updating libraries
@@ -107,7 +214,7 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 * API has gone through a lot of work and tested.
 * Introduced Swagger UI as testing and documentation.
 * A lot of improvements in speed and performance applied further.
-* Import and Export function added, will dump or import from JSON files, handy for when making a backup from your existing database, or when migrating to a other database engine.
+* Import and Export function added, will dump or import from JSON files, handy for when making a backup from your existing database, or when migrating to an other database engine.
 * Removed WebGUI, was outdated and not really useful.
 
 #### v3.2.2
@@ -127,7 +234,7 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 * Full overhaul on how torrents and peers are used in memory. Using crossbeam skipmap for thread safe non-locking memory sharing.
 * Some various improvement on coding performance, readability and linting the files.
 * Replaced Tokio Axum web framework for Actix, reason: Missing critical things like a timeout on connect, disconnect, read and write, and support was lackluster.
-* Renamed the github repository from torrust-axum to torrust-actix.
+* Renamed the GitHub repository from torrust-axum to torrust-actix.
 * Adding user tracking support with an extra key.
 
 #### v3.1.2

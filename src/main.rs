@@ -313,7 +313,7 @@ fn main() -> std::io::Result<()>
                         Err(error) => {
                             sentry::capture_error(&error);
                             error!("Errors happened on shutting down UDP sockets!");
-                            error!("{}", error.to_string());
+                            error!("{}", error);
                         }
                     }
                     tokio_shutdown.handle().await;

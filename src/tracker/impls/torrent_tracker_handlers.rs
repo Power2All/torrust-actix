@@ -258,7 +258,7 @@ impl TorrentTracker {
         match announce_query.event {
             AnnounceEvent::Started | AnnounceEvent::None => {
                 torrent_peer.event = AnnounceEvent::Started;
-                debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
+                debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
                 debug!("[DEBUG] Calling add_torrent_peer");
 
                 let torrent_entry = data.add_torrent_peer(
@@ -296,7 +296,7 @@ impl TorrentTracker {
             }
             AnnounceEvent::Stopped => {
                 torrent_peer.event = AnnounceEvent::Stopped;
-                debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
+                debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
                 debug!("[DEBUG] Calling remove_torrent_peer");
 
                 let torrent_entry = match data.remove_torrent_peer(
@@ -340,7 +340,7 @@ impl TorrentTracker {
             }
             AnnounceEvent::Completed => {
                 torrent_peer.event = AnnounceEvent::Completed;
-                debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id.to_string());
+                debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
                 debug!("[DEBUG] Calling add_torrent_peer");
 
                 let torrent_entry = data.add_torrent_peer(
