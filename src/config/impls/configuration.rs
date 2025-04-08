@@ -456,6 +456,7 @@ impl Configuration {
                     }
                 }
             }
+            udp_iteration += 1;
         }
 
         config
