@@ -1,0 +1,17 @@
+services:
+  torrust_actix:
+    image: power2all/torrust-actix:latest
+    build: .
+    environment:
+      LOG_LEVEL: "debug"
+      TRACKER__API_KEY: "MyVerySecureAPIKey"
+      TRACKER__SWAGGER: "true"
+      DATABASE__PERSISTENT: "false"
+      DATABASE__ENGINE: "sqlite3"
+      DATABASE__PATH: "sqlite://:memory:"
+    container_name: "torrust_actix"
+    hostname: "torrust_actix"
+    ports:
+      - "8080:8080/tcp" # API
+      - "6969:6969/tcp" # TCP Tracker
+      - "6969:6969/udp" # UDP Tracker

@@ -13,5 +13,5 @@ RUN chmod +x /app/torrust-actix/healthcheck.sh
 EXPOSE 8080/tcp
 EXPOSE 6969/tcp
 EXPOSE 6969/udp
-CMD cd /app/torrust-actix/target/release/ && ./init.sh && ./torrust-actix
+CMD cd /app/torrust-actix/target/release/ && ./init.sh
 #HEALTHCHECK CMD /app/torrust-actix/healthcheck.sh || exit 1
