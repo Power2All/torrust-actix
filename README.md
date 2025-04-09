@@ -57,6 +57,16 @@ Swagger UI is introduced, and when enabled in the configuration, is accessible t
 
 Sentry.io support is introduced, you can enable it in the configuration and the URL where to push the data to.
 
+### Run on Docker
+To run this application in Docker, we provided a Docker Compose file that you can use to run it locally or remotely.
+
+You can find it in the "docker" folder called "docker-compose.yml", and in order to deploy it, use the following commands:
+
+```
+docker compose build .
+docker compose start
+```
+
 ### Environment Variable Overrides
 
 Use environment variables to override the configuration settings.
