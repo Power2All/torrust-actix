@@ -172,6 +172,10 @@ UDP_0_THREADS <UINT64>
 
 ### ChangeLog
 
+#### v4.0.11
+* Updating libraries
+* Adding healthcheck for Docker through Python check script
+
 #### v4.0.10
 * Updating libraries
 * Adding full environment support to override configurations (Thanks tachyon3000 for the idea)
