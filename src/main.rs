@@ -51,7 +51,7 @@ fn main() -> std::io::Result<()>
         }));
     }
 
-    tokio::runtime::Builder::new_multi_thread()
+    Builder::new_multi_thread()
         .enable_all()
         .build()?
         .block_on(async {

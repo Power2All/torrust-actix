@@ -25,7 +25,7 @@ impl TorrentSharding {
     pub fn new() -> TorrentSharding
     {
         let mut bags: HashMap<u8, Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>> = HashMap::new();
-        for i in 0..=255 {
+        for i in 0..=255u8 {
             bags.insert(i, Arc::new(RwLock::new(Default::default())));
         }
         TorrentSharding {
@@ -133,7 +133,6 @@ impl TorrentSharding {
     }
 
     #[tracing::instrument(level = "debug")]
-    #[allow(unreachable_patterns)]
     pub fn get_shard(&self, shard: u8) -> Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>
     {
         self.shard_bag.get(&shard).unwrap().clone()
