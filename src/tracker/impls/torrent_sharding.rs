@@ -1,5 +1,5 @@
 use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,9 +24,9 @@ impl TorrentSharding {
     #[tracing::instrument(level = "debug")]
     pub fn new() -> TorrentSharding
     {
-        let mut bags: Vec<Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>> = Vec::new();
+        let mut bags: HashMap<u8, Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>> = HashMap::new();
         for i in 0..=255 {
-            bags[i as usize] = Arc::new(RwLock::new(Default::default()));
+            bags.insert(i, Arc::new(RwLock::new(Default::default())));
         }
         TorrentSharding {
             shard_bag: bags,
@@ -136,7 +136,7 @@ impl TorrentSharding {
     #[allow(unreachable_patterns)]
     pub fn get_shard(&self, shard: u8) -> Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>
     {
-        self.shard_bag[shard as usize].clone()
+        self.shard_bag.get(&shard).unwrap().clone()
     }
 
     #[tracing::instrument(level = "debug")]
