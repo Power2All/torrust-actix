@@ -50,7 +50,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]);
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
@@ -89,7 +89,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]);
         let lock = shard.read_recursive();
         lock.get(&info_hash).map(|torrent| TorrentEntry {
             seeds: torrent.seeds.clone(),
@@ -113,7 +113,7 @@ impl TorrentTracker {
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         if !self.torrents_sharding.contains_torrent(info_hash) { return None; }
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]);
         let mut lock = shard.write();
         match lock.remove(&info_hash) {
             None => { None }
