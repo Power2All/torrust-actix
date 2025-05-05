@@ -6,6 +6,7 @@ use parking_lot::RwLock;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
+use crate::tracker::structs::torrent_sharding::TorrentSharding;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
@@ -14,7 +15,7 @@ impl TorrentTracker {
     {
         TorrentTracker {
             config: config.clone(),
-            torrents_sharding: Arc::new(Default::default()),
+            torrents_sharding: Arc::new(TorrentSharding::new()),
             torrents_updates: Arc::new(RwLock::new(HashMap::new())),
             torrents_whitelist: Arc::new(RwLock::new(Vec::new())),
             torrents_whitelist_updates: Arc::new(RwLock::new(HashMap::new())),
