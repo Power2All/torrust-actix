@@ -146,7 +146,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> (Option<TorrentEntry>, TorrentEntry)
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]);
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
@@ -201,7 +201,7 @@ impl TorrentTracker {
     pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
     {
         if !self.torrents_sharding.contains_peer(info_hash, peer_id) { return (None, None); }
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]);
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(_) => {
