@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 use chrono::Utc;
 use parking_lot::RwLock;
+use uuid::Uuid;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
@@ -14,6 +15,7 @@ impl TorrentTracker {
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
         TorrentTracker {
+            server_id: String::from(""),
             config: config.clone(),
             torrents_sharding: Arc::new(TorrentSharding::new()),
             torrents_updates: Arc::new(RwLock::new(HashMap::new())),

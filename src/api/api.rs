@@ -16,6 +16,7 @@ use log::{error, info};
 use serde_json::json;
 use utoipa_swagger_ui::{Config, SwaggerUi};
 use crate::api::api_blacklists::{api_service_blacklist_delete, api_service_blacklist_get, api_service_blacklist_post, api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
+use crate::api::api_cluster::api_service_cluster_get;
 use crate::api::api_keys::{api_service_key_delete, api_service_key_get, api_service_key_post, api_service_keys_delete, api_service_keys_get, api_service_keys_post};
 use crate::api::api_stats::{api_service_prom_get, api_service_stats_get};
 use crate::api::api_torrents::{api_service_torrent_delete, api_service_torrent_get, api_service_torrent_post, api_service_torrents_delete, api_service_torrents_get, api_service_torrents_post};
@@ -53,6 +54,11 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::get().to(api_service_prom_get))
         );
 
+        // Cluster Routing
+        cfg.service(web::resource("api/cluster")
+            .route(web::get().to(api_service_cluster_get))
+        );
+        
         // Torrents API Routing
         cfg.service(web::resource("api/torrent/{info_hash}")
             .route(web::get().to(api_service_torrent_get))

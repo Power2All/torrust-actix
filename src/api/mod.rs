@@ -1,3 +1,4 @@
+pub mod enums;
 pub mod structs;
 #[allow(clippy::module_inception)]
 pub mod api;
@@ -7,3 +8,4 @@ pub mod api_torrents;
 pub mod api_users;
 pub mod api_whitelists;
 pub mod api_stats;
+pub mod api_cluster;

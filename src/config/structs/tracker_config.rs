@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::api::enums::cluster_mode::ClusterMode;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackerConfig {
@@ -16,4 +17,5 @@ pub struct TrackerConfig {
     pub total_downloads: u64,
     pub swagger: bool,
     pub prometheus_id: String,
+    pub cluster: ClusterMode
 }
