@@ -222,6 +222,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-ws"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3a1fb4f9f2794b0aadaf2ba5f14a6f034c7e86957b458c506a8cb75953f2d99"
+dependencies = [
+ "actix-codec",
+ "actix-http",
+ "actix-web",
+ "bytestring",
+ "futures-core",
+ "tokio",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3349,6 +3363,7 @@ version = "4.1.0"
 dependencies = [
  "actix-cors",
  "actix-web",
+ "actix-ws",
  "async-std",
  "binascii",
  "bip_bencode",
@@ -3379,6 +3394,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
+ "uuid",
  "winres",
 ]
 
@@ -3611,6 +3627,7 @@ version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
 dependencies = [
+ "getrandom 0.3.2",
  "serde",
 ]
 

@@ -20,6 +20,7 @@ use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use std::env;
+use crate::api::enums::cluster_mode::ClusterMode;
 
 impl Configuration {
     #[tracing::instrument(level = "debug")]
@@ -41,7 +42,8 @@ impl Configuration {
                 peers_cleanup_threads: 256,
                 total_downloads: 0,
                 swagger: false,
-                prometheus_id: String::from("torrust_actix")
+                prometheus_id: String::from("torrust_actix"),
+                cluster: ClusterMode::standalone
             },
             sentry_config: SentryConfig {
                 enabled: false,

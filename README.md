@@ -174,8 +174,8 @@ UDP_0_THREADS <UINT64>
 
 #### v4.1.0
 * Updating libraries
-* First iteration for Cluster support (master/client server)
-* Redoing Sharding code
+* First iteration for Cluster support (master/client server), using API for communication
+* Redone Sharding code for simplicity and possible performance improvement
 
 #### v4.0.11
 * Updating libraries

@@ -2,7 +2,7 @@ use std::mem;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use async_std::task;
 use clap::Parser;
 use futures_util::future::{try_join_all, TryJoinAll};
@@ -11,6 +11,7 @@ use parking_lot::deadlock;
 use sentry::ClientInitGuard;
 use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
+use uuid::{NoContext, Timestamp, Uuid};
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
 use torrust_actix::config::structs::configuration::Configuration;
@@ -32,7 +33,10 @@ fn main() -> std::io::Result<()>
 
     setup_logging(&config);
 
+    let server_id = Uuid::new_v7(Timestamp::now(NoContext));
+    
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+    info!("Identifying ID: {}", server_id);
 
     #[warn(unused_variables)]
     let _sentry_guard: ClientInitGuard;

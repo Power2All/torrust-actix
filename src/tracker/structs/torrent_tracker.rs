@@ -16,6 +16,7 @@ use crate::tracker::types::users_updates::UsersUpdates;
 
 #[derive(Debug)]
 pub struct TorrentTracker {
+    pub server_id: String,
     pub config: Arc<Configuration>,
     pub sqlx: DatabaseConnector,
     pub torrents_sharding: Arc<TorrentSharding>,
