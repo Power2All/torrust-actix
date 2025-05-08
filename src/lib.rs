@@ -7,3 +7,4 @@ pub mod api;
 pub mod http;
 pub mod udp;
 pub mod structs;
+pub mod cluster;

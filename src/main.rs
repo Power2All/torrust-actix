@@ -13,6 +13,7 @@ use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use uuid::{NoContext, Timestamp, Uuid};
 use torrust_actix::api::api::api_service;
+use torrust_actix::api::enums::cluster_mode::ClusterMode;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
@@ -34,9 +35,10 @@ fn main() -> std::io::Result<()>
     setup_logging(&config);
 
     let server_id = Uuid::new_v7(Timestamp::now(NoContext));
-    
+
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     info!("Identifying ID: {}", server_id);
+    info!("Server Mode: {:?}", config.tracker_config.cluster);
 
     #[warn(unused_variables)]
     let _sentry_guard: ClientInitGuard;
@@ -155,56 +157,62 @@ fn main() -> std::io::Result<()>
             }
 
             let mut http_handlers = Vec::new();
-            let mut http_futures = Vec::new();
             let mut https_handlers = Vec::new();
-            let mut https_futures = Vec::new();
-            for http_server_object in &config.http_server {
-                if http_server_object.enabled {
-                    http_check_host_and_port_used(http_server_object.bind_address.clone());
-                    let address: SocketAddr = http_server_object.bind_address.parse().unwrap();
-                    if http_server_object.ssl {
-                        let (handle, https_service) = http_service(
-                            address,
-                            tracker.clone(),
-                            http_server_object.clone()
-                        ).await;
-                        https_handlers.push(handle);
-                        https_futures.push(https_service);
-                    } else {
-                        let (handle, http_service) = http_service(
-                            address,
-                            tracker.clone(),
-                            http_server_object.clone()
-                        ).await;
-                        http_handlers.push(handle);
-                        http_futures.push(http_service);
+            let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
+            let mut udp_futures = Vec::new();
+            let mut udp_tokio_threads = Vec::new();
+
+            match tracker.clone().config.tracker_config.cluster {
+                ClusterMode::standalone | ClusterMode::follower => {
+                    let mut http_futures = Vec::new();
+                    let mut https_futures = Vec::new();
+                    for http_server_object in &config.http_server {
+                        if http_server_object.enabled {
+                            http_check_host_and_port_used(http_server_object.bind_address.clone());
+                            let address: SocketAddr = http_server_object.bind_address.parse().unwrap();
+                            if http_server_object.ssl {
+                                let (handle, https_service) = http_service(
+                                    address,
+                                    tracker.clone(),
+                                    http_server_object.clone()
+                                ).await;
+                                https_handlers.push(handle);
+                                https_futures.push(https_service);
+                            } else {
+                                let (handle, http_service) = http_service(
+                                    address,
+                                    tracker.clone(),
+                                    http_server_object.clone()
+                                ).await;
+                                http_handlers.push(handle);
+                                http_futures.push(http_service);
+                            }
+                        }
+                    }
+                    if !http_futures.is_empty() {
+                        tokio_core.spawn(async move {
+                            let _ = try_join_all(http_futures).await;
+                        });
+                    }
+                    if !https_futures.is_empty() {
+                        tokio_core.spawn(async move {
+                            let _ = try_join_all(https_futures).await;
+                        });
+                    }
+
+                    for udp_server_object in &config.udp_server {
+                        if udp_server_object.enabled {
+                            udp_check_host_and_port_used(udp_server_object.bind_address.clone());
+                            let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
+                            let threads: u64 = udp_server_object.threads;
+                            let tracker_clone = tracker.clone();
+                            let tokio_udp = Arc::new(Builder::new_multi_thread().thread_name("udp").worker_threads(threads as usize).enable_all().build()?);
+                            udp_futures.push(udp_service(address, threads, tracker_clone, udp_rx.clone(), tokio_udp.clone()).await);
+                            udp_tokio_threads.push(tokio_udp.clone());
+                        }
                     }
                 }
-            }
-            if !http_futures.is_empty() {
-                tokio_core.spawn(async move {
-                    let _ = try_join_all(http_futures).await;
-                });
-            }
-            if !https_futures.is_empty() {
-                tokio_core.spawn(async move {
-                    let _ = try_join_all(https_futures).await;
-                });
-            }
-
-            let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
-            let mut udp_tokio_threads = Vec::new();
-            let mut udp_futures = Vec::new();
-            for udp_server_object in &config.udp_server {
-                if udp_server_object.enabled {
-                    udp_check_host_and_port_used(udp_server_object.bind_address.clone());
-                    let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
-                    let threads: u64 = udp_server_object.threads;
-                    let tracker_clone = tracker.clone();
-                    let tokio_udp = Arc::new(Builder::new_multi_thread().thread_name("udp").worker_threads(threads as usize).enable_all().build()?);
-                    udp_futures.push(udp_service(address, threads, tracker_clone, udp_rx.clone(), tokio_udp.clone()).await);
-                    udp_tokio_threads.push(tokio_udp.clone());
-                }
+                ClusterMode::leader => {}
             }
 
             let stats_handler = tokio_shutdown.clone();
@@ -221,10 +229,15 @@ fn main() -> std::io::Result<()>
                     let stats = tracker_spawn_stats.get_stats();
                     info!("[STATS] Torrents: {} - Updates: {} - Seeds: {} - Peers: {} - Completed: {}", stats.torrents, stats.torrents_updates, stats.seeds, stats.peers, stats.completed);
                     info!("[STATS] WList: {} - WList Updates: {} - BLists: {} - BLists Updates: {} - Keys: {} - Keys Updates {}", stats.whitelist, stats.whitelist_updates, stats.blacklist, stats.blacklist_updates, stats.keys, stats.keys_updates);
-                    info!("[STATS TCP IPv4] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled, stats.tcp4_failure, stats.tcp4_not_found);
-                    info!("[STATS TCP IPv6] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found);
-                    info!("[STATS UDP IPv4] Connect: {} - A: {} - S: {} - IR: {} - BR: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled, stats.udp4_invalid_request, stats.udp4_bad_request);
-                    info!("[STATS UDP IPv6] Connect: {} - A: {} - S: {} - IR: {} - BR: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled, stats.udp6_invalid_request, stats.udp6_bad_request);
+                    match tracker_spawn_stats.config.tracker_config.cluster {
+                        ClusterMode::standalone | ClusterMode::follower => {
+                            info!("[STATS TCP IPv4] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled, stats.tcp4_scrapes_handled, stats.tcp4_failure, stats.tcp4_not_found);
+                            info!("[STATS TCP IPv6] Connect: {} - API: {} - A: {} - S: {} - F: {} - 404: {}", stats.tcp6_connections_handled, stats.tcp6_api_handled, stats.tcp6_announces_handled, stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found);
+                            info!("[STATS UDP IPv4] Connect: {} - A: {} - S: {} - IR: {} - BR: {}", stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled, stats.udp4_invalid_request, stats.udp4_bad_request);
+                            info!("[STATS UDP IPv6] Connect: {} - A: {} - S: {} - IR: {} - BR: {}", stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled, stats.udp6_invalid_request, stats.udp6_bad_request);
+                        }
+                        ClusterMode::leader => {}
+                    }
                 }
             });
 
