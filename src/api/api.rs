@@ -29,7 +29,7 @@ use crate::config::structs::configuration::Configuration;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub fn api_service_cors() -> Cors
 {
     // This is not a duplicate, each framework has their own CORS configuration.
@@ -41,7 +41,7 @@ pub fn api_service_cors() -> Cors
         .max_age(1)
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceConfig)>
 {
     Box::new(move |cfg: &mut ServiceConfig| {
@@ -55,10 +55,10 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
         );
 
         // Cluster Routing
-        cfg.service(web::resource("api/cluster")
+        cfg.service(web::resource("cluster")
             .route(web::get().to(api_service_cluster_get))
         );
-        
+
         // Torrents API Routing
         cfg.service(web::resource("api/torrent/{info_hash}")
             .route(web::get().to(api_service_torrent_get))
@@ -133,7 +133,7 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
     })
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_service(
     addr: SocketAddr,
     data: Arc<TorrentTracker>,
@@ -273,7 +273,7 @@ pub async fn api_service(
     (server.handle(), server)
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
 {
     if ip.is_ipv4() {
@@ -283,7 +283,7 @@ pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     }
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>) -> Option<HttpResponse>
 {
     match token {
@@ -303,7 +303,7 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
     }
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = match request.peer_addr() {
@@ -332,7 +332,7 @@ pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<Api
     }
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceData>>) -> Result<IpAddr, HttpResponse>
 {
     match api_service_retrieve_remote_ip(request, data.api_trackers_config.clone()).await {
@@ -348,7 +348,7 @@ pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceDat
     }
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -359,7 +359,7 @@ pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServi
     }))
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
 {
     match ip {
@@ -374,7 +374,7 @@ pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsE
     }
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceData>>) -> Option<HttpResponse>
 {
     match api_validate_ip(request, data.clone()).await {
@@ -384,14 +384,14 @@ pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceDat
     None
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_service_openapi_json() -> HttpResponse
 {
     let openapi_file = include_str!("../openapi.json");
     HttpResponse::Ok().content_type(ContentType::json()).body(openapi_file)
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
+#[tracing::instrument(skip(payload), level = "trace")]
 pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, CustomError>
 {
     let mut body = web::BytesMut::new();

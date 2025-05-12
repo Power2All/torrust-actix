@@ -17,5 +17,7 @@ pub struct TrackerConfig {
     pub total_downloads: u64,
     pub swagger: bool,
     pub prometheus_id: String,
-    pub cluster: ClusterMode
+    pub cluster: ClusterMode,
+    pub cluster_ssl: bool,
+    pub cluster_server_address: String
 }

@@ -6,7 +6,7 @@ use crate::api::api::{api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
@@ -19,7 +19,7 @@ pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServi
     HttpResponse::Ok().content_type(ContentType::json()).json(data.torrent_tracker.get_stats())
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client

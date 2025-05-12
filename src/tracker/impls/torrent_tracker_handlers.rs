@@ -17,7 +17,7 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn validate_announce(&self, remote_addr: IpAddr, query: HashMap<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
     {
         // Validate info_hash
@@ -242,7 +242,7 @@ impl TorrentTracker {
         Ok(announce_data)
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn handle_announce(&self, data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
     {
         let mut torrent_peer = TorrentPeer {
@@ -374,7 +374,7 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn validate_scrape(&self, query: HashMap<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
     {
         // Validate info_hash
@@ -401,7 +401,7 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, TorrentEntry>
     {
         // We generate the output and return it, even if it's empty...

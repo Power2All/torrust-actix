@@ -23,7 +23,7 @@ use std::env;
 use crate::api::enums::cluster_mode::ClusterMode;
 
 impl Configuration {
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn init() -> Configuration {
         Configuration {
             log_level: String::from("info"),
@@ -43,7 +43,9 @@ impl Configuration {
                 total_downloads: 0,
                 swagger: false,
                 prometheus_id: String::from("torrust_actix"),
-                cluster: ClusterMode::standalone
+                cluster: ClusterMode::standalone,
+                cluster_ssl: false,
+                cluster_server_address: String::from("127.0.0.1:8080")
             },
             sentry_config: SentryConfig {
                 enabled: false,
@@ -146,7 +148,7 @@ impl Configuration {
         }
     }
     
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn env_overrides(config: &mut Configuration) -> &mut Configuration {
         // Config
         if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
@@ -464,12 +466,12 @@ impl Configuration {
         config
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn load(data: &[u8]) -> Result<Configuration, toml::de::Error> {
         toml::from_str(&String::from_utf8_lossy(data))
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn load_file(path: &str) -> Result<Configuration, ConfigurationError> {
         match std::fs::read(path) {
             Err(e) => Err(ConfigurationError::IOError(e)),
@@ -484,7 +486,7 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn save_file(path: &str, data: String) -> Result<(), ConfigurationError> {
         match File::create(path) {
             Ok(mut file) => {
@@ -497,7 +499,7 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn save_from_config(config: Arc<Configuration>, path: &str)
     {
         let config_toml = toml::to_string(&config).unwrap();
@@ -507,7 +509,7 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
         let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
@@ -544,7 +546,7 @@ impl Configuration {
         Ok(config)
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn validate(config: Configuration) {
         // Check Map
         let check_map = vec![
@@ -579,7 +581,7 @@ impl Configuration {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn validate_value(name: &str, value: String, regex: String)
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();

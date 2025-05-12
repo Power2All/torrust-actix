@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use async_std::task;
 use clap::Parser;
+use crossbeam::channel::{bounded, Receiver, Sender};
 use futures_util::future::{try_join_all, TryJoinAll};
 use log::{error, info};
 use parking_lot::deadlock;
@@ -14,6 +15,9 @@ use tokio_shutdown::Shutdown;
 use uuid::{NoContext, Timestamp, Uuid};
 use torrust_actix::api::api::api_service;
 use torrust_actix::api::enums::cluster_mode::ClusterMode;
+use torrust_actix::cluster::impls::ws_connection::WsConnection;
+use torrust_actix::cluster::structs::rx_data::RxData;
+use torrust_actix::cluster::structs::tx_data::TxData;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
@@ -22,7 +26,7 @@ use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 fn main() -> std::io::Result<()>
 {
     let args = Cli::parse();
@@ -38,7 +42,10 @@ fn main() -> std::io::Result<()>
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     info!("Identifying ID: {}", server_id);
-    info!("Server Mode: {:?}", config.tracker_config.cluster);
+    info!("Cluster Mode: {:?}", config.tracker_config.cluster);
+    if config.tracker_config.cluster != ClusterMode::standalone {
+        info!("Cluster SSL: {}", config.tracker_config.cluster_ssl);
+    }
 
     #[warn(unused_variables)]
     let _sentry_guard: ClientInitGuard;
@@ -63,32 +70,36 @@ fn main() -> std::io::Result<()>
         .block_on(async {
             let tracker = Arc::new(TorrentTracker::new(config.clone(), args.create_database).await);
 
-            if tracker.config.database.clone().persistent {
-                tracker.load_torrents(tracker.clone()).await;
-                if tracker.config.tracker_config.clone().whitelist_enabled {
-                    tracker.load_whitelist(tracker.clone()).await;
+            match tracker.config.tracker_config.clone().cluster {
+                ClusterMode::standalone | ClusterMode::leader => {
+                    if tracker.config.database.clone().persistent {
+                        tracker.load_torrents(tracker.clone()).await;
+                        if tracker.config.tracker_config.clone().whitelist_enabled {
+                            tracker.load_whitelist(tracker.clone()).await;
+                        }
+                        if tracker.config.tracker_config.clone().blacklist_enabled {
+                            tracker.load_blacklist(tracker.clone()).await;
+                        }
+                        if tracker.config.tracker_config.clone().keys_enabled {
+                            tracker.load_keys(tracker.clone()).await;
+                        }
+                        if tracker.config.tracker_config.clone().users_enabled {
+                            tracker.load_users(tracker.clone()).await;
+                        }
+                        if tracker.config.database.clone().update_peers && !tracker.reset_seeds_peers(tracker.clone()).await {
+                            panic!("[RESET SEEDS PEERS] Unable to continue loading");
+                        }
+                    } else {
+                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().total_downloads as i64);
+                    }
+
+                    if args.export { tracker.export(&args, tracker.clone()).await; }
+                    if args.import { tracker.import(&args, tracker.clone()).await; }
                 }
-                if tracker.config.tracker_config.clone().blacklist_enabled {
-                    tracker.load_blacklist(tracker.clone()).await;
-                }
-                if tracker.config.tracker_config.clone().keys_enabled {
-                    tracker.load_keys(tracker.clone()).await;
-                }
-                if tracker.config.tracker_config.clone().users_enabled {
-                    tracker.load_users(tracker.clone()).await;
-                }
-                if tracker.config.database.clone().update_peers && !tracker.reset_seeds_peers(tracker.clone()).await {
-                    panic!("[RESET SEEDS PEERS] Unable to continue loading");
-                }
-            } else {
-                tracker.set_stats(StatsEvent::Completed, config.tracker_config.clone().total_downloads as i64);
+                ClusterMode::follower => {}
             }
-
+            
             if args.create_selfsigned { tracker.cert_gen(&args).await; }
-
-            if args.export { tracker.export(&args, tracker.clone()).await; }
-
-            if args.import { tracker.import(&args, tracker.clone()).await; }
 
             let tokio_core = Builder::new_multi_thread().thread_name("core").worker_threads(9).enable_all().build()?;
 
@@ -156,6 +167,7 @@ fn main() -> std::io::Result<()>
                 });
             }
 
+            let (cluster_tx, cluster_rx) = tokio::sync::watch::channel(false);
             let mut http_handlers = Vec::new();
             let mut https_handlers = Vec::new();
             let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
@@ -164,6 +176,22 @@ fn main() -> std::io::Result<()>
 
             match tracker.clone().config.tracker_config.cluster {
                 ClusterMode::standalone | ClusterMode::follower => {
+                    let cluster_tracker = tracker.clone();
+                    if tracker.clone().config.tracker_config.cluster == ClusterMode::follower {
+                        tokio_core.spawn(async move {
+                            info!("[BOOT] Starting thread for cluster follower websocket connection...");
+                            let ws_conn = WsConnection::new(
+                                cluster_tracker.clone(),
+                                cluster_rx.clone()
+                            ).await;
+                            
+                            let mut tracker_ref = cluster_tracker.clone();
+                            let mut ws_connection = tracker_ref.ws_connection.lock();
+                            *ws_connection = Some(ws_conn);
+                            
+                        });
+                    }
+                    
                     let mut http_futures = Vec::new();
                     let mut https_futures = Vec::new();
                     for http_server_object in &config.http_server {
@@ -325,6 +353,7 @@ fn main() -> std::io::Result<()>
                         handle.stop(true).await;
                     }
                     let _ = udp_tx.send(true);
+                    let _ = cluster_tx.send(true);
                     match udp_futures.into_iter().collect::<TryJoinAll<_>>().await {
                         Ok(_) => {}
                         Err(error) => {

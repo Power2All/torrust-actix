@@ -22,6 +22,7 @@ rpath = false
 strip = "debuginfo"
 
 [dependencies]
+actix-codec = "0.5.2"
 actix-cors = "^0.7"
 actix-web = { version = "^4", features = ["rustls-0_23"] }
 actix-ws = "0.3.0"
@@ -31,6 +32,7 @@ bip_bencode = "^0.4"
 byteorder = "^1.5"
 chrono = "^0.4"
 clap = { version = "^4.5", features = ["derive"] }
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 fern = { version = "^0.7", features = ["colored"] }
 futures-util = "^0.3"
 hex = "^0.4"
@@ -39,6 +41,8 @@ parking_lot = { version = "^0.12", features = ["arc_lock", "hardware-lock-elisio
 percent-encoding = "^2.3"
 rcgen = "^0.14"
 regex = "^1.11"
+reqwest = "^0.12"
+reqwest-websocket = "^0.4"
 rustls = { version = "^0.23", default-features = false, features = ["std", "ring"] }
 rustls-pemfile = "^2.2"
 sentry = { version = "^0.42", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
@@ -56,7 +60,6 @@ tracing = "^0.1"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
 uuid = { version = "^1.16", features = ['v7'] }
-websockets = {  version = "^0.3" }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"

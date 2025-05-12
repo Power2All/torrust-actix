@@ -6,14 +6,19 @@ use actix_ws::{AggregatedMessage, MessageStream, Session};
 use futures_util::StreamExt;
 use log::info;
 use serde_json::json;
-use crate::api::api::api_validation;
+use crate::api::api::{api_service_token, api_validation};
 use crate::api::structs::api_service_data::ApiServiceData;
+use crate::api::structs::query_token::QueryToken;
 
-#[tracing::instrument(skip(payload), level = "debug")]
+#[tracing::instrument(skip(payload), level = "trace")]
 pub async fn api_service_cluster_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
+
+    // Parse the Params
+    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
+    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
 
     // Set up the stream to upgrade it to a websocket
     let (resource, mut session, mut payload) = match actix_ws::handle(&request, payload) {

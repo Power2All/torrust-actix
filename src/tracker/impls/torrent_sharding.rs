@@ -21,7 +21,7 @@ impl TorrentSharding {
         Self::new()
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn new() -> TorrentSharding
     {
         let mut bags: HashMap<u8, Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>> = HashMap::new();
@@ -112,13 +112,13 @@ impl TorrentSharding {
         mem::forget(tokio_threading);
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn contains_torrent(&self, info_hash: InfoHash) -> bool
     {
         self.get_shard_content(info_hash.0[0]).contains_key(&info_hash)
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn contains_peer(&self, info_hash: InfoHash, peer_id: PeerId) -> bool
     {
         match self.get_shard_content(info_hash.0[0]).get(&info_hash) {
@@ -132,19 +132,19 @@ impl TorrentSharding {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn get_shard(&self, shard: u8) -> Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>
     {
         self.shard_bag.get(&shard).unwrap().clone()
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry>
     {
         self.get_shard(shard).read_recursive().clone()
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry>
     {
         let mut torrents_return = BTreeMap::new();
@@ -155,7 +155,7 @@ impl TorrentSharding {
         torrents_return
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub fn get_torrents_amount(&self) -> u64
     {
         let mut torrents = 0u64;

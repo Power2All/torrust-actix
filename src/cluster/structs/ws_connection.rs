@@ -1,8 +1,12 @@
+use crossbeam::channel::{Receiver, Sender};
+use parking_lot::Mutex;
+use reqwest_websocket::WebSocket;
 use crate::cluster::structs::rx_data::RxData;
 use crate::cluster::structs::tx_data::TxData;
 
+#[derive(Debug)]
 pub struct WsConnection {
-    server_id: String,
-    rx_data: RxData,
-    tx_data: TxData
+    pub(crate) server_id: Option<String>,
+    pub(crate) socket: Option<Mutex<WebSocket>>,
+    pub(crate) watcher: tokio::sync::watch::Receiver<bool>,
 }
