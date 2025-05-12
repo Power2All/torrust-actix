@@ -1,4 +1,3 @@
-use crossbeam::channel::{Receiver, Sender};
 use parking_lot::Mutex;
 use reqwest_websocket::WebSocket;
 use crate::cluster::structs::rx_data::RxData;

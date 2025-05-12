@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use async_std::task;
 use clap::Parser;
-use crossbeam::channel::{bounded, Receiver, Sender};
 use futures_util::future::{try_join_all, TryJoinAll};
 use log::{error, info};
 use parking_lot::deadlock;
@@ -188,7 +187,7 @@ fn main() -> std::io::Result<()>
                             let mut tracker_ref = cluster_tracker.clone();
                             let mut ws_connection = tracker_ref.ws_connection.lock();
                             *ws_connection = Some(ws_conn);
-                            
+
                         });
                     }
                     

@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use crossbeam::channel::{Receiver, Sender};
 use log::{error, info};
 use parking_lot::Mutex;
 use reqwest::Client;

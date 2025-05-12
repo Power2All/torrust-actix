@@ -1,9 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use crossbeam::channel::{Receiver, Sender};
 use parking_lot::{Mutex, RwLock};
-use crate::cluster::structs::rx_data::RxData;
-use crate::cluster::structs::tx_data::TxData;
 use crate::cluster::structs::ws_connection::WsConnection;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
@@ -21,9 +18,8 @@ use crate::tracker::types::users_updates::UsersUpdates;
 #[derive(Debug)]
 pub struct TorrentTracker {
     pub server_id: String,
+    pub servers_id: Vec<String>,
     pub ws_connection: Arc<Mutex<Option<WsConnection>>>, // Changed this line
-    pub comm_receiver: Option<Receiver<RxData>>,
-    pub comm_sender: Option<Sender<TxData>>,
     pub config: Arc<Configuration>,
     pub sqlx: DatabaseConnector,
     pub torrents_sharding: Arc<TorrentSharding>,

@@ -3,8 +3,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 use chrono::Utc;
 use parking_lot::{Mutex, RwLock};
-use uuid::Uuid;
-use crate::cluster::structs::ws_connection::WsConnection;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
@@ -17,9 +15,8 @@ impl TorrentTracker {
     {
         TorrentTracker {
             server_id: String::from(""),
+            servers_id: vec![],
             ws_connection: Arc::new(Mutex::new(None)),
-            comm_receiver: None,
-            comm_sender: None,
             config: config.clone(),
             torrents_sharding: Arc::new(TorrentSharding::new()),
             torrents_updates: Arc::new(RwLock::new(HashMap::new())),
