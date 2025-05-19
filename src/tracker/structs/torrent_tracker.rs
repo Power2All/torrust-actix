@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
+use tokio::sync::Mutex;
 use crate::cluster::structs::ws_connection::WsConnection;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
@@ -19,7 +20,8 @@ use crate::tracker::types::users_updates::UsersUpdates;
 pub struct TorrentTracker {
     pub server_id: String,
     pub servers_id: Vec<String>,
-    pub ws_connection: Arc<Mutex<Option<WsConnection>>>, // Changed this line
+    pub ws_connection: Arc<Mutex<Option<WsConnection>>>,
+    pub maintenance_mode: Arc<Mutex<bool>>,
     pub config: Arc<Configuration>,
     pub sqlx: DatabaseConnector,
     pub torrents_sharding: Arc<TorrentSharding>,

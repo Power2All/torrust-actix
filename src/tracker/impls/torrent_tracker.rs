@@ -2,7 +2,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 use chrono::Utc;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
+use tokio::sync::Mutex;
+use uuid::Uuid;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
@@ -11,12 +13,13 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "trace")]
-    pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
+    pub async fn new(config: Arc<Configuration>, server_id: Uuid, create_database: bool) -> TorrentTracker
     {
         TorrentTracker {
-            server_id: String::from(""),
+            server_id: server_id.to_string(),
             servers_id: vec![],
             ws_connection: Arc::new(Mutex::new(None)),
+            maintenance_mode: Arc::new(Mutex::new(false)),
             config: config.clone(),
             torrents_sharding: Arc::new(TorrentSharding::new()),
             torrents_updates: Arc::new(RwLock::new(HashMap::new())),

@@ -6,8 +6,8 @@ use actix_web::web::Data;
 use actix_ws::{AggregatedMessage, AggregatedMessageStream, MessageStream, ProtocolError, Session};
 use futures_util::stream::Next;
 use futures_util::{SinkExt, StreamExt};
-use log::info;
-use serde_json::json;
+use log::{error, info};
+use serde_json::{json, Value};
 use tokio::time::{timeout, Timeout};
 use tokio::time::error::Elapsed;
 use uuid::Uuid;
@@ -36,53 +36,100 @@ pub async fn api_service_cluster_get(request: HttpRequest, payload: web::Payload
     };
     let mut stream = payload.aggregate_continuations().max_continuation_size(2_usize.pow(20));
 
-    // Try to obtain server ID to register, or return an error if the server ID already exists.
-    info!("Websocket connection established, requesting server ID");
-    match timeout(Duration::from_secs(10), stream.next()).await {
-        Ok(ok) => {
-            let extracted_id = ok.unwrap();
-            if extracted_id.is_ok() {
-                match extracted_id.unwrap() {
-                    AggregatedMessage::Text(text) => {
-                        match Uuid::parse_str(&text) {
-                            Ok(_) => {
-                                data.torrent_tracker.servers_id.clone().push(text.clone().to_uppercase());
-                                info!("Websocket connection registered - ID: {}", text.clone());
-                            }
-                            Err(_) => {
-                                info!("Unable to retrieve server ID, quitting");
-                                return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "Invalid server ID"}));   
-                            }
+    // Spawn the websocket thread and handle the traffic further until the connection breaks
+    let tracker_ref = data.clone();
+    rt::spawn(async move {
+        info!("Websocket connection established, requesting server ID");
+        
+        let mut server_id = String::new();
+        
+        // Handle initial server ID message
+        if let Some(Ok(AggregatedMessage::Text(text))) = stream.next().await {
+            let response = match serde_json::from_str::<Value>(&text) {
+                Ok(data_response) => { data_response }
+                Err(error) => {
+                    error!("Failed to receive server ID message: {}", error);
+                    return;
+                }
+            };
+            info!("{:#?}", response);
+            if response.get("version").is_some() && response.get("server_id").is_some() {
+                let response_server_version = response.get("server_id").unwrap().as_str().unwrap();
+                let response_server_id = response.get("server_id").unwrap().as_str().unwrap();
+                info!("Received initial server ID: {}", response_server_id);
+                match Uuid::parse_str(&response_server_id) {
+                    Ok(_) => {
+                        server_id = text.clone().to_uppercase();
+                        data.torrent_tracker.servers_id.clone().push(response_server_id.clone().parse().unwrap());
+                        info!("Websocket connection registered - ID: {}", response_server_id);
+                        let transmit = json!({
+                            "version": env!("CARGO_PKG_VERSION"),
+                            "server_id": tracker_ref.torrent_tracker.server_id.clone()
+                        });
+                        if let Err(e) = session.text(transmit.to_string()).await {
+                            error!("Failed to send server ID message: {}", e);
+                            return;
                         }
                     }
-                    _ => {
-                        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "Invalid server ID"}));
+                    Err(_) => {
+                        error!("Invalid server ID format received");
+                        if let Err(e) = session.close(None).await {
+                            error!("Failed to close session: {}", e);
+                        }
+                        return;
                     }
                 }
+            } else {
+                error!("Failed to receive server ID message");
             }
+        } else {
+            error!("No initial server ID received");
+            if let Err(e) = session.close(None).await {
+                error!("Failed to close session: {}", e);
+            }
+            return;
         }
-        Err(_) => {
-            info!("Websocket connection took too long, quitting");
-            return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "Websocket timeout"}));
-        }
-    }
 
-    // Spawn the websocket thread, and handle the traffic further until the connection breaks
-    rt::spawn(async move {
-        while let Some(message) = stream.next().await {
-            match message {
-                Ok(AggregatedMessage::Text(text)) => {
+        // Handle subsequent messages
+        loop {
+            let result = timeout(Duration::from_secs(30), stream.next()).await;
+            match result {
+                Ok(Some(Ok(AggregatedMessage::Ping(msg)))) => {
+                    if let Err(e) = session.pong(&msg).await {
+                        info!("Failed to send pong: {}", e);
+                        break;
+                    }
+                }
+                Ok(Some(Ok(AggregatedMessage::Close(reason)))) => {
+                    info!("Received close message: {:?}", reason);
+                    break;
+                }
+                Ok(Some(Ok(AggregatedMessage::Text(text)))) => {
                     info!("Received text message: {}", text);
                 }
-                Ok(AggregatedMessage::Binary(bin)) => {
+                Ok(Some(Ok(AggregatedMessage::Binary(bin))))=> {
                     info!("Received binary message: {:?}", bin);
                 }
-                Ok(AggregatedMessage::Ping(msg)) => {
-                    // Sent a PONG back
-                    session.pong(&msg).await.unwrap();
+                Ok(Some(Ok(_))) => {}
+                Ok(Some(Err(e))) => {
+                    error!("Error: {:?}", e);
+                    break;
                 }
-                _ => {}
+                Ok(None) => {
+                    info!("Stream closed");
+                    break;
+                }
+                Err(_) => {
+                    info!("Idle timeout: no message received in 30 seconds");
+                    let _ = session.close(None).await;
+                    break;
+                }
             }
+        }
+
+        // Clean up when the connection ends
+        if let Some(id) = data.torrent_tracker.servers_id.clone().iter().position(|x| x == &server_id) {
+            data.torrent_tracker.servers_id.clone().remove(id);
         }
     });
 

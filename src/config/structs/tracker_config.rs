@@ -19,5 +19,6 @@ pub struct TrackerConfig {
     pub prometheus_id: String,
     pub cluster: ClusterMode,
     pub cluster_ssl: bool,
-    pub cluster_server_address: String
+    pub cluster_server_address: String,
+    pub cluster_timeout: u64,
 }

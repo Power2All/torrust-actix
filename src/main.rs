@@ -10,6 +10,7 @@ use log::{error, info};
 use parking_lot::deadlock;
 use sentry::ClientInitGuard;
 use tokio::runtime::Builder;
+use tokio::select;
 use tokio_shutdown::Shutdown;
 use uuid::{NoContext, Timestamp, Uuid};
 use torrust_actix::api::api::api_service;
@@ -67,7 +68,7 @@ fn main() -> std::io::Result<()>
         .enable_all()
         .build()?
         .block_on(async {
-            let tracker = Arc::new(TorrentTracker::new(config.clone(), args.create_database).await);
+            let tracker = Arc::new(TorrentTracker::new(config.clone(), server_id, args.create_database).await);
 
             match tracker.config.tracker_config.clone().cluster {
                 ClusterMode::standalone | ClusterMode::leader => {
@@ -177,16 +178,29 @@ fn main() -> std::io::Result<()>
                 ClusterMode::standalone | ClusterMode::follower => {
                     let cluster_tracker = tracker.clone();
                     if tracker.clone().config.tracker_config.cluster == ClusterMode::follower {
+                        let maintenance_lock = tracker.maintenance_mode.clone();
+                        let ws_connection_lock = tracker.ws_connection.clone();
+                        let tracker_ref = cluster_tracker.clone();
                         tokio_core.spawn(async move {
-                            info!("[BOOT] Starting thread for cluster follower websocket connection...");
-                            let ws_conn = WsConnection::new(
-                                cluster_tracker.clone(),
-                                cluster_rx.clone()
-                            ).await;
+                            info!("[BOOT] Initializing the tracker in maintenance mode");
+                            {
+                                let mut maintenance = maintenance_lock.lock().await;
+                                *maintenance = true;
+                            }
                             
-                            let mut tracker_ref = cluster_tracker.clone();
-                            let mut ws_connection = tracker_ref.ws_connection.lock();
-                            *ws_connection = Some(ws_conn);
+                            info!("[BOOT] Starting thread for cluster follower websocket connection...");
+                            loop {
+                                let mut rx = cluster_rx.clone();
+                                select! {
+                                    ws_conn = WsConnection::new(cluster_tracker.clone(), rx.clone()) => {
+                                        let mut ws_connection = ws_connection_lock.lock().await;
+                                        *ws_connection = Some(ws_conn);
+                                    }
+                                    changed = rx.changed() => {
+                                        break;
+                                    }
+                                }
+                            }
 
                         });
                     }

@@ -45,7 +45,8 @@ impl Configuration {
                 prometheus_id: String::from("torrust_actix"),
                 cluster: ClusterMode::standalone,
                 cluster_ssl: false,
-                cluster_server_address: String::from("127.0.0.1:8080")
+                cluster_server_address: String::from("127.0.0.1:8080"),
+                cluster_timeout: 5
             },
             sentry_config: SentryConfig {
                 enabled: false,
