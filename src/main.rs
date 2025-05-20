@@ -11,6 +11,7 @@ use parking_lot::deadlock;
 use sentry::ClientInitGuard;
 use tokio::runtime::Builder;
 use tokio::select;
+use tokio::time::{sleep, timeout};
 use tokio_shutdown::Shutdown;
 use uuid::{NoContext, Timestamp, Uuid};
 use torrust_actix::api::api::api_service;
@@ -186,20 +187,50 @@ fn main() -> std::io::Result<()>
                             {
                                 let mut maintenance = maintenance_lock.lock().await;
                                 *maintenance = true;
+                                drop(maintenance);
                             }
                             
                             info!("[BOOT] Starting thread for cluster follower websocket connection...");
-                            loop {
+                            'websocket_loop: loop {
                                 let mut rx = cluster_rx.clone();
                                 select! {
                                     ws_conn = WsConnection::new(cluster_tracker.clone(), rx.clone()) => {
                                         let mut ws_connection = ws_connection_lock.lock().await;
                                         *ws_connection = Some(ws_conn);
+                                        drop(ws_connection);
+                                        {
+                                            let mut maintenance = maintenance_lock.lock().await;
+                                            *maintenance = false;
+                                            drop(maintenance);
+                                        }
+                                        'websocket_ping_loop: loop {
+                                            info!("[FOLLOWER] Check connection is alive");
+                                            let ws_connection_lock = ws_connection_lock.clone();
+                                            let mut ws_connection = ws_connection_lock.lock().await;
+                                            let socket = ws_connection.as_ref().unwrap().websocket.clone();
+                                            match timeout(Duration::from_secs(10), WsConnection::alive_check(socket)).await {
+                                                Ok(Ok(_)) => {
+                                                    info!("[FOLLOWER] Connection is alive");
+                                                }
+                                                _ => {
+                                                    error!("[FOLLOWER] Connection is dead");
+                                                    ws_connection.as_mut().unwrap().server_id = None;
+                                                    {
+                                                        let mut maintenance = maintenance_lock.lock().await;
+                                                        *maintenance = true;
+                                                    }
+                                                    break 'websocket_ping_loop;
+                                                }
+                                            }
+                                            drop(ws_connection);
+                                            sleep(Duration::from_secs(5)).await;
+                                        }
                                     }
-                                    changed = rx.changed() => {
-                                        break;
+                                    _ = rx.changed() => {
+                                        break 'websocket_loop;
                                     }
                                 }
+                                tokio::time::sleep(Duration::from_secs(1)).await
                             }
 
                         });

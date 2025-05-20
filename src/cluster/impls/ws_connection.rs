@@ -6,6 +6,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, TryStreamExt};
 use log::{error, info};
 use parking_lot::RwLock;
+use rand::RngCore;
 use reqwest::Client;
 use reqwest_websocket::{websocket, Error, Message, RequestBuilderExt, UpgradeResponse, WebSocket};
 use serde_json::{json, Value};
@@ -31,11 +32,11 @@ impl WsConnection {
         );
         
         // Initialize the server connection info object
-        let mut ws_connection = WsConnection { server_id: None, watcher: rx };
+        let mut ws_connection = WsConnection { server_id: None, watcher: rx, websocket: Arc::new(None) };
         
         // Setting up a connection to the server and keep looping it until succeeded
         loop {
-            let websocket = Arc::new(Mutex::new(loop {
+            let websocket = Arc::new(Some(Mutex::new(loop {
                 select! {
                     websocket_result = Self::connect_to_websocket(&socket, tracker.config.tracker_config.cluster_timeout) => {
                         match websocket_result {
@@ -52,7 +53,7 @@ impl WsConnection {
                         return ws_connection;
                     }
                 }
-            }));
+            })));
 
             // Let's validate the connection if usable
             select! {
@@ -60,6 +61,7 @@ impl WsConnection {
                     match id {
                         Ok(id_returned) => {
                             ws_connection.server_id = Some(id_returned);
+                            ws_connection.websocket = websocket.clone();
                             break;
                         }
                         Err(_) => {}
@@ -70,7 +72,7 @@ impl WsConnection {
                 }
             }
 
-            tokio::time::sleep(Duration::from_secs(1)).await
+            sleep(Duration::from_secs(1)).await
         }
         
         ws_connection
@@ -124,8 +126,13 @@ impl WsConnection {
         Err(())
     }
     
-    pub async fn validate_connection(socket: Arc<Mutex<WebSocket>>, tracker: Arc<TorrentTracker>) -> Result<String, ()>
+    pub async fn validate_connection(socket: Arc<Option<Mutex<WebSocket>>>, tracker: Arc<TorrentTracker>) -> Result<String, ()>
     {
+        let socket_ref = match &*socket {
+            Some(mutex) => mutex,
+            None => return Err(()),
+        };
+        
         info!("[BOOT] Validating connection...");
         let request = json!({
             "version": env!("CARGO_PKG_VERSION"),
@@ -135,8 +142,7 @@ impl WsConnection {
         // Create the message outside the mutex lock
         let message = Message::Text(serde_json::to_string(&request).unwrap());
         
-        let socket_lock = socket.clone();
-        let mut socket_guard = socket_lock.lock().await;
+        let mut socket_guard = socket_ref.lock().await;
         match socket_guard.deref_mut().send(message.clone()).await {
             Ok(_) => {}
             Err(_) => { return Err(()); }
@@ -176,5 +182,34 @@ impl WsConnection {
         }
         
         Err(())
+    }
+    
+    pub async fn alive_check(socket: Arc<Option<Mutex<WebSocket>>>) -> Result<(), ()> {
+        let socket_ref = match &*socket {
+            Some(mutex) => mutex,
+            None => return Err(()),
+        };
+        
+        let mut buf = [0u8; 124];
+        rand::thread_rng().fill_bytes(&mut buf);
+        let payload = Vec::from(buf);
+
+        let ping = Message::Ping(payload.clone());
+        let mut socket_guard = socket_ref.lock().await;
+        match socket_guard.send(ping).await {
+            Ok(_) => {},
+            Err(_) => return Err(())
+        }
+        match socket_guard.deref_mut().try_next().await {
+            Ok(Some(Message::Pong(new_payload))) => {
+                info!("{:#?}", new_payload);
+                if new_payload == payload {
+                    Ok(())
+                } else {
+                    Err(())
+                }
+            },
+            _ => Err(())
+        }
     }
 }
