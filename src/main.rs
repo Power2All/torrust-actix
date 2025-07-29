@@ -2,7 +2,7 @@ use std::mem;
 use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use async_std::task;
 use clap::Parser;
 use futures_util::future::{try_join_all, TryJoinAll};
@@ -17,8 +17,6 @@ use uuid::{NoContext, Timestamp, Uuid};
 use torrust_actix::api::api::api_service;
 use torrust_actix::api::enums::cluster_mode::ClusterMode;
 use torrust_actix::cluster::impls::ws_connection::WsConnection;
-use torrust_actix::cluster::structs::rx_data::RxData;
-use torrust_actix::cluster::structs::tx_data::TxData;
 use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
@@ -232,7 +230,6 @@ fn main() -> std::io::Result<()>
                                 }
                                 tokio::time::sleep(Duration::from_secs(1)).await
                             }
-
                         });
                     }
                     
@@ -381,7 +378,7 @@ fn main() -> std::io::Result<()>
                 });
             }
 
-            tokio::select! {
+            select! {
                 _ = tokio::signal::ctrl_c() => {
                     info!("Shutdown request received, shutting down...");
                     for handle in api_handlers.iter() {

@@ -394,7 +394,7 @@ pub async fn api_service_openapi_json() -> HttpResponse
 #[tracing::instrument(skip(payload), level = "trace")]
 pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, CustomError>
 {
-    let mut body = web::BytesMut::new();
+    let mut body = BytesMut::new();
     while let Some(chunk) = payload.next().await {
         let chunk = match chunk {
             Ok(data) => { data }

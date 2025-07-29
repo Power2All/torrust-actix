@@ -32,7 +32,7 @@ pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<Strin
 
         match data.torrent_tracker.get_torrent(info_hash) {
             None => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})); }
-            Some(torrent) => { return HttpResponse::Ok().content_type(ContentType::json()).json(api_service_torrents_return_torrent_json(torrent)); }
+            Some(torrent) => { return HttpResponse::Ok().content_type(ContentType::json()).json(api_service_torrents_return_torrent_json(torrent)) }
         }
     }
 

@@ -166,16 +166,16 @@ impl WsConnection {
                         error!("Invalid server version. Expected: {}, Received: {}", response_server_version, env!("CARGO_PKG_VERSION"));
                         return Err(());
                     }
-                    match Uuid::parse_str(&response_server_id) {
+                    return match Uuid::parse_str(&response_server_id) {
                         Ok(_) => {
                             info!("[BOOT] Leader with ID {} and version {} established", response_server_id.to_uppercase(), response_server_version);
-                            return Ok(response_server_id.to_uppercase());
+                            Ok(response_server_id.to_uppercase())
                         }
                         Err(_) => {
                             error!("Invalid server ID format received: {}", response_server_id.to_uppercase());
-                            return Err(());
+                            Err(())
                         }
-                    }
+                    };
                 }
             }
             _ => {}
@@ -194,7 +194,7 @@ impl WsConnection {
         rand::thread_rng().fill_bytes(&mut buf);
         let payload = Vec::from(buf);
 
-        let ping = Message::Ping(payload.clone());
+        let ping = Message::Ping(payload.clone().into());
         let mut socket_guard = socket_ref.lock().await;
         match socket_guard.send(ping).await {
             Ok(_) => {},

@@ -52,7 +52,7 @@ pub async fn api_service_cluster_get(request: HttpRequest, payload: web::Payload
                     return;
                 }
             };
-            info!("{:#?}", response);
+            // info!("{:#?}", response);
             if response.get("version").is_some() && response.get("server_id").is_some() {
                 let response_server_version = response.get("server_id").unwrap().as_str().unwrap();
                 let response_server_id = response.get("server_id").unwrap().as_str().unwrap();
@@ -128,7 +128,10 @@ pub async fn api_service_cluster_get(request: HttpRequest, payload: web::Payload
         }
 
         // Clean up when the connection ends
+        info!("Cleaning up...");
+
         if let Some(id) = data.torrent_tracker.servers_id.clone().iter().position(|x| x == &server_id) {
+            info!("Websocket connection removed - ID: {}", id);
             data.torrent_tracker.servers_id.clone().remove(id);
         }
     });
