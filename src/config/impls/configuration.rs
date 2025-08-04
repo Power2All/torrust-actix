@@ -347,40 +347,40 @@ impl Configuration {
                     break;
                 }
                 Some(block) => {
-                    if let Ok(value) = env::var(format!("API_{}_ENABLED", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_ENABLED")) {
                         block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
                     }
-                    if let Ok(value) = env::var(format!("API_{}_SSL", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_SSL")) {
                         block.ssl = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
                     }
-                    if let Ok(value) = env::var(format!("API_{}_BIND_ADDRESS", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_BIND_ADDRESS")) {
                         block.bind_address = value;
                     }
-                    if let Ok(value) = env::var(format!("API_{}_REAL_IP", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_REAL_IP")) {
                         block.real_ip = value;
                     }
-                    if let Ok(value) = env::var(format!("API_{}_SSL_KEY", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_SSL_KEY")) {
                         block.ssl_key = value;
                     }
-                    if let Ok(value) = env::var(format!("API_{}_SSL_CERT", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_SSL_CERT")) {
                         block.ssl_cert = value;
                     }
-                    if let Ok(value) = env::var(format!("API_{}_KEEP_ALIVE", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_KEEP_ALIVE")) {
                         block.keep_alive = value.parse::<u64>().unwrap_or(60);
                     }
-                    if let Ok(value) = env::var(format!("API_{}_REQUEST_TIMEOUT", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_REQUEST_TIMEOUT")) {
                         block.request_timeout = value.parse::<u64>().unwrap_or(30);
                     }
-                    if let Ok(value) = env::var(format!("API_{}_DISCONNECT_TIMEOUT", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_DISCONNECT_TIMEOUT")) {
                         block.disconnect_timeout = value.parse::<u64>().unwrap_or(30);
                     }
-                    if let Ok(value) = env::var(format!("API_{}_MAX_CONNECTIONS", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_MAX_CONNECTIONS")) {
                         block.max_connections = value.parse::<u64>().unwrap_or(25000);
                     }
-                    if let Ok(value) = env::var(format!("API_{}_THREADS", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_THREADS")) {
                         block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
                     }
-                    if let Ok(value) = env::var(format!("API_{}_TLS_CONNECTION_RATE", api_iteration)) {
+                    if let Ok(value) = env::var(format!("API_{api_iteration}_TLS_CONNECTION_RATE")) {
                         block.tls_connection_rate = value.parse::<u64>().unwrap_or(256);
                     }
                 }
@@ -396,40 +396,40 @@ impl Configuration {
                     break;
                 }
                 Some(block) => {
-                    if let Ok(value) = env::var(format!("HTTP_{}_ENABLED", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_ENABLED")) {
                         block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_SSL", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_SSL")) {
                         block.ssl = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_BIND_ADDRESS", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_BIND_ADDRESS")) {
                         block.bind_address = value;
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_REAL_IP", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_REAL_IP")) {
                         block.real_ip = value;
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_SSL_KEY", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_SSL_KEY")) {
                         block.ssl_key = value;
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_SSL_CERT", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_SSL_CERT")) {
                         block.ssl_cert = value;
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_KEEP_ALIVE", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_KEEP_ALIVE")) {
                         block.keep_alive = value.parse::<u64>().unwrap_or(60);
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_REQUEST_TIMEOUT", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT")) {
                         block.request_timeout = value.parse::<u64>().unwrap_or(30);
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_DISCONNECT_TIMEOUT", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT")) {
                         block.disconnect_timeout = value.parse::<u64>().unwrap_or(30);
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_MAX_CONNECTIONS", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_MAX_CONNECTIONS")) {
                         block.max_connections = value.parse::<u64>().unwrap_or(25000);
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_THREADS", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_THREADS")) {
                         block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{}_TLS_CONNECTION_RATE", http_iteration)) {
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_TLS_CONNECTION_RATE")) {
                         block.tls_connection_rate = value.parse::<u64>().unwrap_or(256);
                     }
                 }
@@ -445,13 +445,13 @@ impl Configuration {
                     break;
                 }
                 Some(block) => {
-                    if let Ok(value) = env::var(format!("UDP_{}_ENABLED", udp_iteration)) {
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_ENABLED")) {
                         block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
                     }
-                    if let Ok(value) = env::var(format!("UDP_{}_BIND_ADDRESS", udp_iteration)) {
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_BIND_ADDRESS")) {
                         block.bind_address = value;
                     }
-                    if let Ok(value) = env::var(format!("UDP_{}_THREADS", udp_iteration)) {
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_THREADS")) {
                         block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
                     }
                 }
@@ -501,7 +501,7 @@ impl Configuration {
         let config_toml = toml::to_string(&config).unwrap();
         match Self::save_file(path, config_toml) {
             Ok(_) => { eprintln!("[CONFIG SAVE] Config file is saved"); }
-            Err(_) => { eprintln!("[CONFIG SAVE] Unable to save to {}", path); }
+            Err(_) => { eprintln!("[CONFIG SAVE] Unable to save to {path}"); }
         }
     }
 
@@ -512,7 +512,7 @@ impl Configuration {
             Ok(c) => { config = c; }
             Err(error) => {
                 eprintln!("No config file found or corrupt.");
-                eprintln!("[ERROR] {}", error);
+                eprintln!("[ERROR] {error}");
 
                 if !create {
                     eprintln!("You can either create your own config.toml file, or start this app using '--create-config' as parameter.");
@@ -582,7 +582,7 @@ impl Configuration {
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();
         if !regex_check.is_match(value.as_str()){
-            panic!("[VALIDATE CONFIG] Error checking {} [:] Name: \"{}\" [:] Regex: \"{}\"", name, value, regex_check);
+            panic!("[VALIDATE CONFIG] Error checking {name} [:] Name: \"{value}\" [:] Regex: \"{regex_check}\"");
         }
     }
 }

@@ -73,7 +73,7 @@ pub async fn http_service(
     let worker_threads = http_server_object.threads as usize;
 
     if http_server_object.ssl {
-        info!("[HTTPS] Starting server listener with SSL on {}", addr);
+        info!("[HTTPS] Starting server listener with SSL on {addr}");
         if http_server_object.ssl_key.is_empty() || http_server_object.ssl_cert.is_empty() {
             error!("[HTTPS] No SSL key or SSL certificate given, exiting...");
             exit(1);
@@ -83,26 +83,26 @@ pub async fn http_service(
             Ok(data) => { data }
             Err(data) => {
                 sentry::capture_error(&data);
-                panic!("[HTTPS] SSL key unreadable: {}", data);
+                panic!("[HTTPS] SSL key unreadable: {data}");
             }
         });
         let certs_file = &mut BufReader::new(match File::open(http_server_object.ssl_cert.clone()) {
             Ok(data) => { data }
-            Err(data) => { panic!("[HTTPS] SSL cert unreadable: {}", data); }
+            Err(data) => { panic!("[HTTPS] SSL cert unreadable: {data}"); }
         });
 
         let tls_certs = match rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>() {
             Ok(data) => { data }
-            Err(data) => { panic!("[HTTPS] SSL cert couldn't be extracted: {}", data); }
+            Err(data) => { panic!("[HTTPS] SSL cert couldn't be extracted: {data}"); }
         };
         let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
             Ok(data) => { data }
-            Err(data) => { panic!("[HTTPS] SSL key couldn't be extracted: {}", data); }
+            Err(data) => { panic!("[HTTPS] SSL key couldn't be extracted: {data}"); }
         };
 
         let tls_config = match rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key)) {
             Ok(data) => { data }
-            Err(data) => { panic!("[HTTPS] SSL config couldn't be created: {}", data); }
+            Err(data) => { panic!("[HTTPS] SSL config couldn't be created: {data}"); }
         };
 
         let server = match data.config.sentry_config.clone().enabled {
@@ -148,7 +148,7 @@ pub async fn http_service(
         return (server.handle(), server);
     }
 
-    info!("[HTTP] Starting server listener on {}", addr);
+    info!("[HTTP] Starting server listener on {addr}");
     let server = match data.config.sentry_config.clone().enabled {
         true => {
             HttpServer::new(move || {
@@ -570,7 +570,7 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
         }
     };
 
-    debug!("[DEBUG] Request from {}: Scrape with Key", ip);
+    debug!("[DEBUG] Request from {ip}: Scrape with Key");
 
     if data.torrent_tracker.config.tracker_config.clone().keys_enabled {
         let key = path.into_inner();
@@ -648,7 +648,7 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<HttpServic
         }
     };
 
-    debug!("[DEBUG] Request from {}: Scrape", ip);
+    debug!("[DEBUG] Request from {ip}: Scrape");
 
     http_service_scrape_handler(request, ip, data.torrent_tracker.clone()).await
 }
@@ -669,7 +669,7 @@ pub async fn http_service_not_found(request: HttpRequest, data: Data<Arc<HttpSer
         }
     };
 
-    debug!("[DEBUG] Request from {}: 404 Not Found", ip);
+    debug!("[DEBUG] Request from {ip}: 404 Not Found");
 
     HttpResponse::NotFound().content_type(ContentType::plaintext()).body(std::str::from_utf8(&ben_map! {
         "failure reason" => ben_bytes!("unknown request")

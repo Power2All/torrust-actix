@@ -100,11 +100,11 @@ pub fn return_type<T>(_: &T) -> String {
 
 pub fn equal_string_check(source: &String, check: &String) -> bool
 {
-    if *source.to_string() == format!("{:?}", check) {
+    if *source.to_string() == format!("{check:?}") {
         return true;
     }
-    println!("Source: {}", source);
-    println!("Check:  {:?}", check);
+    println!("Source: {source}");
+    println!("Check:  {check:?}");
     false
 }
 
