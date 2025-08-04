@@ -71,7 +71,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error); }
+                        Err(error) => { panic!("[SQLite] Error: {error}"); }
                     }
                 }
                 false => {
@@ -86,7 +86,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error); }
+                        Err(error) => { panic!("[SQLite] Error: {error}"); }
                     }
                 }
             }
@@ -103,7 +103,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error); }
+                        Err(error) => { panic!("[SQLite] Error: {error}"); }
                     }
                 }
                 false => {
@@ -115,7 +115,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error); }
+                        Err(error) => { panic!("[SQLite] Error: {error}"); }
                     }
                 }
             }
@@ -132,7 +132,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error); }
+                        Err(error) => { panic!("[SQLite] Error: {error}"); }
                     }
                 }
                 false => {
@@ -144,7 +144,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error); }
+                        Err(error) => { panic!("[SQLite] Error: {error}"); }
                     }
                 }
             }
@@ -162,7 +162,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error); }
+                        Err(error) => { panic!("[SQLite] Error: {error}"); }
                     }
                 }
                 false => {
@@ -175,7 +175,7 @@ impl DatabaseConnectorSQLite {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[SQLite] Error: {}", error); }
+                        Err(error) => { panic!("[SQLite] Error: {error}"); }
                     }
                 }
             }
@@ -200,7 +200,7 @@ impl DatabaseConnectorSQLite {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[SQLite] Error: {}", error); }
+                                Err(error) => { panic!("[SQLite] Error: {error}"); }
                             }
                         }
                         false => {
@@ -218,7 +218,7 @@ impl DatabaseConnectorSQLite {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[SQLite] Error: {}", error); }
+                                Err(error) => { panic!("[SQLite] Error: {error}"); }
                             }
                         }
                     }
@@ -240,7 +240,7 @@ impl DatabaseConnectorSQLite {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[SQLite] Error: {}", error); }
+                                Err(error) => { panic!("[SQLite] Error: {error}"); }
                             }
                         }
                         false => {
@@ -258,7 +258,7 @@ impl DatabaseConnectorSQLite {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[SQLite] Error: {}", error); }
+                                Err(error) => { panic!("[SQLite] Error: {error}"); }
                             }
                         }
                     }
@@ -325,10 +325,10 @@ impl DatabaseConnectorSQLite {
             if torrents < start {
                 break;
             }
-            info!("[SQLite] Handled {} torrents", torrents);
+            info!("[SQLite] Handled {torrents} torrents");
         }
         tracker.set_stats(StatsEvent::Completed, completed as i64);
-        info!("[SQLite] Loaded {} torrents with {} completed", torrents, completed);
+        info!("[SQLite] Loaded {torrents} torrents with {completed} completed");
         Ok((torrents, completed))
     }
 
@@ -364,7 +364,7 @@ impl DatabaseConnectorSQLite {
                         match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e);
+                                error!("[SQLite] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -413,7 +413,7 @@ impl DatabaseConnectorSQLite {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[SQLite] Error: {}", e);
+                                        error!("[SQLite] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -450,7 +450,7 @@ impl DatabaseConnectorSQLite {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[SQLite] Error: {}", e);
+                                        error!("[SQLite] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -487,7 +487,7 @@ impl DatabaseConnectorSQLite {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[SQLite] Error: {}", e);
+                                        error!("[SQLite] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -518,7 +518,7 @@ impl DatabaseConnectorSQLite {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[SQLite] Error: {}", e);
+                                        error!("[SQLite] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -528,10 +528,10 @@ impl DatabaseConnectorSQLite {
                 }
             }
             if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
-                info!("[SQLite] Handled {} torrents", torrents_handled_entries);
+                info!("[SQLite] Handled {torrents_handled_entries} torrents");
             }
         }
-        info!("[SQLite] Handled {} torrents", torrents_handled_entries);
+        info!("[SQLite] Handled {torrents_handled_entries} torrents");
         self.commit(torrents_transaction).await
     }
 
@@ -575,9 +575,9 @@ impl DatabaseConnectorSQLite {
             if hashes < start {
                 break;
             }
-            info!("[SQLite] Handled {} whitelisted torrents", hashes);
+            info!("[SQLite] Handled {hashes} whitelisted torrents");
         }
-        info!("[SQLite] Handled {} whitelisted torrents", hashes);
+        info!("[SQLite] Handled {hashes} whitelisted torrents");
         Ok(hashes)
     }
 
@@ -613,7 +613,7 @@ impl DatabaseConnectorSQLite {
                         match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e);
+                                error!("[SQLite] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -641,17 +641,17 @@ impl DatabaseConnectorSQLite {
                     match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[SQLite] Error: {}", e);
+                            error!("[SQLite] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[SQLite] Handled {} whitelisted torrents", whitelist_handled_entries);
+                info!("[SQLite] Handled {whitelist_handled_entries} whitelisted torrents");
             }
         }
-        info!("[SQLite] Handled {} whitelisted torrents", whitelist_handled_entries);
+        info!("[SQLite] Handled {whitelist_handled_entries} whitelisted torrents");
         let _ = self.commit(whitelist_transaction).await;
         Ok(whitelist_handled_entries)
     }
@@ -696,9 +696,9 @@ impl DatabaseConnectorSQLite {
             if hashes < start {
                 break;
             }
-            info!("[SQLite] Handled {} blacklisted torrents", hashes);
+            info!("[SQLite] Handled {hashes} blacklisted torrents");
         }
-        info!("[SQLite] Handled {} blacklisted torrents", hashes);
+        info!("[SQLite] Handled {hashes} blacklisted torrents");
         Ok(hashes)
     }
 
@@ -734,7 +734,7 @@ impl DatabaseConnectorSQLite {
                         match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e);
+                                error!("[SQLite] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -762,17 +762,17 @@ impl DatabaseConnectorSQLite {
                     match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[SQLite] Error: {}", e);
+                            error!("[SQLite] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[SQLite] Handled {} blacklisted torrents", blacklist_handled_entries);
+                info!("[SQLite] Handled {blacklist_handled_entries} blacklisted torrents");
             }
         }
-        info!("[SQLite] Handled {} blacklisted torrents", blacklist_handled_entries);
+        info!("[SQLite] Handled {blacklist_handled_entries} blacklisted torrents");
         let _ = self.commit(blacklist_transaction).await;
         Ok(blacklist_handled_entries)
     }
@@ -820,9 +820,9 @@ impl DatabaseConnectorSQLite {
             if hashes < start {
                 break;
             }
-            info!("[SQLite] Handled {} keys", hashes);
+            info!("[SQLite] Handled {hashes} keys");
         }
-        info!("[SQLite] Handled {} keys", hashes);
+        info!("[SQLite] Handled {hashes} keys");
         Ok(hashes)
     }
 
@@ -858,7 +858,7 @@ impl DatabaseConnectorSQLite {
                         match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e);
+                                error!("[SQLite] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -896,17 +896,17 @@ impl DatabaseConnectorSQLite {
                     match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[SQLite] Error: {}", e);
+                            error!("[SQLite] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[SQLite] Handled {} keys", keys_handled_entries);
+                info!("[SQLite] Handled {keys_handled_entries} keys");
             }
         }
-        info!("[SQLite] Handled {} keys", keys_handled_entries);
+        info!("[SQLite] Handled {keys_handled_entries} keys");
         let _ = self.commit(keys_transaction).await;
         Ok(keys_handled_entries)
     }
@@ -998,15 +998,15 @@ impl DatabaseConnectorSQLite {
                         let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
                         let mut hasher = Sha1::new();
                         hasher.update(uuid_data);
-                        let hashed = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
-                        hashed
+                        
+                        <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                     }
                     false => {
                         let id_data: &[u8] = result.get(structure.column_id.as_str());
                         let mut hasher = Sha1::new();
                         hasher.update(id_data);
-                        let hashed = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
-                        hashed
+                        
+                        <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                     }
                 };
                 tracker.add_user(UserId(hash), UserEntryItem {
@@ -1032,9 +1032,9 @@ impl DatabaseConnectorSQLite {
             if hashes < start {
                 break;
             }
-            info!("[SQLite] Handled {} users", hashes);
+            info!("[SQLite] Handled {hashes} users");
         }
-        info!("[SQLite] Handled {} users", hashes);
+        info!("[SQLite] Handled {hashes} users");
         Ok(hashes)
     }
 
@@ -1070,7 +1070,7 @@ impl DatabaseConnectorSQLite {
                         match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[SQLite] Error: {}", e);
+                                error!("[SQLite] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -1318,17 +1318,17 @@ impl DatabaseConnectorSQLite {
                     match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[SQLite] Error: {}", e);
+                            error!("[SQLite] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (users_handled_entries as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
-                info!("[SQLite] Handled {} users", users_handled_entries);
+                info!("[SQLite] Handled {users_handled_entries} users");
             }
         }
-        info!("[SQLite] Handled {} users", users_handled_entries);
+        info!("[SQLite] Handled {users_handled_entries} users");
         self.commit(users_transaction).await
     }
 
@@ -1346,7 +1346,7 @@ impl DatabaseConnectorSQLite {
         match sqlx::query(string_format.as_str()).execute(&mut *reset_seeds_peers_transaction).await {
             Ok(_) => {}
             Err(e) => {
-                error!("[SQLite] Error: {}", e);
+                error!("[SQLite] Error: {e}");
                 return Err(e);
             }
         }
@@ -1362,7 +1362,7 @@ impl DatabaseConnectorSQLite {
                 Ok(())
             }
             Err(e) => {
-                error!("[SQLite] Error: {}", e);
+                error!("[SQLite] Error: {e}");
                 Err(e)
             }
         }

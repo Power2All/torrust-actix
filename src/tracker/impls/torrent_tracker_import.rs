@@ -47,7 +47,7 @@ impl TorrentTracker {
             }
             Err(error) => {
                 error!("[IMPORT] The torrents file {} could not be imported!", args.import_file_torrents.as_str());
-                panic!("[IMPORT] {}", error)
+                panic!("[IMPORT] {error}")
             }
         }
 
@@ -72,7 +72,7 @@ impl TorrentTracker {
                 }
                 Err(error) => {
                     error!("[IMPORT] The whitelists file {} could not be imported!", args.import_file_whitelists.as_str());
-                    panic!("[IMPORT] {}", error)
+                    panic!("[IMPORT] {error}")
                 }
             }
         }
@@ -96,7 +96,7 @@ impl TorrentTracker {
                 }
                 Err(error) => {
                     error!("[IMPORT] The blacklists file {} could not be imported!", args.import_file_blacklists.as_str());
-                    panic!("[IMPORT] {}", error)
+                    panic!("[IMPORT] {error}")
                 }
             }
         }
@@ -124,7 +124,7 @@ impl TorrentTracker {
                 }
                 Err(error) => {
                     error!("[IMPORT] The keys file {} could not be imported!", args.import_file_keys.as_str());
-                    panic!("[IMPORT] {}", error)
+                    panic!("[IMPORT] {error}")
                 }
             }
         }
@@ -186,7 +186,7 @@ impl TorrentTracker {
                 }
                 Err(error) => {
                     error!("[IMPORT] The users file {} could not be imported!", args.import_file_users.as_str());
-                    panic!("[IMPORT] {}", error)
+                    panic!("[IMPORT] {error}")
                 }
             }
         }

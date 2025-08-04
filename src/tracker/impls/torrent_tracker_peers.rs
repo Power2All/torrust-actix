@@ -209,7 +209,7 @@ impl TorrentTracker {
             }
             Entry::Occupied(mut o) => {
                 if cleanup {
-                    info!("[PEERS] Removing from torrent {} peer {}", info_hash, peer_id);
+                    info!("[PEERS] Removing from torrent {info_hash} peer {peer_id}");
                 }
                 let previous_torrent = o.get().clone();
                 if o.get_mut().seeds.remove(&peer_id).is_some() {

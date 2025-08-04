@@ -16,7 +16,7 @@ impl TorrentTracker {
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(users) = self.sqlx.load_users(tracker.clone()).await {
-            info!("Loaded {} users", users);
+            info!("Loaded {users} users");
         }
     }
 
@@ -153,6 +153,6 @@ impl TorrentTracker {
             self.remove_user_active_torrent(user_id, info_hash);
             torrents_cleaned += 1;
         }
-        info!("[USERS] Removed {} active torrents in users", torrents_cleaned);
+        info!("[USERS] Removed {torrents_cleaned} active torrents in users");
     }
 }

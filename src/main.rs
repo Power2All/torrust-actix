@@ -102,7 +102,7 @@ fn main() -> std::io::Result<()>
                     }
                     info!("[DEADLOCK] Found {} deadlocks", deadlocks.len());
                     for (i, threads) in deadlocks.iter().enumerate() {
-                        info!("[DEADLOCK] #{}", i);
+                        info!("[DEADLOCK] #{i}");
                         for t in threads {
                             info!("[DEADLOCK] Thread ID: {:#?}", t.thread_id());
                             info!("[DEADLOCK] {:#?}", t.backtrace());
@@ -313,7 +313,7 @@ fn main() -> std::io::Result<()>
                         Err(error) => {
                             sentry::capture_error(&error);
                             error!("Errors happened on shutting down UDP sockets!");
-                            error!("{}", error);
+                            error!("{error}");
                         }
                     }
                     tokio_shutdown.handle().await;
