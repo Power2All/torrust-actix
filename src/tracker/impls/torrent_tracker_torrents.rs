@@ -13,7 +13,7 @@ impl TorrentTracker {
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker.clone()).await {
-            info!("Loaded {} torrents with {} completes", torrents, completes);
+            info!("Loaded {torrents} torrents with {completes} completes");
         }
     }
 

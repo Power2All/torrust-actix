@@ -66,7 +66,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                        Err(error) => { panic!("[PgSQL] Error: {error}"); }
                     }
                 }
                 false => {
@@ -82,7 +82,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                        Err(error) => { panic!("[PgSQL] Error: {error}"); }
                     }
                 }
             }
@@ -100,7 +100,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                        Err(error) => { panic!("[PgSQL] Error: {error}"); }
                     }
                 }
                 false => {
@@ -113,7 +113,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                        Err(error) => { panic!("[PgSQL] Error: {error}"); }
                     }
                 }
             }
@@ -131,7 +131,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                        Err(error) => { panic!("[PgSQL] Error: {error}"); }
                     }
                 }
                 false => {
@@ -144,7 +144,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                        Err(error) => { panic!("[PgSQL] Error: {error}"); }
                     }
                 }
             }
@@ -163,7 +163,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                        Err(error) => { panic!("[PgSQL] Error: {error}"); }
                     }
                 }
                 false => {
@@ -177,7 +177,7 @@ impl DatabaseConnectorPgSQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                        Err(error) => { panic!("[PgSQL] Error: {error}"); }
                     }
                 }
             }
@@ -203,7 +203,7 @@ impl DatabaseConnectorPgSQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                                Err(error) => { panic!("[PgSQL] Error: {error}"); }
                             }
                         }
                         false => {
@@ -222,7 +222,7 @@ impl DatabaseConnectorPgSQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                                Err(error) => { panic!("[PgSQL] Error: {error}"); }
                             }
                         }
                     }
@@ -245,7 +245,7 @@ impl DatabaseConnectorPgSQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                                Err(error) => { panic!("[PgSQL] Error: {error}"); }
                             }
                         }
                         false => {
@@ -264,7 +264,7 @@ impl DatabaseConnectorPgSQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[PgSQL] Error: {}", error); }
+                                Err(error) => { panic!("[PgSQL] Error: {error}"); }
                             }
                         }
                     }
@@ -330,10 +330,10 @@ impl DatabaseConnectorPgSQL {
             if torrents < start {
                 break;
             }
-            info!("[PgSQL] Loaded {} torrents", torrents);
+            info!("[PgSQL] Loaded {torrents} torrents");
         }
         tracker.set_stats(StatsEvent::Completed, completed as i64);
-        info!("[PgSQL] Loaded {} torrents with {} completed", torrents, completed);
+        info!("[PgSQL] Loaded {torrents} torrents with {completed} completed");
         Ok((torrents, completed))
     }
 
@@ -369,7 +369,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e);
+                                error!("[PgSQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -418,7 +418,7 @@ impl DatabaseConnectorPgSQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[PgSQL] Error: {}", e);
+                                        error!("[PgSQL] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -455,7 +455,7 @@ impl DatabaseConnectorPgSQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[PgSQL] Error: {}", e);
+                                        error!("[PgSQL] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -498,7 +498,7 @@ impl DatabaseConnectorPgSQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[PgSQL] Error: {}", e);
+                                        error!("[PgSQL] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -535,7 +535,7 @@ impl DatabaseConnectorPgSQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[PgSQL] Error: {}", e);
+                                        error!("[PgSQL] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -545,10 +545,10 @@ impl DatabaseConnectorPgSQL {
                 }
             }
             if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
-                info!("[PgSQL] Handled {} torrents", torrents_handled_entries);
+                info!("[PgSQL] Handled {torrents_handled_entries} torrents");
             }
         }
-        info!("[PgSQL] Handled {} torrents", torrents_handled_entries);
+        info!("[PgSQL] Handled {torrents_handled_entries} torrents");
         self.commit(torrents_transaction).await
     }
 
@@ -591,9 +591,9 @@ impl DatabaseConnectorPgSQL {
             if hashes < start {
                 break;
             }
-            info!("[PgSQL] Handled {} whitelisted torrents", hashes);
+            info!("[PgSQL] Handled {hashes} whitelisted torrents");
         }
-        info!("[PgSQL] Loaded {} whitelisted torrents", hashes);
+        info!("[PgSQL] Loaded {hashes} whitelisted torrents");
         Ok(hashes)
     }
 
@@ -629,7 +629,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e);
+                                error!("[PgSQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -657,17 +657,17 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[PgSQL] Error: {}", e);
+                            error!("[PgSQL] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[PgSQL] Handled {} torrents", whitelist_handled_entries);
+                info!("[PgSQL] Handled {whitelist_handled_entries} torrents");
             }
         }
-        info!("[PgSQL] Handled {} whitelisted torrents", whitelist_handled_entries);
+        info!("[PgSQL] Handled {whitelist_handled_entries} whitelisted torrents");
         let _ = self.commit(whitelist_transaction).await;
         Ok(whitelist_handled_entries)
     }
@@ -711,9 +711,9 @@ impl DatabaseConnectorPgSQL {
             if hashes < start {
                 break;
             }
-            info!("[PgSQL] Loaded {} blacklisted torrents", hashes);
+            info!("[PgSQL] Loaded {hashes} blacklisted torrents");
         }
-        info!("[PgSQL] Loaded {} blacklisted torrents", hashes);
+        info!("[PgSQL] Loaded {hashes} blacklisted torrents");
         Ok(hashes)
     }
 
@@ -749,7 +749,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e);
+                                error!("[PgSQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -777,17 +777,17 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[PgSQL] Error: {}", e);
+                            error!("[PgSQL] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[PgSQL] Handled {} blacklisted torrents", blacklist_handled_entries);
+                info!("[PgSQL] Handled {blacklist_handled_entries} blacklisted torrents");
             }
         }
-        info!("[PgSQL] Handled {} blacklisted torrents", blacklist_handled_entries);
+        info!("[PgSQL] Handled {blacklist_handled_entries} blacklisted torrents");
         let _ = self.commit(blacklist_transaction).await;
         Ok(blacklist_handled_entries)
     }
@@ -834,9 +834,9 @@ impl DatabaseConnectorPgSQL {
             if hashes < start {
                 break;
             }
-            info!("[PgSQL] Handled {} keys", hashes);
+            info!("[PgSQL] Handled {hashes} keys");
         }
-        info!("[PgSQL] Handled {} keys", hashes);
+        info!("[PgSQL] Handled {hashes} keys");
         Ok(hashes)
     }
 
@@ -872,7 +872,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e);
+                                error!("[PgSQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -910,17 +910,17 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[PgSQL] Error: {}", e);
+                            error!("[PgSQL] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[PgSQL] Handled {} keys", keys_handled_entries);
+                info!("[PgSQL] Handled {keys_handled_entries} keys");
             }
         }
-        info!("[PgSQL] Handled {} keys", keys_handled_entries);
+        info!("[PgSQL] Handled {keys_handled_entries} keys");
         let _ = self.commit(keys_transaction).await;
         Ok(keys_handled_entries)
     }
@@ -1010,15 +1010,15 @@ impl DatabaseConnectorPgSQL {
                         let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
                         let mut hasher = Sha1::new();
                         hasher.update(uuid_data);
-                        let hashed = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
-                        hashed
+                        
+                        <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                     }
                     false => {
                         let id_data: &[u8] = result.get(structure.column_id.as_str());
                         let mut hasher = Sha1::new();
                         hasher.update(id_data);
-                        let hashed = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
-                        hashed
+                        
+                        <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                     }
                 };
                 tracker.add_user(UserId(hash), UserEntryItem {
@@ -1044,9 +1044,9 @@ impl DatabaseConnectorPgSQL {
             if hashes < start {
                 break;
             }
-            info!("[PgSQL] Loaded {} users", hashes);
+            info!("[PgSQL] Loaded {hashes} users");
         }
-        info!("[PgSQL] Loaded {} users", hashes);
+        info!("[PgSQL] Loaded {hashes} users");
         Ok(hashes)
     }
 
@@ -1082,7 +1082,7 @@ impl DatabaseConnectorPgSQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[PgSQL] Error: {}", e);
+                                error!("[PgSQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -1342,17 +1342,17 @@ impl DatabaseConnectorPgSQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[PgSQL] Error: {}", e);
+                            error!("[PgSQL] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (users_handled_entries as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
-                info!("[PgSQL] Handled {} users", users_handled_entries);
+                info!("[PgSQL] Handled {users_handled_entries} users");
             }
         }
-        info!("[PgSQL] Handled {} users", users_handled_entries);
+        info!("[PgSQL] Handled {users_handled_entries} users");
         self.commit(users_transaction).await
     }
 
@@ -1370,7 +1370,7 @@ impl DatabaseConnectorPgSQL {
         match sqlx::query(string_format.as_str()).execute(&mut *reset_seeds_peers_transaction).await {
             Ok(_) => {}
             Err(e) => {
-                error!("[PgSQL] Error: {}", e);
+                error!("[PgSQL] Error: {e}");
                 return Err(e);
             }
         }
@@ -1386,7 +1386,7 @@ impl DatabaseConnectorPgSQL {
                 Ok(())
             }
             Err(e) => {
-                error!("[PgSQL] Error: {}", e);
+                error!("[PgSQL] Error: {e}");
                 Err(e)
             }
         }

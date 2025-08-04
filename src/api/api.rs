@@ -140,7 +140,7 @@ pub async fn api_service(
     let worker_threads = api_server_object.threads as usize;
 
     if api_server_object.ssl {
-        info!("[APIS] Starting server listener with SSL on {}", addr);
+        info!("[APIS] Starting server listener with SSL on {addr}");
         if api_server_object.ssl_key.is_empty() || api_server_object.ssl_cert.is_empty() {
             error!("[APIS] No SSL key or SSL certificate given, exiting...");
             exit(1);
@@ -150,14 +150,14 @@ pub async fn api_service(
             Ok(data) => { data }
             Err(data) => {
                 sentry::capture_error(&data);
-                panic!("[APIS] SSL key unreadable: {}", data);
+                panic!("[APIS] SSL key unreadable: {data}");
             }
         });
         let certs_file = &mut BufReader::new(match File::open(api_server_object.ssl_cert.clone()) {
             Ok(data) => { data }
             Err(data) => {
                 sentry::capture_error(&data);
-                panic!("[APIS] SSL cert unreadable: {}", data);
+                panic!("[APIS] SSL cert unreadable: {data}");
             }
         });
 
@@ -165,14 +165,14 @@ pub async fn api_service(
             Ok(data) => { data }
             Err(data) => {
                 sentry::capture_error(&data);
-                panic!("[APIS] SSL cert couldn't be extracted: {}", data);
+                panic!("[APIS] SSL cert couldn't be extracted: {data}");
             }
         };
         let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
             Ok(data) => { data }
             Err(data) => {
                 sentry::capture_error(&data);
-                panic!("[APIS] SSL key couldn't be extracted: {}", data);
+                panic!("[APIS] SSL key couldn't be extracted: {data}");
             }
         };
 
@@ -180,7 +180,7 @@ pub async fn api_service(
             Ok(data) => { data }
             Err(data) => {
                 sentry::capture_error(&data);
-                panic!("[APIS] SSL config couldn't be created: {}", data);
+                panic!("[APIS] SSL config couldn't be created: {data}");
             }
         };
 
@@ -224,7 +224,7 @@ pub async fn api_service(
         return (server.handle(), server);
     }
 
-    info!("[API] Starting server listener on {}", addr);
+    info!("[API] Starting server listener on {addr}");
 
     let server = match data.config.sentry_config.clone().enabled {
         true => {

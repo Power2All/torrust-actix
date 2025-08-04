@@ -355,7 +355,7 @@ impl TorrentSharding {
                             }
                         }
                     }
-                    info!("[PEERS] Shard: {} - Torrents: {} - Seeds: {} - Peers: {}", shard, torrents, seeds, peers);
+                    info!("[PEERS] Shard: {shard} - Torrents: {torrents} - Seeds: {seeds} - Peers: {peers}");
                 }
             });
         }

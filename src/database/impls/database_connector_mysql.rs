@@ -67,7 +67,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error); }
+                        Err(error) => { panic!("[MySQL] Error: {error}"); }
                     }
                 }
                 false => {
@@ -83,7 +83,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error); }
+                        Err(error) => { panic!("[MySQL] Error: {error}"); }
                     }
                 }
             }
@@ -101,7 +101,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error); }
+                        Err(error) => { panic!("[MySQL] Error: {error}"); }
                     }
                 }
                 false => {
@@ -114,7 +114,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error); }
+                        Err(error) => { panic!("[MySQL] Error: {error}"); }
                     }
                 }
             }
@@ -132,7 +132,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error); }
+                        Err(error) => { panic!("[MySQL] Error: {error}"); }
                     }
                 }
                 false => {
@@ -145,7 +145,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error); }
+                        Err(error) => { panic!("[MySQL] Error: {error}"); }
                     }
                 }
             }
@@ -164,7 +164,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error); }
+                        Err(error) => { panic!("[MySQL] Error: {error}"); }
                     }
                 }
                 false => {
@@ -178,7 +178,7 @@ impl DatabaseConnectorMySQL {
                         ).as_str()
                     ).execute(pool).await {
                         Ok(_) => {}
-                        Err(error) => { panic!("[MySQL] Error: {}", error); }
+                        Err(error) => { panic!("[MySQL] Error: {error}"); }
                     }
                 }
             }
@@ -204,7 +204,7 @@ impl DatabaseConnectorMySQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[MySQL] Error: {}", error); }
+                                Err(error) => { panic!("[MySQL] Error: {error}"); }
                             }
                         }
                         false => {
@@ -223,7 +223,7 @@ impl DatabaseConnectorMySQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[MySQL] Error: {}", error); }
+                                Err(error) => { panic!("[MySQL] Error: {error}"); }
                             }
                         }
                     }
@@ -246,7 +246,7 @@ impl DatabaseConnectorMySQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[MySQL] Error: {}", error); }
+                                Err(error) => { panic!("[MySQL] Error: {error}"); }
                             }
                         }
                         false => {
@@ -265,7 +265,7 @@ impl DatabaseConnectorMySQL {
                                 ).as_str()
                             ).execute(pool).await {
                                 Ok(_) => {}
-                                Err(error) => { panic!("[MySQL] Error: {}", error); }
+                                Err(error) => { panic!("[MySQL] Error: {error}"); }
                             }
                         }
                     }
@@ -332,10 +332,10 @@ impl DatabaseConnectorMySQL {
             if torrents < start {
                 break;
             }
-            info!("[MySQL] Handled {} torrents", torrents);
+            info!("[MySQL] Handled {torrents} torrents");
         }
         tracker.set_stats(StatsEvent::Completed, completed as i64);
-        info!("[MySQL] Loaded {} torrents with {} completed", torrents, completed);
+        info!("[MySQL] Loaded {torrents} torrents with {completed} completed");
         Ok((torrents, completed))
     }
 
@@ -371,7 +371,7 @@ impl DatabaseConnectorMySQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[MySQL] Error: {}", e);
+                                error!("[MySQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -418,7 +418,7 @@ impl DatabaseConnectorMySQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[MySQL] Error: {}", e);
+                                        error!("[MySQL] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -453,7 +453,7 @@ impl DatabaseConnectorMySQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[MySQL] Error: {}", e);
+                                        error!("[MySQL] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -490,7 +490,7 @@ impl DatabaseConnectorMySQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[MySQL] Error: {}", e);
+                                        error!("[MySQL] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -521,7 +521,7 @@ impl DatabaseConnectorMySQL {
                                 match sqlx::query(string_format.as_str()).execute(&mut *torrents_transaction).await {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        error!("[MySQL] Error: {}", e);
+                                        error!("[MySQL] Error: {e}");
                                         return Err(e);
                                     }
                                 }
@@ -531,10 +531,10 @@ impl DatabaseConnectorMySQL {
                 }
             }
             if (torrents_handled_entries as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == torrents_handled_entries {
-                info!("[MySQL] Handled {} torrents", torrents_handled_entries);
+                info!("[MySQL] Handled {torrents_handled_entries} torrents");
             }
         }
-        info!("[MySQL] Handled {} torrents", torrents_handled_entries);
+        info!("[MySQL] Handled {torrents_handled_entries} torrents");
         self.commit(torrents_transaction).await
     }
 
@@ -578,9 +578,9 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
-            info!("[MySQL] Handled {} whitelisted torrents", hashes);
+            info!("[MySQL] Handled {hashes} whitelisted torrents");
         }
-        info!("[MySQL] Handled {} whitelisted torrents", hashes);
+        info!("[MySQL] Handled {hashes} whitelisted torrents");
         Ok(hashes)
     }
 
@@ -616,7 +616,7 @@ impl DatabaseConnectorMySQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[MySQL] Error: {}", e);
+                                error!("[MySQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -644,17 +644,17 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *whitelist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[MySQL] Error: {}", e);
+                            error!("[MySQL] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (whitelist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[MySQL] Handled {} whitelisted torrents", whitelist_handled_entries);
+                info!("[MySQL] Handled {whitelist_handled_entries} whitelisted torrents");
             }
         }
-        info!("[MySQL] Handled {} whitelisted torrents", whitelist_handled_entries);
+        info!("[MySQL] Handled {whitelist_handled_entries} whitelisted torrents");
         let _ = self.commit(whitelist_transaction).await;
         Ok(whitelist_handled_entries)
     }
@@ -699,9 +699,9 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
-            info!("[MySQL] Handled {} blacklisted torrents", hashes);
+            info!("[MySQL] Handled {hashes} blacklisted torrents");
         }
-        info!("[MySQL] Handled {} blacklisted torrents", hashes);
+        info!("[MySQL] Handled {hashes} blacklisted torrents");
         Ok(hashes)
     }
 
@@ -737,7 +737,7 @@ impl DatabaseConnectorMySQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[MySQL] Error: {}", e);
+                                error!("[MySQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -765,17 +765,17 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *blacklist_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[MySQL] Error: {}", e);
+                            error!("[MySQL] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (blacklist_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[MySQL] Handled {} blacklisted torrents", blacklist_handled_entries);
+                info!("[MySQL] Handled {blacklist_handled_entries} blacklisted torrents");
             }
         }
-        info!("[MySQL] Handled {} blacklisted torrents", blacklist_handled_entries);
+        info!("[MySQL] Handled {blacklist_handled_entries} blacklisted torrents");
         let _ = self.commit(blacklist_transaction).await;
         Ok(blacklist_handled_entries)
     }
@@ -823,9 +823,9 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
-            info!("[MySQL] Handled {} keys", hashes);
+            info!("[MySQL] Handled {hashes} keys");
         }
-        info!("[MySQL] Handled {} keys", hashes);
+        info!("[MySQL] Handled {hashes} keys");
         Ok(hashes)
     }
 
@@ -861,7 +861,7 @@ impl DatabaseConnectorMySQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[MySQL] Error: {}", e);
+                                error!("[MySQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -901,17 +901,17 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *keys_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[MySQL] Error: {}", e);
+                            error!("[MySQL] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (keys_handled_entries as f64 / 1000f64).fract() == 0.0 {
-                info!("[MySQL] Handled {} keys", keys_handled_entries);
+                info!("[MySQL] Handled {keys_handled_entries} keys");
             }
         }
-        info!("[MySQL] Handled {} keys", keys_handled_entries);
+        info!("[MySQL] Handled {keys_handled_entries} keys");
         let _ = self.commit(keys_transaction).await;
         Ok(keys_handled_entries)
     }
@@ -1003,15 +1003,15 @@ impl DatabaseConnectorMySQL {
                         let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
                         let mut hasher = Sha1::new();
                         hasher.update(uuid_data);
-                        let hashed = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
-                        hashed
+                        
+                        <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                     }
                     false => {
                         let id_data: &[u8] = result.get(structure.column_id.as_str());
                         let mut hasher = Sha1::new();
                         hasher.update(id_data);
-                        let hashed = <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap();
-                        hashed
+                        
+                        <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                     }
                 };
                 tracker.add_user(UserId(hash), UserEntryItem {
@@ -1037,9 +1037,9 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
-            info!("[MySQL] Loaded {} users", hashes);
+            info!("[MySQL] Loaded {hashes} users");
         }
-        info!("[MySQL] Loaded {} users", hashes);
+        info!("[MySQL] Loaded {hashes} users");
         Ok(hashes)
     }
 
@@ -1075,7 +1075,7 @@ impl DatabaseConnectorMySQL {
                         match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                             Ok(_) => {}
                             Err(e) => {
-                                error!("[MySQL] Error: {}", e);
+                                error!("[MySQL] Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -1319,17 +1319,17 @@ impl DatabaseConnectorMySQL {
                     match sqlx::query(string_format.as_str()).execute(&mut *users_transaction).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("[MySQL] Error: {}", e);
+                            error!("[MySQL] Error: {e}");
                             return Err(e);
                         }
                     }
                 }
             }
             if (users_handled_entries as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == users_handled_entries {
-                info!("[MySQL] Handled {} users", users_handled_entries);
+                info!("[MySQL] Handled {users_handled_entries} users");
             }
         }
-        info!("[MySQL] Handled {} users", users_handled_entries);
+        info!("[MySQL] Handled {users_handled_entries} users");
         self.commit(users_transaction).await
     }
 
@@ -1347,7 +1347,7 @@ impl DatabaseConnectorMySQL {
         match sqlx::query(string_format.as_str()).execute(&mut *reset_seeds_peers_transaction).await {
             Ok(_) => {}
             Err(e) => {
-                error!("[MySQL] Error: {}", e);
+                error!("[MySQL] Error: {e}");
                 return Err(e);
             }
         }
@@ -1362,7 +1362,7 @@ impl DatabaseConnectorMySQL {
                 Ok(())
             }
             Err(e) => {
-                error!("[MySQL] Error: {}", e);
+                error!("[MySQL] Error: {e}");
                 Err(e)
             }
         }

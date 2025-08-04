@@ -10,7 +10,7 @@ impl TorrentTracker {
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(blacklist) = self.sqlx.load_blacklist(tracker.clone()).await {
-            info!("Loaded {} blacklists", blacklist);
+            info!("Loaded {blacklist} blacklists");
         }
     }
 

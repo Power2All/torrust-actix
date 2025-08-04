@@ -14,7 +14,7 @@ impl TorrentTracker {
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(keys) = self.sqlx.load_keys(tracker.clone()).await {
-            info!("Loaded {} keys", keys);
+            info!("Loaded {keys} keys");
         }
     }
 
@@ -23,7 +23,7 @@ impl TorrentTracker {
     {
         match self.sqlx.save_keys(tracker.clone(), keys.clone()).await {
             Ok(keys_count) => {
-                info!("[SYNC KEYS] Synced {} keys", keys_count);
+                info!("[SYNC KEYS] Synced {keys_count} keys");
                 Ok(())
             }
             Err(_) => {

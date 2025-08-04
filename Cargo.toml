@@ -36,21 +36,21 @@ hex = "^0.4"
 log = "^0.4"
 parking_lot = { version = "^0.12", features = ["arc_lock", "hardware-lock-elision", "serde", "deadlock_detection"] }
 percent-encoding = "^2.3"
-rcgen = "^0.13"
+rcgen = "^0.14"
 regex = "^1.11"
 rustls = { version = "^0.23", default-features = false, features = ["std", "ring"] }
 rustls-pemfile = "^2.2"
-sentry = { version = "^0.37", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
-sentry-actix = "^0.37"
+sentry = { version = "^0.42", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
+sentry-actix = "^0.42"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = { version = "^1.0", features = ["preserve_order"] }
 serde_millis = "^0.1"
 sha1 = "^0.10"
 sqlx = { version = "^0.8", features = ["mysql", "postgres", "sqlite", "runtime-tokio-rustls"] }
 thiserror = "^2.0"
-tokio = { version = "^1.44", features = ["full"] }
+tokio = { version = "^1.47", features = ["full"] }
 tokio-shutdown = "^0.1"
-toml = "^0.8"
+toml = "^0.9"
 tracing = "^0.1"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }

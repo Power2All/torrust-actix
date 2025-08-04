@@ -59,14 +59,14 @@ impl UdpServer {
                     let udp_sock = socket_clone.local_addr().unwrap();
                     tokio::select! {
                         _ = rx.changed() => {
-                            info!("Stopping UDP server: {}...", udp_sock);
+                            info!("Stopping UDP server: {udp_sock}...");
                             break;
                         }
                         Ok((valid_bytes, remote_addr)) = socket_clone.recv_from(&mut data) => {
                             let payload = data[..valid_bytes].to_vec();
 
                             debug!("Received {} bytes from {}", payload.len(), remote_addr);
-                            debug!("{:?}", payload);
+                            debug!("{payload:?}");
 
                             let remote_addr_cloned = remote_addr;
                             let payload_cloned = payload.clone();
@@ -258,7 +258,7 @@ impl UdpServer {
                     }
                     Err(error) => {
                         debug!("[UDP ERROR] Hex Decode Error");
-                        debug!("{:#?}", error);
+                        debug!("{error:#?}");
                         return Err(ServerError::PeerKeyNotValid);
                     }
                 }
@@ -280,7 +280,7 @@ impl UdpServer {
             Ok(result) => { result.1 }
             Err(error) => {
                 debug!("[UDP ERROR] Handle Announce - Internal Server Error");
-                debug!("{:#?}", error);
+                debug!("{error:#?}");
                 return Err(ServerError::InternalServerError);
             }
         };

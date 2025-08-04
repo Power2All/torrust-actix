@@ -20,16 +20,16 @@ impl TorrentTracker {
         }
 
         // Generate X.509 key and cert file.
-        let CertifiedKey { cert, key_pair} = generate_simple_self_signed(subject_alt_names).unwrap();
+        let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
 
         // Write the key and cert file.
-        match fs::write(args.selfsigned_keyfile.as_str(), key_pair.serialize_pem()) {
+        match fs::write(args.selfsigned_keyfile.as_str(), signing_key.serialize_pem()) {
             Ok(_) => {
                 info!("[CERTGEN] The key file {} has been generated", args.selfsigned_keyfile.as_str());
             }
             Err(error) => {
                 error!("[CERTGEN] The key file {} could not be generated!", args.selfsigned_keyfile.as_str());
-                panic!("[CERTGEN] {}", error)
+                panic!("[CERTGEN] {error}")
             }
         }
         match fs::write(args.selfsigned_certfile.as_str(), cert.pem()) {
@@ -38,7 +38,7 @@ impl TorrentTracker {
             }
             Err(error) => {
                 error!("[CERTGEN] The cert file {} could not be generated!", args.selfsigned_certfile.as_str());
-                panic!("[CERTGEN] {}", error)
+                panic!("[CERTGEN] {error}")
             }
         }
 
