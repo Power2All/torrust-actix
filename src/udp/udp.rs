@@ -11,9 +11,9 @@ pub const PROTOCOL_IDENTIFIER: i64 = 4_497_486_125_440;
 pub const MAX_SCRAPE_TORRENTS: u8 = 74;
 pub const MAX_PACKET_SIZE: usize = 1496;
 
-pub async fn udp_service(addr: SocketAddr, threads: u64, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
+pub async fn udp_service(addr: SocketAddr, threads: u64, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
 {
-    let udp_server = UdpServer::new(data, addr, threads).await.unwrap_or_else(|e| {
+    let udp_server = UdpServer::new(data, addr, threads, recv_buffer_size, send_buffer_size, reuse_address).await.unwrap_or_else(|e| {
         error!("Could not listen to the UDP port: {e}");
         exit(1);
     });
