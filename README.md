@@ -172,6 +172,15 @@ UDP_0_THREADS <UINT64>
 
 ### ChangeLog
 
+#### v4.0.13
+* Added further UDP improvement by adding customization, also added to the config:
+  * Receive Buffer Size
+  * Send Buffer Size
+  * Reuse of Address
+
+#### v4.0.12
+* Updating libraries and cleanup code
+
 #### v4.0.11
 * Updating libraries
 * Adding healthcheck for Docker through Python check script

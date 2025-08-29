@@ -123,6 +123,9 @@ impl Configuration {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:6969"),
                     threads: available_parallelism().unwrap().get() as u64,
+                    receive_buffer_size: 134217728,
+                    send_buffer_size: 67108864,
+                    reuse_address: true
                 }
             ),
             api_server: vec!(

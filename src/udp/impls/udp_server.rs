@@ -3,6 +3,7 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::SystemTime;
 use log::{debug, info};
+use socket2::{Socket, Domain, Type, Protocol};
 use tokio::net::UdpSocket;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
@@ -34,12 +35,23 @@ use crate::udp::udp::{MAX_PACKET_SIZE, MAX_SCRAPE_TORRENTS};
 
 impl UdpServer {
     #[tracing::instrument(level = "debug")]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, threads: u64) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, threads: u64, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool) -> tokio::io::Result<UdpServer>
     {
-        let socket = UdpSocket::bind(bind_address).await?;
+        let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
+        let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
+
+        socket.set_recv_buffer_size(recv_buffer_size).map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::Other, e))?;
+        socket.set_send_buffer_size(send_buffer_size).map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::Other, e))?;
+        socket.set_reuse_address(reuse_address).map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::Other, e))?;
+        socket.bind(&bind_address.into()).map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::Other, e))?;
+        socket.set_nonblocking(true).map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::Other, e))?;
+
+        // Convert to std::net::UdpSocket, then to tokio::net::UdpSocket
+        let std_socket: std::net::UdpSocket = socket.into();
+        let tokio_socket = UdpSocket::from_std(std_socket)?;
 
         Ok(UdpServer {
-            socket: Arc::new(socket),
+            socket: Arc::new(tokio_socket),
             threads,
             tracker,
         })
