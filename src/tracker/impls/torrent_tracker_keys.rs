@@ -83,10 +83,10 @@ impl TorrentTracker {
     pub fn check_key(&self, hash: InfoHash) -> bool
     {
         let lock = self.keys.read_recursive();
-        lock.get(&hash).map_or(false, |&key| {
+        lock.get(&hash).is_some_and(|&key| {
             let key_time = Utc.timestamp_opt(key, 0)
                 .single()
-                .map(|dt| SystemTime::from(dt))
+                .map(SystemTime::from)
                 .unwrap_or(UNIX_EPOCH);
 
             key_time > SystemTime::now()
@@ -112,7 +112,7 @@ impl TorrentTracker {
             for (&hash, &key_time) in lock.iter() {
                 let time = Utc.timestamp_opt(key_time, 0)
                     .single()
-                    .map(|dt| SystemTime::from(dt))
+                    .map(SystemTime::from)
                     .unwrap_or(UNIX_EPOCH);
 
                 if time <= now {

@@ -20,11 +20,11 @@ impl TorrentTracker {
         let hashes_len = hashes.len();
         match self.sqlx.save_blacklist(tracker, hashes).await {
             Ok(_) => {
-                info!("[SYNC BLACKLIST] Synced {} blacklists", hashes_len);
+                info!("[SYNC BLACKLIST] Synced {hashes_len} blacklists");
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC BLACKLIST] Unable to sync {} blacklists", hashes_len);
+                error!("[SYNC BLACKLIST] Unable to sync {hashes_len} blacklists");
                 Err(())
             }
         }

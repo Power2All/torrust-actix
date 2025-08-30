@@ -25,11 +25,11 @@ impl TorrentTracker {
         let users_len = users.len();
         match self.sqlx.save_users(tracker, users).await {
             Ok(_) => {
-                info!("[SYNC USERS] Synced {} users", users_len);
+                info!("[SYNC USERS] Synced {users_len} users");
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC USERS] Unable to sync {} users", users_len);
+                error!("[SYNC USERS] Unable to sync {users_len} users");
                 Err(())
             }
         }

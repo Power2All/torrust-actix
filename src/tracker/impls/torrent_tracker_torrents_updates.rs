@@ -122,7 +122,7 @@ impl TorrentTracker {
 
         match self.save_torrents(torrent_tracker, torrents_to_save).await {
             Ok(_) => {
-                info!("[SYNC TORRENT UPDATES] Synced {} torrents", mapping_len);
+                info!("[SYNC TORRENT UPDATES] Synced {mapping_len} torrents");
                 
                 let mut lock = self.torrents_updates.write();
                 let mut removed_count = 0i64;
@@ -146,7 +146,7 @@ impl TorrentTracker {
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC TORRENT UPDATES] Unable to sync {} torrents", mapping_len);
+                error!("[SYNC TORRENT UPDATES] Unable to sync {mapping_len} torrents");
                 Err(())
             }
         }

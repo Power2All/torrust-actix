@@ -1,3 +1,4 @@
+use crate::tracker::structs::peer_id::PeerId;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -16,60 +17,58 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let info = path.into_inner();
-    if info.len() == 40 {
-        let info_hash = match hex2bin(info.clone()) {
-            Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
-        };
-
-        match data.torrent_tracker.get_torrent(info_hash) {
-            None => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})); }
-            Some(torrent) => { return HttpResponse::Ok().content_type(ContentType::json()).json(api_service_torrents_return_torrent_json(torrent)); }
-        }
+    if info.len() != 40 {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}));
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+    let info_hash = match hex2bin(info) {
+        Ok(hash) => InfoHash(hash),
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
+    };
+
+    match data.torrent_tracker.get_torrent(info_hash) {
+        None => HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
+        Some(torrent) => HttpResponse::Ok().content_type(ContentType::json()).json(api_service_torrents_return_torrent_json(torrent)),
+    }
 }
 
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let body = match api_parse_body(payload).await {
-        Ok(data) => { data }
-        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+        Ok(data) => data,
+        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
     };
 
     let info_hashes = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(hash) => { hash }
-        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
+        Ok(hash) => hash,
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
 
-    let mut torrents_output = HashMap::new();
+    let mut torrents_output = HashMap::with_capacity(info_hashes.len());
     for info in info_hashes {
         if info.len() == 40 {
-            let info_hash = match hex2bin(info.clone()) {
-                Ok(hash) => { InfoHash(hash) }
-                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
-            };
-
-            match data.torrent_tracker.get_torrent(info_hash) {
-                None => {}
-                Some(torrent) => { torrents_output.insert(info_hash, api_service_torrents_return_torrent_json(torrent)); }
+            match hex2bin(info.clone()) {
+                Ok(hash) => {
+                    let info_hash = InfoHash(hash);
+                    if let Some(torrent) = data.torrent_tracker.get_torrent(info_hash) {
+                        torrents_output.insert(info, api_service_torrents_return_torrent_json(torrent));
+                    }
+                }
+                Err(_) => {
+                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"}))
+                }
             }
         }
     }
@@ -83,82 +82,82 @@ pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payloa
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(String, u64)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let (info, completed) = path.into_inner();
-    if info.len() == 40 {
-        let info_hash = match hex2bin(info.clone()) {
-            Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
-        };
-
-        let torrent_entry = TorrentEntry {
-            seeds: BTreeMap::new(),
-            peers: BTreeMap::new(),
-            completed,
-            updated: std::time::Instant::now(),
-        };
-
-        if data.torrent_tracker.config.database.clone().persistent {
-            let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
-        }
-
-        return match data.torrent_tracker.add_torrent(info_hash, torrent_entry.clone()) {
-            (_, true) => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            (_, false) => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("info_hash updated {}", info)})) }
-        }
+    if info.len() != 40 {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}));
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+    let info_hash = match hex2bin(info) {
+        Ok(hash) => InfoHash(hash),
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
+    };
+
+    let torrent_entry = TorrentEntry {
+        seeds: BTreeMap::new(),
+        peers: BTreeMap::new(),
+        completed,
+        updated: std::time::Instant::now(),
+    };
+
+    if data.torrent_tracker.config.database.persistent {
+        let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
+    }
+
+    match data.torrent_tracker.add_torrent(info_hash, torrent_entry) {
+        (_, true) => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
+        (_, false) => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "info_hash updated"})),
+    }
 }
 
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let body = match api_parse_body(payload).await {
-        Ok(data) => { data }
-        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+        Ok(data) => data,
+        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
     };
 
     let info_hashmap = match serde_json::from_slice::<HashMap<String, u64>>(&body) {
-        Ok(data) => { data }
-        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
+        Ok(data) => data,
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
 
-    let mut torrents_output = HashMap::new();
+    let mut torrents_output = HashMap::with_capacity(info_hashmap.len());
     for (info, completed) in info_hashmap {
         if info.len() == 40 {
-            let info_hash = match hex2bin(info.clone()) {
-                Ok(hash) => { InfoHash(hash) }
-                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info) })) }
-            };
+            match hex2bin(info.clone()) {
+                Ok(hash) => {
+                    let info_hash = InfoHash(hash);
+                    let torrent_entry = TorrentEntry {
+                        seeds: BTreeMap::new(),
+                        peers: BTreeMap::new(),
+                        completed,
+                        updated: std::time::Instant::now(),
+                    };
 
-            let torrent_entry = TorrentEntry {
-                seeds: BTreeMap::new(),
-                peers: BTreeMap::new(),
-                completed,
-                updated: std::time::Instant::now(),
-            };
+                    if data.torrent_tracker.config.database.persistent {
+                        let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
+                    }
 
-            if data.torrent_tracker.config.database.clone().persistent {
-                let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
-            }
-
-            match data.torrent_tracker.add_torrent(info_hash, torrent_entry.clone()) {
-                (_, true) => { torrents_output.insert(info_hash, json!({"status": "ok"})); }
-                (_, false) => { torrents_output.insert(info_hash, json!({"status": "info_hash updated"})); }
+                    let status = match data.torrent_tracker.add_torrent(info_hash, torrent_entry) {
+                        (_, true) => json!({"status": "ok"}),
+                        (_, false) => json!({"status": "info_hash updated"}),
+                    };
+                    torrents_output.insert(info, status);
+                }
+                Err(_) => {
+                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"}))
+                }
             }
         }
     }
@@ -172,68 +171,69 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let info = path.into_inner();
-    if info.len() == 40 {
-        let info_hash = match hex2bin(info.clone()) {
-            Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
-        };
-
-        if data.torrent_tracker.config.database.clone().persistent {
-            let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
-        }
-
-        return match data.torrent_tracker.remove_torrent(info_hash) {
-            None => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})) }
-            Some(_) => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-        }
+    if info.len() != 40 {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}));
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+    let info_hash = match hex2bin(info) {
+        Ok(hash) => InfoHash(hash),
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
+    };
+
+    if data.torrent_tracker.config.database.persistent {
+        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
+    }
+
+    match data.torrent_tracker.remove_torrent(info_hash) {
+        None => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
+        Some(_) => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
+    }
 }
 
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let body = match api_parse_body(payload).await {
-        Ok(data) => { data }
-        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+        Ok(data) => data,
+        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
     };
 
     let hashes = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(data) => { data }
-        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
+        Ok(data) => data,
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
 
-    let mut torrents_output = HashMap::new();
+    let mut torrents_output = HashMap::with_capacity(hashes.len());
     for info in hashes {
         if info.len() == 40 {
-            let info_hash = match hex2bin(info.clone()) {
-                Ok(hash) => { InfoHash(hash) }
-                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
-            };
+            match hex2bin(info.clone()) {
+                Ok(hash) => {
+                    let info_hash = InfoHash(hash);
 
-            if data.torrent_tracker.config.database.clone().persistent {
-                let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
-            }
+                    if data.torrent_tracker.config.database.persistent {
+                        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
+                    }
 
-            match data.torrent_tracker.remove_torrent(info_hash) {
-                None => { torrents_output.insert(info_hash, json!({"status": "unknown info_hash"})); }
-                Some(_) => { torrents_output.insert(info_hash, json!({"status": "ok"})); }
+                    let status = match data.torrent_tracker.remove_torrent(info_hash) {
+                        None => json!({"status": "unknown info_hash"}),
+                        Some(_) => json!({"status": "ok"}),
+                    };
+                    torrents_output.insert(info, status);
+                }
+                Err(_) => {
+                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"}))
+                }
             }
         }
     }
@@ -247,37 +247,46 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
 #[tracing::instrument(level = "debug")]
 pub fn api_service_torrents_return_torrent_json(torrent: TorrentEntry) -> Value
 {
-    let seeds = torrent.seeds.iter().map(|(peer_id, torrent_peer)| {
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
-        let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-        let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+
+    // Create separate functions for seeds and peers to handle the type differences
+    let process_seed = |(peer_id, torrent_peer): (&PeerId, &crate::tracker::structs::torrent_peer::TorrentPeer)| {
+        let elapsed_ms = torrent_peer.updated.elapsed().as_millis();
+        let timestamp = now.saturating_sub(elapsed_ms);
+        let timestamp_final = ((timestamp as f64 / 2.0).round() * 2.0) as u64;
+
         json!({
-            "peer_id": peer_id.clone(),
-            "peer_addr": torrent_peer.peer_addr.clone(),
+            "peer_id": peer_id.0, // Access the inner Vec<u8> if PeerId is a wrapper
+            "peer_addr": torrent_peer.peer_addr,
             "updated": timestamp_final,
             "uploaded": torrent_peer.uploaded.0 as u64,
             "downloaded": torrent_peer.downloaded.0 as u64,
             "left": torrent_peer.left.0 as u64,
         })
-    }).collect::<Vec<_>>();
+    };
 
-    let peers = torrent.peers.iter().map(|(peer_id, torrent_peer)| {
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent_peer.updated.elapsed().as_millis();
-        let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-        let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
+    let process_peer = |(peer_id, torrent_peer): (&PeerId, &crate::tracker::structs::torrent_peer::TorrentPeer)| {
+        let elapsed_ms = torrent_peer.updated.elapsed().as_millis();
+        let timestamp = now.saturating_sub(elapsed_ms);
+        let timestamp_final = ((timestamp as f64 / 2.0).round() * 2.0) as u64;
+
         json!({
-            "peer_id": peer_id.clone(),
-            "peer_addr": torrent_peer.peer_addr.clone(),
+            "peer_id": peer_id.0, // Access the inner Vec<u8> if PeerId is a wrapper
+            "peer_addr": torrent_peer.peer_addr,
             "updated": timestamp_final,
             "uploaded": torrent_peer.uploaded.0 as u64,
             "downloaded": torrent_peer.downloaded.0 as u64,
             "left": torrent_peer.left.0 as u64,
         })
-    }).collect::<Vec<_>>();
+    };
 
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - torrent.updated.elapsed().as_millis();
-    let timestamp_calc: f64 = timestamp as f64 / 2_f64;
-    let timestamp_final = (timestamp_calc.round() * 2_f64) as u64;
+    let seeds: Vec<Value> = torrent.seeds.iter().map(process_seed).collect();
+    let peers: Vec<Value> = torrent.peers.iter().map(process_peer).collect();
+
+    let elapsed_ms = torrent.updated.elapsed().as_millis();
+    let timestamp = now.saturating_sub(elapsed_ms);
+    let timestamp_final = ((timestamp as f64 / 2.0).round() * 2.0) as u64;
+
     json!({
         "status": "ok",
         "seeds": seeds,

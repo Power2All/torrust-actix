@@ -1,5 +1,4 @@
-use std::io;
-use actix_web::Either;
+use std::borrow::Cow;
 use crate::udp::structs::connection_id::ConnectionId;
 use crate::udp::structs::transaction_id::TransactionId;
 
@@ -8,9 +7,9 @@ pub enum RequestParseError {
     Sendable {
         connection_id: ConnectionId,
         transaction_id: TransactionId,
-        err: Either<io::Error, &'static str>,
+        err: Cow<'static, str>, // Use Cow for efficient string handling
     },
     Unsendable {
-        err: Either<io::Error, &'static str>,
+        err: Cow<'static, str>,
     },
 }

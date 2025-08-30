@@ -14,58 +14,57 @@ use crate::tracker::structs::info_hash::InfoHash;
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let info = path.into_inner();
-    if info.len() == 40 {
-        let info_hash = match hex2bin(info.clone()) {
-            Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
-        };
-
-        match data.torrent_tracker.check_blacklist(info_hash) {
-            true => { return HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})); }
-            false => { return HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})); }
-        }
+    if info.len() != 40 {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}));
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+    let info_hash = match hex2bin(info) {
+        Ok(hash) => InfoHash(hash),
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
+    };
+
+    match data.torrent_tracker.check_blacklist(info_hash) {
+        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
+        false => HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
+    }
 }
 
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let body = match api_parse_body(payload).await {
-        Ok(data) => { data }
-        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+        Ok(data) => data,
+        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
     };
 
     let blacklists = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(data) => { data }
-        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
+        Ok(data) => data,
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
 
-    let mut blacklist_output = HashMap::new();
+    let mut blacklist_output = HashMap::with_capacity(blacklists.len());
     for blacklist in blacklists {
         if blacklist.len() == 40 {
-            let blacklist_hash = match hex2bin(blacklist.clone()) {
-                Ok(hash) => { InfoHash(hash) }
-                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", blacklist)})) }
-            };
-
-            blacklist_output.insert(blacklist_hash, data.torrent_tracker.check_blacklist(blacklist_hash));
+            match hex2bin(blacklist.clone()) {
+                Ok(hash) => {
+                    let info_hash = InfoHash(hash);
+                    blacklist_output.insert(blacklist, data.torrent_tracker.check_blacklist(info_hash));
+                }
+                Err(_) => {
+                    blacklist_output.insert(blacklist, false);
+                }
+            }
         }
     }
 
@@ -78,68 +77,69 @@ pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payl
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let info = path.into_inner();
-    if info.len() == 40 {
-        let info_hash = match hex2bin(info.clone()) {
-            Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
-        };
-
-        if data.torrent_tracker.config.database.clone().persistent {
-            let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
-        }
-
-        return match data.torrent_tracker.add_blacklist(info_hash) {
-            true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("info_hash updated {}", info)})) }
-        }
+    if info.len() != 40 {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}));
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+    let info_hash = match hex2bin(info) {
+        Ok(hash) => InfoHash(hash),
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
+    };
+
+    if data.torrent_tracker.config.database.persistent {
+        let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
+    }
+
+    match data.torrent_tracker.add_blacklist(info_hash) {
+        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
+        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "info_hash updated"})),
+    }
 }
 
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let body = match api_parse_body(payload).await {
-        Ok(data) => { data }
-        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+        Ok(data) => data,
+        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
     };
 
     let blacklists = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(data) => { data }
-        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
+        Ok(data) => data,
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
 
-    let mut blacklists_output = HashMap::new();
+    let mut blacklists_output = HashMap::with_capacity(blacklists.len());
     for info in blacklists {
         if info.len() == 40 {
-            let info_hash = match hex2bin(info.clone()) {
-                Ok(hash) => { InfoHash(hash) }
-                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
-            };
+            match hex2bin(info.clone()) {
+                Ok(hash) => {
+                    let info_hash = InfoHash(hash);
 
-            if data.torrent_tracker.config.database.clone().persistent {
-                let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
-            }
+                    if data.torrent_tracker.config.database.persistent {
+                        let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
+                    }
 
-            match data.torrent_tracker.add_blacklist(info_hash) {
-                true => { blacklists_output.insert(info_hash, json!({"status": "ok"})); }
-                false => { blacklists_output.insert(info_hash, json!({"status": "info_hash updated"})); }
+                    let status = match data.torrent_tracker.add_blacklist(info_hash) {
+                        true => json!({"status": "ok"}),
+                        false => json!({"status": "info_hash updated"}),
+                    };
+                    blacklists_output.insert(info, status);
+                }
+                Err(_) => {
+                    blacklists_output.insert(info, json!({"status": "invalid info_hash"}));
+                }
             }
         }
     }
@@ -153,68 +153,69 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let info = path.into_inner();
-    if info.len() == 40 {
-        let info_hash = match hex2bin(info.clone()) {
-            Ok(hash) => { InfoHash(hash) }
-            Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})); }
-        };
-
-        if data.torrent_tracker.config.database.clone().persistent {
-            let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
-        }
-
-        return match data.torrent_tracker.remove_blacklist(info_hash) {
-            true => { HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})) }
-            false => { HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": format!("unknown info_hash {}", info)})) }
-        }
+    if info.len() != 40 {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}));
     }
 
-    HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"}))
+    let info_hash = match hex2bin(info) {
+        Ok(hash) => InfoHash(hash),
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
+    };
+
+    if data.torrent_tracker.config.database.persistent {
+        let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
+    }
+
+    match data.torrent_tracker.remove_blacklist(info_hash) {
+        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
+        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
+    }
 }
 
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), data.torrent_tracker.config.clone()).await { return response; }
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
     let body = match api_parse_body(payload).await {
-        Ok(data) => { data }
-        Err(error) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})); }
+        Ok(data) => data,
+        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
     };
 
     let blacklists = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(data) => { data }
-        Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})); }
+        Ok(data) => data,
+        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
 
-    let mut blacklists_output = HashMap::new();
+    let mut blacklists_output = HashMap::with_capacity(blacklists.len());
     for info in blacklists {
         if info.len() == 40 {
-            let info_hash = match hex2bin(info.clone()) {
-                Ok(hash) => { InfoHash(hash) }
-                Err(_) => { return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": format!("invalid info_hash {}", info)})) }
-            };
+            match hex2bin(info.clone()) {
+                Ok(hash) => {
+                    let info_hash = InfoHash(hash);
 
-            if data.torrent_tracker.config.database.clone().persistent {
-                let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
-            }
+                    if data.torrent_tracker.config.database.persistent {
+                        let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
+                    }
 
-            match data.torrent_tracker.remove_blacklist(info_hash) {
-                true => { blacklists_output.insert(info_hash, json!({"status": "ok"})); }
-                false => { blacklists_output.insert(info_hash, json!({"status": "unknown info_hash"})); }
+                    let status = match data.torrent_tracker.remove_blacklist(info_hash) {
+                        true => json!({"status": "ok"}),
+                        false => json!({"status": "unknown info_hash"}),
+                    };
+                    blacklists_output.insert(info, status);
+                }
+                Err(_) => {
+                    blacklists_output.insert(info, json!({"status": "invalid info_hash"}));
+                }
             }
         }
     }

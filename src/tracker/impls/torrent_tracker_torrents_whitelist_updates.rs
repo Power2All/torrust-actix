@@ -112,7 +112,7 @@ impl TorrentTracker {
 
         match self.save_whitelist(torrent_tracker, whitelist_updates).await {
             Ok(_) => {
-                info!("[SYNC WHITELIST UPDATES] Synced {} whitelists", mapping_len);
+                info!("[SYNC WHITELIST UPDATES] Synced {mapping_len} whitelists");
                 
                 let mut lock = self.torrents_whitelist_updates.write();
                 let mut removed_count = 0i64;
@@ -136,7 +136,7 @@ impl TorrentTracker {
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC WHITELIST UPDATES] Unable to sync {} whitelists", mapping_len);
+                error!("[SYNC WHITELIST UPDATES] Unable to sync {mapping_len} whitelists");
                 Err(())
             }
         }

@@ -112,7 +112,7 @@ impl TorrentTracker {
 
         match self.save_blacklist(torrent_tracker, blacklist_updates).await {
             Ok(_) => {
-                info!("[SYNC BLACKLIST UPDATES] Synced {} blacklists", mapping_len);
+                info!("[SYNC BLACKLIST UPDATES] Synced {mapping_len} blacklists");
                 
                 let mut lock = self.torrents_blacklist_updates.write();
                 let mut removed_count = 0i64;
@@ -136,7 +136,7 @@ impl TorrentTracker {
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC BLACKLIST UPDATES] Unable to sync {} blacklists", mapping_len);
+                error!("[SYNC BLACKLIST UPDATES] Unable to sync {mapping_len} blacklists");
                 Err(())
             }
         }

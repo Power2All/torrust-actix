@@ -55,7 +55,7 @@ impl TorrentTracker {
                 TorrentPeersType::IPv6 => peer_addr.is_ipv6(),
             };
 
-            ip_type_match && self_ip.map_or(true, |ip| ip != peer_addr.ip())
+            ip_type_match && self_ip.is_none_or(|ip| ip != peer_addr.ip())
         };
 
         let iter = peers.iter()

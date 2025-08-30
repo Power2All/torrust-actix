@@ -22,13 +22,13 @@ impl TorrentTracker {
     {
         fn get_required_bytes<'a>(query: &'a HashMap<String, Vec<Vec<u8>>>, field: &str, expected_len: Option<usize>) -> Result<&'a [u8], CustomError> {
             let value = query.get(field)
-                .ok_or_else(|| CustomError::new(&format!("missing {}", field)))?
+                .ok_or_else(|| CustomError::new(&format!("missing {field}")))?
                 .first()
-                .ok_or_else(|| CustomError::new(&format!("no {} given", field)))?;
+                .ok_or_else(|| CustomError::new(&format!("no {field} given")))?;
 
             if let Some(len) = expected_len {
                 if value.len() != len {
-                    return Err(CustomError::new(&format!("invalid {} size", field)));
+                    return Err(CustomError::new(&format!("invalid {field} size")));
                 }
             }
 
@@ -38,9 +38,9 @@ impl TorrentTracker {
         fn parse_integer<T: std::str::FromStr>(query: &HashMap<String, Vec<Vec<u8>>>, field: &str) -> Result<T, CustomError> {
             let bytes = get_required_bytes(query, field, None)?;
             let str_value = std::str::from_utf8(bytes)
-                .map_err(|_| CustomError::new(&format!("invalid {}", field)))?;
+                .map_err(|_| CustomError::new(&format!("invalid {field}")))?;
             str_value.parse::<T>()
-                .map_err(|_| CustomError::new(&format!("missing or invalid {}", field)))
+                .map_err(|_| CustomError::new(&format!("missing or invalid {field}")))
         }
 
         let info_hash = get_required_bytes(&query, "info_hash", Some(20))?;
@@ -258,7 +258,7 @@ impl TorrentTracker {
         scrape_query.info_hash.iter()
             .map(|&info_hash| {
                 debug!("[DEBUG] Calling get_torrent");
-                let entry = data.get_torrent(info_hash).unwrap_or_else(TorrentEntry::new);
+                let entry = data.get_torrent(info_hash).unwrap_or_default();
                 (info_hash, entry)
             })
             .collect()

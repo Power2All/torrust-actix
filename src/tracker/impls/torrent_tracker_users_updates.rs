@@ -91,7 +91,7 @@ impl TorrentTracker {
 
         match self.save_users(torrent_tracker, users_to_save).await {
             Ok(_) => {
-                info!("[SYNC USER UPDATES] Synced {} users", mapping_len);
+                info!("[SYNC USER UPDATES] Synced {mapping_len} users");
                 
                 let mut lock = self.users_updates.write();
                 let mut removed_count = 0i64;
@@ -115,7 +115,7 @@ impl TorrentTracker {
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC USER UPDATES] Unable to sync {} users", mapping_len);
+                error!("[SYNC USER UPDATES] Unable to sync {mapping_len} users");
                 Err(())
             }
         }
