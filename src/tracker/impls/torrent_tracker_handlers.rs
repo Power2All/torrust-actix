@@ -20,214 +20,65 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn validate_announce(&self, remote_addr: IpAddr, query: HashMap<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
     {
-        // Validate info_hash
-        let info_hash: Vec<Vec<u8>> = match query.get("info_hash") {
-            None => {
-                return Err(CustomError::new("missing info_hash"));
-            }
-            Some(result) => {
-                if result.is_empty() {
-                    return Err(CustomError::new("no info_hash given"));
-                }
-                if let Some(result_array) = result.first() {
-                    if result_array.len() != 20 {
-                        return Err(CustomError::new("invalid info_hash size"));
-                    }
-                    result.clone()
-                } else {
-                    return Err(CustomError::new("no info_hash given"));
-                }
-            }
-        };
+        fn get_required_bytes<'a>(query: &'a HashMap<String, Vec<Vec<u8>>>, field: &str, expected_len: Option<usize>) -> Result<&'a [u8], CustomError> {
+            let value = query.get(field)
+                .ok_or_else(|| CustomError::new(&format!("missing {}", field)))?
+                .first()
+                .ok_or_else(|| CustomError::new(&format!("no {} given", field)))?;
 
-        // Validate peer_id
-        let peer_id: Vec<Vec<u8>> = match query.get("peer_id") {
-            None => {
-                return Err(CustomError::new("missing peer_id"));
-            }
-            Some(result) => {
-                if result.is_empty() {
-                    return Err(CustomError::new("no peer_id given"));
-                }
-                if let Some(result_array) = result.first() {
-                    if result_array.len() != 20 {
-                        return Err(CustomError::new("invalid peer_id size"));
-                    }
-                    result.clone()
-                } else {
-                    return Err(CustomError::new("no peer_id given"));
+            if let Some(len) = expected_len {
+                if value.len() != len {
+                    return Err(CustomError::new(&format!("invalid {} size", field)));
                 }
             }
-        };
 
-        // Validate port
-        let port_integer = match query.get("port") {
-            None => {
-                return Err(CustomError::new("missing port"));
-            }
-            Some(result) => {
-                if let Some(result_array) = result.first() {
-                    let port = match String::from_utf8(result_array.to_vec()) {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("invalid port"))
-                    };
-                    match port.parse::<u16>() {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("missing or invalid port"))
-                    }
-                } else {
-                    return Err(CustomError::new("missing port"));
-                }
-            }
-        };
-
-        // Validate uploaded
-        let uploaded_integer = match query.get("uploaded") {
-            None => {
-                return Err(CustomError::new("missing uploaded"));
-            }
-            Some(result) => {
-                if let Some(result_array) = result.first() {
-                    let uploaded = match String::from_utf8(result_array.to_vec()) {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("invalid uploaded"))
-                    };
-                    match uploaded.parse::<u64>() {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("missing or invalid uploaded"))
-                    }
-                } else {
-                    return Err(CustomError::new("missing uploaded"));
-                }
-            }
-        };
-
-        // Validate downloaded
-        let downloaded_integer = match query.get("downloaded") {
-            None => {
-                return Err(CustomError::new("missing downloaded"));
-            }
-            Some(result) => {
-                if let Some(result_array) = result.first() {
-                    let downloaded = match String::from_utf8(result_array.to_vec()) {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("invalid downloaded"))
-                    };
-                    match downloaded.parse::<u64>() {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("missing or invalid downloaded"))
-                    }
-                } else {
-                    return Err(CustomError::new("missing downloaded"));
-                }
-            }
-        };
-
-        // Validate left
-        let left_integer = match query.get("left") {
-            None => {
-                return Err(CustomError::new("missing left"));
-            }
-            Some(result) => {
-                if let Some(result_array) = result.first() {
-                    let left = match String::from_utf8(result_array.to_vec()) {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("invalid left"))
-                    };
-                    match left.parse::<u64>() {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("missing or invalid left"))
-                    }
-                } else {
-                    return Err(CustomError::new("missing left"));
-                }
-            }
-        };
-
-        // Validate compact
-        let mut compact_bool = false;
-        match query.get("compact") {
-            None => {}
-            Some(result) => {
-                if let Some(result_array) = result.first() {
-                    let compact = match String::from_utf8(result_array.to_vec()) {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("invalid compact"))
-                    };
-                    let compact_integer = match compact.parse::<u8>() {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("missing or invalid compact"))
-                    };
-                    if compact_integer == 1 {
-                        compact_bool = true;
-                    }
-                }
-            }
+            Ok(value.as_slice())
         }
 
-        // Validate event
-        let mut event_integer: AnnounceEvent = AnnounceEvent::Started;
-        match query.get("event") {
-            None => {}
-            Some(result) => {
-                if let Some(result_array) = result.first() {
-                    let event = match String::from_utf8(result_array.to_vec()) {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("invalid event"))
-                    };
-                    match event.as_str().to_lowercase().as_str() {
-                        "started" => {
-                            event_integer = AnnounceEvent::Started;
-                        }
-                        "stopped" => {
-                            event_integer = AnnounceEvent::Stopped;
-                        }
-                        "completed" => {
-                            event_integer = AnnounceEvent::Completed;
-                        }
-                        _ => {
-                            event_integer = AnnounceEvent::Started;
-                        }
-                    }
-                } else {
-                    event_integer = AnnounceEvent::Started;
-                }
-            }
+        fn parse_integer<T: std::str::FromStr>(query: &HashMap<String, Vec<Vec<u8>>>, field: &str) -> Result<T, CustomError> {
+            let bytes = get_required_bytes(query, field, None)?;
+            let str_value = std::str::from_utf8(bytes)
+                .map_err(|_| CustomError::new(&format!("invalid {}", field)))?;
+            str_value.parse::<T>()
+                .map_err(|_| CustomError::new(&format!("missing or invalid {}", field)))
         }
 
-        // Validate no_peer_id
-        let mut no_peer_id_bool = false;
-        match query.get("no_peer_id") {
-            None => {}
-            Some(_) => {
-                no_peer_id_bool = true;
-            }
-        }
+        let info_hash = get_required_bytes(&query, "info_hash", Some(20))?;
+        let peer_id = get_required_bytes(&query, "peer_id", Some(20))?;
+        let port_integer = parse_integer::<u16>(&query, "port")?;
+        let uploaded_integer = parse_integer::<u64>(&query, "uploaded")?;
+        let downloaded_integer = parse_integer::<u64>(&query, "downloaded")?;
+        let left_integer = parse_integer::<u64>(&query, "left")?;
 
-        // Validate numwant
-        let mut numwant_integer = 72;
-        match query.get("numwant") {
-            None => {}
-            Some(result) => {
-                if let Some(result_array) = result.first() {
-                    let numwant = match String::from_utf8(result_array.to_vec()) {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("invalid numwant"))
-                    };
-                    numwant_integer = match numwant.parse::<u64>() {
-                        Ok(v) => v,
-                        Err(_) => return Err(CustomError::new("missing or invalid numwant"))
-                    };
-                    if numwant_integer == 0 || numwant_integer > 72 {
-                        numwant_integer = 72;
-                    }
-                }
-            }
-        }
+        let compact_bool = query.get("compact")
+            .and_then(|v| v.first())
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .and_then(|s| s.parse::<u8>().ok())
+            .map(|v| v == 1)
+            .unwrap_or(false);
 
-        let announce_data = AnnounceQueryRequest {
-            info_hash: InfoHash::from(&info_hash[0] as &[u8]),
-            peer_id: PeerId::from(&peer_id[0] as &[u8]),
+        let event_integer = query.get("event")
+            .and_then(|v| v.first())
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .map(|s| match s.to_lowercase().as_str() {
+                "stopped" => AnnounceEvent::Stopped,
+                "completed" => AnnounceEvent::Completed,
+                _ => AnnounceEvent::Started,
+            })
+            .unwrap_or(AnnounceEvent::Started);
+
+        let no_peer_id_bool = query.contains_key("no_peer_id");
+
+        let numwant_integer = query.get("numwant")
+            .and_then(|v| v.first())
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(|v| if v == 0 || v > 72 { 72 } else { v })
+            .unwrap_or(72);
+
+        Ok(AnnounceQueryRequest {
+            info_hash: InfoHash::from(info_hash),
+            peer_id: PeerId::from(peer_id),
             port: port_integer,
             uploaded: uploaded_integer,
             downloaded: downloaded_integer,
@@ -237,9 +88,7 @@ impl TorrentTracker {
             event: event_integer,
             remote_addr,
             numwant: numwant_integer,
-        };
-
-        Ok(announce_data)
+        })
     }
 
     #[tracing::instrument(level = "debug")]
@@ -255,6 +104,9 @@ impl TorrentTracker {
             event: AnnounceEvent::None,
         };
 
+        let is_persistent = data.config.database.persistent;
+        let users_enabled = data.config.tracker_config.users_enabled;
+
         match announce_query.event {
             AnnounceEvent::Started | AnnounceEvent::None => {
                 torrent_peer.event = AnnounceEvent::Started;
@@ -268,7 +120,7 @@ impl TorrentTracker {
                     false
                 );
 
-                if data.config.database.clone().persistent {
+                if is_persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.1.clone(),
@@ -276,13 +128,16 @@ impl TorrentTracker {
                     );
                 }
 
-                if data.config.tracker_config.clone().users_enabled && user_key.is_some() {
-                    if let Some(mut user) = data.get_user(user_key.unwrap()) {
-                        user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                        user.torrents_active.insert(announce_query.info_hash, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs());
-                        data.add_user(user_key.unwrap(), user.clone());
-                        if data.config.database.clone().persistent {
-                            data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
+                if users_enabled {
+                    if let Some(user_id) = user_key {
+                        if let Some(mut user) = data.get_user(user_id) {
+                            let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                            user.updated = now;
+                            user.torrents_active.insert(announce_query.info_hash, now);
+                            data.add_user(user_id, user.clone());
+                            if is_persistent {
+                                data.add_user_update(user_id, user, UpdatesAction::Add);
+                            }
                         }
                     }
                 }
@@ -302,33 +157,30 @@ impl TorrentTracker {
                 let torrent_entry = match data.remove_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
-                    data.config.database.clone().persistent,
+                    is_persistent,
                     false
                 ) {
-                    (Some(_), None) => {
-                        TorrentEntry::new()
-                    }
                     (Some(_), Some(new_torrent)) => {
-                        if data.config.tracker_config.clone().users_enabled && user_key.is_some(){
-                            if let Some(mut user) = data.get_user(user_key.unwrap()) {
-                                user.uploaded += announce_query.uploaded;
-                                user.downloaded += announce_query.downloaded;
-                                user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                                user.torrents_active.remove(&announce_query.info_hash);
-                                data.add_user(user_key.unwrap(), user.clone());
-                                if data.config.database.clone().persistent {
-                                    data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
+                        if users_enabled {
+                            if let Some(user_id) = user_key {
+                                if let Some(mut user) = data.get_user(user_id) {
+                                    user.uploaded += announce_query.uploaded;
+                                    user.downloaded += announce_query.downloaded;
+                                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                                    user.torrents_active.remove(&announce_query.info_hash);
+                                    data.add_user(user_id, user.clone());
+                                    if is_persistent {
+                                        data.add_user_update(user_id, user, UpdatesAction::Add);
+                                    }
                                 }
                             }
                         }
                         new_torrent
                     }
-                    _ => {
-                        TorrentEntry::new()
-                    }
+                    _ => TorrentEntry::new()
                 };
 
-                if data.config.database.clone().persistent {
+                if is_persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.clone(),
@@ -350,7 +202,7 @@ impl TorrentTracker {
                     true
                 );
 
-                if data.config.database.clone().persistent {
+                if is_persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.1.clone(),
@@ -358,13 +210,15 @@ impl TorrentTracker {
                     );
                 }
 
-                if data.config.tracker_config.clone().users_enabled && user_key.is_some(){
-                    if let Some(mut user) = data.get_user(user_key.unwrap()) {
-                        user.completed += 1;
-                        user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                        data.add_user(user_key.unwrap(), user.clone());
-                        if data.config.database.clone().persistent {
-                            data.add_user_update(user_key.unwrap(), user, UpdatesAction::Add);
+                if users_enabled {
+                    if let Some(user_id) = user_key {
+                        if let Some(mut user) = data.get_user(user_id) {
+                            user.completed += 1;
+                            user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                            data.add_user(user_id, user.clone());
+                            if is_persistent {
+                                data.add_user_update(user_id, user, UpdatesAction::Add);
+                            }
                         }
                     }
                 }
@@ -377,26 +231,23 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn validate_scrape(&self, query: HashMap<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
     {
-        // Validate info_hash
-        let mut info_hash: Vec<InfoHash> = Vec::new();
         match query.get("info_hash") {
-            None => {
-                Err(CustomError::new("missing info_hash"))
-            }
+            None => Err(CustomError::new("missing info_hash")),
             Some(result) => {
                 if result.is_empty() {
                     return Err(CustomError::new("no info_hash given"));
                 }
-                for hash in result.iter() {
-                    if hash.len() != 20 {
-                        return Err(CustomError::new("an invalid info_hash was given"));
-                    }
-                    info_hash.push(InfoHash::from(hash as &[u8]));
-                }
-                let scrape_data = ScrapeQueryRequest {
-                    info_hash
-                };
-                Ok(scrape_data)
+
+                let info_hash: Vec<InfoHash> = result.iter()
+                    .map(|hash| {
+                        if hash.len() != 20 {
+                            return Err(CustomError::new("an invalid info_hash was given"));
+                        }
+                        Ok(InfoHash::from(hash.as_slice()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(ScrapeQueryRequest { info_hash })
             }
         }
     }
@@ -404,17 +255,12 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, TorrentEntry>
     {
-        // We generate the output and return it, even if it's empty...
-        let mut return_data = BTreeMap::new();
-        for info_hash in scrape_query.info_hash.iter() {
-            debug!("[DEBUG] Calling get_torrent");
-            match data.get_torrent(*info_hash) {
-                None => { return_data.insert(*info_hash, TorrentEntry::new()); }
-                Some(result) => {
-                    return_data.insert(*info_hash, result);
-                }
-            }
-        }
-        return_data
+        scrape_query.info_hash.iter()
+            .map(|&info_hash| {
+                debug!("[DEBUG] Calling get_torrent");
+                let entry = data.get_torrent(info_hash).unwrap_or_else(TorrentEntry::new);
+                (info_hash, entry)
+            })
+            .collect()
     }
 }
