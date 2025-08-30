@@ -172,6 +172,9 @@ UDP_0_THREADS <UINT64>
 
 ### ChangeLog
 
+#### v4.0.14
+* Code optimizations thanks to AI scanning
+
 #### v4.0.13
 * Added further UDP improvement by adding customization, also added to the config:
   * Receive Buffer Size

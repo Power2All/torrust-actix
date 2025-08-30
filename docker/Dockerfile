@@ -9,7 +9,7 @@ RUN cargo build --release && rm -Rf target/release/.fingerprint target/release/b
 COPY init.sh /app/torrust-actix/target/release/init.sh
 COPY healthcheck.py /app/torrust-actix/healthcheck
 RUN chmod +x /app/torrust-actix/target/release/init.sh
-RUN chmod +x /app/torrust-actix/healthcheck.py
+RUN chmod +x /app/torrust-actix/healthcheck
 EXPOSE 8080/tcp
 EXPOSE 6969/tcp
 EXPOSE 6969/udp

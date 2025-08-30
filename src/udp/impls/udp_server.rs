@@ -65,7 +65,7 @@ impl UdpServer {
             let socket_clone = self.socket.clone();
             let tracker = self.tracker.clone();
             let mut rx = rx.clone();
-            let mut data = [0; 65507];
+            let mut data = [0; 1496];
             tokio::spawn(async move {
                 loop {
                     let udp_sock = socket_clone.local_addr().unwrap();

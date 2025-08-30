@@ -3,7 +3,6 @@ use std::fmt::Formatter;
 use serde::Serialize;
 use crate::common::common::bin2hex;
 use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::peer_id_visitor::PeerIdVisitor;
 
 impl fmt::Display for PeerId {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -94,16 +93,23 @@ impl PeerId {
 
 impl Serialize for PeerId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: serde::Serializer, {
-        let buff_size = self.0.len() * 2;
-        let mut tmp: Vec<u8> = vec![0; buff_size];
-        binascii::bin2hex(&self.0, &mut tmp).unwrap();
-        let id = std::str::from_utf8(&tmp).ok();
+    where
+        S: serde::Serializer,
+    {
+        const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+        let mut buffer = [0u8; 40];
+
+        for (i, &byte) in self.0.iter().enumerate() {
+            buffer[i * 2] = HEX_CHARS[(byte >> 4) as usize];
+            buffer[i * 2 + 1] = HEX_CHARS[(byte & 0xf) as usize];
+        }
+
+        // SAFETY: We know the buffer contains only valid ASCII hex characters
+        let id = unsafe { std::str::from_utf8_unchecked(&buffer) };
 
         #[derive(Serialize)]
         struct PeerIdInfo<'a> {
-            id: Option<&'a str>,
+            id: &'a str,
             client: Option<&'a str>,
         }
 
@@ -119,12 +125,25 @@ impl std::str::FromStr for PeerId {
     type Err = binascii::ConvertError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut i = Self([0u8; 20]);
         if s.len() != 40 {
             return Err(binascii::ConvertError::InvalidInputLength);
         }
-        binascii::hex2bin(s.as_bytes(), &mut i.0)?;
-        Ok(i)
+
+        let mut result = PeerId([0u8; 20]);
+        let bytes = s.as_bytes();
+
+        for i in 0..20 {
+            let high = hex_char_to_nibble(bytes[i * 2]);
+            let low = hex_char_to_nibble(bytes[i * 2 + 1]);
+
+            if high == 0xFF || low == 0xFF {
+                return Err(binascii::ConvertError::InvalidInput);
+            }
+
+            result.0[i] = (high << 4) | low;
+        }
+
+        Ok(result)
     }
 }
 
@@ -132,13 +151,64 @@ impl From<&[u8]> for PeerId {
     fn from(data: &[u8]) -> PeerId {
         assert_eq!(data.len(), 20);
         let mut ret = PeerId([0u8; 20]);
-        ret.0.clone_from_slice(data);
+        ret.0.copy_from_slice(data);
         ret
     }
 }
 
 impl<'de> serde::de::Deserialize<'de> for PeerId {
     fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
+        struct PeerIdVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for PeerIdVisitor {
+            type Value = PeerId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a 40 character long hash")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if v.len() != 40 {
+                    return Err(serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Str(v),
+                        &"expected a 40 character long string",
+                    ));
+                }
+
+                let mut res = PeerId([0u8; 20]);
+                let bytes = v.as_bytes();
+
+                for i in 0..20 {
+                    let high = hex_char_to_nibble(bytes[i * 2]);
+                    let low = hex_char_to_nibble(bytes[i * 2 + 1]);
+
+                    if high == 0xFF || low == 0xFF {
+                        return Err(serde::de::Error::invalid_value(
+                            serde::de::Unexpected::Str(v),
+                            &"expected a hexadecimal string",
+                        ));
+                    }
+
+                    res.0[i] = (high << 4) | low;
+                }
+
+                Ok(res)
+            }
+        }
+
         des.deserialize_str(PeerIdVisitor)
+    }
+}
+
+#[inline(always)]
+fn hex_char_to_nibble(c: u8) -> u8 {
+    match c {
+        b'0'..=b'9' => c - b'0',
+        b'a'..=b'f' => c - b'a' + 10,
+        b'A'..=b'F' => c - b'A' + 10,
+        _ => 0xFF,
     }
 }

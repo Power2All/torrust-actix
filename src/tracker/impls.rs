@@ -1,7 +1,5 @@
 pub mod info_hash;
-pub mod info_hash_visitor;
 pub mod peer_id;
-pub mod peer_id_visitor;
 pub mod torrent_entry;
 pub mod torrent_peer;
 pub mod torrent_tracker;
