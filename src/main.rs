@@ -109,7 +109,7 @@ fn main() -> std::io::Result<()>
                                 }
                             }
                         }
-                        _ = shutdown_waiting(Duration::from_secs(1), deadlocks_handler.clone()) => {
+                        _ = deadlocks_handler.handle() => {
                             info!("[BOOT] Shutting down thread for deadlocks...");
                             return;
                         }
@@ -260,7 +260,7 @@ fn main() -> std::io::Result<()>
                                 stats.udp6_invalid_request, stats.udp6_bad_request
                             );
                         }
-                        _ = shutdown_waiting(Duration::from_secs(1), stats_handler.clone()) => {
+                        _ = stats_handler.handle() => {
                             info!("[BOOT] Shutting down thread for console updates...");
                             return;
                         }
