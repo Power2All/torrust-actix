@@ -13,7 +13,6 @@ pub mod torrent_tracker_torrents_whitelist;
 pub mod torrent_tracker_users;
 pub mod torrent_tracker_users_updates;
 pub mod user_id;
-pub mod user_id_visitor;
 pub mod announce_event;
 pub mod torrent_sharding;
 pub mod torrent_tracker_import;

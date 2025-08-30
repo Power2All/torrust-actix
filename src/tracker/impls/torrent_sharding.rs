@@ -162,7 +162,6 @@ impl TorrentSharding {
     }
 
     pub fn get_multiple_torrents(&self, info_hashes: &[InfoHash]) -> BTreeMap<InfoHash, Option<TorrentEntry>> {
-        // Group by shard to minimize lock acquisitions
         let mut shard_groups: BTreeMap<u8, Vec<InfoHash>> = BTreeMap::new();
         for &info_hash in info_hashes {
             shard_groups.entry(info_hash.0[0]).or_default().push(info_hash);

@@ -12,7 +12,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker.clone()).await {
+        if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker).await {
             info!("Loaded {torrents} torrents with {completes} completes");
         }
     }
@@ -20,13 +20,14 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), ()>
     {
-        match self.sqlx.save_torrents(tracker.clone(), torrents.clone()).await {
+        let torrents_count = torrents.len();
+        match self.sqlx.save_torrents(tracker, torrents).await {
             Ok(_) => {
-                info!("[SYNC TORRENTS] Synced {} torrents", torrents.len());
+                info!("[SYNC TORRENTS] Synced {torrents_count} torrents");
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC TORRENTS] Unable to sync {} torrents", torrents.len());
+                error!("[SYNC TORRENTS] Unable to sync {torrents_count} torrents");
                 Err(())
             }
         }
@@ -35,7 +36,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> bool
     {
-        match self.sqlx.reset_seeds_peers(tracker.clone()).await {
+        match self.sqlx.reset_seeds_peers(tracker).await {
             Ok(_) => {
                 info!("[RESET SEEDS PEERS] Completed");
                 true
@@ -50,28 +51,43 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
+
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Torrents, 1);
                 self.update_stats(StatsEvent::Completed, torrent_entry.completed as i64);
                 self.update_stats(StatsEvent::Seeds, torrent_entry.seeds.len() as i64);
                 self.update_stats(StatsEvent::Peers, torrent_entry.peers.len() as i64);
-                (v.insert(torrent_entry).clone(), true)
+
+                let entry_clone = torrent_entry.clone();
+                v.insert(torrent_entry);
+                (entry_clone, true)
             }
             Entry::Occupied(mut o) => {
-                self.update_stats(StatsEvent::Completed, 0i64 - o.get().completed as i64);
-                self.update_stats(StatsEvent::Completed, torrent_entry.completed as i64);
-                o.get_mut().completed = torrent_entry.completed;
-                self.update_stats(StatsEvent::Seeds, 0i64 - o.get().seeds.len() as i64);
-                self.update_stats(StatsEvent::Seeds, torrent_entry.seeds.len() as i64);
-                o.get_mut().seeds = torrent_entry.seeds.clone();
-                self.update_stats(StatsEvent::Peers, 0i64 - o.get().peers.len() as i64);
-                self.update_stats(StatsEvent::Peers, torrent_entry.peers.len() as i64);
-                o.get_mut().peers = torrent_entry.peers.clone();
-                o.get_mut().updated = torrent_entry.updated;
-                (torrent_entry.clone(), false)
+                let current = o.get_mut();
+
+                let completed_delta = torrent_entry.completed as i64 - current.completed as i64;
+                let seeds_delta = torrent_entry.seeds.len() as i64 - current.seeds.len() as i64;
+                let peers_delta = torrent_entry.peers.len() as i64 - current.peers.len() as i64;
+
+                if completed_delta != 0 {
+                    self.update_stats(StatsEvent::Completed, completed_delta);
+                }
+                if seeds_delta != 0 {
+                    self.update_stats(StatsEvent::Seeds, seeds_delta);
+                }
+                if peers_delta != 0 {
+                    self.update_stats(StatsEvent::Peers, peers_delta);
+                }
+
+                current.completed = torrent_entry.completed;
+                current.seeds = torrent_entry.seeds;
+                current.peers = torrent_entry.peers;
+                current.updated = torrent_entry.updated;
+
+                (current.clone(), false)
             }
         }
     }
@@ -79,68 +95,61 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_torrents(&self, hashes: BTreeMap<InfoHash, TorrentEntry>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
     {
-        let mut returned_data = BTreeMap::new();
-        for (info_hash, torrent_entry) in hashes.iter() {
-            returned_data.insert(*info_hash, self.add_torrent(*info_hash, torrent_entry.clone()));
-        }
-        returned_data
+        hashes.into_iter()
+            .map(|(info_hash, torrent_entry)| {
+                let result = self.add_torrent(info_hash, torrent_entry);
+                (info_hash, result)
+            })
+            .collect()
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let lock = shard.read_recursive();
-        lock.get(&info_hash).map(|torrent| TorrentEntry {
-            seeds: torrent.seeds.clone(),
-            peers: torrent.peers.clone(),
-            completed: torrent.completed,
-            updated: torrent.updated
-        })
+        lock.get(&info_hash).cloned()
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
-        let mut returned_data = BTreeMap::new();
-        for info_hash in hashes.iter() {
-            returned_data.insert(*info_hash, self.get_torrent(*info_hash));
-        }
-        returned_data
+        hashes.into_iter()
+            .map(|info_hash| {
+                let entry = self.get_torrent(info_hash);
+                (info_hash, entry)
+            })
+            .collect()
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        if !self.torrents_sharding.contains_torrent(info_hash) { return None; }
-        let shard = self.torrents_sharding.clone().get_shard(info_hash.0[0]).unwrap();
+        if !self.torrents_sharding.contains_torrent(info_hash) {
+            return None;
+        }
+
+        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
-        match lock.remove(&info_hash) {
-            None => { None }
-            Some(data) => {
-                self.update_stats(StatsEvent::Torrents, -1);
-                self.update_stats(StatsEvent::Seeds, data.seeds.len() as i64);
-                self.update_stats(StatsEvent::Peers, data.peers.len() as i64);
-                Some(data)
-            }
+
+        if let Some(data) = lock.remove(&info_hash) {
+            self.update_stats(StatsEvent::Torrents, -1);
+            self.update_stats(StatsEvent::Seeds, -(data.seeds.len() as i64));
+            self.update_stats(StatsEvent::Peers, -(data.peers.len() as i64));
+            Some(data)
+        } else {
+            None
         }
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
-        let mut returned_data = BTreeMap::new();
-        for info_hash in hashes.iter() {
-            returned_data.insert(*info_hash, match self.remove_torrent(*info_hash) {
-                None => { None }
-                Some(torrent) => {
-                    self.update_stats(StatsEvent::Torrents, -1);
-                    self.update_stats(StatsEvent::Seeds, torrent.seeds.len() as i64);
-                    self.update_stats(StatsEvent::Peers, torrent.peers.len() as i64);
-                    Some(torrent)
-                }
-            });
-        }
-        returned_data
+        hashes.into_iter()
+            .map(|info_hash| {
+                let result = self.remove_torrent(info_hash);
+                (info_hash, result)
+            })
+            .collect()
     }
 }

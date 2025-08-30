@@ -12,46 +12,40 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_key_update(&self, info_hash: InfoHash, timeout: i64, updates_action: UpdatesAction) -> bool
     {
-        let map = self.keys_updates.clone();
-        let mut lock = map.write();
-        match lock.insert(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos(), (info_hash, timeout, updates_action)) {
-            None => {
-                self.update_stats(StatsEvent::KeyUpdates, 1);
-                true
-            }
-            Some(_) => {
-                false
-            }
+        let mut lock = self.keys_updates.write();
+        let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
+
+        if lock.insert(timestamp, (info_hash, timeout, updates_action)).is_none() {
+            self.update_stats(StatsEvent::KeyUpdates, 1);
+            true
+        } else {
+            false
         }
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn get_key_updates(&self) -> HashMap<u128, (InfoHash, i64, UpdatesAction)>
     {
-        let map = self.keys_updates.clone();
-        let lock = map.read_recursive();
+        let lock = self.keys_updates.read_recursive();
         lock.clone()
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn remove_key_update(&self, timestamp: &u128) -> bool
     {
-        let map = self.keys_updates.clone();
-        let mut lock = map.write();
-        match lock.remove(timestamp) {
-            None => { false }
-            Some(_) => {
-                self.update_stats(StatsEvent::KeyUpdates, -1);
-                true
-            }
+        let mut lock = self.keys_updates.write();
+        if lock.remove(timestamp).is_some() {
+            self.update_stats(StatsEvent::KeyUpdates, -1);
+            true
+        } else {
+            false
         }
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn clear_key_updates(&self)
     {
-        let map = self.keys_updates.clone();
-        let mut lock = map.write();
+        let mut lock = self.keys_updates.write();
         lock.clear();
         self.set_stats(StatsEvent::KeyUpdates, 0);
     }
@@ -59,26 +53,45 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn save_key_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
+        let updates = self.get_key_updates();
+
         let mut mapping: HashMap<InfoHash, (u128, i64, UpdatesAction)> = HashMap::new();
-        for (timestamp, (info_hash, timeout, updates_action)) in self.get_key_updates().iter() {
-            match mapping.entry(*info_hash) {
+        let mut timestamps_to_remove = Vec::new();
+
+        for (timestamp, (info_hash, timeout, updates_action)) in updates {
+            match mapping.entry(info_hash) {
                 Entry::Occupied(mut o) => {
-                    o.insert((o.get().0, *timeout, *updates_action));
-                    self.remove_key_update(timestamp);
+                    let existing = o.get();
+                    if timestamp > existing.0 {
+                        timestamps_to_remove.push(existing.0);
+                        o.insert((timestamp, timeout, updates_action));
+                    } else {
+                        timestamps_to_remove.push(timestamp);
+                    }
                 }
                 Entry::Vacant(v) => {
-                    v.insert((*timestamp, *timeout, *updates_action));
+                    v.insert((timestamp, timeout, updates_action));
                 }
             }
         }
-        match self.save_keys(torrent_tracker.clone(), mapping.clone().into_iter().map(|(info_hash, (_, timeout, updates_action))| {
-            (info_hash, (timeout, updates_action))
-        }).collect::<BTreeMap<InfoHash, (i64, UpdatesAction)>>()).await {
+
+        let keys_to_save: BTreeMap<InfoHash, (i64, UpdatesAction)> = mapping
+            .iter()
+            .map(|(info_hash, (_, timeout, updates_action))| (*info_hash, (*timeout, *updates_action)))
+            .collect();
+
+        match self.save_keys(torrent_tracker, keys_to_save).await {
             Ok(_) => {
                 info!("[SYNC KEY UPDATES] Synced {} keys", mapping.len());
-                for (_, (timestamp, _, _)) in mapping.into_iter() {
+
+                for (_, (timestamp, _, _)) in mapping {
                     self.remove_key_update(&timestamp);
                 }
+
+                for timestamp in timestamps_to_remove {
+                    self.remove_key_update(&timestamp);
+                }
+
                 Ok(())
             }
             Err(_) => {

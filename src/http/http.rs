@@ -328,13 +328,34 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             IpAddr::V4(_) => {
                 if announce_unwrapped.left != 0 {
                     let seeds = data.get_peers(
-                        torrent_entry.seeds.clone(),
+                        &torrent_entry.seeds,
                         TorrentPeersType::IPv4,
                         Some(ip),
                         72
                     );
-                    if seeds.is_some() {
-                        for (_, torrent_peer) in seeds.unwrap().iter() {
+                    for (_, torrent_peer) in seeds.iter() {
+                        let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
+                            Ok(ip) => { ip }
+                            Err(e) => {
+                                error!("[IPV4 Error] {} - {}", torrent_peer.peer_addr.ip(), e);
+                                return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                                    "failure reason" => ben_bytes!(e.to_string())
+                                }.encode());
+                            }
+                        };
+                        let _ = peers_list.write(&u32::from(peer_pre_parse).to_be_bytes());
+                        peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
+                    }
+                }
+                if peers_list.len() != 72 {
+                    let peers = data.get_peers(
+                        &torrent_entry.peers,
+                        TorrentPeersType::IPv4,
+                        Some(ip),
+                        72
+                    );
+                    for (_, torrent_peer) in peers.iter() {
+                        if peers_list.len() != 72 {
                             let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
                                 Ok(ip) => { ip }
                                 Err(e) => {
@@ -346,34 +367,9 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                             };
                             let _ = peers_list.write(&u32::from(peer_pre_parse).to_be_bytes());
                             peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
+                            continue;
                         }
-                    }
-                }
-                if peers_list.len() != 72 {
-                    let peers = data.get_peers(
-                        torrent_entry.peers.clone(),
-                        TorrentPeersType::IPv4,
-                        Some(ip),
-                        72
-                    );
-                    if peers.is_some() {
-                        for (_, torrent_peer) in peers.unwrap().iter() {
-                            if peers_list.len() != 72 {
-                                let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
-                                    Ok(ip) => { ip }
-                                    Err(e) => {
-                                        error!("[IPV4 Error] {} - {}", torrent_peer.peer_addr.ip(), e);
-                                        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                                            "failure reason" => ben_bytes!(e.to_string())
-                                        }.encode());
-                                    }
-                                };
-                                let _ = peers_list.write(&u32::from(peer_pre_parse).to_be_bytes());
-                                peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
-                                continue;
-                            }
-                            break;
-                        }
+                        break;
                     }
                 }
                 HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -388,52 +384,48 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             IpAddr::V6(_) => {
                 if announce_unwrapped.left != 0 {
                     let seeds = data.get_peers(
-                        torrent_entry.seeds.clone(),
+                        &torrent_entry.seeds,
                         TorrentPeersType::IPv6,
                         Some(ip),
                         72
                     );
-                    if seeds.is_some() {
-                        for (_, torrent_peer) in seeds.unwrap().iter() {
+                    for (_, torrent_peer) in seeds.iter() {
+                        let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
+                            Ok(ip) => { ip }
+                            Err(e) => {
+                                error!("[IPV6 Error] {} - {}", torrent_peer.peer_addr.ip(), e);
+                                return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                                        "failure reason" => ben_bytes!(e.to_string())
+                                    }.encode());
+                            }
+                        };
+                        let _ = peers_list.write(&u128::from(peer_pre_parse).to_be_bytes());
+                        peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
+                    }
+                }
+                if peers_list.len() != 72 {
+                    let peers = data.get_peers(
+                        &torrent_entry.peers,
+                        TorrentPeersType::IPv6,
+                        Some(ip),
+                        72
+                    );
+                    for (_, torrent_peer) in peers.iter() {
+                        if peers_list.len() != 72 {
                             let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
                                 Ok(ip) => { ip }
                                 Err(e) => {
                                     error!("[IPV6 Error] {} - {}", torrent_peer.peer_addr.ip(), e);
                                     return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                                            "failure reason" => ben_bytes!(e.to_string())
-                                        }.encode());
+                                        "failure reason" => ben_bytes!(e.to_string())
+                                    }.encode());
                                 }
                             };
                             let _ = peers_list.write(&u128::from(peer_pre_parse).to_be_bytes());
                             peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
+                            continue;
                         }
-                    }
-                }
-                if peers_list.len() != 72 {
-                    let peers = data.get_peers(
-                        torrent_entry.peers.clone(),
-                        TorrentPeersType::IPv6,
-                        Some(ip),
-                        72
-                    );
-                    if peers.is_some() {
-                        for (_, torrent_peer) in peers.unwrap().iter() {
-                            if peers_list.len() != 72 {
-                                let peer_pre_parse = match torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
-                                    Ok(ip) => { ip }
-                                    Err(e) => {
-                                        error!("[IPV6 Error] {} - {}", torrent_peer.peer_addr.ip(), e);
-                                        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                                            "failure reason" => ben_bytes!(e.to_string())
-                                        }.encode());
-                                    }
-                                };
-                                let _ = peers_list.write(&u128::from(peer_pre_parse).to_be_bytes());
-                                peers_list.write_all(&announce_unwrapped.clone().port.to_be_bytes()).unwrap();
-                                continue;
-                            }
-                            break;
-                        }
+                        break;
                     }
                 }
                 HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -454,40 +446,36 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         IpAddr::V4(_) => {
             if announce_unwrapped.left != 0 {
                 let seeds = data.get_peers(
-                    torrent_entry.seeds.clone(),
+                    &torrent_entry.seeds,
                     TorrentPeersType::IPv4,
                     Some(ip),
                     72
                 );
-                if seeds.is_some() {
-                    for (peer_id, torrent_peer) in seeds.unwrap().iter() {
+                for (peer_id, torrent_peer) in seeds.iter() {
+                    peers_list_mut.push(ben_map! {
+                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
+                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                    });
+                }
+            }
+            if peers_list_mut.len() != 72 {
+                let peers = data.get_peers(
+                    &torrent_entry.peers,
+                    TorrentPeersType::IPv4,
+                    Some(ip),
+                    72
+                );
+                for (peer_id, torrent_peer) in peers.iter() {
+                    if peers_list_mut.len() != 72 {
                         peers_list_mut.push(ben_map! {
                             "peer id" => ben_bytes!(peer_id.to_string()),
                             "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                             "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
                         });
+                        continue;
                     }
-                }
-            }
-            if peers_list_mut.len() != 72 {
-                let peers = data.get_peers(
-                    torrent_entry.peers.clone(),
-                    TorrentPeersType::IPv4,
-                    Some(ip),
-                    72
-                );
-                if peers.is_some() {
-                    for (peer_id, torrent_peer) in peers.unwrap().iter() {
-                        if peers_list_mut.len() != 72 {
-                            peers_list_mut.push(ben_map! {
-                                "peer id" => ben_bytes!(peer_id.to_string()),
-                                "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                                "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
-                            });
-                            continue;
-                        }
-                        break;
-                    }
+                    break;
                 }
             }
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -502,40 +490,36 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         IpAddr::V6(_) => {
             if announce_unwrapped.left != 0 {
                 let seeds = data.get_peers(
-                    torrent_entry.seeds.clone(),
+                    &torrent_entry.seeds,
                     TorrentPeersType::IPv6,
                     Some(ip),
                     72
                 );
-                if seeds.is_some() {
-                    for (peer_id, torrent_peer) in seeds.unwrap().iter() {
+                for (peer_id, torrent_peer) in seeds.iter() {
+                    peers_list_mut.push(ben_map! {
+                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
+                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                    });
+                }
+            }
+            if peers_list_mut.len() != 72 {
+                let peers = data.get_peers(
+                    &torrent_entry.peers,
+                    TorrentPeersType::IPv6,
+                    Some(ip),
+                    72
+                );
+                for (peer_id, torrent_peer) in peers.iter() {
+                    if peers_list_mut.len() != 72 {
                         peers_list_mut.push(ben_map! {
                             "peer id" => ben_bytes!(peer_id.to_string()),
                             "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                             "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
                         });
+                        continue;
                     }
-                }
-            }
-            if peers_list_mut.len() != 72 {
-                let peers = data.get_peers(
-                    torrent_entry.peers.clone(),
-                    TorrentPeersType::IPv6,
-                    Some(ip),
-                    72
-                );
-                if peers.is_some() {
-                    for (peer_id, torrent_peer) in peers.unwrap().iter() {
-                        if peers_list_mut.len() != 72 {
-                            peers_list_mut.push(ben_map! {
-                                "peer id" => ben_bytes!(peer_id.to_string()),
-                                "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                                "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
-                            });
-                            continue;
-                        }
-                        break;
-                    }
+                    break;
                 }
             }
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
