@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::collections::{HashMap, VecDeque};
-use log::{debug, info};
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::interval;
@@ -16,34 +15,23 @@ impl ResponseBatchManager {
         let (sender, mut receiver) = mpsc::unbounded_channel::<QueuedResponse>();
 
         tokio::spawn(async move {
-            let mut buffer = VecDeque::with_capacity(1000); // Larger buffer for higher throughput
-            let mut timer = interval(Duration::from_millis(5)); // 5ms flush interval for better responsiveness
-            let mut stats_timer = interval(Duration::from_secs(10)); // Stats every 10 seconds
-            let mut total_queued = 0u64;
-            let mut total_sent = 0u64;
+            let mut buffer = VecDeque::with_capacity(1000);
+            let mut timer = interval(Duration::from_millis(5));
 
             loop {
                 tokio::select! {
                     Some(response) = receiver.recv() => {
-                        total_queued += 1;
                         buffer.push_back(response);
 
                         if buffer.len() >= 500 {
-                            debug!("Buffer full ({} items) - flushing immediately", buffer.len());
                             Self::flush_buffer(&socket, &mut buffer).await;
                         }
                     }
 
                     _ = timer.tick() => {
                         if !buffer.is_empty() {
-                            debug!("Timer flush - {} items in buffer", buffer.len());
                             Self::flush_buffer(&socket, &mut buffer).await;
                         }
-                    }
-
-                    _ = stats_timer.tick() => {
-                        info!("Batch sender stats - Queued: {}, Current buffer: {}, Socket: {:?}",
-                              total_queued, buffer.len(), socket.local_addr());
                     }
                 }
             }
@@ -53,55 +41,12 @@ impl ResponseBatchManager {
     }
 
     pub(crate) fn queue_response(&self, remote_addr: SocketAddr, payload: Vec<u8>) {
-        // Monitor queue health
-        match self.sender.send(QueuedResponse { remote_addr, payload }) {
-            Ok(_) => {
-                debug!("Response queued for {}", remote_addr);
-            }
-            Err(e) => {
-                // This indicates the batch sender task has died
-                log::error!("Failed to queue response - batch sender may have crashed: {}", e);
-            }
-        }
+        let _ = self.sender.send(QueuedResponse { remote_addr, payload });
     }
 
     async fn flush_buffer(socket: &UdpSocket, buffer: &mut VecDeque<QueuedResponse>) {
-        let batch_size = buffer.len();
-        let mut sent_count = 0;
-        let mut error_count = 0;
-
         while let Some(response) = buffer.pop_front() {
-            match socket.send_to(&response.payload, &response.remote_addr).await {
-                Ok(bytes_sent) => {
-                    sent_count += 1;
-                    debug!("Sent {} bytes to {}", bytes_sent, response.remote_addr);
-                }
-                Err(e) => {
-                    error_count += 1;
-                    match e.kind() {
-                        std::io::ErrorKind::WouldBlock => {
-                            debug!("Send buffer full (EWOULDBLOCK) - packet dropped");
-                        }
-                        std::io::ErrorKind::Other => {
-                            if let Some(os_error) = e.raw_os_error() {
-                                match os_error {
-                                    105 => debug!("ENOBUFS: No buffer space available - increase socket buffers"),
-                                    111 => debug!("ECONNREFUSED: Connection refused by peer"),
-                                    113 => debug!("EHOSTUNREACH: Host unreachable"),
-                                    _ => debug!("Send error (OS error {}): {}", os_error, e),
-                                }
-                            } else {
-                                debug!("Send error: {}", e);
-                            }
-                        }
-                        _ => debug!("Send error: {}", e),
-                    }
-                }
-            }
-        }
-
-        if batch_size > 0 {
-            info!("Batch flush: {} total, {} sent, {} errors", batch_size, sent_count, error_count);
+            let _ = socket.send_to(&response.payload, &response.remote_addr).await;
         }
     }
 
