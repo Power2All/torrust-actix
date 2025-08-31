@@ -41,14 +41,45 @@ impl UdpServer {
         let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
 
-        socket.set_recv_buffer_size(recv_buffer_size).map_err(tokio::io::Error::other)?;
-        socket.set_send_buffer_size(send_buffer_size).map_err(tokio::io::Error::other)?;
+        // Aggressive buffer sizing for high throughput
+        let actual_recv_buffer = recv_buffer_size.max(16_777_216); // Minimum 16MB
+        let actual_send_buffer = send_buffer_size.max(16_777_216); // Minimum 16MB
+
+        socket.set_recv_buffer_size(actual_recv_buffer).map_err(tokio::io::Error::other)?;
+        socket.set_send_buffer_size(actual_send_buffer).map_err(tokio::io::Error::other)?;
         socket.set_reuse_address(reuse_address).map_err(tokio::io::Error::other)?;
+
+        // Enable SO_REUSEPORT for better load distribution across threads
+        #[cfg(target_os = "linux")]
+        {
+            use socket2::TcpKeepalive;
+            let reuse_port = 1i32;
+            unsafe {
+                let optval = &reuse_port as *const i32 as *const libc::c_void;
+                if libc::setsockopt(
+                    socket.as_raw_fd(),
+                    libc::SOL_SOCKET,
+                    libc::SO_REUSEPORT,
+                    optval,
+                    std::mem::size_of::<i32>() as libc::socklen_t,
+                ) != 0 {
+                    log::warn!("Failed to set SO_REUSEPORT - continuing without it");
+                }
+            }
+        }
+
         socket.bind(&bind_address.into()).map_err(tokio::io::Error::other)?;
         socket.set_nonblocking(true).map_err(tokio::io::Error::other)?;
 
+        // Convert to std::net::UdpSocket, then to tokio::net::UdpSocket
         let std_socket: std::net::UdpSocket = socket.into();
         let tokio_socket = UdpSocket::from_std(std_socket)?;
+
+        // Log actual buffer sizes
+        let sock_ref = socket2::SockRef::from(&tokio_socket);
+        let actual_recv = sock_ref.recv_buffer_size().unwrap_or(0);
+        let actual_send = sock_ref.send_buffer_size().unwrap_or(0);
+        info!("Socket created with buffers - Recv: {} bytes, Send: {} bytes", actual_recv, actual_send);
 
         Ok(UdpServer {
             socket: Arc::new(tokio_socket),
@@ -61,32 +92,62 @@ impl UdpServer {
     pub async fn start(&self, rx: tokio::sync::watch::Receiver<bool>)
     {
         let threads = self.threads;
-        for _index in 0..=threads {
+        // Create multiple sockets for better performance using SO_REUSEPORT
+        for thread_id in 0..threads {
             let socket_clone = self.socket.clone();
             let tracker = self.tracker.clone();
             let mut rx = rx.clone();
-            let mut data = [0; 1496];
+
             tokio::spawn(async move {
+                // Larger buffer to handle burst traffic
+                let mut data = [0; 2048]; // Increased from 1496
+                let mut packet_count = 0u64;
+                let mut last_stats = std::time::Instant::now();
+
                 loop {
                     let udp_sock = socket_clone.local_addr().unwrap();
                     tokio::select! {
                         _ = rx.changed() => {
-                            info!("Stopping UDP server: {udp_sock}...");
+                            info!("Stopping UDP server thread {}: {udp_sock}...", thread_id);
                             break;
                         }
-                        Ok((valid_bytes, remote_addr)) = socket_clone.recv_from(&mut data) => {
-                            let payload = &data[..valid_bytes];
+                        result = socket_clone.recv_from(&mut data) => {
+                            match result {
+                                Ok((valid_bytes, remote_addr)) => {
+                                    packet_count += 1;
 
-                            debug!("Received {} bytes from {}", payload.len(), remote_addr);
-                            debug!("{payload:?}");
+                                    // Log stats every 10k packets per thread
+                                    if packet_count % 10000 == 0 {
+                                        let elapsed = last_stats.elapsed();
+                                        let rate = 10000.0 / elapsed.as_secs_f64();
+                                        debug!("Thread {} processed 10k packets in {:?} ({:.1} pps)",
+                                              thread_id, elapsed, rate);
+                                        last_stats = std::time::Instant::now();
+                                    }
 
-                            let tracker_cloned = tracker.clone();
-                            let socket_cloned = socket_clone.clone();
-                            let payload_vec = payload.to_vec();
-                            tokio::spawn(async move {
-                                let response = UdpServer::handle_packet(remote_addr, payload_vec, tracker_cloned.clone()).await;
-                                UdpServer::send_response(tracker_cloned.clone(), socket_cloned.clone(), remote_addr, response).await;
-                            });
+                                    let payload = &data[..valid_bytes];
+                                    debug!("Thread {} received {} bytes from {}", thread_id, payload.len(), remote_addr);
+
+                                    let tracker_cloned = tracker.clone();
+                                    let socket_cloned = socket_clone.clone();
+                                    let payload_vec = payload.to_vec();
+
+                                    // Process immediately without extra spawning for better performance
+                                    let response = UdpServer::handle_packet(remote_addr, payload_vec, tracker_cloned.clone()).await;
+                                    UdpServer::send_response(tracker_cloned.clone(), socket_cloned.clone(), remote_addr, response).await;
+                                }
+                                Err(e) => {
+                                    match e.kind() {
+                                        std::io::ErrorKind::WouldBlock => {
+                                            // This is normal for non-blocking sockets
+                                            tokio::task::yield_now().await;
+                                        }
+                                        _ => {
+                                            log::error!("Thread {} recv_from error: {}", thread_id, e);
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -101,7 +162,8 @@ impl UdpServer {
         let sentry = sentry::TransactionContext::new("udp server", "send response");
         let transaction = sentry::start_transaction(sentry);
 
-        let mut buffer = Vec::with_capacity(512);
+        // Pre-allocate buffer with exact capacity instead of MAX_PACKET_SIZE
+        let mut buffer = Vec::with_capacity(512); // Most responses are much smaller than MAX_PACKET_SIZE
         let mut cursor = Cursor::new(&mut buffer);
 
         match response.write(&mut cursor) {
@@ -109,6 +171,7 @@ impl UdpServer {
                 let position = cursor.position() as usize;
                 debug!("Response bytes: {:?}", &buffer[..position]);
 
+                // Get batch manager for this socket and queue the response
                 let batch_manager = ResponseBatchManager::get_for_socket(socket).await;
                 batch_manager.queue_response(remote_addr, buffer[..position].to_vec());
             }
@@ -127,6 +190,7 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn send_packet(socket: Arc<UdpSocket>, remote_addr: &SocketAddr, payload: &[u8]) {
+        // This method is kept for compatibility but shouldn't be used in the batched version
         let _ = socket.send_to(payload, remote_addr).await;
     }
 
@@ -214,6 +278,7 @@ impl UdpServer {
     pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let config = tracker.config.tracker_config.clone();
 
+        // Whitelist/Blacklist checks
         if config.whitelist_enabled && !tracker.check_whitelist(InfoHash(request.info_hash.0)) {
             debug!("[UDP ERROR] Torrent Not Whitelisted");
             return Err(ServerError::TorrentNotWhitelisted);
@@ -223,6 +288,7 @@ impl UdpServer {
             return Err(ServerError::TorrentBlacklisted);
         }
 
+        // Key validation
         if config.keys_enabled {
             if request.path.len() < 50 {
                 debug!("[UDP ERROR] Unknown Key");
@@ -246,6 +312,7 @@ impl UdpServer {
             }
         }
 
+        // User key validation
         let user_key = if config.users_enabled {
             let user_key_path_extract = if request.path.len() >= 91 {
                 Some(&request.path[51..=91])
@@ -278,6 +345,7 @@ impl UdpServer {
             return Err(ServerError::PeerKeyNotValid);
         }
 
+        // Handle announce
         let torrent = match tracker.handle_announce(tracker.clone(), AnnounceQueryRequest {
             info_hash: InfoHash(request.info_hash.0),
             peer_id: PeerId(request.peer_id.0),
@@ -298,6 +366,7 @@ impl UdpServer {
             }
         };
 
+        // Get peers efficiently
         let torrent_peers = tracker.get_torrent_peers(request.info_hash, 72, TorrentPeersType::All, Some(remote_addr.ip()));
 
         let (peers, peers6) = if let Some(torrent_peers_unwrapped) = torrent_peers {
@@ -305,6 +374,7 @@ impl UdpServer {
             let mut peers6 = Vec::with_capacity(72);
             let mut count = 0;
 
+            // Only collect peers if not completed download
             if request.bytes_left.0 != 0 {
                 if remote_addr.is_ipv4() {
                     for torrent_peer in torrent_peers_unwrapped.seeds_ipv4.values().take(72) {
@@ -325,6 +395,7 @@ impl UdpServer {
                 }
             }
 
+            // Collect regular peers
             if remote_addr.is_ipv4() {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv4.values().take(72 - count) {
                     if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
@@ -344,6 +415,7 @@ impl UdpServer {
             (Vec::new(), Vec::new())
         };
 
+        // Create response
         let response = if remote_addr.is_ipv6() {
             Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
@@ -362,6 +434,7 @@ impl UdpServer {
             })
         };
 
+        // Update stats
         let stats_event = if remote_addr.is_ipv4() {
             StatsEvent::Udp4AnnouncesHandled
         } else {

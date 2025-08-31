@@ -56,6 +56,7 @@ tracing = "^0.1"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
 lazy_static = "^1.5"
+libc = "^0.2"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"
