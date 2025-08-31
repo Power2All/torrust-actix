@@ -3379,6 +3379,7 @@ dependencies = [
  "futures-util",
  "hex",
  "lazy_static",
+ "libc",
  "log",
  "parking_lot",
  "percent-encoding",

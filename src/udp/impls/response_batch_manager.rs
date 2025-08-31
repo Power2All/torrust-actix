@@ -20,20 +20,22 @@ impl ResponseBatchManager {
             let mut timer = interval(Duration::from_millis(5)); // 5ms flush interval for better responsiveness
             let mut stats_timer = interval(Duration::from_secs(10)); // Stats every 10 seconds
             let mut total_queued = 0u64;
-            let mut total_sent = 0u64;
 
             loop {
                 tokio::select! {
+                    // Receive responses
                     Some(response) = receiver.recv() => {
                         total_queued += 1;
                         buffer.push_back(response);
 
+                        // If buffer reaches 500 responses, send immediately
                         if buffer.len() >= 500 {
                             debug!("Buffer full ({} items) - flushing immediately", buffer.len());
                             Self::flush_buffer(&socket, &mut buffer).await;
                         }
                     }
 
+                    // Timer tick - flush any remaining responses
                     _ = timer.tick() => {
                         if !buffer.is_empty() {
                             debug!("Timer flush - {} items in buffer", buffer.len());
@@ -41,6 +43,7 @@ impl ResponseBatchManager {
                         }
                     }
 
+                    // Stats reporting
                     _ = stats_timer.tick() => {
                         info!("Batch sender stats - Queued: {}, Current buffer: {}, Socket: {:?}",
                               total_queued, buffer.len(), socket.local_addr());
@@ -70,6 +73,7 @@ impl ResponseBatchManager {
         let mut sent_count = 0;
         let mut error_count = 0;
 
+        // Process all responses in buffer
         while let Some(response) = buffer.pop_front() {
             match socket.send_to(&response.payload, &response.remote_addr).await {
                 Ok(bytes_sent) => {
@@ -105,15 +109,19 @@ impl ResponseBatchManager {
         }
     }
 
+    // Get or create batch manager for a socket
     pub(crate) async fn get_for_socket(socket: Arc<UdpSocket>) -> Arc<ResponseBatchManager> {
         let socket_key = format!("{:?}", socket.local_addr().unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap()));
 
+        // Initialize global registry if needed
         let registry = BATCH_MANAGERS.get_or_init(|| RwLock::new(HashMap::new()));
 
+        // Try to get existing batch manager
         if let Some(manager) = registry.read().await.get(&socket_key) {
             return manager.clone();
         }
 
+        // Create new batch manager
         let manager = Arc::new(ResponseBatchManager::new(socket));
         registry.write().await.insert(socket_key, manager.clone());
 
