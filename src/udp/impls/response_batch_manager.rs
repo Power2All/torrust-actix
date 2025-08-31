@@ -16,9 +16,9 @@ impl ResponseBatchManager {
         let (sender, mut receiver) = mpsc::unbounded_channel::<QueuedResponse>();
 
         tokio::spawn(async move {
-            let mut buffer = VecDeque::with_capacity(1000); // Larger buffer for higher throughput
-            let mut timer = interval(Duration::from_millis(5)); // 5ms flush interval for better responsiveness
-            let mut stats_timer = interval(Duration::from_secs(10)); // Stats every 10 seconds
+            let mut buffer = VecDeque::with_capacity(1000);
+            let mut timer = interval(Duration::from_millis(1)); // 1ms flush - much more aggressive
+            let mut stats_timer = interval(Duration::from_secs(10));
             let mut total_queued = 0u64;
 
             loop {
@@ -28,17 +28,15 @@ impl ResponseBatchManager {
                         total_queued += 1;
                         buffer.push_back(response);
 
-                        // If buffer reaches 500 responses, send immediately
-                        if buffer.len() >= 500 {
-                            debug!("Buffer full ({} items) - flushing immediately", buffer.len());
+                        // Much smaller batch size for lower latency
+                        if buffer.len() >= 50 {
                             Self::flush_buffer(&socket, &mut buffer).await;
                         }
                     }
 
-                    // Timer tick - flush any remaining responses
+                    // Very frequent timer tick - prioritize low latency over efficiency
                     _ = timer.tick() => {
                         if !buffer.is_empty() {
-                            debug!("Timer flush - {} items in buffer", buffer.len());
                             Self::flush_buffer(&socket, &mut buffer).await;
                         }
                     }
