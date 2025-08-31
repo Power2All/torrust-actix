@@ -200,19 +200,20 @@ fn main() -> std::io::Result<()>
                     udp_check_host_and_port_used(udp_server_object.bind_address.clone());
                     let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
 
-                    let threads: u64 = udp_server_object.threads;
                     let tokio_udp = Arc::new(Builder::new_multi_thread()
                         .thread_name("udp")
-                        .worker_threads(threads as usize)
+                        .worker_threads(1)
                         .enable_all()
                         .build()?);
 
                     let udp_future = udp_service(
                         address,
-                        threads,
                         udp_server_object.receive_buffer_size,
                         udp_server_object.send_buffer_size,
                         udp_server_object.reuse_address,
+                        udp_server_object.receiver_threads,
+                        udp_server_object.worker_threads,
+                        udp_server_object.queue_size,
                         tracker.clone(),
                         udp_rx.clone(),
                         tokio_udp.clone()
