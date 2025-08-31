@@ -53,6 +53,24 @@ impl UdpServer {
         socket.set_send_buffer_size(actual_send_buffer).map_err(tokio::io::Error::other)?;
         socket.set_reuse_address(reuse_address).map_err(tokio::io::Error::other)?;
 
+        // Enable SO_REUSEPORT for better load distribution across threads
+        #[cfg(target_os = "linux")]
+        {
+            let reuse_port = 1i32;
+            unsafe {
+                let optval = &reuse_port as *const i32 as *const libc::c_void;
+                if libc::setsockopt(
+                    socket.as_raw_fd(),
+                    libc::SOL_SOCKET,
+                    libc::SO_REUSEPORT,
+                    optval,
+                    std::mem::size_of::<i32>() as libc::socklen_t,
+                ) != 0 {
+                    log::warn!("Failed to set SO_REUSEPORT - continuing without it");
+                }
+            }
+        }
+
         socket.bind(&bind_address.into()).map_err(tokio::io::Error::other)?;
         socket.set_nonblocking(true).map_err(tokio::io::Error::other)?;
 
@@ -156,18 +174,9 @@ impl UdpServer {
                 let position = cursor.position() as usize;
                 debug!("Response bytes: {:?}", &buffer[..position]);
 
-                // For immediate response (bypassing batching for better latency)
-                match socket.send_to(&buffer[..position], &remote_addr).await {
-                    Ok(bytes_sent) => {
-                        debug!("Direct send successful: {} bytes to {}", bytes_sent, remote_addr);
-                    }
-                    Err(e) => {
-                        // If direct send fails, fall back to batched approach
-                        log::warn!("Direct send failed ({}), using batch queue", e);
-                        let batch_manager = ResponseBatchManager::get_for_socket(socket).await;
-                        batch_manager.queue_response(remote_addr, buffer[..position].to_vec());
-                    }
-                }
+                // Get batch manager for this socket and queue the response
+                let batch_manager = ResponseBatchManager::get_for_socket(socket).await;
+                batch_manager.queue_response(remote_addr, buffer[..position].to_vec());
             }
             Err(error) => {
                 sentry::capture_error(&error);
