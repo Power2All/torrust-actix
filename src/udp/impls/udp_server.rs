@@ -5,10 +5,6 @@ use std::time::SystemTime;
 use log::{debug, info};
 use socket2::{Socket, Domain, Type, Protocol};
 use tokio::net::UdpSocket;
-
-#[cfg(target_os = "linux")]
-use std::os::fd::AsRawFd;
-
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
@@ -56,6 +52,7 @@ impl UdpServer {
         // Enable SO_REUSEPORT for better load distribution across threads
         #[cfg(target_os = "linux")]
         {
+            use socket2::TcpKeepalive;
             let reuse_port = 1i32;
             unsafe {
                 let optval = &reuse_port as *const i32 as *const libc::c_void;
