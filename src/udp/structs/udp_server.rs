@@ -5,6 +5,8 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 #[derive(Debug)]
 pub struct UdpServer {
     pub(crate) socket: Arc<UdpSocket>,
-    pub(crate) threads: u64,
     pub(crate) tracker: Arc<TorrentTracker>,
+    pub(crate) receiver_threads: u64,
+    pub(crate) worker_threads: u64,
+    pub(crate) queue_size: u64
 }
