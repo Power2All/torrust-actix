@@ -103,10 +103,6 @@ impl ResponseBatchManager {
                 }
             }
         }
-
-        if batch_size > 0 {
-            info!("Batch flush: {} total, {} sent, {} errors", batch_size, sent_count, error_count);
-        }
     }
 
     // Get or create batch manager for a socket
