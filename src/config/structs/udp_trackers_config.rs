@@ -7,8 +7,5 @@ pub struct UdpTrackersConfig {
     pub threads: u64,
     pub receive_buffer_size: usize,
     pub send_buffer_size: usize,
-    pub reuse_address: bool,
-    pub receiver_threads: usize,
-    pub worker_threads: usize,
-    pub queue_size: usize
+    pub reuse_address: bool
 }

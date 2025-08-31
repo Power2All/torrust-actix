@@ -2,10 +2,9 @@ use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::SystemTime;
-use log::{debug, info, warn};
+use log::{debug, info};
 use socket2::{Socket, Domain, Type, Protocol};
 use tokio::net::UdpSocket;
-use tokio::sync::mpsc;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
@@ -25,7 +24,6 @@ use crate::udp::structs::connection_id::ConnectionId;
 use crate::udp::structs::error_response::ErrorResponse;
 use crate::udp::structs::number_of_downloads::NumberOfDownloads;
 use crate::udp::structs::number_of_peers::NumberOfPeers;
-use crate::udp::structs::packet_job::PacketJob;
 use crate::udp::structs::port::Port;
 use crate::udp::structs::response_peer::ResponsePeer;
 use crate::udp::structs::scrape_request::ScrapeRequest;
@@ -37,16 +35,7 @@ use crate::udp::udp::MAX_SCRAPE_TORRENTS;
 
 impl UdpServer {
     #[tracing::instrument(level = "debug")]
-    pub async fn new(
-        tracker: Arc<TorrentTracker>,
-        bind_address: SocketAddr,
-        recv_buffer_size: usize,
-        send_buffer_size: usize,
-        reuse_address: bool,
-        receiver_threads: usize,
-        worker_threads: usize,
-        queue_size: usize
-    ) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, threads: u64, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool) -> tokio::io::Result<UdpServer>
     {
         let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
@@ -63,126 +52,58 @@ impl UdpServer {
 
         Ok(UdpServer {
             socket: Arc::new(tokio_socket),
+            threads,
             tracker,
-            receiver_threads: receiver_threads as u64,
-            worker_threads: worker_threads as u64,
-            queue_size: queue_size as u64
         })
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn start(&self, rx: tokio::sync::watch::Receiver<bool>) {
-        let (packet_tx, packet_rx) = mpsc::channel::<PacketJob>(self.queue_size as usize);
-        let packet_rx = Arc::new(tokio::sync::Mutex::new(packet_rx));
-
-        let receiver_threads = self.receiver_threads as usize;
-        let worker_threads = self.worker_threads as usize;
-
-        for thread_id in 0..receiver_threads {
+    pub async fn start(&self, rx: tokio::sync::watch::Receiver<bool>)
+    {
+        let threads = self.threads;
+        for _index in 0..=threads {
             let socket_clone = self.socket.clone();
             let tracker = self.tracker.clone();
-            let mut shutdown_rx = rx.clone();
-            let packet_tx = packet_tx.clone();
-
+            let mut rx = rx.clone();
+            let mut data = [0; 1496];
             tokio::spawn(async move {
-                info!("Starting UDP receiver thread {}", thread_id);
-                let mut data = [0; 1496];
-
                 loop {
+                    let udp_sock = socket_clone.local_addr().unwrap();
                     tokio::select! {
-                        _ = shutdown_rx.changed() => {
-                            info!("Stopping UDP receiver thread {}...", thread_id);
+                        _ = rx.changed() => {
+                            info!("Stopping UDP server: {udp_sock}...");
                             break;
                         }
                         Ok((valid_bytes, remote_addr)) = socket_clone.recv_from(&mut data) => {
-                            let payload = data[..valid_bytes].to_vec();
+                            let payload = &data[..valid_bytes];
 
-                            debug!("Receiver {} got {} bytes from {}", thread_id, payload.len(), remote_addr);
+                            debug!("Received {} bytes from {}", payload.len(), remote_addr);
+                            debug!("{payload:?}");
 
-                            let job = PacketJob {
-                                data: payload,
-                                remote_addr,
-                            };
-
-                            if let Err(e) = packet_tx.try_send(job) {
-                                warn!("Packet queue full, dropping packet: {}", e);
-                                match remote_addr {
-                                    SocketAddr::V4(_) => tracker.update_stats(StatsEvent::Udp4BadRequest, 1),
-                                    SocketAddr::V6(_) => tracker.update_stats(StatsEvent::Udp6BadRequest, 1),
-                                };
-                            }
+                            let tracker_cloned = tracker.clone();
+                            let socket_cloned = socket_clone.clone();
+                            // Use payload slice instead of cloning the entire Vec
+                            let payload_vec = payload.to_vec();
+                            tokio::spawn(async move {
+                                let response = UdpServer::handle_packet(remote_addr, payload_vec, tracker_cloned.clone()).await;
+                                UdpServer::send_response(tracker_cloned.clone(), socket_cloned.clone(), remote_addr, response).await;
+                            });
                         }
                     }
                 }
             });
         }
-
-        for thread_id in 0..worker_threads {
-            let socket_clone = self.socket.clone();
-            let tracker = self.tracker.clone();
-            let mut shutdown_rx = rx.clone();
-            let packet_rx = packet_rx.clone();
-
-            tokio::spawn(async move {
-                info!("Starting UDP worker thread {}", thread_id);
-
-                loop {
-                    tokio::select! {
-                        _ = shutdown_rx.changed() => {
-                            info!("Stopping UDP worker thread {}...", thread_id);
-                            break;
-                        }
-                        job = async {
-                            let mut rx = packet_rx.lock().await;
-                            rx.recv().await
-                        } => {
-                            if let Some(PacketJob { data, remote_addr }) = job {
-                                debug!("Worker {} processing packet from {}", thread_id, remote_addr);
-
-                                let response = UdpServer::handle_packet(
-                                    remote_addr,
-                                    data,
-                                    tracker.clone()
-                                ).await;
-
-                                UdpServer::send_response(
-                                    tracker.clone(),
-                                    socket_clone.clone(),
-                                    remote_addr,
-                                    response
-                                ).await;
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        drop(packet_tx);
     }
 
-    // Optimized send_response with pre-sized buffer
     #[tracing::instrument(level = "debug")]
-    pub async fn send_response(
-        tracker: Arc<TorrentTracker>,
-        socket: Arc<UdpSocket>,
-        remote_addr: SocketAddr,
-        response: Response
-    ) {
+    pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response)
+    {
         debug!("sending response to: {:?}", &remote_addr);
         let sentry = sentry::TransactionContext::new("udp server", "send response");
         let transaction = sentry::start_transaction(sentry);
 
-        // Optimize buffer allocation based on response type
-        let estimated_size = match &response {
-            Response::Connect(_) => 16,
-            Response::AnnounceIpv4(_) => 20 + 6 * 72,  // header + max IPv4 peers (6 bytes each)
-            Response::AnnounceIpv6(_) => 20 + 18 * 72, // header + max IPv6 peers (18 bytes each)
-            Response::Scrape(_) => 8 + 12 * 74,        // header + max torrents
-            Response::Error(_) => 128,                 // reasonable max for error message
-        };
-
-        let mut buffer = Vec::with_capacity(estimated_size);
+        // Pre-allocate buffer with exact capacity instead of MAX_PACKET_SIZE
+        let mut buffer = Vec::with_capacity(512); // Most responses are much smaller than MAX_PACKET_SIZE
         let mut cursor = Cursor::new(&mut buffer);
 
         match response.write(&mut cursor) {
@@ -204,7 +125,6 @@ impl UdpServer {
         transaction.finish();
     }
 
-    // Rest of the methods remain the same...
     #[tracing::instrument(level = "debug")]
     pub async fn send_packet(socket: Arc<UdpSocket>, remote_addr: &SocketAddr, payload: &[u8]) {
         let _ = socket.send_to(payload, remote_addr).await;
@@ -275,7 +195,7 @@ impl UdpServer {
     #[tracing::instrument(level = "debug")]
     pub async fn handle_udp_connect(remote_addr: SocketAddr, request: &ConnectRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let connection_id = UdpServer::get_connection_id(&remote_addr).await;
-        let response = Response::Connect(ConnectResponse {
+        let response = Response::from(ConnectResponse {
             transaction_id: request.transaction_id,
             connection_id
         });
@@ -433,7 +353,7 @@ impl UdpServer {
 
         // Create response
         let response = if remote_addr.is_ipv6() {
-            Response::AnnounceIpv6(AnnounceResponse {
+            Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
                 announce_interval: AnnounceInterval(config.request_interval as i32),
                 leechers: NumberOfPeers(torrent.peers.len() as i32),
@@ -441,7 +361,7 @@ impl UdpServer {
                 peers: peers6,
             })
         } else {
-            Response::AnnounceIpv4(AnnounceResponse {
+            Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
                 announce_interval: AnnounceInterval(config.request_interval as i32),
                 leechers: NumberOfPeers(torrent.peers.len() as i32),
@@ -488,7 +408,7 @@ impl UdpServer {
         };
         tracker.update_stats(stats_event, 1);
 
-        Ok(Response::Scrape(ScrapeResponse {
+        Ok(Response::from(ScrapeResponse {
             transaction_id: request.transaction_id,
             torrent_stats,
         }))
@@ -496,7 +416,7 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn handle_udp_error(e: ServerError, transaction_id: TransactionId) -> Response {
-        Response::Error(ErrorResponse {
+        Response::from(ErrorResponse {
             transaction_id,
             message: e.to_string().into()
         })
