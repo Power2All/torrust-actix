@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 pub struct UdpTrackersConfig {
     pub enabled: bool,
     pub bind_address: String,
-    pub threads: u64,
+    pub udp_threads: usize,
+    pub worker_threads: usize,
     pub receive_buffer_size: usize,
     pub send_buffer_size: usize,
     pub reuse_address: bool

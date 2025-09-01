@@ -122,7 +122,8 @@ impl Configuration {
                 UdpTrackersConfig {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:6969"),
-                    threads: available_parallelism().unwrap().get() as u64,
+                    udp_threads: 2,
+                    worker_threads: available_parallelism().unwrap().get(),
                     receive_buffer_size: 134217728,
                     send_buffer_size: 67108864,
                     reuse_address: true
@@ -454,8 +455,20 @@ impl Configuration {
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_BIND_ADDRESS")) {
                         block.bind_address = value;
                     }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_THREADS")) {
-                        block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_UDP_THREADS")) {
+                        block.udp_threads = value.parse::<usize>().unwrap_or(2);
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_WORKER_THREADS")) {
+                        block.worker_threads = value.parse::<usize>().unwrap_or(available_parallelism().unwrap().get());
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_RECEIVE_BUFFER_SIZE")) {
+                        block.receive_buffer_size = value.parse::<usize>().unwrap_or(134217728);
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SEND_BUFFER_SIZE")) {
+                        block.send_buffer_size = value.parse::<usize>().unwrap_or(67108864);
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
+                        block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
                     }
                 }
             }

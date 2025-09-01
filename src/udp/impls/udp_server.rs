@@ -5,6 +5,7 @@ use std::time::SystemTime;
 use log::{debug, info};
 use socket2::{Socket, Domain, Type, Protocol};
 use tokio::net::UdpSocket;
+use tokio::runtime::Builder;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
@@ -24,18 +25,20 @@ use crate::udp::structs::connection_id::ConnectionId;
 use crate::udp::structs::error_response::ErrorResponse;
 use crate::udp::structs::number_of_downloads::NumberOfDownloads;
 use crate::udp::structs::number_of_peers::NumberOfPeers;
+use crate::udp::structs::parse_pool::ParsePool;
 use crate::udp::structs::port::Port;
 use crate::udp::structs::response_peer::ResponsePeer;
 use crate::udp::structs::scrape_request::ScrapeRequest;
 use crate::udp::structs::scrape_response::ScrapeResponse;
 use crate::udp::structs::torrent_scrape_statistics::TorrentScrapeStatistics;
 use crate::udp::structs::transaction_id::TransactionId;
+use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
 use crate::udp::udp::MAX_SCRAPE_TORRENTS;
 
 impl UdpServer {
     #[tracing::instrument(level = "debug")]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, threads: u64, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool) -> tokio::io::Result<UdpServer>
     {
         let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
@@ -46,53 +49,67 @@ impl UdpServer {
         socket.bind(&bind_address.into()).map_err(tokio::io::Error::other)?;
         socket.set_nonblocking(true).map_err(tokio::io::Error::other)?;
 
-        // Convert to std::net::UdpSocket, then to tokio::net::UdpSocket
         let std_socket: std::net::UdpSocket = socket.into();
         let tokio_socket = UdpSocket::from_std(std_socket)?;
 
         Ok(UdpServer {
             socket: Arc::new(tokio_socket),
-            threads,
+            udp_threads,
+            worker_threads,
             tracker,
         })
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn start(&self, rx: tokio::sync::watch::Receiver<bool>)
-    {
-        let threads = self.threads;
-        for _index in 0..=threads {
-            let socket_clone = self.socket.clone();
-            let tracker = self.tracker.clone();
-            let mut rx = rx.clone();
-            let mut data = [0; 1496];
-            tokio::spawn(async move {
-                loop {
-                    let udp_sock = socket_clone.local_addr().unwrap();
-                    tokio::select! {
-                        _ = rx.changed() => {
-                            info!("Stopping UDP server: {udp_sock}...");
-                            break;
-                        }
-                        Ok((valid_bytes, remote_addr)) = socket_clone.recv_from(&mut data) => {
-                            let payload = &data[..valid_bytes];
+    pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
+        let parse_pool = Arc::new(ParsePool::new());
+        parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone()).await;
 
-                            debug!("Received {} bytes from {}", payload.len(), remote_addr);
-                            debug!("{payload:?}");
+        let udp_threads = self.udp_threads;
+        let socket_clone = self.socket.clone();
+        let parse_pool_clone = parse_pool.clone();
 
-                            let tracker_cloned = tracker.clone();
-                            let socket_cloned = socket_clone.clone();
-                            // Use payload slice instead of cloning the entire Vec
-                            let payload_vec = payload.to_vec();
-                            tokio::spawn(async move {
-                                let response = UdpServer::handle_packet(remote_addr, payload_vec, tracker_cloned.clone()).await;
-                                UdpServer::send_response(tracker_cloned.clone(), socket_cloned.clone(), remote_addr, response).await;
-                            });
+        // Spawn the runtime in a blocking thread
+        tokio::task::spawn_blocking(move || {
+            let tokio_udp = Builder::new_multi_thread()
+                .thread_name("udp")
+                .worker_threads(udp_threads)
+                .enable_all()
+                .build()
+                .unwrap();
+
+            tokio_udp.block_on(async move {
+                for _index in 0..udp_threads {
+                    let parse_pool_clone = parse_pool_clone.clone();
+                    let socket_clone = socket_clone.clone();
+                    let mut rx = rx.clone();
+
+                    tokio::spawn(async move {
+                        let mut data = [0; 1496];
+                        loop {
+                            let udp_sock = socket_clone.local_addr().unwrap();
+                            tokio::select! {
+                            _ = rx.changed() => {
+                                info!("Stopping UDP server: {udp_sock}...");
+                                break;
+                            }
+                            Ok((valid_bytes, remote_addr)) = socket_clone.recv_from(&mut data) => {
+                                let payload = &data[..valid_bytes];
+                                debug!("Received {} bytes from {}", payload.len(), remote_addr);
+                                debug!("{payload:?}");
+
+                                let socket_cloned = socket_clone.clone();
+                                let payload_vec = payload.to_vec();
+                                parse_pool_clone.payload.write().push(UdpPacket { remote_addr, data: payload_vec, socket: socket_cloned });
+                            }
                         }
-                    }
+                        }
+                    });
                 }
+
+                rx.changed().await.ok();
             });
-        }
+        });
     }
 
     #[tracing::instrument(level = "debug")]

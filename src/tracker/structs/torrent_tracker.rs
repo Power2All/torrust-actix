@@ -28,5 +28,5 @@ pub struct TorrentTracker {
     pub keys_updates: KeysUpdates,
     pub users: Arc<RwLock<BTreeMap<UserId, UserEntryItem>>>,
     pub users_updates: UsersUpdates,
-    pub stats: Arc<StatsAtomics>,
+    pub stats: Arc<StatsAtomics>
 }
