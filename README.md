@@ -174,6 +174,7 @@ UDP_0_THREADS <UINT64>
 
 #### v4.0.14
 * Code optimizations thanks to AI scanning
+* Huge memory and CPU consumption improvement for UDP, using offloading
 
 #### v4.0.13
 * Added further UDP improvement by adding customization, also added to the config:
