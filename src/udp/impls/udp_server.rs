@@ -1,7 +1,5 @@
-use std::io::Cursor;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::SystemTime;
 use log::{debug, info};
 use socket2::{Socket, Domain, Type, Protocol};
 use tokio::net::UdpSocket;
@@ -62,14 +60,13 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
-        let parse_pool = Arc::new(ParsePool::new());
+        let parse_pool = Arc::new(ParsePool::new(10000)); // Bounded queue
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone()).await;
 
         let udp_threads = self.udp_threads;
         let socket_clone = self.socket.clone();
         let parse_pool_clone = parse_pool.clone();
 
-        // Spawn the runtime in a blocking thread
         tokio::task::spawn_blocking(move || {
             let tokio_udp = Builder::new_multi_thread()
                 .thread_name("udp")
@@ -89,57 +86,55 @@ impl UdpServer {
                         loop {
                             let udp_sock = socket_clone.local_addr().unwrap();
                             tokio::select! {
-                            _ = rx.changed() => {
-                                info!("Stopping UDP server: {udp_sock}...");
-                                break;
-                            }
-                            Ok((valid_bytes, remote_addr)) = socket_clone.recv_from(&mut data) => {
-                                let payload = &data[..valid_bytes];
-                                debug!("Received {} bytes from {}", payload.len(), remote_addr);
-                                debug!("{payload:?}");
+                                _ = rx.changed() => {
+                                    info!("Stopping UDP server: {udp_sock}...");
+                                    break;
+                                }
+                                Ok((valid_bytes, remote_addr)) = socket_clone.recv_from(&mut data) => {
+                                    if valid_bytes > 0 {
+                                        let packet = UdpPacket {
+                                            remote_addr,
+                                            data,
+                                            data_len: valid_bytes,
+                                            socket: socket_clone.clone(),
+                                        };
 
-                                let socket_cloned = socket_clone.clone();
-                                let payload_vec = payload.to_vec();
-                                parse_pool_clone.payload.write().push(UdpPacket { remote_addr, data: payload_vec, socket: socket_cloned });
+                                        // Use try_push for non-blocking operation
+                                        if parse_pool_clone.payload.push(packet).is_err() {
+                                            // Queue full, drop packet (or handle differently)
+                                            debug!("Parse pool queue full, dropping packet");
+                                        }
+                                    }
+                                }
                             }
-                        }
                         }
                     });
                 }
-
                 rx.changed().await.ok();
             });
         });
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response)
-    {
+    pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
         debug!("sending response to: {:?}", &remote_addr);
-        let sentry = sentry::TransactionContext::new("udp server", "send response");
-        let transaction = sentry::start_transaction(sentry);
 
-        // Pre-allocate buffer with exact capacity instead of MAX_PACKET_SIZE
-        let mut buffer = Vec::with_capacity(512); // Most responses are much smaller than MAX_PACKET_SIZE
-        let mut cursor = Cursor::new(&mut buffer);
+        // Pre-allocate buffer with exact capacity
+        let estimated_size = response.estimated_size();
+        let mut buffer = Vec::with_capacity(estimated_size);
 
-        match response.write(&mut cursor) {
+        match response.write(&mut buffer) {
             Ok(_) => {
-                let position = cursor.position() as usize;
-                debug!("Response bytes: {:?}", &buffer[..position]);
-                UdpServer::send_packet(socket, &remote_addr, &buffer[..position]).await;
+                UdpServer::send_packet(socket, &remote_addr, &buffer).await;
             }
             Err(error) => {
-                sentry::capture_error(&error);
                 match remote_addr {
                     SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4InvalidRequest, 1); }
                     SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6InvalidRequest, 1); }
                 }
-                debug!("could not write response to bytes.");
+                debug!("could not write response to bytes: {error}");
             }
         }
-
-        transaction.finish();
     }
 
     #[tracing::instrument(level = "debug")]
@@ -149,15 +144,41 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
-        match SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-            Ok(duration) => ConnectionId(((duration.as_secs() / 3600) | ((remote_address.port() as u64) << 36)) as i64),
-            Err(_) => ConnectionId(0x7FFFFFFFFFFFFFFF)
+        use std::hash::{Hasher, DefaultHasher};
+        use std::time::Instant;
+
+        let mut hasher = DefaultHasher::new();
+        hasher.write_u64(Instant::now().elapsed().as_nanos() as u64);
+        hasher.write_u16(remote_address.port());
+        if let std::net::IpAddr::V4(ipv4) = remote_address.ip() {
+            hasher.write(&ipv4.octets());
+        } else if let std::net::IpAddr::V6(ipv6) = remote_address.ip() {
+            hasher.write(&ipv6.octets());
         }
+
+        ConnectionId(hasher.finish() as i64)
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn handle_packet(remote_addr: SocketAddr, payload: Vec<u8>, tracker: Arc<TorrentTracker>) -> Response {
-        let transaction_id = match Request::from_bytes(&payload, MAX_SCRAPE_TORRENTS) {
+    pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>) -> Response {
+        // Fast path for connect requests (most common)
+        if payload.len() == 16 {
+            if let [_, _, _, _, action1, action2, action3, action4, ..] = payload {
+                if *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 {
+                    if let Ok(request) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
+                        if let Request::Connect(connect_request) = request {
+                            return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
+                                Ok(response) => response,
+                                Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Regular processing for other requests
+        let transaction_id = match Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
             Ok(request) => {
                 let tid = match &request {
                     Request::Connect(connect_request) => connect_request.transaction_id,

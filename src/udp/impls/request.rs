@@ -83,17 +83,38 @@ impl Request {
 
     #[tracing::instrument(level = "debug")]
     pub fn from_bytes(bytes: &[u8], max_scrape_torrents: u8) -> Result<Self, RequestParseError> {
-        let mut cursor = Cursor::new(bytes);
+        // Quick length check
+        if bytes.len() < 16 {
+            return Err(RequestParseError::unsendable_text("Packet too short"));
+        }
 
-        let connection_id = cursor
-            .read_i64::<NetworkEndian>()
-            .map_err(RequestParseError::unsendable_io)?;
-        let action = cursor
-            .read_i32::<NetworkEndian>()
-            .map_err(RequestParseError::unsendable_io)?;
-        let transaction_id = cursor
-            .read_i32::<NetworkEndian>()
-            .map_err(RequestParseError::unsendable_io)?;
+        // Use array references instead of cursor for faster parsing
+        let connection_id = i64::from_be_bytes(bytes[0..8].try_into().map_err(|_|
+            RequestParseError::unsendable_io(io::Error::new(io::ErrorKind::InvalidData, "Invalid connection_id"))
+        )?);
+
+        let action = i32::from_be_bytes(bytes[8..12].try_into().map_err(|_|
+            RequestParseError::unsendable_io(io::Error::new(io::ErrorKind::InvalidData, "Invalid action"))
+        )?);
+
+        let transaction_id = i32::from_be_bytes(bytes[12..16].try_into().map_err(|_|
+            RequestParseError::unsendable_io(io::Error::new(io::ErrorKind::InvalidData, "Invalid transaction_id"))
+        )?);
+
+        // Fast path for connect requests
+        if action == 0 {
+            if connection_id == PROTOCOL_IDENTIFIER {
+                return Ok(ConnectRequest {
+                    transaction_id: TransactionId(transaction_id),
+                }.into());
+            } else {
+                return Err(RequestParseError::unsendable_text("Protocol identifier missing"));
+            }
+        }
+
+        // For announce and scrape, continue with cursor-based parsing
+        let mut cursor = Cursor::new(bytes);
+        cursor.set_position(16); // Skip already parsed bytes
 
         match action {
             // Connect

@@ -1,21 +1,21 @@
 use std::sync::Arc;
 use std::time::Duration;
-use log::{debug, info};
-use parking_lot::RwLock;
+use log::info;
+use crossbeam::queue::ArrayQueue;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::udp::structs::parse_pool::ParsePool;
+use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
 
 impl Default for ParsePool {
     fn default() -> Self {
-        Self::new()
+        Self::new(0)
     }
 }
 
 impl ParsePool {
-    pub fn new() -> ParsePool
-    {
-        ParsePool { payload: Arc::new(RwLock::new(Vec::new())) }
+    pub fn new(capacity: usize) -> ParsePool {
+        ParsePool { payload: Arc::new(ArrayQueue::new(capacity)) }
     }
 
     pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>) {
@@ -26,7 +26,9 @@ impl ParsePool {
 
             tokio::spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
+                let mut batch = Vec::with_capacity(32);
                 let mut interval = tokio::time::interval(Duration::from_millis(1));
+
                 loop {
                     tokio::select! {
                         _ = shutdown_handler.changed() => {
@@ -34,19 +36,27 @@ impl ParsePool {
                             return;
                         }
                         _ = interval.tick() => {
-                            let data = {
-                                let mut guard = payload.write();
-                                std::mem::take(&mut *guard)
-                            };
-                            for udp_packet in data {
-                                debug!("Executing request IP {}", udp_packet.remote_addr);
-                                let response = UdpServer::handle_packet(udp_packet.remote_addr, udp_packet.data.clone(), tracker_cloned.clone()).await;
-                                UdpServer::send_response(tracker_cloned.clone(), udp_packet.socket.clone(), udp_packet.remote_addr, response).await;
+                            // Batch process packets
+                            while let Some(packet) = payload.pop() {
+                                batch.push(packet);
+                                if batch.len() >= 32 { break; }
+                            }
+
+                            if !batch.is_empty() {
+                                Self::process_batch(batch, tracker_cloned.clone()).await;
+                                batch = Vec::with_capacity(32);
                             }
                         }
                     }
                 }
             });
+        }
+    }
+
+    async fn process_batch(packets: Vec<UdpPacket>, tracker: Arc<TorrentTracker>) {
+        for packet in packets {
+            let response = UdpServer::handle_packet(packet.remote_addr, &Vec::from(&packet.data[..packet.data_len]), tracker.clone()).await;
+            UdpServer::send_response(tracker.clone(), packet.socket.clone(), packet.remote_addr, response).await;
         }
     }
 }

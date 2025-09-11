@@ -200,6 +200,26 @@ impl Response {
                 .into()),
         }
     }
+
+    #[inline]
+    pub fn estimated_size(&self) -> usize {
+        match self {
+            Response::Connect(_) => 16,
+            Response::AnnounceIpv4(r) => 20 + (r.peers.len() * 6),
+            Response::AnnounceIpv6(r) => 20 + (r.peers.len() * 18),
+            Response::Scrape(r) => 8 + (r.torrent_stats.len() * 12),
+            Response::Error(r) => 8 + r.message.len(),
+        }
+    }
+
+    // Helper method for writing to Vec<u8> with pre-allocation
+    #[inline]
+    pub fn write_to_vec(&self) -> Result<Vec<u8>, io::Error> {
+        let estimated_size = self.estimated_size();
+        let mut buffer = Vec::with_capacity(estimated_size);
+        self.write(&mut buffer)?;
+        Ok(buffer)
+    }
 }
 
 // Helper functions for parsing
