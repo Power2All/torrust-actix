@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 use log::{debug, info};
 use parking_lot::RwLock;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -25,29 +26,22 @@ impl ParsePool {
 
             tokio::spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
+                let mut interval = tokio::time::interval(Duration::from_millis(1));
                 loop {
                     tokio::select! {
                         _ = shutdown_handler.changed() => {
                             info!("[UDP] Shutting down the Parse Pool thread {i}...");
                             return;
                         }
-                        else => {
-                            let batch_opt = {
+                        _ = interval.tick() => {
+                            let data = {
                                 let mut guard = payload.write();
-                                if guard.is_empty() {
-                                    None
-                                } else {
-                                    Some(std::mem::take(&mut *guard))
-                                }
+                                std::mem::take(&mut *guard)
                             };
-                            if let Some(data) = batch_opt {
-                                for udp_packet in data {
-                                    debug!("Executing request IP {}", udp_packet.remote_addr);
-                                    let response = UdpServer::handle_packet(udp_packet.remote_addr, &udp_packet.data, tracker_cloned.clone()).await;
-                                    UdpServer::send_response(tracker_cloned.clone(), udp_packet.socket.clone(), udp_packet.remote_addr, response).await;
-                                }
-                            } else {
-                                tokio::task::yield_now().await;
+                            for udp_packet in data {
+                                debug!("Executing request IP {}", udp_packet.remote_addr);
+                                let response = UdpServer::handle_packet(udp_packet.remote_addr, udp_packet.data.clone(), tracker_cloned.clone()).await;
+                                UdpServer::send_response(tracker_cloned.clone(), udp_packet.socket.clone(), udp_packet.remote_addr, response).await;
                             }
                         }
                     }

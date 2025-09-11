@@ -1,5 +1,5 @@
 use std::io::Cursor;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::SystemTime;
 use log::{debug, info};
@@ -99,8 +99,8 @@ impl UdpServer {
                                 debug!("{payload:?}");
 
                                 let socket_cloned = socket_clone.clone();
-                                let payload_arc: std::sync::Arc<[u8]> = payload.to_vec().into();
-                                parse_pool_clone.payload.write().push(UdpPacket { remote_addr, data: payload_arc, socket: socket_cloned });
+                                let payload_vec = payload.to_vec();
+                                parse_pool_clone.payload.write().push(UdpPacket { remote_addr, data: payload_vec, socket: socket_cloned });
                             }
                         }
                         }
@@ -120,7 +120,7 @@ impl UdpServer {
         let transaction = sentry::start_transaction(sentry);
 
         // Pre-allocate buffer with exact capacity instead of MAX_PACKET_SIZE
-        let mut buffer = Vec::with_capacity(256);
+        let mut buffer = Vec::with_capacity(512); // Most responses are much smaller than MAX_PACKET_SIZE
         let mut cursor = Cursor::new(&mut buffer);
 
         match response.write(&mut cursor) {
@@ -156,8 +156,8 @@ impl UdpServer {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>) -> Response {
-        let transaction_id = match Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
+    pub async fn handle_packet(remote_addr: SocketAddr, payload: Vec<u8>, tracker: Arc<TorrentTracker>) -> Response {
+        let transaction_id = match Request::from_bytes(&payload, MAX_SCRAPE_TORRENTS) {
             Ok(request) => {
                 let tid = match &request {
                     Request::Connect(connect_request) => connect_request.transaction_id,
@@ -332,7 +332,7 @@ impl UdpServer {
                 if remote_addr.is_ipv4() {
                     for torrent_peer in torrent_peers_unwrapped.seeds_ipv4.values().take(72) {
                         if count >= 72 { break; }
-                        if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
+                        if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
                             peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                             count += 1;
                         }
@@ -340,7 +340,7 @@ impl UdpServer {
                 } else {
                     for torrent_peer in torrent_peers_unwrapped.seeds_ipv6.values().take(72) {
                         if count >= 72 { break; }
-                        if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
+                        if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
                             peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                             count += 1;
                         }
@@ -351,13 +351,13 @@ impl UdpServer {
             // Collect regular peers
             if remote_addr.is_ipv4() {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv4.values().take(72 - count) {
-                    if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
+                    if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
                         peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }
             } else {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv6.values().take(72 - count) {
-                    if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
+                    if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
                         peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }

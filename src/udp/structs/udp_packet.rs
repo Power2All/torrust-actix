@@ -5,6 +5,6 @@ use tokio::net::UdpSocket;
 #[derive(Debug, Clone)]
 pub struct UdpPacket {
     pub remote_addr: SocketAddr,
-    pub data: Arc<[u8]>,
+    pub data: Vec<u8>,
     pub socket: Arc<UdpSocket>,
 }

@@ -9,6 +9,7 @@ use tokio::runtime::Builder;
 use tokio::sync::Semaphore;
 use tokio_shutdown::Shutdown;
 use crate::common::common::shutdown_waiting;
+use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::cleanup_stats::CleanupStats;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
@@ -257,7 +258,7 @@ impl TorrentSharding {
     #[tracing::instrument(level = "debug")]
     pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry> {
         // Pre-allocate with estimated capacity
-        let _estimated_size: usize = self.shards.iter()
+        let estimated_size: usize = self.shards.iter()
             .map(|s| s.read().len())
             .sum();
 
