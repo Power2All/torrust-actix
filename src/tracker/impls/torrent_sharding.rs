@@ -1,3 +1,4 @@
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -5,9 +6,10 @@ use log::info;
 use parking_lot::RwLock;
 use tokio::runtime::Builder;
 use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
 use tokio_shutdown::Shutdown;
 use crate::common::common::shutdown_waiting;
-use crate::tracker::structs::cleanup_stats::CleanupStats;
+use crate::tracker::impls::cleanup_stats::CleanupStats;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
@@ -31,77 +33,84 @@ impl TorrentSharding {
 
     pub async fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool) {
         let cleanup_interval = torrent_tracker.config.tracker_config.peers_cleanup_interval;
-        let _cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
+        let cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
 
-        // Use single-threaded runtime for I/O-bound work
-        let cleanup_pool = Builder::new_current_thread()
-            .thread_name("cleanup-pool")
+        // Create a separate runtime for blocking operations
+        let cleanup_pool = Builder::new_multi_thread()
+            .worker_threads(cleanup_threads as usize)
+            .thread_name("cleanup-worker")
             .enable_all()
             .build()
             .unwrap();
 
-        // Process shards in batches to avoid memory spikes
-        let batch_size = 16; // Process 16 shards at a time
-        let semaphore = Arc::new(Semaphore::new(batch_size));
+        // Use semaphore to limit concurrent shard cleanups
+        let max_concurrent = std::cmp::max(cleanup_threads as usize, 4);
+        let semaphore = Arc::new(Semaphore::new(max_concurrent));
 
-        let timer_handle = {
+        let timer_handle: JoinHandle<()> = cleanup_pool.spawn({
             let torrent_tracker_clone = Arc::clone(&torrent_tracker);
             let shutdown_clone = shutdown.clone();
-            let pool_clone = Arc::new(cleanup_pool);
+            let sem_clone = Arc::clone(&semaphore);
 
-            tokio::spawn(async move {
-                let mut batch_futures = Vec::with_capacity(batch_size);
+            async move {
+                // Pre-allocate reusable buffer for expired entries
+                let expired_buffer = Arc::new(RwLock::new(Vec::with_capacity(1000)));
 
                 loop {
                     if shutdown_waiting(
                         Duration::from_secs(cleanup_interval),
                         shutdown_clone.clone()
                     ).await {
-                        return;
+                        break;
                     }
 
+                    // Shared stats accumulator for this cleanup cycle
                     let stats = Arc::new(CleanupStats::new());
-                    let now = std::time::Instant::now();
+                    let mut cleanup_handles = Vec::with_capacity(256);
 
-                    // Process shards in batches
-                    for shard_batch in (0u8..=255u8).collect::<Vec<_>>().chunks(batch_size) {
-                        for &shard in shard_batch {
-                            let tracker_clone = Arc::clone(&torrent_tracker_clone);
-                            let sem_clone = Arc::clone(&semaphore);
-                            let stats_clone = Arc::clone(&stats);
+                    // Process shards concurrently with controlled parallelism
+                    for shard in 0u8..=255u8 {
+                        let tracker_clone = Arc::clone(&torrent_tracker_clone);
+                        let sem_clone = Arc::clone(&sem_clone);
+                        let stats_clone = Arc::clone(&stats);
+                        let buffer_clone = Arc::clone(&expired_buffer);
 
-                            let future = pool_clone.spawn(async move {
-                                let _permit = sem_clone.acquire().await.ok()?;
-                                Self::cleanup_shard_optimized(
-                                    tracker_clone,
-                                    shard,
-                                    peer_timeout,
-                                    persistent,
-                                    stats_clone,
-                                ).await;
-                                Some(())
-                            });
+                        let handle = tokio::spawn(async move {
+                            let _permit = sem_clone.acquire().await.ok()?;
+                            Self::cleanup_shard_optimized(
+                                tracker_clone,
+                                shard,
+                                peer_timeout,
+                                persistent,
+                                stats_clone,
+                                buffer_clone
+                            ).await;
+                            Some(())
+                        });
 
-                            batch_futures.push(future);
-                        }
+                        cleanup_handles.push(handle);
+                    }
 
-                        // Wait for current batch to complete
-                        for future in batch_futures.drain(..) {
-                            let _ = future.await;
-                        }
+                    // Wait for all cleanups to complete
+                    for handle in cleanup_handles {
+                        let _ = handle.await;
                     }
 
                     // Apply batch stats update
                     stats.apply_to_tracker(&torrent_tracker_clone);
-
-                    let elapsed = now.elapsed();
-                    info!("[CLEANUP] Completed in {elapsed:?}");
                 }
-            })
-        };
+            }
+        });
 
-        shutdown.clone().handle().await;
+        // Wait for shutdown signal
+        shutdown.handle().await;
+
+        // Cancel the cleanup task
         timer_handle.abort();
+        let _ = timer_handle.await;
+
+        // Shutdown the runtime properly
+        cleanup_pool.shutdown_background();
     }
 
     async fn cleanup_shard_optimized(
@@ -110,61 +119,81 @@ impl TorrentSharding {
         peer_timeout: Duration,
         persistent: bool,
         stats: Arc<CleanupStats>,
+        expired_buffer: Arc<RwLock<Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>)>>>
     ) {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
 
         if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
-            let _now = std::time::Instant::now();
+            // Reuse buffer from pool
+            let mut buffer = expired_buffer.write();
+            buffer.clear();
 
-            // Single write acquisition for the entire cleanup
-            let mut shard_write = shard_arc.write();
+            // Quick read pass to identify expired entries
+            {
+                let shard_read = shard_arc.read();
 
-            // Use retain for more efficient removal
-            shard_write.retain(|_info_hash, torrent_entry| {
-                let mut retain_torrent = true;
-                let mut expired_seeds = Vec::new();
-                let mut expired_peers = Vec::new();
+                for (info_hash, torrent_entry) in shard_read.iter() {
+                    let mut has_expired = false;
+                    let mut expired_seeds = Vec::new();
+                    let mut expired_peers = Vec::new();
 
-                // Check seeds with pre-allocation
-                expired_seeds.reserve(torrent_entry.seeds.len() / 8);
-                for (peer_id, torrent_peer) in &torrent_entry.seeds {
-                    if torrent_peer.updated.elapsed() > peer_timeout {
-                        expired_seeds.push(*peer_id);
+                    // Check seeds - use capacity hint for better allocation
+                    expired_seeds.reserve(torrent_entry.seeds.len() / 10);
+                    for (peer_id, torrent_peer) in &torrent_entry.seeds {
+                        if torrent_peer.updated.elapsed() > peer_timeout {
+                            expired_seeds.push(*peer_id);
+                            has_expired = true;
+                        }
+                    }
+
+                    // Check peers - use capacity hint
+                    expired_peers.reserve(torrent_entry.peers.len() / 10);
+                    for (peer_id, torrent_peer) in &torrent_entry.peers {
+                        if torrent_peer.updated.elapsed() > peer_timeout {
+                            expired_peers.push(*peer_id);
+                            has_expired = true;
+                        }
+                    }
+
+                    if has_expired {
+                        buffer.push((*info_hash, expired_seeds, expired_peers));
                     }
                 }
+            }
 
-                // Check peers with pre-allocation
-                expired_peers.reserve(torrent_entry.peers.len() / 8);
-                for (peer_id, torrent_peer) in &torrent_entry.peers {
-                    if torrent_peer.updated.elapsed() > peer_timeout {
-                        expired_peers.push(*peer_id);
+            // Process removals if needed
+            if !buffer.is_empty() {
+                let mut shard_write = shard_arc.write();
+
+                for (info_hash, expired_seeds, expired_peers) in buffer.iter() {
+                    if let Entry::Occupied(mut entry) = shard_write.entry(*info_hash) {
+                        let torrent_entry = entry.get_mut();
+
+                        // Batch remove seeds
+                        for peer_id in expired_seeds {
+                            if torrent_entry.seeds.remove(peer_id).is_some() {
+                                seeds_removed += 1;
+                            }
+                        }
+
+                        // Batch remove peers
+                        for peer_id in expired_peers {
+                            if torrent_entry.peers.remove(peer_id).is_some() {
+                                peers_removed += 1;
+                            }
+                        }
+
+                        // Remove empty torrent
+                        if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
+                            entry.remove();
+                            torrents_removed += 1;
+                        }
                     }
                 }
-
-                // Remove expired entries
-                for peer_id in expired_seeds {
-                    if torrent_entry.seeds.remove(&peer_id).is_some() {
-                        seeds_removed += 1;
-                    }
-                }
-
-                for peer_id in expired_peers {
-                    if torrent_entry.peers.remove(&peer_id).is_some() {
-                        peers_removed += 1;
-                    }
-                }
-
-                // Remove empty torrent if not persistent
-                if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
-                    retain_torrent = false;
-                    torrents_removed += 1;
-                }
-
-                retain_torrent
-            });
+            }
         }
 
-        // Update shared stats
+        // Update shared stats atomically
         if torrents_removed > 0 {
             stats.add_torrents(torrents_removed);
         }
@@ -222,8 +251,9 @@ impl TorrentSharding {
 
         for shard in &self.shards {
             let shard_data = shard.read();
-            // Use extend for better performance
-            torrents_return.extend(shard_data.iter().map(|(k, v)| (*k, v.clone())));
+            for (k, v) in shard_data.iter() {
+                torrents_return.insert(*k, v.clone());
+            }
         }
         torrents_return
     }
@@ -276,7 +306,6 @@ impl TorrentSharding {
         results
     }
 
-    // Streaming iterator to avoid cloning
     pub fn iter_all_torrents<F>(&self, mut f: F)
     where
         F: FnMut(&InfoHash, &TorrentEntry)

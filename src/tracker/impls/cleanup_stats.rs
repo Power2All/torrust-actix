@@ -1,8 +1,13 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::structs::cleanup_stats::CleanupStats;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+
+pub struct CleanupStats {
+    pub torrents: AtomicU64,
+    pub seeds: AtomicU64,
+    pub peers: AtomicU64,
+}
 
 impl CleanupStats {
     pub(crate) fn new() -> Self {
@@ -26,9 +31,9 @@ impl CleanupStats {
     }
 
     pub(crate) fn apply_to_tracker(&self, tracker: &Arc<TorrentTracker>) {
-        let torrents = self.torrents.load(Ordering::Relaxed);
-        let seeds = self.seeds.load(Ordering::Relaxed);
-        let peers = self.peers.load(Ordering::Relaxed);
+        let torrents = self.torrents.swap(0, Ordering::Relaxed);
+        let seeds = self.seeds.swap(0, Ordering::Relaxed);
+        let peers = self.peers.swap(0, Ordering::Relaxed);
 
         // Batch update all stats at once
         if torrents > 0 {
