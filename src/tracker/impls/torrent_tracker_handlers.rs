@@ -20,6 +20,8 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn validate_announce(&self, remote_addr: IpAddr, query: HashMap<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
     {
+        let now = std::time::Instant::now();
+
         fn get_required_bytes<'a>(query: &'a HashMap<String, Vec<Vec<u8>>>, field: &str, expected_len: Option<usize>) -> Result<&'a [u8], CustomError> {
             let value = query.get(field)
                 .ok_or_else(|| CustomError::new(&format!("missing {field}")))?
@@ -43,12 +45,19 @@ impl TorrentTracker {
                 .map_err(|_| CustomError::new(&format!("missing or invalid {field}")))
         }
 
-        let info_hash = get_required_bytes(&query, "info_hash", Some(20))?;
-        let peer_id = get_required_bytes(&query, "peer_id", Some(20))?;
+        // Fast path: validate required parameters first
+        let info_hash_bytes = get_required_bytes(&query, "info_hash", Some(20))?;
+        let peer_id_bytes = get_required_bytes(&query, "peer_id", Some(20))?;
         let port_integer = parse_integer::<u16>(&query, "port")?;
-        let uploaded_integer = parse_integer::<u64>(&query, "uploaded")?;
-        let downloaded_integer = parse_integer::<u64>(&query, "downloaded")?;
-        let left_integer = parse_integer::<u64>(&query, "left")?;
+
+        // Parse info_hash with optimized conversion
+        let info_hash = InfoHash::from(info_hash_bytes);
+        let peer_id = PeerId::from(peer_id_bytes);
+
+        // Parse optional parameters with defaults
+        let uploaded_integer = parse_integer::<u64>(&query, "uploaded").unwrap_or(0);
+        let downloaded_integer = parse_integer::<u64>(&query, "downloaded").unwrap_or(0);
+        let left_integer = parse_integer::<u64>(&query, "left").unwrap_or(0);
 
         let compact_bool = query.get("compact")
             .and_then(|v| v.first())
@@ -76,9 +85,12 @@ impl TorrentTracker {
             .map(|v| if v == 0 || v > 72 { 72 } else { v })
             .unwrap_or(72);
 
+        let elapsed = now.elapsed();
+        debug!("[PERF] Announce validation took: {:?}", elapsed);
+
         Ok(AnnounceQueryRequest {
-            info_hash: InfoHash::from(info_hash),
-            peer_id: PeerId::from(peer_id),
+            info_hash,
+            peer_id,
             port: port_integer,
             uploaded: uploaded_integer,
             downloaded: downloaded_integer,
@@ -94,6 +106,8 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn handle_announce(&self, data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
     {
+        let now = std::time::Instant::now();
+
         let mut torrent_peer = TorrentPeer {
             peer_id: announce_query.peer_id,
             peer_addr: SocketAddr::new(announce_query.remote_addr, announce_query.port),
@@ -111,7 +125,6 @@ impl TorrentTracker {
             AnnounceEvent::Started | AnnounceEvent::None => {
                 torrent_peer.event = AnnounceEvent::Started;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
-                debug!("[DEBUG] Calling add_torrent_peer");
 
                 let torrent_entry = data.add_torrent_peer(
                     announce_query.info_hash,
@@ -142,6 +155,9 @@ impl TorrentTracker {
                     }
                 }
 
+                let elapsed = now.elapsed();
+                debug!("[PERF] Announce Started handling took: {elapsed:?}");
+
                 Ok((torrent_peer, TorrentEntry {
                     seeds: torrent_entry.1.seeds,
                     peers: torrent_entry.1.peers,
@@ -152,7 +168,6 @@ impl TorrentTracker {
             AnnounceEvent::Stopped => {
                 torrent_peer.event = AnnounceEvent::Stopped;
                 debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
-                debug!("[DEBUG] Calling remove_torrent_peer");
 
                 let torrent_entry = match data.remove_torrent_peer(
                     announce_query.info_hash,
@@ -188,12 +203,14 @@ impl TorrentTracker {
                     );
                 }
 
+                let elapsed = now.elapsed();
+                debug!("[PERF] Announce Stopped handling took: {elapsed:?}");
+
                 Ok((torrent_peer, torrent_entry))
             }
             AnnounceEvent::Completed => {
                 torrent_peer.event = AnnounceEvent::Completed;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
-                debug!("[DEBUG] Calling add_torrent_peer");
 
                 let torrent_entry = data.add_torrent_peer(
                     announce_query.info_hash,
@@ -223,6 +240,9 @@ impl TorrentTracker {
                     }
                 }
 
+                let elapsed = now.elapsed();
+                debug!("[PERF] Announce Completed handling took: {elapsed:?}");
+
                 Ok((torrent_peer, torrent_entry.1))
             }
         }
@@ -231,6 +251,8 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn validate_scrape(&self, query: HashMap<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
     {
+        let now = std::time::Instant::now();
+
         match query.get("info_hash") {
             None => Err(CustomError::new("missing info_hash")),
             Some(result) => {
@@ -238,16 +260,20 @@ impl TorrentTracker {
                     return Err(CustomError::new("no info_hash given"));
                 }
 
-                let info_hash: Vec<InfoHash> = result.iter()
-                    .map(|hash| {
-                        if hash.len() != 20 {
-                            return Err(CustomError::new("an invalid info_hash was given"));
-                        }
-                        Ok(InfoHash::from(hash.as_slice()))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
+                // Optimized batch parsing of info hashes
+                let mut info_hash_vec = Vec::with_capacity(result.len());
 
-                Ok(ScrapeQueryRequest { info_hash })
+                for hash in result {
+                    if hash.len() != 20 {
+                        return Err(CustomError::new("an invalid info_hash was given"));
+                    }
+                    info_hash_vec.push(InfoHash::from(hash.as_slice()));
+                }
+
+                let elapsed = now.elapsed();
+                debug!("[PERF] Scrape validation took: {elapsed:?}");
+
+                Ok(ScrapeQueryRequest { info_hash: info_hash_vec })
             }
         }
     }
@@ -255,12 +281,18 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, TorrentEntry>
     {
-        scrape_query.info_hash.iter()
+        let now = std::time::Instant::now();
+
+        let result = scrape_query.info_hash.iter()
             .map(|&info_hash| {
-                debug!("[DEBUG] Calling get_torrent");
                 let entry = data.get_torrent(info_hash).unwrap_or_default();
                 (info_hash, entry)
             })
-            .collect()
+            .collect();
+
+        let elapsed = now.elapsed();
+        debug!("[PERF] Scrape handling took: {:?}", elapsed);
+
+        result
     }
 }

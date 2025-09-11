@@ -1,6 +1,4 @@
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 use log::info;
@@ -24,50 +22,35 @@ impl Default for TorrentSharding {
 
 #[allow(dead_code)]
 impl TorrentSharding {
-
     #[tracing::instrument(level = "debug")]
     pub fn new() -> TorrentSharding {
         TorrentSharding {
-            shards: std::array::from_fn(|_| Arc::new(RwLock::new(Default::default()))),
+            shards: std::array::from_fn(|_| Arc::new(RwLock::new(BTreeMap::new()))),
         }
     }
 
     pub async fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool) {
         let cleanup_interval = torrent_tracker.config.tracker_config.peers_cleanup_interval;
-        let cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
+        let _cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
 
-        // Create thread pool with optimized configuration
-        let cleanup_pool = Arc::new(match cleanup_threads {
-            0 => {
-                Builder::new_current_thread()
-                    .thread_name("cleanup-pool")
-                    .enable_all()
-                    .build()
-                    .unwrap()
-            }
-            _ => {
-                Builder::new_multi_thread()
-                    .thread_name("cleanup-pool")
-                    .worker_threads(cleanup_threads as usize)
-                    .max_blocking_threads(cleanup_threads as usize)
-                    .enable_all()
-                    .build()
-                    .unwrap()
-            }
-        });
+        // Use single-threaded runtime for I/O-bound work
+        let cleanup_pool = Builder::new_current_thread()
+            .thread_name("cleanup-pool")
+            .enable_all()
+            .build()
+            .unwrap();
 
-        // Use semaphore to limit concurrent shard cleanups (prevent memory spikes)
-        let max_concurrent = std::cmp::max(cleanup_threads as usize, 4);
-        let semaphore = Arc::new(Semaphore::new(max_concurrent));
+        // Process shards in batches to avoid memory spikes
+        let batch_size = 16; // Process 16 shards at a time
+        let semaphore = Arc::new(Semaphore::new(batch_size));
 
         let timer_handle = {
             let torrent_tracker_clone = Arc::clone(&torrent_tracker);
             let shutdown_clone = shutdown.clone();
-            let pool_clone = Arc::clone(&cleanup_pool);
+            let pool_clone = Arc::new(cleanup_pool);
 
             tokio::spawn(async move {
-                // Pre-allocate reusable buffer for expired entries
-                let expired_buffer = Arc::new(RwLock::new(Vec::with_capacity(1000)));
+                let mut batch_futures = Vec::with_capacity(batch_size);
 
                 loop {
                     if shutdown_waiting(
@@ -77,47 +60,48 @@ impl TorrentSharding {
                         return;
                     }
 
-                    // Shared stats accumulator for this cleanup cycle
                     let stats = Arc::new(CleanupStats::new());
-                    let mut cleanup_handles = Vec::with_capacity(256);
+                    let now = std::time::Instant::now();
 
-                    // Process shards concurrently with controlled parallelism
-                    for shard in 0u8..=255u8 {
-                        let tracker_clone = Arc::clone(&torrent_tracker_clone);
-                        let sem_clone = Arc::clone(&semaphore);
-                        let stats_clone = Arc::clone(&stats);
-                        let buffer_clone = Arc::clone(&expired_buffer);
+                    // Process shards in batches
+                    for shard_batch in (0u8..=255u8).collect::<Vec<_>>().chunks(batch_size) {
+                        for &shard in shard_batch {
+                            let tracker_clone = Arc::clone(&torrent_tracker_clone);
+                            let sem_clone = Arc::clone(&semaphore);
+                            let stats_clone = Arc::clone(&stats);
 
-                        let handle = pool_clone.spawn(async move {
-                            let _permit = sem_clone.acquire().await.ok()?;
-                            Self::cleanup_shard_optimized(
-                                tracker_clone,
-                                shard,
-                                peer_timeout,
-                                persistent,
-                                stats_clone,
-                                buffer_clone
-                            ).await;
-                            Some(())
-                        });
+                            let future = pool_clone.spawn(async move {
+                                let _permit = sem_clone.acquire().await.ok()?;
+                                Self::cleanup_shard_optimized(
+                                    tracker_clone,
+                                    shard,
+                                    peer_timeout,
+                                    persistent,
+                                    stats_clone,
+                                ).await;
+                                Some(())
+                            });
 
-                        cleanup_handles.push(handle);
-                    }
+                            batch_futures.push(future);
+                        }
 
-                    // Wait for all cleanups to complete
-                    for handle in cleanup_handles {
-                        let _ = handle.await;
+                        // Wait for current batch to complete
+                        for future in batch_futures.drain(..) {
+                            let _ = future.await;
+                        }
                     }
 
                     // Apply batch stats update
                     stats.apply_to_tracker(&torrent_tracker_clone);
+
+                    let elapsed = now.elapsed();
+                    info!("[CLEANUP] Completed in {elapsed:?}");
                 }
             })
         };
 
         shutdown.clone().handle().await;
         timer_handle.abort();
-        mem::forget(cleanup_pool);
     }
 
     async fn cleanup_shard_optimized(
@@ -126,81 +110,61 @@ impl TorrentSharding {
         peer_timeout: Duration,
         persistent: bool,
         stats: Arc<CleanupStats>,
-        expired_buffer: Arc<RwLock<Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>)>>>
     ) {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
 
         if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
-            // Reuse buffer from pool
-            let mut buffer = expired_buffer.write();
-            buffer.clear();
+            let _now = std::time::Instant::now();
 
-            // Quick read pass to identify expired entries
-            {
-                let shard_read = shard_arc.read();
+            // Single write acquisition for the entire cleanup
+            let mut shard_write = shard_arc.write();
 
-                for (info_hash, torrent_entry) in shard_read.iter() {
-                    let mut has_expired = false;
-                    let mut expired_seeds = Vec::new();
-                    let mut expired_peers = Vec::new();
+            // Use retain for more efficient removal
+            shard_write.retain(|_info_hash, torrent_entry| {
+                let mut retain_torrent = true;
+                let mut expired_seeds = Vec::new();
+                let mut expired_peers = Vec::new();
 
-                    // Check seeds - use capacity hint for better allocation
-                    expired_seeds.reserve(torrent_entry.seeds.len() / 10); // Assume ~10% expiry
-                    for (peer_id, torrent_peer) in &torrent_entry.seeds {
-                        if torrent_peer.updated.elapsed() > peer_timeout {
-                            expired_seeds.push(*peer_id);
-                            has_expired = true;
-                        }
-                    }
-
-                    // Check peers - use capacity hint
-                    expired_peers.reserve(torrent_entry.peers.len() / 10);
-                    for (peer_id, torrent_peer) in &torrent_entry.peers {
-                        if torrent_peer.updated.elapsed() > peer_timeout {
-                            expired_peers.push(*peer_id);
-                            has_expired = true;
-                        }
-                    }
-
-                    if has_expired {
-                        buffer.push((*info_hash, expired_seeds, expired_peers));
+                // Check seeds with pre-allocation
+                expired_seeds.reserve(torrent_entry.seeds.len() / 8);
+                for (peer_id, torrent_peer) in &torrent_entry.seeds {
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        expired_seeds.push(*peer_id);
                     }
                 }
-            }
 
-            // Process removals if needed
-            if !buffer.is_empty() {
-                let mut shard_write = shard_arc.write();
-
-                for (info_hash, expired_seeds, expired_peers) in buffer.iter() {
-                    if let Entry::Occupied(mut entry) = shard_write.entry(*info_hash) {
-                        let torrent_entry = entry.get_mut();
-
-                        // Batch remove seeds
-                        for peer_id in expired_seeds {
-                            if torrent_entry.seeds.remove(peer_id).is_some() {
-                                seeds_removed += 1;
-                            }
-                        }
-
-                        // Batch remove peers
-                        for peer_id in expired_peers {
-                            if torrent_entry.peers.remove(peer_id).is_some() {
-                                peers_removed += 1;
-                            }
-                        }
-
-                        // Remove empty torrent
-                        if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
-                            entry.remove();
-                            torrents_removed += 1;
-                        }
+                // Check peers with pre-allocation
+                expired_peers.reserve(torrent_entry.peers.len() / 8);
+                for (peer_id, torrent_peer) in &torrent_entry.peers {
+                    if torrent_peer.updated.elapsed() > peer_timeout {
+                        expired_peers.push(*peer_id);
                     }
                 }
-            }
+
+                // Remove expired entries
+                for peer_id in expired_seeds {
+                    if torrent_entry.seeds.remove(&peer_id).is_some() {
+                        seeds_removed += 1;
+                    }
+                }
+
+                for peer_id in expired_peers {
+                    if torrent_entry.peers.remove(&peer_id).is_some() {
+                        peers_removed += 1;
+                    }
+                }
+
+                // Remove empty torrent if not persistent
+                if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
+                    retain_torrent = false;
+                    torrents_removed += 1;
+                }
+
+                retain_torrent
+            });
         }
 
-        // Update shared stats atomically
+        // Update shared stats
         if torrents_removed > 0 {
             stats.add_torrents(torrents_removed);
         }
@@ -220,7 +184,6 @@ impl TorrentSharding {
     #[inline]
     pub fn contains_torrent(&self, info_hash: InfoHash) -> bool {
         let shard_index = info_hash.0[0] as usize;
-        // Use get() to avoid bounds check in release mode
         self.shards.get(shard_index)
             .map(|s| s.read().contains_key(&info_hash))
             .unwrap_or(false)
@@ -248,7 +211,6 @@ impl TorrentSharding {
 
     #[tracing::instrument(level = "debug")]
     pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry> {
-        // Keep original API but use regular read() instead of read_recursive()
         self.shards.get(shard as usize)
             .map(|s| s.read().clone())
             .unwrap_or_default()
@@ -256,42 +218,31 @@ impl TorrentSharding {
 
     #[tracing::instrument(level = "debug")]
     pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry> {
-        // Pre-allocate with estimated capacity
-        let _estimated_size: usize = self.shards.iter()
-            .map(|s| s.read().len())
-            .sum();
-
         let mut torrents_return = BTreeMap::new();
 
-        // Consider if you really need to clone all data - maybe return an iterator instead?
         for shard in &self.shards {
             let shard_data = shard.read();
-            for (k, v) in shard_data.iter() {
-                torrents_return.insert(*k, v.clone());
-            }
+            // Use extend for better performance
+            torrents_return.extend(shard_data.iter().map(|(k, v)| (*k, v.clone())));
         }
         torrents_return
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn get_torrents_amount(&self) -> u64 {
-        // Use parallel iteration for large shard counts
         self.shards.iter()
             .map(|shard| shard.read().len() as u64)
             .sum()
     }
 
     pub fn get_multiple_torrents(&self, info_hashes: &[InfoHash]) -> BTreeMap<InfoHash, Option<TorrentEntry>> {
-        // Pre-allocate result map
         let mut results = BTreeMap::new();
-
-        // Group by shard to minimize lock acquisitions
         let mut shard_groups: [Vec<InfoHash>; 256] = std::array::from_fn(|_| Vec::new());
+
         for &info_hash in info_hashes {
             shard_groups[info_hash.0[0] as usize].push(info_hash);
         }
 
-        // Process each shard
         for (shard_index, hashes) in shard_groups.iter().enumerate() {
             if !hashes.is_empty() {
                 let shard = self.shards[shard_index].read();
@@ -304,16 +255,13 @@ impl TorrentSharding {
     }
 
     pub fn batch_contains_peers(&self, queries: &[(InfoHash, PeerId)]) -> Vec<bool> {
-        // Pre-allocate results
         let mut results = vec![false; queries.len()];
-
-        // Group by shard using array instead of BTreeMap
         let mut shard_groups: [Vec<usize>; 256] = std::array::from_fn(|_| Vec::new());
+
         for (idx, &(info_hash, _)) in queries.iter().enumerate() {
             shard_groups[info_hash.0[0] as usize].push(idx);
         }
 
-        // Process each shard
         for (shard_index, indices) in shard_groups.iter().enumerate() {
             if !indices.is_empty() {
                 let shard = self.shards[shard_index].read();
@@ -328,7 +276,7 @@ impl TorrentSharding {
         results
     }
 
-    // Optional: Add a streaming iterator version to avoid cloning
+    // Streaming iterator to avoid cloning
     pub fn iter_all_torrents<F>(&self, mut f: F)
     where
         F: FnMut(&InfoHash, &TorrentEntry)
