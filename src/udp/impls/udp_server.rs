@@ -165,12 +165,11 @@ impl UdpServer {
         if payload.len() == 16 {
             if let [_, _, _, _, action1, action2, action3, action4, ..] = payload {
                 if *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 {
-                    if let Ok(request) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
-                        if let Request::Connect(connect_request) = request {
-                            return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
-                                Ok(response) => response,
-                                Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
-                            }
+                    // Collapsed if let pattern - combining the Ok check with the Connect variant check
+                    if let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
+                        return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
+                            Ok(response) => response,
+                            Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
                         }
                     }
                 }
