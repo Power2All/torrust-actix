@@ -233,6 +233,8 @@ fn main() -> std::io::Result<()>
 
             tokio_core.spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(console_interval));
+                // Track last totals to compute per-second rates
+                let mut last_udp: Option<(i64,i64,i64,i64,i64,i64,i64)> = None; // (t, c4,a4,s4,c6,a6,s6)
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
@@ -255,12 +257,29 @@ fn main() -> std::io::Result<()>
                                 stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found
                             );
 
+                            // Compute per-second handled deltas for UDP
+                            let now = chrono::Utc::now().timestamp();
+                            let (udp_c4_ps, udp_a4_ps, udp_s4_ps, udp_c6_ps, udp_a6_ps, udp_s6_ps) = if let Some((t,c4,a4,s4,c6,a6,s6)) = last_udp {
+                                let dt = (now - t).max(1);
+                                (
+                                    (stats.udp4_connections_handled - c4)/dt,
+                                    (stats.udp4_announces_handled - a4)/dt,
+                                    (stats.udp4_scrapes_handled - s4)/dt,
+                                    (stats.udp6_connections_handled - c6)/dt,
+                                    (stats.udp6_announces_handled - a6)/dt,
+                                    (stats.udp6_scrapes_handled - s6)/dt,
+                                )
+                            } else { (0,0,0,0,0,0) };
+                            last_udp = Some((now, stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled,
+                                             stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled));
+
                             info!(
-                                "[STATS UDP] IPv4: Conn:{} A:{} S:{} IR:{} BR:{} | IPv6: Conn:{} A:{} S:{} IR:{} BR:{}",
-                                stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled,
+                                "[STATS UDP] IPv4: Conn:{} ({}s) A:{} ({}s) S:{} ({}s) IR:{} BR:{} | IPv6: Conn:{} ({}s) A:{} ({}s) S:{} ({}s) IR:{} BR:{} | Q:{}",
+                                stats.udp4_connections_handled, udp_c4_ps, stats.udp4_announces_handled, udp_a4_ps, stats.udp4_scrapes_handled, udp_s4_ps,
                                 stats.udp4_invalid_request, stats.udp4_bad_request,
-                                stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled,
-                                stats.udp6_invalid_request, stats.udp6_bad_request
+                                stats.udp6_connections_handled, udp_c6_ps, stats.udp6_announces_handled, udp_a6_ps, stats.udp6_scrapes_handled, udp_s6_ps,
+                                stats.udp6_invalid_request, stats.udp6_bad_request,
+                                stats.udp_queue_len
                             );
                         }
                         _ = stats_handler.handle() => {

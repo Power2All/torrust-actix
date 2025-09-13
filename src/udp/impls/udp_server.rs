@@ -1,5 +1,6 @@
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
+use std::time::Duration;
 use log::{debug, info};
 use socket2::{Socket, Domain, Type, Protocol};
 use tokio::net::UdpSocket;
@@ -62,6 +63,25 @@ impl UdpServer {
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
         let parse_pool = Arc::new(ParsePool::new(10000)); // Bounded queue
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone()).await;
+
+        // Periodically update UDP queue length in stats
+        let payload = parse_pool.payload.clone();
+        let tracker_queue = self.tracker.clone();
+        let mut rx_queue = rx.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            loop {
+                tokio::select! {
+                    _ = rx_queue.changed() => {
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        let len = payload.len() as i64;
+                        tracker_queue.set_stats(StatsEvent::UdpQueueLen, len);
+                    }
+                }
+            }
+        });
 
         let udp_threads = self.udp_threads;
         let socket_clone = self.socket.clone();

@@ -51,6 +51,7 @@ impl TorrentTracker {
             udp6_connections_handled: self.stats.udp6_connections_handled.load(Ordering::Relaxed),
             udp6_announces_handled: self.stats.udp6_announces_handled.load(Ordering::Relaxed),
             udp6_scrapes_handled: self.stats.udp6_scrapes_handled.load(Ordering::Relaxed),
+            udp_queue_len: self.stats.udp_queue_len.load(Ordering::Relaxed),
         }
     }
 
@@ -180,6 +181,9 @@ impl TorrentTracker {
             }
             StatsEvent::Udp6ScrapesHandled => {
                 self.update_counter(&self.stats.udp6_scrapes_handled, value);
+            }
+            StatsEvent::UdpQueueLen => {
+                self.stats.udp_queue_len.store(value, Ordering::Release);
             }
         };
         self.get_stats()
@@ -311,6 +315,9 @@ impl TorrentTracker {
             }
             StatsEvent::Udp6ScrapesHandled => {
                 self.stats.udp6_scrapes_handled.store(value, Ordering::Release);
+            }
+            StatsEvent::UdpQueueLen => {
+                self.stats.udp_queue_len.store(value, Ordering::Release);
             }
         };
         self.get_stats()
