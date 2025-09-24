@@ -21,4 +21,4 @@ pub mod torrent_tracker_cert_gen;
 pub mod torrent_tracker_torrents_blacklist_updates;
 pub mod torrent_tracker_torrents_whitelist_updates;
 pub mod torrent_tracker_keys_updates;
-pub mod cleanup_stats;
+pub mod cleanup_stats_atomics;
