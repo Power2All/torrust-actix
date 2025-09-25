@@ -41,11 +41,6 @@ impl CleanupStatsAtomic {
         let seeds = self.seeds.value.load(Ordering::Relaxed);
         let peers = self.peers.value.load(Ordering::Relaxed);
 
-        // Update tracker stats (assuming it has atomic counters or a method to update)
-        // This would need to be implemented in the TorrentTracker
-        // For now, we'll assume it exists:
-        // tracker.update_cleanup_stats(torrents, seeds, peers);
-
         if torrents > 0 || seeds > 0 || peers > 0 {
             info!("[CLEANUP TOTAL] Torrents: {torrents} - Seeds: {seeds} - Peers: {peers}");
         }

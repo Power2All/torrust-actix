@@ -15,7 +15,6 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 
-// Compile regex once to avoid recompilation
 lazy_static::lazy_static! {
     static ref UUID_REGEX: Regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
 }
@@ -23,10 +22,8 @@ lazy_static::lazy_static! {
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
@@ -41,10 +38,8 @@ pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>,
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
@@ -75,10 +70,8 @@ pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, 
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String, String, u64, u64, u64, u64, u8)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
@@ -133,10 +126,8 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
@@ -207,10 +198,8 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
@@ -248,10 +237,8 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
 #[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    // Validate client
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
 
-    // Parse the Params
     let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
     if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
 
@@ -341,7 +328,6 @@ pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>
     }
 }
 
-// Helper function to hash ID once
 fn hash_id(id: &str) -> [u8; 20] {
     let mut hasher = Sha1::new();
     hasher.update(id.as_bytes());

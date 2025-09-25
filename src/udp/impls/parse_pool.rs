@@ -33,13 +33,11 @@ impl ParsePool {
                 info!("[UDP] Start Parse Pool thread {i}...");
                 let mut batch: Vec<UdpPacket> = Vec::with_capacity(64);
 
-                // aggressive drain with periodic yields when empty
                 const BATCH_MAX: usize = 64;
                 const EMPTY_YIELD_EVERY: usize = 256;
                 let mut empty_polls = 0usize;
 
                 loop {
-                    // Drain queue into the batch buffer
                     batch.clear();
                     while let Some(packet) = payload.pop() {
                         batch.push(packet);
@@ -49,7 +47,6 @@ impl ParsePool {
                     }
 
                     if !batch.is_empty() {
-                        // Process without copying packet data
                         Self::process_batch(&batch, tracker_cloned.clone()).await;
                         empty_polls = 0;
                     } else {
@@ -59,7 +56,6 @@ impl ParsePool {
                         }
                     }
 
-                    // Low-cost shutdown check
                     if shutdown_handler.has_changed().unwrap_or(false)
                         && shutdown_handler.changed().await.is_ok() {
                             info!("[UDP] Shutting down the Parse Pool thread {i}...");

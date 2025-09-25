@@ -257,7 +257,6 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
 #[tracing::instrument(level = "debug")]
 pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
-    // Validate the IP address
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
             http_stat_update(ip, data.torrent_tracker.clone(), StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);

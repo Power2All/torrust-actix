@@ -23,7 +23,7 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>
             if let Some(equal_pos) = query_item.find('=') {
                 let (key_part, value_part) = query_item.split_at(equal_pos);
                 let key_name_raw = key_part;
-                let value_data_raw = &value_part[1..]; // Skip the '=' character
+                let value_data_raw = &value_part[1..];
 
                 let key_name = percent_encoding::percent_decode_str(key_name_raw)
                     .decode_utf8_lossy()

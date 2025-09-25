@@ -45,7 +45,6 @@ impl TorrentTracker {
                 .map_err(|_| CustomError::new(&format!("missing or invalid {field}")))
         }
 
-        // Fast path: validate required parameters first
         let info_hash_bytes = get_required_bytes(&query, "info_hash", Some(20))?;
         let peer_id_bytes = get_required_bytes(&query, "peer_id", Some(20))?;
         let port_integer = parse_integer::<u16>(&query, "port")?;

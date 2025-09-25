@@ -7,7 +7,7 @@ pub enum RequestParseError {
     Sendable {
         connection_id: ConnectionId,
         transaction_id: TransactionId,
-        err: Cow<'static, str>, // Use Cow for efficient string handling
+        err: Cow<'static, str>,
     },
     Unsendable {
         err: Cow<'static, str>,

@@ -167,7 +167,11 @@ HTTP_0_TLS_CONNECTION_RATE <UINT64>
 
 UDP_0_ENABLED <true | false>
 UDP_0_BIND_ADDRESS <STRING>
-UDP_0_THREADS <UINT64>
+UDP_0_UDP_THREADS <UINT64>
+UDP_0_UDP_WORKER_THREADS <UINT64>
+UDP_0_UDP_RECEIVE_BUFFER_SIZE <UINT64>
+UDP_0_UDP_SEND_BUFFER_SIZE <UINT64>
+UDP_0_UDP_REUSE_ADDRESS <true | false>
 ```
 
 ### ChangeLog
@@ -175,6 +179,7 @@ UDP_0_THREADS <UINT64>
 #### v4.0.14
 * Code optimizations thanks to AI scanning
 * Huge memory and CPU consumption improvement for UDP, using offloading
+* Complete scan of code for multiple other performance improvements
 
 #### v4.0.13
 * Added further UDP improvement by adding customization, also added to the config:
