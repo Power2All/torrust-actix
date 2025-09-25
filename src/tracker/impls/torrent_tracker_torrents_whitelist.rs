@@ -9,7 +9,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(whitelist) = self.sqlx.load_whitelist(tracker.clone()).await {
+        if let Ok(whitelist) = self.sqlx.load_whitelist(tracker).await {
             info!("Loaded {whitelist} whitelists");
         }
     }
@@ -17,13 +17,14 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
     {
-        match self.sqlx.save_whitelist(tracker.clone(), hashes.clone()).await {
+        let hashes_len = hashes.len();
+        match self.sqlx.save_whitelist(tracker, hashes).await {
             Ok(_) => {
-                info!("[SYNC WHITELIST] Synced {} whitelists", hashes.len());
+                info!("[SYNC WHITELIST] Synced {hashes_len} whitelists");
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC WHITELIST] Unable to sync {} whitelists", hashes.len());
+                error!("[SYNC WHITELIST] Unable to sync {hashes_len} whitelists");
                 Err(())
             }
         }
@@ -32,8 +33,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_whitelist(&self, info_hash: InfoHash) -> bool
     {
-        let map = self.torrents_whitelist.clone();
-        let mut lock = map.write();
+        let mut lock = self.torrents_whitelist.write();
         if !lock.contains(&info_hash) {
             lock.push(info_hash);
             self.update_stats(StatsEvent::Whitelist, 1);
@@ -45,42 +45,34 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn get_whitelist(&self) -> Vec<InfoHash>
     {
-        let map = self.torrents_whitelist.clone();
-        let lock = map.read_recursive();
+        let lock = self.torrents_whitelist.read_recursive();
         lock.clone()
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
-        let map = self.torrents_whitelist.clone();
-        let lock = map.read_recursive();
-        if lock.contains(&info_hash) {
-            return true;
-        }
-        false
+        let lock = self.torrents_whitelist.read_recursive();
+        lock.contains(&info_hash)
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn remove_whitelist(&self, info_hash: InfoHash) -> bool
     {
-        let map = self.torrents_whitelist.clone();
-        let mut lock = map.write();
-        match lock.iter().position(|r| *r == info_hash) {
-            None => { false }
-            Some(index) => {
-                lock.remove(index);
-                self.update_stats(StatsEvent::Whitelist, -1);
-                true
-            }
+        let mut lock = self.torrents_whitelist.write();
+        if let Some(index) = lock.iter().position(|r| *r == info_hash) {
+            lock.swap_remove(index);
+            self.update_stats(StatsEvent::Whitelist, -1);
+            true
+        } else {
+            false
         }
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn clear_whitelist(&self)
     {
-        let map = self.torrents_whitelist.clone();
-        let mut lock = map.write();
+        let mut lock = self.torrents_whitelist.write();
         lock.clear();
     }
 }

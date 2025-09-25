@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use chrono::{TimeZone, Utc};
 use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
@@ -15,7 +14,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(users) = self.sqlx.load_users(tracker.clone()).await {
+        if let Ok(users) = self.sqlx.load_users(tracker).await {
             info!("Loaded {users} users");
         }
     }
@@ -23,13 +22,14 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), ()>
     {
-        match self.sqlx.save_users(tracker.clone(), users.clone()).await {
+        let users_len = users.len();
+        match self.sqlx.save_users(tracker, users).await {
             Ok(_) => {
-                info!("[SYNC USERS] Synced {} users", users.len());
+                info!("[SYNC USERS] Synced {users_len} users");
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC USERS] Unable to sync {} users", users.len());
+                error!("[SYNC USERS] Unable to sync {users_len} users");
                 Err(())
             }
         }
@@ -38,8 +38,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_user(&self, user_id: UserId, user_entry_item: UserEntryItem) -> bool
     {
-        let map = self.users.clone();
-        let mut lock = map.write();
+        let mut lock = self.users.write();
         match lock.entry(user_id) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Users, 1);
@@ -56,16 +55,14 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_user_active_torrent(&self, user_id: UserId, info_hash: InfoHash) -> bool
     {
-        let map = self.users.clone();
-        let mut lock = map.write();
+        let mut lock = self.users.write();
         match lock.entry(user_id) {
             Entry::Vacant(_) => {
                 false
             }
             Entry::Occupied(mut o) => {
-                let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                let timestamp_unix = timestamp.as_secs();
-                o.get_mut().torrents_active.insert(info_hash, timestamp_unix);
+                let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                o.get_mut().torrents_active.insert(info_hash, timestamp);
                 true
             }
         }
@@ -74,47 +71,39 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn get_user(&self, id: UserId) -> Option<UserEntryItem>
     {
-        let map = self.users.clone();
-        let lock = map.read_recursive();
+        let lock = self.users.read_recursive();
         lock.get(&id).cloned()
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn get_users(&self) -> BTreeMap<UserId, UserEntryItem>
     {
-        let map = self.users.clone();
-        let lock = map.read_recursive();
+        let lock = self.users.read_recursive();
         lock.clone()
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn remove_user(&self, user_id: UserId) -> Option<UserEntryItem>
     {
-        let map = self.users.clone();
-        let mut lock = map.write();
-        match lock.remove(&user_id) {
-            None => { None }
-            Some(data) => {
-                self.update_stats(StatsEvent::Users, -1);
-                Some(data)
-            }
+        let mut lock = self.users.write();
+        if let Some(data) = lock.remove(&user_id) {
+            self.update_stats(StatsEvent::Users, -1);
+            Some(data)
+        } else {
+            None
         }
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn remove_user_active_torrent(&self, user_id: UserId, info_hash: InfoHash) -> bool
     {
-        let map = self.users.clone();
-        let mut lock = map.write();
+        let mut lock = self.users.write();
         match lock.entry(user_id) {
             Entry::Vacant(_) => {
                 false
             }
             Entry::Occupied(mut o) => {
-                match o.get_mut().torrents_active.remove(&info_hash) {
-                    None => { false }
-                    Some(_) => { true }
-                }
+                o.get_mut().torrents_active.remove(&info_hash).is_some()
             }
         }
     }
@@ -122,8 +111,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn check_user_key(&self, key: UserId) -> Option<UserId>
     {
-        let map = self.users.clone();
-        let lock = map.read_recursive();
+        let lock = self.users.read_recursive();
         for (user_id, user_entry_item) in lock.iter() {
             if user_entry_item.key == key {
                 return Some(*user_id);
@@ -135,24 +123,35 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn clean_user_active_torrents(&self, peer_timeout: Duration)
     {
-        let mut torrents_cleaned = 0u64;
-        let mut remove_active_torrents = vec![];
-        let map = self.users.clone();
-        let lock = map.read_recursive();
-        info!("[USERS] Scanning {} users with dead active torrents", lock.len());
-        for (user_id, user_entry_item) in lock.iter() {
-            let torrents_active = user_entry_item.torrents_active.clone();
-            for (info_hash, updated) in torrents_active.iter() {
-                let time = SystemTime::from(Utc.timestamp_opt(*updated as i64 + peer_timeout.as_secs() as i64, 0).unwrap());
-                if time.duration_since(SystemTime::now()).is_err() {
-                    remove_active_torrents.push((*user_id, *info_hash));
+        let current_time = SystemTime::now();
+        let timeout_threshold = current_time.duration_since(UNIX_EPOCH).unwrap().as_secs() - peer_timeout.as_secs();
+        
+        let remove_active_torrents = {
+            let lock = self.users.read_recursive();
+            info!("[USERS] Scanning {} users with dead active torrents", lock.len());
+            
+            let mut to_remove = Vec::new();
+            for (user_id, user_entry_item) in lock.iter() {
+                for (info_hash, &updated) in &user_entry_item.torrents_active {
+                    if updated < timeout_threshold {
+                        to_remove.push((*user_id, *info_hash));
+                    }
+                }
+            }
+            to_remove
+        };
+
+        let torrents_cleaned = remove_active_torrents.len() as u64;
+        
+        if !remove_active_torrents.is_empty() {
+            let mut lock = self.users.write();
+            for (user_id, info_hash) in remove_active_torrents {
+                if let Entry::Occupied(mut o) = lock.entry(user_id) {
+                    o.get_mut().torrents_active.remove(&info_hash);
                 }
             }
         }
-        for (user_id, info_hash) in remove_active_torrents {
-            self.remove_user_active_torrent(user_id, info_hash);
-            torrents_cleaned += 1;
-        }
+        
         info!("[USERS] Removed {torrents_cleaned} active torrents in users");
     }
 }

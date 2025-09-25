@@ -83,26 +83,42 @@ impl Request {
 
     #[tracing::instrument(level = "debug")]
     pub fn from_bytes(bytes: &[u8], max_scrape_torrents: u8) -> Result<Self, RequestParseError> {
-        let mut cursor = Cursor::new(bytes);
+        if bytes.len() < 16 {
+            return Err(RequestParseError::unsendable_text("Packet too short"));
+        }
 
-        let connection_id = cursor
-            .read_i64::<NetworkEndian>()
-            .map_err(RequestParseError::unsendable_io)?;
-        let action = cursor
-            .read_i32::<NetworkEndian>()
-            .map_err(RequestParseError::unsendable_io)?;
-        let transaction_id = cursor
-            .read_i32::<NetworkEndian>()
-            .map_err(RequestParseError::unsendable_io)?;
+        let connection_id = i64::from_be_bytes(bytes[0..8].try_into().map_err(|_|
+            RequestParseError::unsendable_io(io::Error::new(io::ErrorKind::InvalidData, "Invalid connection_id"))
+        )?);
+
+        let action = i32::from_be_bytes(bytes[8..12].try_into().map_err(|_|
+            RequestParseError::unsendable_io(io::Error::new(io::ErrorKind::InvalidData, "Invalid action"))
+        )?);
+
+        let transaction_id = i32::from_be_bytes(bytes[12..16].try_into().map_err(|_|
+            RequestParseError::unsendable_io(io::Error::new(io::ErrorKind::InvalidData, "Invalid transaction_id"))
+        )?);
+
+        if action == 0 {
+            if connection_id == PROTOCOL_IDENTIFIER {
+                return Ok(ConnectRequest {
+                    transaction_id: TransactionId(transaction_id),
+                }.into());
+            } else {
+                return Err(RequestParseError::unsendable_text("Protocol identifier missing"));
+            }
+        }
+
+        let mut cursor = Cursor::new(bytes);
+        cursor.set_position(16);
 
         match action {
             // Connect
             0 => {
                 if connection_id == PROTOCOL_IDENTIFIER {
-                    Ok((ConnectRequest {
+                    Ok(ConnectRequest {
                         transaction_id: TransactionId(transaction_id),
-                    })
-                        .into())
+                    }.into())
                 } else {
                     Err(RequestParseError::unsendable_text(
                         "Protocol identifier missing",
@@ -116,39 +132,23 @@ impl Request {
                 let mut peer_id = [0; 20];
                 let mut ip = [0; 4];
 
-                cursor.read_exact(&mut info_hash).map_err(|err| {
+                let sendable_err = |err: io::Error| {
                     RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
-                cursor.read_exact(&mut peer_id).map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
+                };
 
-                let bytes_downloaded = cursor.read_i64::<NetworkEndian>().map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
-                let bytes_left = cursor.read_i64::<NetworkEndian>().map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
-                let bytes_uploaded = cursor.read_i64::<NetworkEndian>().map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
-                let event = cursor.read_i32::<NetworkEndian>().map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
+                cursor.read_exact(&mut info_hash).map_err(sendable_err)?;
+                cursor.read_exact(&mut peer_id).map_err(sendable_err)?;
 
-                cursor.read_exact(&mut ip).map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
+                let bytes_downloaded = cursor.read_i64::<NetworkEndian>().map_err(sendable_err)?;
+                let bytes_left = cursor.read_i64::<NetworkEndian>().map_err(sendable_err)?;
+                let bytes_uploaded = cursor.read_i64::<NetworkEndian>().map_err(sendable_err)?;
+                let event = cursor.read_i32::<NetworkEndian>().map_err(sendable_err)?;
 
-                let key = cursor.read_u32::<NetworkEndian>().map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
-                let peers_wanted = cursor.read_i32::<NetworkEndian>().map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
-                let port = cursor.read_u16::<NetworkEndian>().map_err(|err| {
-                    RequestParseError::sendable_io(err, connection_id, transaction_id)
-                })?;
+                cursor.read_exact(&mut ip).map_err(sendable_err)?;
+
+                let key = cursor.read_u32::<NetworkEndian>().map_err(sendable_err)?;
+                let peers_wanted = cursor.read_i32::<NetworkEndian>().map_err(sendable_err)?;
+                let port = cursor.read_u16::<NetworkEndian>().map_err(sendable_err)?;
 
                 let opt_ip = if ip == [0; 4] {
                     None
@@ -156,22 +156,33 @@ impl Request {
                     Some(Ipv4Addr::from(ip))
                 };
 
-                let option_byte = cursor.read_u8();
-                let option_size = cursor.read_u8();
-                let mut path: &str = "";
-                let mut path_array = vec![];
+                let path = if cursor.position() < bytes.len() as u64 {
+                    let option_byte = cursor.read_u8().ok();
+                    let option_size = cursor.read_u8().ok();
 
-                let option_byte_value = option_byte.unwrap_or_default();
-                let option_size_value = option_size.unwrap_or_default();
-                if option_byte_value == 2 {
-                    path_array.resize(option_size_value as usize, 0u8);
-                    cursor.read_exact(&mut path_array).map_err(|err| {
-                        RequestParseError::sendable_io(err, connection_id, transaction_id)
-                    })?;
-                    path = std::str::from_utf8(&path_array).unwrap_or_default();
-                }
+                    if option_byte == Some(2) {
+                        if let Some(size) = option_size {
+                            let size_usize = size as usize;
+                            if cursor.position() + size_usize as u64 <= bytes.len() as u64 {
+                                let start_pos = cursor.position() as usize;
+                                let end_pos = start_pos + size_usize;
+                                std::str::from_utf8(&bytes[start_pos..end_pos])
+                                    .unwrap_or_default()
+                                    .to_string()
+                            } else {
+                                String::new()
+                            }
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                };
 
-                Ok((AnnounceRequest {
+                Ok(AnnounceRequest {
                     connection_id: ConnectionId(connection_id),
                     transaction_id: TransactionId(transaction_id),
                     info_hash: InfoHash(info_hash),
@@ -184,36 +195,44 @@ impl Request {
                     key: PeerKey(key),
                     peers_wanted: NumberOfPeers(peers_wanted),
                     port: Port(port),
-                    path: path.to_string(),
-                })
-                    .into())
+                    path,
+                }.into())
             }
 
             // Scrape
             2 => {
                 let position = cursor.position() as usize;
-                let inner = cursor.into_inner();
+                let remaining_bytes = &bytes[position..];
 
-                let info_hashes: Vec<InfoHash> = inner[position..]
-                    .chunks_exact(20)
-                    .take(max_scrape_torrents as usize)
-                    .map(|chunk| InfoHash(chunk.try_into().unwrap()))
-                    .collect();
+                let max_hashes = max_scrape_torrents as usize;
+                let available_hashes = remaining_bytes.len() / 20;
+                let actual_hashes = available_hashes.min(max_hashes);
 
-                if info_hashes.is_empty() {
-                    Err(RequestParseError::sendable_text(
+                if actual_hashes == 0 {
+                    return Err(RequestParseError::sendable_text(
                         "Full scrapes are not allowed",
                         connection_id,
                         transaction_id,
-                    ))
-                } else {
-                    Ok((ScrapeRequest {
-                        connection_id: ConnectionId(connection_id),
-                        transaction_id: TransactionId(transaction_id),
-                        info_hashes,
-                    })
-                        .into())
+                    ));
                 }
+
+                let mut info_hashes = Vec::with_capacity(actual_hashes);
+
+                for chunk in remaining_bytes.chunks_exact(20).take(actual_hashes) {
+                    let hash_array: [u8; 20] = chunk.try_into()
+                        .map_err(|_| RequestParseError::sendable_text(
+                            "Invalid info hash format",
+                            connection_id,
+                            transaction_id,
+                        ))?;
+                    info_hashes.push(InfoHash(hash_array));
+                }
+
+                Ok(ScrapeRequest {
+                    connection_id: ConnectionId(connection_id),
+                    transaction_id: TransactionId(transaction_id),
+                    info_hashes,
+                }.into())
             }
 
             _ => Err(RequestParseError::sendable_text(

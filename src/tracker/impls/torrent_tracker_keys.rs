@@ -13,7 +13,7 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(keys) = self.sqlx.load_keys(tracker.clone()).await {
+        if let Ok(keys) = self.sqlx.load_keys(tracker).await {
             info!("Loaded {keys} keys");
         }
     }
@@ -21,13 +21,13 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<(), ()>
     {
-        match self.sqlx.save_keys(tracker.clone(), keys.clone()).await {
+        match self.sqlx.save_keys(tracker, keys).await {
             Ok(keys_count) => {
                 info!("[SYNC KEYS] Synced {keys_count} keys");
                 Ok(())
             }
             Err(_) => {
-                error!("[SYNC KEYS] Unable to sync {} keys", keys.len());
+                error!("[SYNC KEYS] Unable to sync keys");
                 Err(())
             }
         }
@@ -36,10 +36,10 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn add_key(&self, hash: InfoHash, timeout: i64) -> bool
     {
-        let map = self.keys.clone();
-        let mut lock = map.write();
+        let mut lock = self.keys.write();
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let timeout_unix = timestamp.as_secs() as i64 + timeout;
+
         match lock.entry(hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Key, 1);
@@ -56,63 +56,47 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn get_key(&self, hash: InfoHash) -> Option<(InfoHash, i64)>
     {
-        let map = self.keys.clone();
-        let lock = map.read_recursive();
-        lock.get(&hash).map(|data| (hash, *data))
+        let lock = self.keys.read_recursive();
+        lock.get(&hash).map(|&data| (hash, data))
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn get_keys(&self) -> BTreeMap<InfoHash, i64>
     {
-        let map = self.keys.clone();
-        let lock = map.read_recursive();
+        let lock = self.keys.read_recursive();
         lock.clone()
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn remove_key(&self, hash: InfoHash) -> bool
     {
-        let map = self.keys.clone();
-        let mut lock = map.write();
-        match lock.remove(&hash) {
-            None => {
-                false
-            }
-            Some(_) => {
-                self.update_stats(StatsEvent::Key, -1);
-                true
-            }
+        let mut lock = self.keys.write();
+        if lock.remove(&hash).is_some() {
+            self.update_stats(StatsEvent::Key, -1);
+            true
+        } else {
+            false
         }
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn check_key(&self, hash: InfoHash) -> bool
     {
-        let map = self.keys.clone();
-        let lock = map.read_recursive();
-        match lock.get(&hash) {
-            None => {
-                false
-            }
-            Some(key) => {
-                let time = SystemTime::from(Utc.timestamp_opt(*key, 0).unwrap());
-                match time.duration_since(SystemTime::now()) {
-                    Ok(_) => {
-                        true
-                    }
-                    Err(_) => {
-                        false
-                    }
-                }
-            }
-        }
+        let lock = self.keys.read_recursive();
+        lock.get(&hash).is_some_and(|&key| {
+            let key_time = Utc.timestamp_opt(key, 0)
+                .single()
+                .map(SystemTime::from)
+                .unwrap_or(UNIX_EPOCH);
+
+            key_time > SystemTime::now()
+        })
     }
 
     #[tracing::instrument(level = "debug")]
     pub fn clear_keys(&self)
     {
-        let map = self.keys.clone();
-        let mut lock = map.write();
+        let mut lock = self.keys.write();
         lock.clear();
         self.set_stats(StatsEvent::Key, 0);
     }
@@ -120,12 +104,25 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn clean_keys(&self)
     {
-        let keys = self.get_keys();
-        for (hash, key_time) in keys.iter() {
-            let time = SystemTime::from(Utc.timestamp_opt(*key_time, 0).unwrap());
-            if time.duration_since(SystemTime::now()).is_err() {
-                self.remove_key(*hash);
+        let now = SystemTime::now();
+        let mut keys_to_remove = Vec::new();
+
+        {
+            let lock = self.keys.read_recursive();
+            for (&hash, &key_time) in lock.iter() {
+                let time = Utc.timestamp_opt(key_time, 0)
+                    .single()
+                    .map(SystemTime::from)
+                    .unwrap_or(UNIX_EPOCH);
+
+                if time <= now {
+                    keys_to_remove.push(hash);
+                }
             }
+        }
+
+        for hash in keys_to_remove {
+            self.remove_key(hash);
         }
     }
 }

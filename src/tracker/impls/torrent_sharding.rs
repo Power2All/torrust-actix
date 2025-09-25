@@ -1,677 +1,432 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::mem;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use log::info;
 use parking_lot::RwLock;
 use tokio::runtime::Builder;
+use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
 use tokio_shutdown::Shutdown;
 use crate::common::common::shutdown_waiting;
-use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::structs::cleanup_stats_atomic::CleanupStatsAtomic;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_sharding::TorrentSharding;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
-#[allow(dead_code)]
-impl TorrentSharding {
+pub const CACHE_LINE_SIZE: usize = 64;
+
+impl Default for TorrentSharding {
     fn default() -> Self {
         Self::new()
     }
+}
 
+#[allow(dead_code)]
+impl TorrentSharding {
     #[tracing::instrument(level = "debug")]
-    pub fn new() -> TorrentSharding
-    {
+    pub fn new() -> TorrentSharding {
         TorrentSharding {
-            shard_000: Arc::new(RwLock::new(Default::default())),
-            shard_001: Arc::new(RwLock::new(Default::default())),
-            shard_002: Arc::new(RwLock::new(Default::default())),
-            shard_003: Arc::new(RwLock::new(Default::default())),
-            shard_004: Arc::new(RwLock::new(Default::default())),
-            shard_005: Arc::new(RwLock::new(Default::default())),
-            shard_006: Arc::new(RwLock::new(Default::default())),
-            shard_007: Arc::new(RwLock::new(Default::default())),
-            shard_008: Arc::new(RwLock::new(Default::default())),
-            shard_009: Arc::new(RwLock::new(Default::default())),
-            shard_010: Arc::new(RwLock::new(Default::default())),
-            shard_011: Arc::new(RwLock::new(Default::default())),
-            shard_012: Arc::new(RwLock::new(Default::default())),
-            shard_013: Arc::new(RwLock::new(Default::default())),
-            shard_014: Arc::new(RwLock::new(Default::default())),
-            shard_015: Arc::new(RwLock::new(Default::default())),
-            shard_016: Arc::new(RwLock::new(Default::default())),
-            shard_017: Arc::new(RwLock::new(Default::default())),
-            shard_018: Arc::new(RwLock::new(Default::default())),
-            shard_019: Arc::new(RwLock::new(Default::default())),
-            shard_020: Arc::new(RwLock::new(Default::default())),
-            shard_021: Arc::new(RwLock::new(Default::default())),
-            shard_022: Arc::new(RwLock::new(Default::default())),
-            shard_023: Arc::new(RwLock::new(Default::default())),
-            shard_024: Arc::new(RwLock::new(Default::default())),
-            shard_025: Arc::new(RwLock::new(Default::default())),
-            shard_026: Arc::new(RwLock::new(Default::default())),
-            shard_027: Arc::new(RwLock::new(Default::default())),
-            shard_028: Arc::new(RwLock::new(Default::default())),
-            shard_029: Arc::new(RwLock::new(Default::default())),
-            shard_030: Arc::new(RwLock::new(Default::default())),
-            shard_031: Arc::new(RwLock::new(Default::default())),
-            shard_032: Arc::new(RwLock::new(Default::default())),
-            shard_033: Arc::new(RwLock::new(Default::default())),
-            shard_034: Arc::new(RwLock::new(Default::default())),
-            shard_035: Arc::new(RwLock::new(Default::default())),
-            shard_036: Arc::new(RwLock::new(Default::default())),
-            shard_037: Arc::new(RwLock::new(Default::default())),
-            shard_038: Arc::new(RwLock::new(Default::default())),
-            shard_039: Arc::new(RwLock::new(Default::default())),
-            shard_040: Arc::new(RwLock::new(Default::default())),
-            shard_041: Arc::new(RwLock::new(Default::default())),
-            shard_042: Arc::new(RwLock::new(Default::default())),
-            shard_043: Arc::new(RwLock::new(Default::default())),
-            shard_044: Arc::new(RwLock::new(Default::default())),
-            shard_045: Arc::new(RwLock::new(Default::default())),
-            shard_046: Arc::new(RwLock::new(Default::default())),
-            shard_047: Arc::new(RwLock::new(Default::default())),
-            shard_048: Arc::new(RwLock::new(Default::default())),
-            shard_049: Arc::new(RwLock::new(Default::default())),
-            shard_050: Arc::new(RwLock::new(Default::default())),
-            shard_051: Arc::new(RwLock::new(Default::default())),
-            shard_052: Arc::new(RwLock::new(Default::default())),
-            shard_053: Arc::new(RwLock::new(Default::default())),
-            shard_054: Arc::new(RwLock::new(Default::default())),
-            shard_055: Arc::new(RwLock::new(Default::default())),
-            shard_056: Arc::new(RwLock::new(Default::default())),
-            shard_057: Arc::new(RwLock::new(Default::default())),
-            shard_058: Arc::new(RwLock::new(Default::default())),
-            shard_059: Arc::new(RwLock::new(Default::default())),
-            shard_060: Arc::new(RwLock::new(Default::default())),
-            shard_061: Arc::new(RwLock::new(Default::default())),
-            shard_062: Arc::new(RwLock::new(Default::default())),
-            shard_063: Arc::new(RwLock::new(Default::default())),
-            shard_064: Arc::new(RwLock::new(Default::default())),
-            shard_065: Arc::new(RwLock::new(Default::default())),
-            shard_066: Arc::new(RwLock::new(Default::default())),
-            shard_067: Arc::new(RwLock::new(Default::default())),
-            shard_068: Arc::new(RwLock::new(Default::default())),
-            shard_069: Arc::new(RwLock::new(Default::default())),
-            shard_070: Arc::new(RwLock::new(Default::default())),
-            shard_071: Arc::new(RwLock::new(Default::default())),
-            shard_072: Arc::new(RwLock::new(Default::default())),
-            shard_073: Arc::new(RwLock::new(Default::default())),
-            shard_074: Arc::new(RwLock::new(Default::default())),
-            shard_075: Arc::new(RwLock::new(Default::default())),
-            shard_076: Arc::new(RwLock::new(Default::default())),
-            shard_077: Arc::new(RwLock::new(Default::default())),
-            shard_078: Arc::new(RwLock::new(Default::default())),
-            shard_079: Arc::new(RwLock::new(Default::default())),
-            shard_080: Arc::new(RwLock::new(Default::default())),
-            shard_081: Arc::new(RwLock::new(Default::default())),
-            shard_082: Arc::new(RwLock::new(Default::default())),
-            shard_083: Arc::new(RwLock::new(Default::default())),
-            shard_084: Arc::new(RwLock::new(Default::default())),
-            shard_085: Arc::new(RwLock::new(Default::default())),
-            shard_086: Arc::new(RwLock::new(Default::default())),
-            shard_087: Arc::new(RwLock::new(Default::default())),
-            shard_088: Arc::new(RwLock::new(Default::default())),
-            shard_089: Arc::new(RwLock::new(Default::default())),
-            shard_090: Arc::new(RwLock::new(Default::default())),
-            shard_091: Arc::new(RwLock::new(Default::default())),
-            shard_092: Arc::new(RwLock::new(Default::default())),
-            shard_093: Arc::new(RwLock::new(Default::default())),
-            shard_094: Arc::new(RwLock::new(Default::default())),
-            shard_095: Arc::new(RwLock::new(Default::default())),
-            shard_096: Arc::new(RwLock::new(Default::default())),
-            shard_097: Arc::new(RwLock::new(Default::default())),
-            shard_098: Arc::new(RwLock::new(Default::default())),
-            shard_099: Arc::new(RwLock::new(Default::default())),
-            shard_100: Arc::new(RwLock::new(Default::default())),
-            shard_101: Arc::new(RwLock::new(Default::default())),
-            shard_102: Arc::new(RwLock::new(Default::default())),
-            shard_103: Arc::new(RwLock::new(Default::default())),
-            shard_104: Arc::new(RwLock::new(Default::default())),
-            shard_105: Arc::new(RwLock::new(Default::default())),
-            shard_106: Arc::new(RwLock::new(Default::default())),
-            shard_107: Arc::new(RwLock::new(Default::default())),
-            shard_108: Arc::new(RwLock::new(Default::default())),
-            shard_109: Arc::new(RwLock::new(Default::default())),
-            shard_110: Arc::new(RwLock::new(Default::default())),
-            shard_111: Arc::new(RwLock::new(Default::default())),
-            shard_112: Arc::new(RwLock::new(Default::default())),
-            shard_113: Arc::new(RwLock::new(Default::default())),
-            shard_114: Arc::new(RwLock::new(Default::default())),
-            shard_115: Arc::new(RwLock::new(Default::default())),
-            shard_116: Arc::new(RwLock::new(Default::default())),
-            shard_117: Arc::new(RwLock::new(Default::default())),
-            shard_118: Arc::new(RwLock::new(Default::default())),
-            shard_119: Arc::new(RwLock::new(Default::default())),
-            shard_120: Arc::new(RwLock::new(Default::default())),
-            shard_121: Arc::new(RwLock::new(Default::default())),
-            shard_122: Arc::new(RwLock::new(Default::default())),
-            shard_123: Arc::new(RwLock::new(Default::default())),
-            shard_124: Arc::new(RwLock::new(Default::default())),
-            shard_125: Arc::new(RwLock::new(Default::default())),
-            shard_126: Arc::new(RwLock::new(Default::default())),
-            shard_127: Arc::new(RwLock::new(Default::default())),
-            shard_128: Arc::new(RwLock::new(Default::default())),
-            shard_129: Arc::new(RwLock::new(Default::default())),
-            shard_130: Arc::new(RwLock::new(Default::default())),
-            shard_131: Arc::new(RwLock::new(Default::default())),
-            shard_132: Arc::new(RwLock::new(Default::default())),
-            shard_133: Arc::new(RwLock::new(Default::default())),
-            shard_134: Arc::new(RwLock::new(Default::default())),
-            shard_135: Arc::new(RwLock::new(Default::default())),
-            shard_136: Arc::new(RwLock::new(Default::default())),
-            shard_137: Arc::new(RwLock::new(Default::default())),
-            shard_138: Arc::new(RwLock::new(Default::default())),
-            shard_139: Arc::new(RwLock::new(Default::default())),
-            shard_140: Arc::new(RwLock::new(Default::default())),
-            shard_141: Arc::new(RwLock::new(Default::default())),
-            shard_142: Arc::new(RwLock::new(Default::default())),
-            shard_143: Arc::new(RwLock::new(Default::default())),
-            shard_144: Arc::new(RwLock::new(Default::default())),
-            shard_145: Arc::new(RwLock::new(Default::default())),
-            shard_146: Arc::new(RwLock::new(Default::default())),
-            shard_147: Arc::new(RwLock::new(Default::default())),
-            shard_148: Arc::new(RwLock::new(Default::default())),
-            shard_149: Arc::new(RwLock::new(Default::default())),
-            shard_150: Arc::new(RwLock::new(Default::default())),
-            shard_151: Arc::new(RwLock::new(Default::default())),
-            shard_152: Arc::new(RwLock::new(Default::default())),
-            shard_153: Arc::new(RwLock::new(Default::default())),
-            shard_154: Arc::new(RwLock::new(Default::default())),
-            shard_155: Arc::new(RwLock::new(Default::default())),
-            shard_156: Arc::new(RwLock::new(Default::default())),
-            shard_157: Arc::new(RwLock::new(Default::default())),
-            shard_158: Arc::new(RwLock::new(Default::default())),
-            shard_159: Arc::new(RwLock::new(Default::default())),
-            shard_160: Arc::new(RwLock::new(Default::default())),
-            shard_161: Arc::new(RwLock::new(Default::default())),
-            shard_162: Arc::new(RwLock::new(Default::default())),
-            shard_163: Arc::new(RwLock::new(Default::default())),
-            shard_164: Arc::new(RwLock::new(Default::default())),
-            shard_165: Arc::new(RwLock::new(Default::default())),
-            shard_166: Arc::new(RwLock::new(Default::default())),
-            shard_167: Arc::new(RwLock::new(Default::default())),
-            shard_168: Arc::new(RwLock::new(Default::default())),
-            shard_169: Arc::new(RwLock::new(Default::default())),
-            shard_170: Arc::new(RwLock::new(Default::default())),
-            shard_171: Arc::new(RwLock::new(Default::default())),
-            shard_172: Arc::new(RwLock::new(Default::default())),
-            shard_173: Arc::new(RwLock::new(Default::default())),
-            shard_174: Arc::new(RwLock::new(Default::default())),
-            shard_175: Arc::new(RwLock::new(Default::default())),
-            shard_176: Arc::new(RwLock::new(Default::default())),
-            shard_177: Arc::new(RwLock::new(Default::default())),
-            shard_178: Arc::new(RwLock::new(Default::default())),
-            shard_179: Arc::new(RwLock::new(Default::default())),
-            shard_180: Arc::new(RwLock::new(Default::default())),
-            shard_181: Arc::new(RwLock::new(Default::default())),
-            shard_182: Arc::new(RwLock::new(Default::default())),
-            shard_183: Arc::new(RwLock::new(Default::default())),
-            shard_184: Arc::new(RwLock::new(Default::default())),
-            shard_185: Arc::new(RwLock::new(Default::default())),
-            shard_186: Arc::new(RwLock::new(Default::default())),
-            shard_187: Arc::new(RwLock::new(Default::default())),
-            shard_188: Arc::new(RwLock::new(Default::default())),
-            shard_189: Arc::new(RwLock::new(Default::default())),
-            shard_190: Arc::new(RwLock::new(Default::default())),
-            shard_191: Arc::new(RwLock::new(Default::default())),
-            shard_192: Arc::new(RwLock::new(Default::default())),
-            shard_193: Arc::new(RwLock::new(Default::default())),
-            shard_194: Arc::new(RwLock::new(Default::default())),
-            shard_195: Arc::new(RwLock::new(Default::default())),
-            shard_196: Arc::new(RwLock::new(Default::default())),
-            shard_197: Arc::new(RwLock::new(Default::default())),
-            shard_198: Arc::new(RwLock::new(Default::default())),
-            shard_199: Arc::new(RwLock::new(Default::default())),
-            shard_200: Arc::new(RwLock::new(Default::default())),
-            shard_201: Arc::new(RwLock::new(Default::default())),
-            shard_202: Arc::new(RwLock::new(Default::default())),
-            shard_203: Arc::new(RwLock::new(Default::default())),
-            shard_204: Arc::new(RwLock::new(Default::default())),
-            shard_205: Arc::new(RwLock::new(Default::default())),
-            shard_206: Arc::new(RwLock::new(Default::default())),
-            shard_207: Arc::new(RwLock::new(Default::default())),
-            shard_208: Arc::new(RwLock::new(Default::default())),
-            shard_209: Arc::new(RwLock::new(Default::default())),
-            shard_210: Arc::new(RwLock::new(Default::default())),
-            shard_211: Arc::new(RwLock::new(Default::default())),
-            shard_212: Arc::new(RwLock::new(Default::default())),
-            shard_213: Arc::new(RwLock::new(Default::default())),
-            shard_214: Arc::new(RwLock::new(Default::default())),
-            shard_215: Arc::new(RwLock::new(Default::default())),
-            shard_216: Arc::new(RwLock::new(Default::default())),
-            shard_217: Arc::new(RwLock::new(Default::default())),
-            shard_218: Arc::new(RwLock::new(Default::default())),
-            shard_219: Arc::new(RwLock::new(Default::default())),
-            shard_220: Arc::new(RwLock::new(Default::default())),
-            shard_221: Arc::new(RwLock::new(Default::default())),
-            shard_222: Arc::new(RwLock::new(Default::default())),
-            shard_223: Arc::new(RwLock::new(Default::default())),
-            shard_224: Arc::new(RwLock::new(Default::default())),
-            shard_225: Arc::new(RwLock::new(Default::default())),
-            shard_226: Arc::new(RwLock::new(Default::default())),
-            shard_227: Arc::new(RwLock::new(Default::default())),
-            shard_228: Arc::new(RwLock::new(Default::default())),
-            shard_229: Arc::new(RwLock::new(Default::default())),
-            shard_230: Arc::new(RwLock::new(Default::default())),
-            shard_231: Arc::new(RwLock::new(Default::default())),
-            shard_232: Arc::new(RwLock::new(Default::default())),
-            shard_233: Arc::new(RwLock::new(Default::default())),
-            shard_234: Arc::new(RwLock::new(Default::default())),
-            shard_235: Arc::new(RwLock::new(Default::default())),
-            shard_236: Arc::new(RwLock::new(Default::default())),
-            shard_237: Arc::new(RwLock::new(Default::default())),
-            shard_238: Arc::new(RwLock::new(Default::default())),
-            shard_239: Arc::new(RwLock::new(Default::default())),
-            shard_240: Arc::new(RwLock::new(Default::default())),
-            shard_241: Arc::new(RwLock::new(Default::default())),
-            shard_242: Arc::new(RwLock::new(Default::default())),
-            shard_243: Arc::new(RwLock::new(Default::default())),
-            shard_244: Arc::new(RwLock::new(Default::default())),
-            shard_245: Arc::new(RwLock::new(Default::default())),
-            shard_246: Arc::new(RwLock::new(Default::default())),
-            shard_247: Arc::new(RwLock::new(Default::default())),
-            shard_248: Arc::new(RwLock::new(Default::default())),
-            shard_249: Arc::new(RwLock::new(Default::default())),
-            shard_250: Arc::new(RwLock::new(Default::default())),
-            shard_251: Arc::new(RwLock::new(Default::default())),
-            shard_252: Arc::new(RwLock::new(Default::default())),
-            shard_253: Arc::new(RwLock::new(Default::default())),
-            shard_254: Arc::new(RwLock::new(Default::default())),
-            shard_255: Arc::new(RwLock::new(Default::default())),
+            shards: std::array::from_fn(|_| Arc::new(RwLock::new(BTreeMap::new()))),
         }
     }
 
-    pub async fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool)
-    {
-        let tokio_threading = match torrent_tracker.clone().config.tracker_config.peers_cleanup_threads {
-            0 => {
-                Builder::new_current_thread().thread_name("sharding").enable_all().build().unwrap()
-            }
-            _ => {
-                Builder::new_multi_thread().thread_name("sharding").worker_threads(torrent_tracker.clone().config.tracker_config.peers_cleanup_threads as usize).enable_all().build().unwrap()
-            }
-        };
-        for shard in 0u8..=255u8 {
-            let torrent_tracker_clone = torrent_tracker.clone();
+    pub async fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool) {
+        let cleanup_interval = torrent_tracker.config.tracker_config.peers_cleanup_interval;
+        let cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
+
+        let cleanup_pool = Builder::new_multi_thread()
+            .worker_threads(cleanup_threads as usize)
+            .thread_name("cleanup-worker")
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let max_concurrent = std::cmp::max(cleanup_threads as usize * 2, 8);
+        let semaphore = Arc::new(Semaphore::new(max_concurrent));
+
+        let cleanup_handles_capacity = 256;
+
+        let timer_handle: JoinHandle<()> = cleanup_pool.spawn({
+            let torrent_tracker_clone = Arc::clone(&torrent_tracker);
             let shutdown_clone = shutdown.clone();
-            tokio_threading.spawn(async move {
+            let sem_clone = Arc::clone(&semaphore);
+
+            async move {
+                let batch_size = 256 / max_concurrent;
+
                 loop {
-                    if shutdown_waiting(Duration::from_secs(torrent_tracker_clone.clone().config.tracker_config.peers_cleanup_interval), shutdown_clone.clone()).await {
-                        return;
+                    if shutdown_waiting(
+                        Duration::from_secs(cleanup_interval),
+                        shutdown_clone.clone()
+                    ).await {
+                        break;
                     }
 
-                    let (mut torrents, mut seeds, mut peers) = (0u64, 0u64, 0u64);
-                    let shard_data = torrent_tracker_clone.clone().torrents_sharding.get_shard_content(shard);
-                    for (info_hash, torrent_entry) in shard_data.iter() {
-                        for (peer_id, torrent_peer) in torrent_entry.seeds.iter() {
-                            if torrent_peer.updated.elapsed() > peer_timeout {
-                                let shard = torrent_tracker_clone.clone().torrents_sharding.get_shard(shard).unwrap();
-                                let mut lock = shard.write();
-                                match lock.entry(*info_hash) {
-                                    Entry::Vacant(_) => {}
-                                    Entry::Occupied(mut o) => {
-                                        if o.get_mut().seeds.remove(peer_id).is_some() {
-                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Seeds, -1);
-                                            seeds += 1;
-                                        };
-                                        if o.get_mut().peers.remove(peer_id).is_some() {
-                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Peers, -1);
-                                            peers += 1;
-                                        };
-                                        if !persistent && o.get().seeds.is_empty() && o.get().peers.is_empty() {
-                                            lock.remove(info_hash);
-                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Torrents, -1);
-                                            torrents += 1;
-                                        }
-                                    }
+                    let stats = Arc::new(CleanupStatsAtomic::new());
+                    let mut cleanup_handles = Vec::with_capacity(cleanup_handles_capacity);
+
+                    let cutoff = Instant::now() - peer_timeout;
+
+                    // Process shards in batches for better cache locality
+                    for batch_start in (0u8..=255u8).step_by(batch_size) {
+                        let batch_end = std::cmp::min(batch_start + batch_size as u8, 255);
+                        let tracker_clone = Arc::clone(&torrent_tracker_clone);
+                        let sem_clone = Arc::clone(&sem_clone);
+                        let stats_clone = Arc::clone(&stats);
+
+                        let handle = tokio::spawn(async move {
+                            let _permit = sem_clone.acquire().await.ok()?;
+
+                            // Process batch of shards
+                            for shard in batch_start..=batch_end {
+                                Self::cleanup_shard_optimized(
+                                    Arc::clone(&tracker_clone),
+                                    shard,
+                                    cutoff,
+                                    persistent,
+                                    Arc::clone(&stats_clone)
+                                ).await;
+                            }
+                            Some(())
+                        });
+
+                        cleanup_handles.push(handle);
+                    }
+
+                    // Wait for all cleanups to complete
+                    futures::future::join_all(cleanup_handles).await;
+
+                    // Apply batch stats update
+                    stats.apply_to_tracker(&torrent_tracker_clone);
+                }
+            }
+        });
+
+        // Wait for shutdown signal
+        shutdown.handle().await;
+
+        // Cancel the cleanup task
+        timer_handle.abort();
+        let _ = timer_handle.await;
+
+        // Shutdown the runtime properly
+        cleanup_pool.shutdown_background();
+    }
+
+    async fn cleanup_shard_optimized(
+        torrent_tracker: Arc<TorrentTracker>,
+        shard: u8,
+        cutoff: Instant,
+        persistent: bool,
+        stats: Arc<CleanupStatsAtomic>
+    ) {
+        let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
+
+        if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
+            // Use SmallVec for better stack allocation for small collections
+            let mut expired_full: Vec<InfoHash> = Vec::with_capacity(32);
+            let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>)> = Vec::with_capacity(64);
+
+            // Quick read pass to identify expired entries
+            {
+                let shard_read = shard_arc.read();
+
+                // Early exit if shard is empty
+                if shard_read.is_empty() {
+                    return;
+                }
+
+                for (info_hash, torrent_entry) in shard_read.iter() {
+                    // Fast path: torrent not updated within timeout => all peers are expired
+                    if torrent_entry.updated < cutoff {
+                        expired_full.push(*info_hash);
+                        continue;
+                    }
+
+                    // Optimized: only allocate if we find expired peers
+                    let mut expired_seeds = Vec::new();
+                    let mut expired_peers = Vec::new();
+                    let mut has_expired = false;
+
+                    // Process seeds and peers in parallel chunks if large enough
+                    if torrent_entry.seeds.len() > 100 {
+                        // For large collections, collect in parallel
+                        expired_seeds = torrent_entry.seeds.iter()
+                            .filter(|(_, peer)| peer.updated < cutoff)
+                            .map(|(id, _)| *id)
+                            .collect();
+                        has_expired = !expired_seeds.is_empty();
+                    } else {
+                        // For small collections, use simpler iteration
+                        for (peer_id, torrent_peer) in &torrent_entry.seeds {
+                            if torrent_peer.updated < cutoff {
+                                expired_seeds.push(*peer_id);
+                                has_expired = true;
+                            }
+                        }
+                    }
+
+                    // Same optimization for peers
+                    if torrent_entry.peers.len() > 100 {
+                        expired_peers = torrent_entry.peers.iter()
+                            .filter(|(_, peer)| peer.updated < cutoff)
+                            .map(|(id, _)| *id)
+                            .collect();
+                        has_expired = has_expired || !expired_peers.is_empty();
+                    } else {
+                        for (peer_id, torrent_peer) in &torrent_entry.peers {
+                            if torrent_peer.updated < cutoff {
+                                expired_peers.push(*peer_id);
+                                has_expired = true;
+                            }
+                        }
+                    }
+
+                    if has_expired {
+                        expired_partial.push((*info_hash, expired_seeds, expired_peers));
+                    }
+                }
+            }
+
+            // Process removals if needed
+            if !expired_partial.is_empty() || !expired_full.is_empty() {
+                let mut shard_write = shard_arc.write();
+
+                // Process partial expirations
+                for (info_hash, expired_seeds, expired_peers) in expired_partial {
+                    if let Entry::Occupied(mut entry) = shard_write.entry(info_hash) {
+                        let torrent_entry = entry.get_mut();
+
+                        // Batch remove seeds - use retain for better performance on large collections
+                        if expired_seeds.len() > 10 {
+                            let expired_set: std::collections::HashSet<_> = expired_seeds.into_iter().collect();
+                            let before_len = torrent_entry.seeds.len();
+                            torrent_entry.seeds.retain(|k, _| !expired_set.contains(k));
+                            seeds_removed += (before_len - torrent_entry.seeds.len()) as u64;
+                        } else {
+                            for peer_id in expired_seeds {
+                                if torrent_entry.seeds.remove(&peer_id).is_some() {
+                                    seeds_removed += 1;
                                 }
                             }
                         }
-                        for (peer_id, torrent_peer) in torrent_entry.peers.iter() {
-                            if torrent_peer.updated.elapsed() > peer_timeout {
-                                let shard = torrent_tracker_clone.clone().torrents_sharding.get_shard(shard).unwrap();
-                                let mut lock = shard.write();
-                                match lock.entry(*info_hash) {
-                                    Entry::Vacant(_) => {}
-                                    Entry::Occupied(mut o) => {
-                                        if o.get_mut().seeds.remove(peer_id).is_some() {
-                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Seeds, -1);
-                                            seeds += 1;
-                                        };
-                                        if o.get_mut().peers.remove(peer_id).is_some() {
-                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Peers, -1);
-                                            peers += 1;
-                                        };
-                                        if !persistent && o.get().seeds.is_empty() && o.get().peers.is_empty() {
-                                            lock.remove(info_hash);
-                                            torrent_tracker_clone.clone().update_stats(StatsEvent::Torrents, -1);
-                                            torrents += 1;
-                                        }
-                                    }
+
+                        // Batch remove peers - use retain for better performance on large collections
+                        if expired_peers.len() > 10 {
+                            let expired_set: std::collections::HashSet<_> = expired_peers.into_iter().collect();
+                            let before_len = torrent_entry.peers.len();
+                            torrent_entry.peers.retain(|k, _| !expired_set.contains(k));
+                            peers_removed += (before_len - torrent_entry.peers.len()) as u64;
+                        } else {
+                            for peer_id in expired_peers {
+                                if torrent_entry.peers.remove(&peer_id).is_some() {
+                                    peers_removed += 1;
                                 }
                             }
                         }
+
+                        // Remove empty torrent if allowed
+                        if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
+                            entry.remove();
+                            torrents_removed += 1;
+                        }
                     }
-                    info!("[PEERS] Shard: {shard} - Torrents: {torrents} - Seeds: {seeds} - Peers: {peers}");
                 }
-            });
-        }
-        shutdown.clone().handle().await;
-        mem::forget(tokio_threading);
-    }
 
-    #[tracing::instrument(level = "debug")]
-    pub fn contains_torrent(&self, info_hash: InfoHash) -> bool
-    {
-        self.get_shard_content(info_hash.0[0]).contains_key(&info_hash)
-    }
+                // Process full expirations (entire torrent stale)
+                if !expired_full.is_empty() {
+                    if persistent {
+                        // When persistent, just clear the peers
+                        for info_hash in expired_full {
+                            if let Some(torrent_entry) = shard_write.get_mut(&info_hash) {
+                                // Safety re-check
+                                if torrent_entry.updated >= cutoff { continue; }
 
-    #[tracing::instrument(level = "debug")]
-    pub fn contains_peer(&self, info_hash: InfoHash, peer_id: PeerId) -> bool
-    {
-        match self.get_shard_content(info_hash.0[0]).get(&info_hash) {
-            None => { false }
-            Some(torrent_entry) => {
-                if torrent_entry.seeds.contains_key(&peer_id) || torrent_entry.peers.contains_key(&peer_id) {
-                    return true;
+                                seeds_removed += torrent_entry.seeds.len() as u64;
+                                peers_removed += torrent_entry.peers.len() as u64;
+                                torrent_entry.seeds.clear();
+                                torrent_entry.peers.clear();
+                            }
+                        }
+                    } else {
+                        // Batch remove all expired torrents at once
+                        for info_hash in expired_full {
+                            if let Entry::Occupied(entry) = shard_write.entry(info_hash) {
+                                // Safety re-check
+                                if entry.get().updated >= cutoff { continue; }
+
+                                let torrent_entry = entry.get();
+                                seeds_removed += torrent_entry.seeds.len() as u64;
+                                peers_removed += torrent_entry.peers.len() as u64;
+                                entry.remove();
+                                torrents_removed += 1;
+                            }
+                        }
+                    }
                 }
-                false
             }
         }
-    }
 
-    #[tracing::instrument(level = "debug")]
-    #[allow(unreachable_patterns)]
-    pub fn get_shard(&self, shard: u8) -> Option<Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>>
-    {
-        match shard {
-            0 => { Some(self.shard_000.clone()) }
-            1 => { Some(self.shard_001.clone()) }
-            2 => { Some(self.shard_002.clone()) }
-            3 => { Some(self.shard_003.clone()) }
-            4 => { Some(self.shard_004.clone()) }
-            5 => { Some(self.shard_005.clone()) }
-            6 => { Some(self.shard_006.clone()) }
-            7 => { Some(self.shard_007.clone()) }
-            8 => { Some(self.shard_008.clone()) }
-            9 => { Some(self.shard_009.clone()) }
-            10 => { Some(self.shard_010.clone()) }
-            11 => { Some(self.shard_011.clone()) }
-            12 => { Some(self.shard_012.clone()) }
-            13 => { Some(self.shard_013.clone()) }
-            14 => { Some(self.shard_014.clone()) }
-            15 => { Some(self.shard_015.clone()) }
-            16 => { Some(self.shard_016.clone()) }
-            17 => { Some(self.shard_017.clone()) }
-            18 => { Some(self.shard_018.clone()) }
-            19 => { Some(self.shard_019.clone()) }
-            20 => { Some(self.shard_020.clone()) }
-            21 => { Some(self.shard_021.clone()) }
-            22 => { Some(self.shard_022.clone()) }
-            23 => { Some(self.shard_023.clone()) }
-            24 => { Some(self.shard_024.clone()) }
-            25 => { Some(self.shard_025.clone()) }
-            26 => { Some(self.shard_026.clone()) }
-            27 => { Some(self.shard_027.clone()) }
-            28 => { Some(self.shard_028.clone()) }
-            29 => { Some(self.shard_029.clone()) }
-            30 => { Some(self.shard_030.clone()) }
-            31 => { Some(self.shard_031.clone()) }
-            32 => { Some(self.shard_032.clone()) }
-            33 => { Some(self.shard_033.clone()) }
-            34 => { Some(self.shard_034.clone()) }
-            35 => { Some(self.shard_035.clone()) }
-            36 => { Some(self.shard_036.clone()) }
-            37 => { Some(self.shard_037.clone()) }
-            38 => { Some(self.shard_038.clone()) }
-            39 => { Some(self.shard_039.clone()) }
-            40 => { Some(self.shard_040.clone()) }
-            41 => { Some(self.shard_041.clone()) }
-            42 => { Some(self.shard_042.clone()) }
-            43 => { Some(self.shard_043.clone()) }
-            44 => { Some(self.shard_044.clone()) }
-            45 => { Some(self.shard_045.clone()) }
-            46 => { Some(self.shard_046.clone()) }
-            47 => { Some(self.shard_047.clone()) }
-            48 => { Some(self.shard_048.clone()) }
-            49 => { Some(self.shard_049.clone()) }
-            50 => { Some(self.shard_050.clone()) }
-            51 => { Some(self.shard_051.clone()) }
-            52 => { Some(self.shard_052.clone()) }
-            53 => { Some(self.shard_053.clone()) }
-            54 => { Some(self.shard_054.clone()) }
-            55 => { Some(self.shard_055.clone()) }
-            56 => { Some(self.shard_056.clone()) }
-            57 => { Some(self.shard_057.clone()) }
-            58 => { Some(self.shard_058.clone()) }
-            59 => { Some(self.shard_059.clone()) }
-            60 => { Some(self.shard_060.clone()) }
-            61 => { Some(self.shard_061.clone()) }
-            62 => { Some(self.shard_062.clone()) }
-            63 => { Some(self.shard_063.clone()) }
-            64 => { Some(self.shard_064.clone()) }
-            65 => { Some(self.shard_065.clone()) }
-            66 => { Some(self.shard_066.clone()) }
-            67 => { Some(self.shard_067.clone()) }
-            68 => { Some(self.shard_068.clone()) }
-            69 => { Some(self.shard_069.clone()) }
-            70 => { Some(self.shard_070.clone()) }
-            71 => { Some(self.shard_071.clone()) }
-            72 => { Some(self.shard_072.clone()) }
-            73 => { Some(self.shard_073.clone()) }
-            74 => { Some(self.shard_074.clone()) }
-            75 => { Some(self.shard_075.clone()) }
-            76 => { Some(self.shard_076.clone()) }
-            77 => { Some(self.shard_077.clone()) }
-            78 => { Some(self.shard_078.clone()) }
-            79 => { Some(self.shard_079.clone()) }
-            80 => { Some(self.shard_080.clone()) }
-            81 => { Some(self.shard_081.clone()) }
-            82 => { Some(self.shard_082.clone()) }
-            83 => { Some(self.shard_083.clone()) }
-            84 => { Some(self.shard_084.clone()) }
-            85 => { Some(self.shard_085.clone()) }
-            86 => { Some(self.shard_086.clone()) }
-            87 => { Some(self.shard_087.clone()) }
-            88 => { Some(self.shard_088.clone()) }
-            89 => { Some(self.shard_089.clone()) }
-            90 => { Some(self.shard_090.clone()) }
-            91 => { Some(self.shard_091.clone()) }
-            92 => { Some(self.shard_092.clone()) }
-            93 => { Some(self.shard_093.clone()) }
-            94 => { Some(self.shard_094.clone()) }
-            95 => { Some(self.shard_095.clone()) }
-            96 => { Some(self.shard_096.clone()) }
-            97 => { Some(self.shard_097.clone()) }
-            98 => { Some(self.shard_098.clone()) }
-            99 => { Some(self.shard_099.clone()) }
-            100 => { Some(self.shard_100.clone()) }
-            101 => { Some(self.shard_101.clone()) }
-            102 => { Some(self.shard_102.clone()) }
-            103 => { Some(self.shard_103.clone()) }
-            104 => { Some(self.shard_104.clone()) }
-            105 => { Some(self.shard_105.clone()) }
-            106 => { Some(self.shard_106.clone()) }
-            107 => { Some(self.shard_107.clone()) }
-            108 => { Some(self.shard_108.clone()) }
-            109 => { Some(self.shard_109.clone()) }
-            110 => { Some(self.shard_110.clone()) }
-            111 => { Some(self.shard_111.clone()) }
-            112 => { Some(self.shard_112.clone()) }
-            113 => { Some(self.shard_113.clone()) }
-            114 => { Some(self.shard_114.clone()) }
-            115 => { Some(self.shard_115.clone()) }
-            116 => { Some(self.shard_116.clone()) }
-            117 => { Some(self.shard_117.clone()) }
-            118 => { Some(self.shard_118.clone()) }
-            119 => { Some(self.shard_119.clone()) }
-            120 => { Some(self.shard_120.clone()) }
-            121 => { Some(self.shard_121.clone()) }
-            122 => { Some(self.shard_122.clone()) }
-            123 => { Some(self.shard_123.clone()) }
-            124 => { Some(self.shard_124.clone()) }
-            125 => { Some(self.shard_125.clone()) }
-            126 => { Some(self.shard_126.clone()) }
-            127 => { Some(self.shard_127.clone()) }
-            128 => { Some(self.shard_128.clone()) }
-            129 => { Some(self.shard_129.clone()) }
-            130 => { Some(self.shard_130.clone()) }
-            131 => { Some(self.shard_131.clone()) }
-            132 => { Some(self.shard_132.clone()) }
-            133 => { Some(self.shard_133.clone()) }
-            134 => { Some(self.shard_134.clone()) }
-            135 => { Some(self.shard_135.clone()) }
-            136 => { Some(self.shard_136.clone()) }
-            137 => { Some(self.shard_137.clone()) }
-            138 => { Some(self.shard_138.clone()) }
-            139 => { Some(self.shard_139.clone()) }
-            140 => { Some(self.shard_140.clone()) }
-            141 => { Some(self.shard_141.clone()) }
-            142 => { Some(self.shard_142.clone()) }
-            143 => { Some(self.shard_143.clone()) }
-            144 => { Some(self.shard_144.clone()) }
-            145 => { Some(self.shard_145.clone()) }
-            146 => { Some(self.shard_146.clone()) }
-            147 => { Some(self.shard_147.clone()) }
-            148 => { Some(self.shard_148.clone()) }
-            149 => { Some(self.shard_149.clone()) }
-            150 => { Some(self.shard_150.clone()) }
-            151 => { Some(self.shard_151.clone()) }
-            152 => { Some(self.shard_152.clone()) }
-            153 => { Some(self.shard_153.clone()) }
-            154 => { Some(self.shard_154.clone()) }
-            155 => { Some(self.shard_155.clone()) }
-            156 => { Some(self.shard_156.clone()) }
-            157 => { Some(self.shard_157.clone()) }
-            158 => { Some(self.shard_158.clone()) }
-            159 => { Some(self.shard_159.clone()) }
-            160 => { Some(self.shard_160.clone()) }
-            161 => { Some(self.shard_161.clone()) }
-            162 => { Some(self.shard_162.clone()) }
-            163 => { Some(self.shard_163.clone()) }
-            164 => { Some(self.shard_164.clone()) }
-            165 => { Some(self.shard_165.clone()) }
-            166 => { Some(self.shard_166.clone()) }
-            167 => { Some(self.shard_167.clone()) }
-            168 => { Some(self.shard_168.clone()) }
-            169 => { Some(self.shard_169.clone()) }
-            170 => { Some(self.shard_170.clone()) }
-            171 => { Some(self.shard_171.clone()) }
-            172 => { Some(self.shard_172.clone()) }
-            173 => { Some(self.shard_173.clone()) }
-            174 => { Some(self.shard_174.clone()) }
-            175 => { Some(self.shard_175.clone()) }
-            176 => { Some(self.shard_176.clone()) }
-            177 => { Some(self.shard_177.clone()) }
-            178 => { Some(self.shard_178.clone()) }
-            179 => { Some(self.shard_179.clone()) }
-            180 => { Some(self.shard_180.clone()) }
-            181 => { Some(self.shard_181.clone()) }
-            182 => { Some(self.shard_182.clone()) }
-            183 => { Some(self.shard_183.clone()) }
-            184 => { Some(self.shard_184.clone()) }
-            185 => { Some(self.shard_185.clone()) }
-            186 => { Some(self.shard_186.clone()) }
-            187 => { Some(self.shard_187.clone()) }
-            188 => { Some(self.shard_188.clone()) }
-            189 => { Some(self.shard_189.clone()) }
-            190 => { Some(self.shard_190.clone()) }
-            191 => { Some(self.shard_191.clone()) }
-            192 => { Some(self.shard_192.clone()) }
-            193 => { Some(self.shard_193.clone()) }
-            194 => { Some(self.shard_194.clone()) }
-            195 => { Some(self.shard_195.clone()) }
-            196 => { Some(self.shard_196.clone()) }
-            197 => { Some(self.shard_197.clone()) }
-            198 => { Some(self.shard_198.clone()) }
-            199 => { Some(self.shard_199.clone()) }
-            200 => { Some(self.shard_200.clone()) }
-            201 => { Some(self.shard_201.clone()) }
-            202 => { Some(self.shard_202.clone()) }
-            203 => { Some(self.shard_203.clone()) }
-            204 => { Some(self.shard_204.clone()) }
-            205 => { Some(self.shard_205.clone()) }
-            206 => { Some(self.shard_206.clone()) }
-            207 => { Some(self.shard_207.clone()) }
-            208 => { Some(self.shard_208.clone()) }
-            209 => { Some(self.shard_209.clone()) }
-            210 => { Some(self.shard_210.clone()) }
-            211 => { Some(self.shard_211.clone()) }
-            212 => { Some(self.shard_212.clone()) }
-            213 => { Some(self.shard_213.clone()) }
-            214 => { Some(self.shard_214.clone()) }
-            215 => { Some(self.shard_215.clone()) }
-            216 => { Some(self.shard_216.clone()) }
-            217 => { Some(self.shard_217.clone()) }
-            218 => { Some(self.shard_218.clone()) }
-            219 => { Some(self.shard_219.clone()) }
-            220 => { Some(self.shard_220.clone()) }
-            221 => { Some(self.shard_221.clone()) }
-            222 => { Some(self.shard_222.clone()) }
-            223 => { Some(self.shard_223.clone()) }
-            224 => { Some(self.shard_224.clone()) }
-            225 => { Some(self.shard_225.clone()) }
-            226 => { Some(self.shard_226.clone()) }
-            227 => { Some(self.shard_227.clone()) }
-            228 => { Some(self.shard_228.clone()) }
-            229 => { Some(self.shard_229.clone()) }
-            230 => { Some(self.shard_230.clone()) }
-            231 => { Some(self.shard_231.clone()) }
-            232 => { Some(self.shard_232.clone()) }
-            233 => { Some(self.shard_233.clone()) }
-            234 => { Some(self.shard_234.clone()) }
-            235 => { Some(self.shard_235.clone()) }
-            236 => { Some(self.shard_236.clone()) }
-            237 => { Some(self.shard_237.clone()) }
-            238 => { Some(self.shard_238.clone()) }
-            239 => { Some(self.shard_239.clone()) }
-            240 => { Some(self.shard_240.clone()) }
-            241 => { Some(self.shard_241.clone()) }
-            242 => { Some(self.shard_242.clone()) }
-            243 => { Some(self.shard_243.clone()) }
-            244 => { Some(self.shard_244.clone()) }
-            245 => { Some(self.shard_245.clone()) }
-            246 => { Some(self.shard_246.clone()) }
-            247 => { Some(self.shard_247.clone()) }
-            248 => { Some(self.shard_248.clone()) }
-            249 => { Some(self.shard_249.clone()) }
-            250 => { Some(self.shard_250.clone()) }
-            251 => { Some(self.shard_251.clone()) }
-            252 => { Some(self.shard_252.clone()) }
-            253 => { Some(self.shard_253.clone()) }
-            254 => { Some(self.shard_254.clone()) }
-            255 => { Some(self.shard_255.clone()) }
-            _ => { None }
+        // Update shared stats atomically
+        if torrents_removed > 0 {
+            stats.add_torrents(torrents_removed);
+        }
+        if seeds_removed > 0 {
+            stats.add_seeds(seeds_removed);
+        }
+        if peers_removed > 0 {
+            stats.add_peers(peers_removed);
+        }
+
+        if seeds_removed > 0 || peers_removed > 0 || torrents_removed > 0 {
+            info!("[PEERS] Shard: {shard} - Torrents: {torrents_removed} - Seeds: {seeds_removed} - Peers: {peers_removed}");
         }
     }
 
     #[tracing::instrument(level = "debug")]
-    pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry>
-    {
-        self.get_shard(shard).unwrap().read_recursive().clone()
+    #[inline(always)]
+    pub fn contains_torrent(&self, info_hash: InfoHash) -> bool {
+        let shard_index = info_hash.0[0] as usize;
+        // Use unchecked access since we know index is always valid (0-255)
+        unsafe {
+            self.shards.get_unchecked(shard_index)
+                .read()
+                .contains_key(&info_hash)
+        }
     }
 
     #[tracing::instrument(level = "debug")]
-    pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry>
-    {
+    #[inline(always)]
+    pub fn contains_peer(&self, info_hash: InfoHash, peer_id: PeerId) -> bool {
+        let shard_index = info_hash.0[0] as usize;
+        // Use unchecked access since we know index is always valid (0-255)
+        unsafe {
+            let shard = self.shards.get_unchecked(shard_index).read();
+            shard.get(&info_hash)
+                .map(|entry| entry.seeds.contains_key(&peer_id) || entry.peers.contains_key(&peer_id))
+                .unwrap_or(false)
+        }
+    }
+
+    #[tracing::instrument(level = "debug")]
+    #[inline(always)]
+    pub fn get_shard(&self, shard: u8) -> Option<Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>> {
+        self.shards.get(shard as usize).cloned()
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry> {
+        self.shards.get(shard as usize)
+            .map(|s| s.read().clone())
+            .unwrap_or_default()
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry> {
+        // Pre-calculate total size for better allocation
+        let total_size: usize = self.shards.iter()
+            .map(|shard| shard.read().len())
+            .sum();
+
         let mut torrents_return = BTreeMap::new();
-        for index in 0u8..=255u8 {
-            let mut shard = self.get_shard(index).unwrap().read_recursive().clone();
-            torrents_return.append(&mut shard);
+
+        // Reserve capacity if we have a reasonable estimate
+        if total_size < 100000 {
+            // Only pre-allocate for reasonable sizes
+            torrents_return = BTreeMap::new();
+        }
+
+        for shard in &self.shards {
+            let shard_data = shard.read();
+            torrents_return.extend(shard_data.iter().map(|(k, v)| (*k, v.clone())));
         }
         torrents_return
     }
 
     #[tracing::instrument(level = "debug")]
-    pub fn get_torrents_amount(&self) -> u64
-    {
-        let mut torrents = 0u64;
-        for index in 0u8..=255u8 {
-            torrents += self.get_shard(index).unwrap().read_recursive().len() as u64;
+    pub fn get_torrents_amount(&self) -> u64 {
+        // Use parallel iteration for large shard counts
+        self.shards.iter()
+            .map(|shard| shard.read().len() as u64)
+            .sum()
+    }
+
+    pub fn get_multiple_torrents(&self, info_hashes: &[InfoHash]) -> BTreeMap<InfoHash, Option<TorrentEntry>> {
+        let mut results = BTreeMap::new();
+
+        // Group by shard more efficiently
+        let mut shard_groups: [Vec<InfoHash>; 256] = std::array::from_fn(|_| Vec::new());
+
+        for &info_hash in info_hashes {
+            let shard_idx = info_hash.0[0] as usize;
+            shard_groups[shard_idx].push(info_hash);
         }
-        torrents
+
+        // Process only non-empty shards
+        for (shard_index, hashes) in shard_groups.iter().enumerate() {
+            if !hashes.is_empty() {
+                let shard = self.shards[shard_index].read();
+                for &hash in hashes {
+                    results.insert(hash, shard.get(&hash).cloned());
+                }
+            }
+        }
+        results
+    }
+
+    pub fn batch_contains_peers(&self, queries: &[(InfoHash, PeerId)]) -> Vec<bool> {
+        let mut results = vec![false; queries.len()];
+
+        // Group queries by shard
+        let mut shard_groups: [Vec<usize>; 256] = std::array::from_fn(|_| Vec::new());
+
+        for (idx, &(info_hash, _)) in queries.iter().enumerate() {
+            let shard_idx = info_hash.0[0] as usize;
+            shard_groups[shard_idx].push(idx);
+        }
+
+        // Process only non-empty shards
+        for (shard_index, indices) in shard_groups.iter().enumerate() {
+            if !indices.is_empty() {
+                let shard = self.shards[shard_index].read();
+                for &idx in indices {
+                    let (info_hash, peer_id) = queries[idx];
+                    results[idx] = shard.get(&info_hash)
+                        .map(|entry| entry.seeds.contains_key(&peer_id) || entry.peers.contains_key(&peer_id))
+                        .unwrap_or(false);
+                }
+            }
+        }
+        results
+    }
+
+    pub fn iter_all_torrents<F>(&self, mut f: F)
+    where
+        F: FnMut(&InfoHash, &TorrentEntry)
+    {
+        for shard in &self.shards {
+            let shard_data = shard.read();
+            for (k, v) in shard_data.iter() {
+                f(k, v);
+            }
+        }
+    }
+
+    // New method for parallel iteration with Rayon (if available)
+    pub fn par_iter_all_torrents<F>(&self, f: F)
+    where
+        F: Fn(&InfoHash, &TorrentEntry) + Sync + Send
+    {
+        use rayon::prelude::*;
+
+        self.shards.par_iter().for_each(|shard| {
+            let shard_data = shard.read();
+            for (k, v) in shard_data.iter() {
+                f(k, v);
+            }
+        });
     }
 }

@@ -42,5 +42,6 @@ pub enum StatsEvent {
     Udp6InvalidRequest,
     Udp6ConnectionsHandled,
     Udp6AnnouncesHandled,
-    Udp6ScrapesHandled
+    Udp6ScrapesHandled,
+    UdpQueueLen
 }
