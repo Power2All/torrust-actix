@@ -182,16 +182,14 @@ impl UdpServer {
     #[tracing::instrument(level = "debug")]
     pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>) -> Response {
         // Fast path for connect requests (most common)
-        if payload.len() == 16 {
-            if let [_, _, _, _, action1, action2, action3, action4, ..] = payload {
-                if *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 {
-                    // Collapsed if let pattern - combining the Ok check with the Connect variant check
-                    if let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
-                        return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
-                            Ok(response) => response,
-                            Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
-                        }
-                    }
+        if payload.len() >= 16 {
+            // action field at [8..12] == 0
+            if payload[8..12] == [0, 0, 0, 0] {
+                if let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
+                    return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
+                        Ok(response) => response,
+                        Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
+                    };
                 }
             }
         }
@@ -391,13 +389,13 @@ impl UdpServer {
             // Collect regular peers
             if remote_addr.is_ipv4() {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv4.values().take(72 - count) {
-                    if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
+                    if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                         peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }
             } else {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv6.values().take(72 - count) {
-                    if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
+                    if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                         peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }

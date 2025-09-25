@@ -122,7 +122,7 @@ impl Configuration {
                 UdpTrackersConfig {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:6969"),
-                    udp_threads: 2,
+                    udp_threads: 4,
                     worker_threads: available_parallelism().unwrap().get(),
                     receive_buffer_size: 134217728,
                     send_buffer_size: 67108864,
