@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
-use log::{debug, info};
+use log::{debug, info, warn};
 use socket2::{Socket, Domain, Type, Protocol};
 use tokio::net::UdpSocket;
 use tokio::runtime::Builder;
@@ -119,7 +119,7 @@ impl UdpServer {
                                         };
 
                                         if parse_pool_clone.payload.push(packet).is_err() {
-                                            debug!("Parse pool queue full, dropping packet");
+                                            warn!("Parse pool queue full, dropping packet");
                                         }
                                     }
                                 }
