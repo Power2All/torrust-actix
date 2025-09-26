@@ -216,6 +216,9 @@ fn main() -> std::io::Result<()>
                         udp_server_object.receive_buffer_size,
                         udp_server_object.send_buffer_size,
                         udp_server_object.reuse_address,
+                        udp_server_object.initial_capacity,
+                        udp_server_object.segment_size,
+                        udp_server_object.max_capacity,
                         tracker.clone(),
                         udp_rx.clone(),
                         tokio_udp.clone()
