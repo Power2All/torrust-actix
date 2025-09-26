@@ -17,8 +17,8 @@ impl Default for ParsePool {
 impl ParsePool {
     pub fn new(initial_capacity: usize) -> Self {
         // Configure the dynamic queue
-        let segment_size = 1000;  // Each segment holds 1000 packets
-        let max_segments = 1000;    // Maximum 100 segments = 100,000 packets max
+        let segment_size = 10000;  // Each segment holds 10000 packets
+        let max_segments = 100;    // Maximum 100 segments = 1,00,000 packets max
 
         ParsePool {
             payload: Arc::new(DynamicQueue::new(initial_capacity, segment_size, max_segments)),
