@@ -30,7 +30,7 @@ impl ParsePool {
 
     /// Create with custom configuration
     pub fn new_with_config(initial_capacity: usize, segment_size: usize, max_capacity: usize) -> Self {
-        let max_segments = (max_capacity + segment_size - 1) / segment_size;
+        let max_segments = max_capacity.div_ceil(segment_size);
 
         ParsePool {
             payload: Arc::new(DynamicQueue::new(initial_capacity, segment_size, max_segments)),
@@ -93,11 +93,9 @@ impl ParsePool {
                         // Log if we're getting close to capacity
                         let usage_percent = (len * 100) / capacity.max(1);
                         if usage_percent > 80 {
-                            warn!("Parse pool at {}% capacity ({}/{}, {} segments)",
-                                  usage_percent, len, capacity, segments);
+                            warn!("Parse pool at {usage_percent}% capacity ({len}/{capacity}, {segments} segments)");
                         } else if usage_percent > 50 {
-                            debug!("Parse pool at {}% capacity ({}/{}, {} segments)",
-                                   usage_percent, len, capacity, segments);
+                            debug!("Parse pool at {usage_percent}% capacity ({len}/{capacity}, {segments} segments)");
                         }
 
                         // Periodically try to shrink if underutilized
@@ -131,25 +129,25 @@ impl ParsePool {
 
             // Spawn a native OS thread with its own runtime
             let handle = std::thread::Builder::new()
-                .name(format!("parse-worker-{}", worker_idx))
+                .name(format!("parse-worker-{worker_idx}"))
                 .stack_size(2 * 1024 * 1024)  // 2MB stack
                 .spawn(move || {
                     // Create a single-threaded runtime for this worker
                     let runtime = Builder::new_current_thread()
-                        .thread_name(format!("parse-runtime-{}", worker_idx))
+                        .thread_name(format!("parse-runtime-{worker_idx}"))
                         .enable_all()
                         .build()
                         .expect("Failed to create parse worker runtime");
 
                     runtime.block_on(async move {
-                        info!("Parse worker {} started", worker_idx);
+                        info!("Parse worker {worker_idx} started");
                         Self::adaptive_worker_loop(
                             payload_clone,
                             tracker_clone,
                             rx_clone,
                             worker_idx
                         ).await;
-                        info!("Parse worker {} stopped", worker_idx);
+                        info!("Parse worker {worker_idx} stopped");
                     });
                 })
                 .expect("Failed to spawn parse worker thread");
@@ -166,7 +164,7 @@ impl ParsePool {
             // Join all worker threads
             for (idx, handle) in thread_handles.into_iter().enumerate() {
                 if let Err(e) = handle.join() {
-                    warn!("Failed to join parse worker {}: {:?}", idx, e);
+                    warn!("Failed to join parse worker {idx}: {e:?}");
                 }
             }
             info!("All parse workers shut down");
@@ -185,11 +183,10 @@ impl ParsePool {
 
         loop {
             // Check for shutdown
-            if rx.has_changed().unwrap_or(false) {
-                if *rx.borrow() {
+            if rx.has_changed().unwrap_or(false)
+                && *rx.borrow() {
                     break;
                 }
-            }
 
             // Adaptive processing based on queue depth
             let queue_len = payload.len();
