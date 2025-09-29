@@ -10,7 +10,7 @@ authors = [
 description = "A rich, fast and efficient Bittorrent Tracker."
 
 [profile.release]
-opt-level = 3
+opt-level = 'z'
 debug = false
 debug-assertions = false
 overflow-checks = false
