@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
-use log::{debug, info, warn};
+use log::{info, warn};
 use tokio::sync::mpsc;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::udp::structs::parse_pool::ParsePool;
@@ -117,7 +117,7 @@ impl ParsePool {
                                 let worker_id = base_threads + burst_workers.len();
 
                                 let handle = tokio::spawn(async move {
-                                    debug!("[UDP] Spawning burst worker {worker_id}");
+                                    info!("[UDP] Spawning burst worker {worker_id}");
                                     let mut batch = Vec::with_capacity(64);
                                     let timeout = Duration::from_millis(50);
 
@@ -139,7 +139,7 @@ impl ParsePool {
                                             batch = Vec::with_capacity(64);
                                         } else {
                                             // No work for timeout period, exit burst worker
-                                            debug!("[UDP] Burst worker {worker_id} idle, exiting");
+                                            info!("[UDP] Burst worker {worker_id} idle, exiting");
                                             return;
                                         }
                                     }
