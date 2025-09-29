@@ -9,7 +9,7 @@ use crate::udp::structs::udp_server::UdpServer;
 
 impl Default for ParsePool {
     fn default() -> Self {
-        Self::new(0, 1) // You'll need to provide a default thread count
+        Self::new(0, 1)
     }
 }
 
@@ -24,7 +24,7 @@ impl ParsePool {
 
         ParsePool {
             payload: Arc::new(ArrayQueue::new(capacity)),
-            udp_runtime: tokio_udp,
+            udp_runtime: Arc::new(tokio_udp),
         }
     }
 
@@ -33,8 +33,9 @@ impl ParsePool {
             let payload = self.payload.clone();
             let tracker_cloned = tracker.clone();
             let mut shutdown_handler = shutdown_handler.clone();
+            let runtime = self.udp_runtime.clone();
 
-            self.udp_runtime.spawn(async move {
+            runtime.spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
                 let mut batch = Vec::with_capacity(32);
                 let mut interval = tokio::time::interval(Duration::from_millis(1));
@@ -61,6 +62,10 @@ impl ParsePool {
                 }
             });
         }
+
+        // Leak the runtime to prevent it from ever being dropped
+        let runtime = self.udp_runtime.clone();
+        std::mem::forget(runtime);
     }
 
     async fn process_batch(packets: Vec<UdpPacket>, tracker: Arc<TorrentTracker>) {

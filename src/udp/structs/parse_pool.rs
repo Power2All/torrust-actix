@@ -4,5 +4,5 @@ use crossbeam::queue::ArrayQueue;
 
 pub struct ParsePool {
     pub payload: Arc<ArrayQueue<UdpPacket>>,
-    pub(crate) udp_runtime: tokio::runtime::Runtime,
+    pub udp_runtime: Arc<tokio::runtime::Runtime>,
 }
