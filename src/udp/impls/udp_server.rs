@@ -44,10 +44,7 @@ impl UdpServer {
         worker_threads: usize,
         recv_buffer_size: usize,
         send_buffer_size: usize,
-        reuse_address: bool,
-        max_burst: usize,
-        queue_threshold: usize,
-        low_threshold: usize,
+        reuse_address: bool
     ) -> tokio::io::Result<UdpServer> {
         let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
@@ -66,16 +63,13 @@ impl UdpServer {
             udp_threads,
             worker_threads,
             tracker,
-            max_burst,
-            queue_threshold,
-            low_threshold
         })
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
         // Create dynamic parse pool (no fixed capacity limit)
-        let parse_pool = Arc::new(ParsePool::new(self.max_burst, self.queue_threshold, self.low_threshold));
+        let parse_pool = Arc::new(ParsePool::new());
 
         // Start worker threads with dynamic scaling
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone()).await;

@@ -17,13 +17,4 @@ pub struct ParsePool {
 
     /// Approximate queue length counter (atomic for lock-free access)
     pub(crate) queue_len: Arc<AtomicUsize>,
-
-    /// Max burst workers
-    pub(crate) max_burst: usize,
-
-    /// Queue threshold for spawning new workers
-    pub(crate) queue_threshold: usize,
-
-    /// Low threshold for spawning new workers
-    pub(crate) low_threshold: usize,
 }

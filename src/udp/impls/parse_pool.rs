@@ -10,22 +10,19 @@ use crate::udp::structs::udp_server::UdpServer;
 
 impl Default for ParsePool {
     fn default() -> Self {
-        Self::new(100, 10000, 5000)
+        Self::new()
     }
 }
 
 impl ParsePool {
     /// Creates a new ParsePool with dynamic capacity
     /// Uses an unbounded channel to prevent packet drops during burst traffic
-    pub fn new(max_burst: usize, queue_threshold: usize, low_threshold: usize) -> ParsePool {
+    pub fn new() -> ParsePool {
         let (tx, rx) = mpsc::unbounded_channel();
         ParsePool {
             sender: Arc::new(tx),
             receiver: Arc::new(tokio::sync::Mutex::new(rx)),
             queue_len: Arc::new(AtomicUsize::new(0)),
-            max_burst,
-            queue_threshold,
-            low_threshold
         }
     }
 
@@ -72,18 +69,15 @@ impl ParsePool {
         let receiver_monitor = self.receiver.clone();
         let tracker_monitor = tracker.clone();
         let queue_len_monitor = self.queue_len.clone();
-        let max_burst_monitor = self.max_burst.clone();
-        let queue_threshold_monitor = self.queue_threshold.clone();
-        let low_threshold_monitor = self.low_threshold.clone();
         let mut shutdown_monitor = shutdown_handler.clone();
 
         tokio::spawn(async move {
             info!("[UDP] Starting dynamic worker scaling monitor...");
             let mut interval = tokio::time::interval(Duration::from_millis(100));
             let mut burst_workers: Vec<tokio::task::JoinHandle<()>> = Vec::new();
-            let max_burst_workers = max_burst_monitor; // Maximum number of burst workers
-            let queue_threshold = queue_threshold_monitor; // Spawn burst worker if queue > this
-            let low_threshold = low_threshold_monitor; // Keep burst workers if queue > this
+            let max_burst_workers = 50; // Maximum number of burst workers
+            let queue_threshold = 100; // Spawn burst worker if queue > this
+            let low_threshold = 20; // Keep burst workers if queue > this
 
             loop {
                 tokio::select! {

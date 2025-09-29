@@ -126,10 +126,7 @@ impl Configuration {
                     worker_threads: available_parallelism().unwrap().get(),
                     receive_buffer_size: 134217728,
                     send_buffer_size: 67108864,
-                    reuse_address: true,
-                    max_burst: 100,
-                    queue_threshold: 10000,
-                    low_threshold: 5000
+                    reuse_address: true
                 }
             ),
             api_server: vec!(
@@ -472,15 +469,6 @@ impl Configuration {
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
                         block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_MAX_BURST")) {
-                        block.max_burst = value.parse::<usize>().unwrap_or(100);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_QUEUE_THRESHOLD")) {
-                        block.queue_threshold = value.parse::<usize>().unwrap_or(10000);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_LOW_THRESHOLD")) {
-                        block.low_threshold = value.parse::<usize>().unwrap_or(5000);
                     }
                 }
             }

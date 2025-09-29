@@ -12,9 +12,9 @@ pub const MAX_SCRAPE_TORRENTS: u8 = 74;
 pub const MAX_PACKET_SIZE: usize = 1496;
 
 #[allow(clippy::too_many_arguments)]
-pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, max_burst: usize, queue_threshold: usize, low_threshold: usize, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
+pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
 {
-    let udp_server = UdpServer::new(data, addr, udp_threads, worker_threads, recv_buffer_size, send_buffer_size, reuse_address, max_burst, queue_threshold, low_threshold).await.unwrap_or_else(|e| {
+    let udp_server = UdpServer::new(data, addr, udp_threads, worker_threads, recv_buffer_size, send_buffer_size, reuse_address).await.unwrap_or_else(|e| {
         error!("Could not listen to the UDP port: {e}");
         exit(1);
     });
