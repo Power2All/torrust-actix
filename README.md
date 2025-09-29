@@ -172,11 +172,6 @@ UDP_0_THREADS <UINT64>
 
 ### ChangeLog
 
-#### v4.0.15
-* Reverted a lot of code, as they contained a nasty bug
-* Re-applied some fixes for the dynamic pool, as that did work as expected
-* Re-organized main.rs code
-
 #### v4.0.14
 * Code optimizations thanks to AI scanning
 * Huge memory and CPU consumption improvement for UDP, using offloading

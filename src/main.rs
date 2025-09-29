@@ -20,21 +20,11 @@ use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
 
-/// Main entry point for the Torrust BitTorrent Tracker
-///
-/// This application provides a high-performance BitTorrent tracker with support for:
-/// - HTTP/HTTPS tracking endpoints
-/// - UDP tracking protocol
-/// - API endpoints for management
-/// - Persistent storage with database support
-/// - Whitelist/blacklist functionality
-/// - User authentication and API keys
 #[tracing::instrument(level = "debug")]
-fn main() -> std::io::Result<()> {
-    // Parse command line arguments
+fn main() -> std::io::Result<()>
+{
     let args = Cli::parse();
 
-    // Load configuration from file, exit with code 101 if loading fails
     let config = match Configuration::load_from_file(args.create_config) {
         Ok(config) => Arc::new(config),
         Err(_) => exit(101)
@@ -44,40 +34,32 @@ fn main() -> std::io::Result<()> {
 
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    // Initialize Sentry error tracking if enabled in configuration
     #[warn(unused_variables)]
     let _sentry_guard: ClientInitGuard;
     if config.sentry_config.enabled {
-        _sentry_guard = sentry::init((
-            config.sentry_config.dsn.clone(),
-            sentry::ClientOptions {
-                release: sentry::release_name!(),
-                debug: config.sentry_config.debug,
-                sample_rate: config.sentry_config.sample_rate,
-                max_breadcrumbs: config.sentry_config.max_breadcrumbs,
-                attach_stacktrace: config.sentry_config.attach_stacktrace,
-                send_default_pii: config.sentry_config.send_default_pii,
-                traces_sample_rate: config.sentry_config.traces_sample_rate,
-                session_mode: sentry::SessionMode::Request,
-                auto_session_tracking: true,
-                ..Default::default()
-            }
-        ));
+        _sentry_guard = sentry::init((config.sentry_config.dsn.clone(), sentry::ClientOptions {
+            release: sentry::release_name!(),
+            debug: config.sentry_config.debug,
+            sample_rate: config.sentry_config.sample_rate,
+            max_breadcrumbs: config.sentry_config.max_breadcrumbs,
+            attach_stacktrace: config.sentry_config.attach_stacktrace,
+            send_default_pii: config.sentry_config.send_default_pii,
+            traces_sample_rate: config.sentry_config.traces_sample_rate,
+            session_mode: sentry::SessionMode::Request,
+            auto_session_tracking: true,
+            ..Default::default()
+        }));
     }
 
-    // Create the main Tokio runtime and start the async application
     Builder::new_multi_thread()
         .enable_all()
         .build()?
         .block_on(async {
-            // Initialize the torrent tracker with configuration and database
             let tracker = Arc::new(TorrentTracker::new(config.clone(), args.create_database).await);
 
-            // Clone commonly used config sections to avoid repeated access
             let tracker_config = tracker.config.tracker_config.clone();
             let db_config = tracker.config.database.clone();
 
-            // Load persistent data from database if enabled
             if db_config.persistent {
                 tracker.load_torrents(tracker.clone()).await;
 
@@ -93,38 +75,20 @@ fn main() -> std::io::Result<()> {
                 if tracker_config.users_enabled {
                     tracker.load_users(tracker.clone()).await;
                 }
-
-                // Reset seed/peer counts in database if update_peers is enabled
                 if db_config.update_peers && !tracker.reset_seeds_peers(tracker.clone()).await {
                     panic!("[RESET SEEDS PEERS] Unable to continue loading");
                 }
             } else {
-                // For non-persistent mode, initialize completed stats from config
                 tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
             }
 
-            // Handle optional CLI operations
-            if args.create_selfsigned {
-                tracker.cert_gen(&args).await;
-            }
-            if args.export {
-                tracker.export(&args, tracker.clone()).await;
-            }
-            if args.import {
-                tracker.import(&args, tracker.clone()).await;
-            }
+            if args.create_selfsigned { tracker.cert_gen(&args).await; }
+            if args.export { tracker.export(&args, tracker.clone()).await; }
+            if args.import { tracker.import(&args, tracker.clone()).await; }
 
-            // Create dedicated runtime for core services with 9 worker threads
-            let tokio_core = Builder::new_multi_thread()
-                .thread_name("core")
-                .worker_threads(9)
-                .enable_all()
-                .build()?;
-
+            let tokio_core = Builder::new_multi_thread().thread_name("core").worker_threads(9).enable_all().build()?;
             let tokio_shutdown = Shutdown::new().expect("shutdown creation works on first call");
 
-            // Spawn deadlock detection thread
-            // Checks every 30 seconds for potential deadlocks in the application
             let deadlocks_handler = tokio_shutdown.clone();
             tokio_core.spawn(async move {
                 info!("[BOOT] Starting thread for deadlocks...");
@@ -153,8 +117,6 @@ fn main() -> std::io::Result<()> {
                 }
             });
 
-            // Initialize API servers (management/admin endpoints)
-            // Separate HTTP and HTTPS servers to handle them in different tasks
             let mut api_futures = Vec::new();
             let mut apis_futures = Vec::new();
 
@@ -177,7 +139,6 @@ fn main() -> std::io::Result<()> {
                 }
             }
 
-            // Spawn API server tasks
             if !api_futures.is_empty() {
                 let (handles, futures): (Vec<_>, Vec<_>) = api_futures.into_iter().unzip();
                 tokio_core.spawn(async move {
@@ -193,8 +154,6 @@ fn main() -> std::io::Result<()> {
                 });
             }
 
-            // Initialize HTTP tracker servers
-            // These handle announce/scrape requests from BitTorrent clients
             let mut http_futures = Vec::new();
             let mut https_futures = Vec::new();
 
@@ -217,7 +176,6 @@ fn main() -> std::io::Result<()> {
                 }
             }
 
-            // Spawn HTTP tracker server tasks
             if !http_futures.is_empty() {
                 let (handles, futures): (Vec<_>, Vec<_>) = http_futures.into_iter().unzip();
                 tokio_core.spawn(async move {
@@ -233,8 +191,6 @@ fn main() -> std::io::Result<()> {
                 });
             }
 
-            // Initialize UDP tracker servers
-            // UDP protocol is more efficient for tracker communications
             let (udp_tx, udp_rx) = tokio::sync::watch::channel(false);
             let mut udp_tokio_threads = Vec::new();
             let mut udp_futures = Vec::new();
@@ -247,7 +203,6 @@ fn main() -> std::io::Result<()> {
                     let udp_threads: usize = udp_server_object.udp_threads;
                     let worker_threads: usize = udp_server_object.worker_threads;
 
-                    // Create dedicated runtime for UDP operations
                     let tokio_udp = Arc::new(Builder::new_multi_thread()
                         .thread_name("udp")
                         .worker_threads(udp_threads)
@@ -271,8 +226,6 @@ fn main() -> std::io::Result<()> {
                 }
             }
 
-            // Spawn statistics logging thread
-            // Periodically logs tracker statistics to console
             let stats_handler = tokio_shutdown.clone();
             let tracker_spawn_stats = tracker.clone();
             let console_interval = tracker_spawn_stats.config.log_console_interval;
@@ -280,18 +233,14 @@ fn main() -> std::io::Result<()> {
 
             tokio_core.spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(console_interval));
-
-                // Track last UDP stats to compute per-second rates
-                // Format: (timestamp, conn4, announce4, scrape4, conn6, announce6, scrape6)
-                let mut last_udp: Option<(i64, i64, i64, i64, i64, i64, i64)> = None;
-
+                // Track last totals to compute per-second rates
+                let mut last_udp: Option<(i64,i64,i64,i64,i64,i64,i64)> = None; // (t, c4,a4,s4,c6,a6,s6)
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
                             tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60);
                             let stats = tracker_spawn_stats.get_stats();
 
-                            // Log general tracker statistics
                             info!(
                                 "[STATS] Torrents: {} - Updates: {} - Seeds: {} - Peers: {} - Completed: {} | \
                                 WList: {} - WList Updates: {} - BLists: {} - BLists Updates: {} - Keys: {} - Keys Updates {}",
@@ -300,7 +249,6 @@ fn main() -> std::io::Result<()> {
                                 stats.keys, stats.keys_updates
                             );
 
-                            // Log TCP tracker statistics (IPv4 and IPv6)
                             info!(
                                 "[STATS TCP] IPv4: Conn:{} API:{} A:{} S:{} F:{} 404:{} | IPv6: Conn:{} API:{} A:{} S:{} F:{} 404:{}",
                                 stats.tcp4_connections_handled, stats.tcp4_api_handled, stats.tcp4_announces_handled,
@@ -309,44 +257,27 @@ fn main() -> std::io::Result<()> {
                                 stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found
                             );
 
-                            // Calculate per-second rates for UDP requests
+                            // Compute per-second handled deltas for UDP
                             let now = chrono::Utc::now().timestamp();
-                            let (udp_c4_ps, udp_a4_ps, udp_s4_ps, udp_c6_ps, udp_a6_ps, udp_s6_ps) =
-                                if let Some((t, c4, a4, s4, c6, a6, s6)) = last_udp {
-                                    let dt = (now - t).max(1);
-                                    (
-                                        (stats.udp4_connections_handled - c4) / dt,
-                                        (stats.udp4_announces_handled - a4) / dt,
-                                        (stats.udp4_scrapes_handled - s4) / dt,
-                                        (stats.udp6_connections_handled - c6) / dt,
-                                        (stats.udp6_announces_handled - a6) / dt,
-                                        (stats.udp6_scrapes_handled - s6) / dt,
-                                    )
-                                } else {
-                                    (0, 0, 0, 0, 0, 0)
-                                };
+                            let (udp_c4_ps, udp_a4_ps, udp_s4_ps, udp_c6_ps, udp_a6_ps, udp_s6_ps) = if let Some((t,c4,a4,s4,c6,a6,s6)) = last_udp {
+                                let dt = (now - t).max(1);
+                                (
+                                    (stats.udp4_connections_handled - c4)/dt,
+                                    (stats.udp4_announces_handled - a4)/dt,
+                                    (stats.udp4_scrapes_handled - s4)/dt,
+                                    (stats.udp6_connections_handled - c6)/dt,
+                                    (stats.udp6_announces_handled - a6)/dt,
+                                    (stats.udp6_scrapes_handled - s6)/dt,
+                                )
+                            } else { (0,0,0,0,0,0) };
+                            last_udp = Some((now, stats.udp4_connections_handled, stats.udp4_announces_handled, stats.udp4_scrapes_handled,
+                                             stats.udp6_connections_handled, stats.udp6_announces_handled, stats.udp6_scrapes_handled));
 
-                            last_udp = Some((
-                                now,
-                                stats.udp4_connections_handled,
-                                stats.udp4_announces_handled,
-                                stats.udp4_scrapes_handled,
-                                stats.udp6_connections_handled,
-                                stats.udp6_announces_handled,
-                                stats.udp6_scrapes_handled
-                            ));
-
-                            // Log UDP tracker statistics with per-second rates
                             info!(
-                                "[STATS UDP] IPv4: Conn:{} ({}/s) A:{} ({}/s) S:{} ({}/s) IR:{} BR:{} | \
-                                IPv6: Conn:{} ({}/s) A:{} ({}/s) S:{} ({}/s) IR:{} BR:{} | Q:{}",
-                                stats.udp4_connections_handled, udp_c4_ps,
-                                stats.udp4_announces_handled, udp_a4_ps,
-                                stats.udp4_scrapes_handled, udp_s4_ps,
+                                "[STATS UDP] IPv4: Conn:{} ({}s) A:{} ({}s) S:{} ({}s) IR:{} BR:{} | IPv6: Conn:{} ({}s) A:{} ({}s) S:{} ({}s) IR:{} BR:{} | Q:{}",
+                                stats.udp4_connections_handled, udp_c4_ps, stats.udp4_announces_handled, udp_a4_ps, stats.udp4_scrapes_handled, udp_s4_ps,
                                 stats.udp4_invalid_request, stats.udp4_bad_request,
-                                stats.udp6_connections_handled, udp_c6_ps,
-                                stats.udp6_announces_handled, udp_a6_ps,
-                                stats.udp6_scrapes_handled, udp_s6_ps,
+                                stats.udp6_connections_handled, udp_c6_ps, stats.udp6_announces_handled, udp_a6_ps, stats.udp6_scrapes_handled, udp_s6_ps,
                                 stats.udp6_invalid_request, stats.udp6_bad_request,
                                 stats.udp_queue_len
                             );
@@ -359,8 +290,6 @@ fn main() -> std::io::Result<()> {
                 }
             });
 
-            // Spawn peer cleanup thread
-            // Removes inactive peers based on timeout configuration
             let tracker_cleanup_clone = tracker.clone();
             let cleanup_handler = tokio_shutdown.clone();
             let cleanup_interval = tracker_cleanup_clone.config.tracker_config.peers_cleanup_interval;
@@ -379,8 +308,6 @@ fn main() -> std::io::Result<()> {
                 ).await;
             });
 
-            // Spawn API key cleanup thread (if keys are enabled)
-            // Removes expired API keys based on timeout
             if tracker_config.keys_enabled {
                 let cleanup_keys_handler = tokio_shutdown.clone();
                 let tracker_spawn_cleanup_keys = tracker.clone();
@@ -392,10 +319,8 @@ fn main() -> std::io::Result<()> {
                     loop {
                         tokio::select! {
                             _ = interval.tick() => {
-                                tracker_spawn_cleanup_keys.set_stats(
-                                    StatsEvent::TimestampKeysTimeout,
-                                    chrono::Utc::now().timestamp() + keys_interval as i64
-                                );
+                                tracker_spawn_cleanup_keys.set_stats(StatsEvent::TimestampKeysTimeout,
+                                    chrono::Utc::now().timestamp() + keys_interval as i64);
                                 info!("[KEYS] Checking now for outdated keys.");
                                 tracker_spawn_cleanup_keys.clean_keys();
                                 info!("[KEYS] Keys cleaned up.");
@@ -409,8 +334,6 @@ fn main() -> std::io::Result<()> {
                 });
             }
 
-            // Spawn database persistence thread (if persistent storage is enabled)
-            // Periodically saves tracker state to database
             if db_config.persistent {
                 let updates_handler = tokio_shutdown.clone();
                 let tracker_spawn_updates = tracker.clone();
@@ -422,10 +345,8 @@ fn main() -> std::io::Result<()> {
                     loop {
                         tokio::select! {
                             _ = interval.tick() => {
-                                tracker_spawn_updates.set_stats(
-                                    StatsEvent::TimestampSave,
-                                    chrono::Utc::now().timestamp() + update_interval as i64
-                                );
+                                tracker_spawn_updates.set_stats(StatsEvent::TimestampSave,
+                                    chrono::Utc::now().timestamp() + update_interval as i64);
 
                                 info!("[DATABASE UPDATES] Starting batch updates...");
 
@@ -455,15 +376,12 @@ fn main() -> std::io::Result<()> {
                 });
             }
 
-            // Main application loop - wait for shutdown signal (Ctrl+C)
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
                     info!("Shutdown request received, shutting down...");
 
-                    // Signal UDP servers to shutdown
                     let _ = udp_tx.send(true);
 
-                    // Wait for UDP servers to complete shutdown
                     match try_join_all(udp_futures).await {
                         Ok(_) => {}
                         Err(error) => {
@@ -472,11 +390,9 @@ fn main() -> std::io::Result<()> {
                         }
                     }
 
-                    // Shutdown all other services
                     tokio_shutdown.handle().await;
                     task::sleep(Duration::from_secs(1)).await;
 
-                    // Save final state to database or config before exiting
                     if db_config.persistent {
                         tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
                         Configuration::save_from_config(tracker.config.clone(), "config.toml");
@@ -505,7 +421,6 @@ fn main() -> std::io::Result<()> {
                     task::sleep(Duration::from_secs(1)).await;
                     info!("Server shutting down completed");
 
-                    // Prevent runtime destructors from running (faster shutdown)
                     mem::forget(tokio_core);
                     mem::forget(udp_tokio_threads);
                     Ok(())
