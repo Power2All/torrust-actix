@@ -19,35 +19,42 @@ impl ParsePool {
     }
 
     pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>) {
+        let tokio_udp = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("worker")
+            .worker_threads(threads)
+            .enable_all()
+            .build()
+            .unwrap();
+
         for i in 0..threads {
             let payload = self.payload.clone();
             let tracker_cloned = tracker.clone();
             let mut shutdown_handler = shutdown_handler.clone();
 
-            tokio::spawn(async move {
+            tokio_udp.spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
                 let mut batch = Vec::with_capacity(32);
                 let mut interval = tokio::time::interval(Duration::from_millis(1));
 
                 loop {
                     tokio::select! {
-                        _ = shutdown_handler.changed() => {
-                            info!("[UDP] Shutting down the Parse Pool thread {i}...");
-                            return;
+                    _ = shutdown_handler.changed() => {
+                        info!("[UDP] Shutting down the Parse Pool thread {i}...");
+                        return;
+                    }
+                    _ = interval.tick() => {
+                        // Batch process packets
+                        while let Some(packet) = payload.pop() {
+                            batch.push(packet);
+                            if batch.len() >= 32 { break; }
                         }
-                        _ = interval.tick() => {
-                            // Batch process packets
-                            while let Some(packet) = payload.pop() {
-                                batch.push(packet);
-                                if batch.len() >= 32 { break; }
-                            }
 
-                            if !batch.is_empty() {
-                                Self::process_batch(batch, tracker_cloned.clone()).await;
-                                batch = Vec::with_capacity(32);
-                            }
+                        if !batch.is_empty() {
+                            Self::process_batch(batch, tracker_cloned.clone()).await;
+                            batch = Vec::with_capacity(32);
                         }
                     }
+                }
                 }
             });
         }
