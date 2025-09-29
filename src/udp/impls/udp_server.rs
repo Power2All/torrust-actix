@@ -61,8 +61,7 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
-        //let parse_pool = Arc::new(ParsePool::new(10000));
-        let parse_pool = Arc::new(ParsePool::new_with_config(10000, 5000, 500000));
+        let parse_pool = Arc::new(ParsePool::new(10000));
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone()).await;
 
         let payload = parse_pool.payload.clone();
