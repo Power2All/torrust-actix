@@ -177,8 +177,8 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>) -> Response {
-        if payload.len() >= 16
-            && payload[8..12] == [0, 0, 0, 0] {
+        if payload.len() >= 16 {
+            if payload[8..12] == [0, 0, 0, 0] {
                 if let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
                     return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
                         Ok(response) => response,
@@ -186,6 +186,7 @@ impl UdpServer {
                     };
                 }
             }
+        }
 
         let transaction_id = match Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
             Ok(request) => {
