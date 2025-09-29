@@ -53,6 +53,8 @@ impl TorrentSharding {
             let sem_clone = Arc::clone(&semaphore);
 
             async move {
+ 
+
                 loop {
                     if shutdown_waiting(
                         Duration::from_secs(cleanup_interval),
@@ -70,6 +72,7 @@ impl TorrentSharding {
                         let tracker_clone = Arc::clone(&torrent_tracker_clone);
                         let sem_clone = Arc::clone(&sem_clone);
                         let stats_clone = Arc::clone(&stats);
+                        
 
                         let handle = tokio::spawn(async move {
                             let _permit = sem_clone.acquire().await.ok()?;
@@ -117,156 +120,129 @@ impl TorrentSharding {
     ) {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
 
-        // FIX: Early return if shard doesn't exist
-        let shard_arc = match torrent_tracker.torrents_sharding.shards.get(shard as usize) {
-            Some(s) => s,
-            None => return,
-        };
+        if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
+            // Precompute cutoff once to avoid per-peer Instant::now calls
+            let cutoff = std::time::Instant::now() - peer_timeout;
 
-        // Precompute cutoff once to avoid per-peer Instant::now calls
-        let cutoff = std::time::Instant::now() - peer_timeout;
+            // Local buffers to avoid cross-shard contention
+            let mut expired_full: Vec<InfoHash> = Vec::new();
+            let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
 
-        // Local buffers to avoid cross-shard contention
-        let mut expired_full: Vec<InfoHash> = Vec::new();
-        let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
+            // Quick read pass to identify expired entries
+            {
+                let shard_read = shard_arc.read();
 
-        // Quick read pass to identify expired entries
-        {
-            let shard_read = shard_arc.read();
-
-            // FIX: Reserve capacity based on shard size to reduce reallocations
-            let shard_len = shard_read.len();
-            if shard_len > 0 {
-                expired_full.reserve(shard_len / 20);  // Estimate ~5% full expirations
-                expired_partial.reserve(shard_len / 10);  // Estimate ~10% partial expirations
-            }
-
-            for (info_hash, torrent_entry) in shard_read.iter() {
-                // Fast path: torrent not updated within timeout => all peers are expired
-                if torrent_entry.updated < cutoff {
-                    expired_full.push(*info_hash);
-                    continue;
-                }
-
-                // FIX: Calculate expected sizes more efficiently
-                let seeds_capacity = torrent_entry.seeds.len().saturating_sub(1) / 10;
-                let peers_capacity = torrent_entry.peers.len().saturating_sub(1) / 10;
-
-                let mut expired_seeds = if seeds_capacity > 0 {
-                    Vec::with_capacity(seeds_capacity)
-                } else {
-                    Vec::new()
-                };
-
-                let mut expired_peers = if peers_capacity > 0 {
-                    Vec::with_capacity(peers_capacity)
-                } else {
-                    Vec::new()
-                };
-
-                // Check seeds
-                for (peer_id, torrent_peer) in &torrent_entry.seeds {
-                    if torrent_peer.updated < cutoff {
-                        expired_seeds.push(*peer_id);
-                    }
-                }
-
-                // Check peers
-                for (peer_id, torrent_peer) in &torrent_entry.peers {
-                    if torrent_peer.updated < cutoff {
-                        expired_peers.push(*peer_id);
-                    }
-                }
-
-                // FIX: Only add to partial if there are actually expired entries
-                if !expired_seeds.is_empty() || !expired_peers.is_empty() {
-                    expired_partial.push((*info_hash, expired_seeds, expired_peers));
-                }
-            }
-        }
-
-        // FIX: Early return if nothing to clean
-        if expired_partial.is_empty() && expired_full.is_empty() {
-            return;
-        }
-
-        // Process removals
-        {
-            let mut shard_write = shard_arc.write();
-
-            // Process partial expirations
-            for (info_hash, expired_seeds, expired_peers) in expired_partial {
-                if let Entry::Occupied(mut entry) = shard_write.entry(info_hash) {
-                    let torrent_entry = entry.get_mut();
-
-                    // Batch remove seeds
-                    for peer_id in expired_seeds {
-                        if torrent_entry.seeds.remove(&peer_id).is_some() {
-                            seeds_removed += 1;
-                        }
-                    }
-
-                    // Batch remove peers
-                    for peer_id in expired_peers {
-                        if torrent_entry.peers.remove(&peer_id).is_some() {
-                            peers_removed += 1;
-                        }
-                    }
-
-                    // Remove empty torrent if allowed
-                    if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
-                        entry.remove();
-                        torrents_removed += 1;
-                    }
-                }
-            }
-
-            // Process full expirations (entire torrent stale)
-            for info_hash in expired_full {
-                if let Entry::Occupied(entry) = shard_write.entry(info_hash) {
-                    // Safety re-check: skip if torrent was updated after read phase
-                    if entry.get().updated >= cutoff {
+                for (info_hash, torrent_entry) in shard_read.iter() {
+                    // Fast path: torrent not updated within timeout => all peers are expired
+                    if torrent_entry.updated < cutoff {
+                        expired_full.push(*info_hash);
                         continue;
                     }
 
-                    let torrent_entry = entry.get();
-                    let seeds_len = torrent_entry.seeds.len() as u64;
-                    let peers_len = torrent_entry.peers.len() as u64;
+                    let mut has_expired = false;
+                    let mut expired_seeds = Vec::new();
+                    let mut expired_peers = Vec::new();
 
-                    if !persistent {
-                        // FIX: Remove entire torrent without needing mut reference first
-                        entry.remove();
-                        torrents_removed += 1;
-                        seeds_removed += seeds_len;
-                        peers_removed += peers_len;
-                    } else {
-                        // Clear peers but keep torrent entry
-                        let torrent_entry = entry.into_mut();
-                        if seeds_len > 0 {
-                            torrent_entry.seeds.clear();
-                            seeds_removed += seeds_len;
+                    // Check seeds - use capacity hint for better allocation
+                    expired_seeds.reserve(torrent_entry.seeds.len() / 10);
+                    for (peer_id, torrent_peer) in &torrent_entry.seeds {
+                        if torrent_peer.updated < cutoff {
+                            expired_seeds.push(*peer_id);
+                            has_expired = true;
                         }
-                        if peers_len > 0 {
-                            torrent_entry.peers.clear();
+                    }
+
+                    // Check peers - use capacity hint
+                    expired_peers.reserve(torrent_entry.peers.len() / 10);
+                    for (peer_id, torrent_peer) in &torrent_entry.peers {
+                        if torrent_peer.updated < cutoff {
+                            expired_peers.push(*peer_id);
+                            has_expired = true;
+                        }
+                    }
+
+                    if has_expired {
+                        expired_partial.push((*info_hash, expired_seeds, expired_peers));
+                    }
+                }
+            }
+
+            // Process removals if needed
+            if !expired_partial.is_empty() || !expired_full.is_empty() {
+                let mut shard_write = shard_arc.write();
+
+                // Process partial expirations
+                for (info_hash, expired_seeds, expired_peers) in expired_partial.iter() {
+                    if let Entry::Occupied(mut entry) = shard_write.entry(*info_hash) {
+                        let torrent_entry = entry.get_mut();
+
+                        // Batch remove seeds
+                        for peer_id in expired_seeds {
+                            if torrent_entry.seeds.remove(peer_id).is_some() {
+                                seeds_removed += 1;
+                            }
+                        }
+
+                        // Batch remove peers
+                        for peer_id in expired_peers {
+                            if torrent_entry.peers.remove(peer_id).is_some() {
+                                peers_removed += 1;
+                            }
+                        }
+
+                        // Remove empty torrent if allowed
+                        if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
+                            entry.remove();
+                            torrents_removed += 1;
+                        }
+                    }
+                }
+
+                // Process full expirations (entire torrent stale)
+                for info_hash in expired_full.iter() {
+                    if let Entry::Occupied(entry) = shard_write.entry(*info_hash) {
+                        let mut entry = entry;
+                        // Safety re-check: skip if torrent was updated after read phase
+                        if entry.get().updated >= cutoff { continue; }
+
+                        let torrent_entry = entry.get_mut();
+                        let seeds_len = torrent_entry.seeds.len() as u64;
+                        let peers_len = torrent_entry.peers.len() as u64;
+
+                        if !persistent {
+                            // Remove entire torrent
+                            entry.remove();
+                            torrents_removed += 1;
+                            seeds_removed += seeds_len;
                             peers_removed += peers_len;
+                        } else {
+                            // Clear peers but keep torrent entry
+                            if seeds_len > 0 {
+                                torrent_entry.seeds.clear();
+                                seeds_removed += seeds_len;
+                            }
+                            if peers_len > 0 {
+                                torrent_entry.peers.clear();
+                                peers_removed += peers_len;
+                            }
                         }
                     }
                 }
             }
         }
 
-        // FIX: Batch stats updates more efficiently
-        if torrents_removed | seeds_removed | peers_removed > 0 {
-            if torrents_removed > 0 {
-                stats.add_torrents(torrents_removed);
-            }
-            if seeds_removed > 0 {
-                stats.add_seeds(seeds_removed);
-            }
-            if peers_removed > 0 {
-                stats.add_peers(peers_removed);
-            }
+        // Update shared stats atomically
+        if torrents_removed > 0 {
+            stats.add_torrents(torrents_removed);
+        }
+        if seeds_removed > 0 {
+            stats.add_seeds(seeds_removed);
+        }
+        if peers_removed > 0 {
+            stats.add_peers(peers_removed);
+        }
 
+        if seeds_removed > 0 || peers_removed > 0 || torrents_removed > 0 {
             info!("[PEERS] Shard: {shard} - Torrents: {torrents_removed} - Seeds: {seeds_removed} - Peers: {peers_removed}");
         }
     }
@@ -309,13 +285,7 @@ impl TorrentSharding {
 
     #[tracing::instrument(level = "debug")]
     pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry> {
-        // FIX: Pre-calculate total capacity to reduce reallocations
-        let _total_capacity: usize = self.shards.iter()
-            .map(|shard| shard.read().len())
-            .sum();
-
         let mut torrents_return = BTreeMap::new();
-        // Note: BTreeMap doesn't have with_capacity, but we avoid multiple extend operations
 
         for shard in &self.shards {
             let shard_data = shard.read();
@@ -334,29 +304,13 @@ impl TorrentSharding {
     }
 
     pub fn get_multiple_torrents(&self, info_hashes: &[InfoHash]) -> BTreeMap<InfoHash, Option<TorrentEntry>> {
-        // FIX: Pre-allocate with exact capacity
         let mut results = BTreeMap::new();
         let mut shard_groups: [Vec<InfoHash>; 256] = std::array::from_fn(|_| Vec::new());
 
-        // FIX: Calculate shard sizes first to optimize allocations
-        let mut shard_counts = [0usize; 256];
-        for &info_hash in info_hashes {
-            shard_counts[info_hash.0[0] as usize] += 1;
-        }
-
-        // Reserve capacity for each shard group
-        for (idx, count) in shard_counts.iter().enumerate() {
-            if *count > 0 {
-                shard_groups[idx].reserve(*count);
-            }
-        }
-
-        // Populate shard groups
         for &info_hash in info_hashes {
             shard_groups[info_hash.0[0] as usize].push(info_hash);
         }
 
-        // FIX: Process only non-empty shards
         for (shard_index, hashes) in shard_groups.iter().enumerate() {
             if !hashes.is_empty() {
                 let shard = self.shards[shard_index].read();
@@ -369,29 +323,13 @@ impl TorrentSharding {
     }
 
     pub fn batch_contains_peers(&self, queries: &[(InfoHash, PeerId)]) -> Vec<bool> {
-        // FIX: Pre-allocate with exact capacity
         let mut results = vec![false; queries.len()];
         let mut shard_groups: [Vec<usize>; 256] = std::array::from_fn(|_| Vec::new());
 
-        // FIX: Calculate shard sizes first to optimize allocations
-        let mut shard_counts = [0usize; 256];
-        for (_idx, &(info_hash, _)) in queries.iter().enumerate() {
-            shard_counts[info_hash.0[0] as usize] += 1;
-        }
-
-        // Reserve capacity for each shard group
-        for (idx, count) in shard_counts.iter().enumerate() {
-            if *count > 0 {
-                shard_groups[idx].reserve(*count);
-            }
-        }
-
-        // Populate shard groups
         for (idx, &(info_hash, _)) in queries.iter().enumerate() {
             shard_groups[info_hash.0[0] as usize].push(idx);
         }
 
-        // FIX: Process only non-empty shards
         for (shard_index, indices) in shard_groups.iter().enumerate() {
             if !indices.is_empty() {
                 let shard = self.shards[shard_index].read();
