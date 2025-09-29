@@ -37,7 +37,7 @@ use crate::udp::udp::MAX_SCRAPE_TORRENTS;
 
 impl UdpServer {
     #[tracing::instrument(level = "debug")]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, initial_capacity: usize, segment_size: usize, max_capacity: usize) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool) -> tokio::io::Result<UdpServer>
     {
         let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
@@ -55,16 +55,14 @@ impl UdpServer {
             socket: Arc::new(tokio_socket),
             udp_threads,
             worker_threads,
-            initial_capacity,
-            segment_size,
-            max_capacity,
             tracker,
         })
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
-        let parse_pool = Arc::new(ParsePool::new_with_config(self.initial_capacity, self.segment_size, self.max_capacity));
+        //let parse_pool = Arc::new(ParsePool::new(10000));
+        let parse_pool = Arc::new(ParsePool::new_with_config(10000, 5000, 500000));
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone()).await;
 
         let payload = parse_pool.payload.clone();

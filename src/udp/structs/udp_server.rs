@@ -7,8 +7,5 @@ pub struct UdpServer {
     pub(crate) socket: Arc<UdpSocket>,
     pub(crate) udp_threads: usize,
     pub(crate) worker_threads: usize,
-    pub(crate) initial_capacity: usize,
-    pub(crate) segment_size: usize,
-    pub(crate) max_capacity: usize,
     pub(crate) tracker: Arc<TorrentTracker>,
 }
