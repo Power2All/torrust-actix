@@ -5,4 +5,3 @@ pub mod ipv4_addr;
 pub mod ipv6_addr;
 pub mod udp_server;
 pub mod parse_pool;
-pub mod dynamic_queue;
