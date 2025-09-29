@@ -43,18 +43,11 @@ impl TorrentSharding {
             .build()
             .unwrap();
 
-        // Use semaphore to limit concurrent shard cleanups
-        let max_concurrent = std::cmp::max(cleanup_threads as usize, 4);
-        let semaphore = Arc::new(Semaphore::new(max_concurrent));
-
         let timer_handle: JoinHandle<()> = cleanup_pool.spawn({
             let torrent_tracker_clone = Arc::clone(&torrent_tracker);
             let shutdown_clone = shutdown.clone();
-            let sem_clone = Arc::clone(&semaphore);
 
             async move {
- 
-
                 loop {
                     if shutdown_waiting(
                         Duration::from_secs(cleanup_interval),
@@ -65,25 +58,31 @@ impl TorrentSharding {
 
                     // Shared stats accumulator for this cleanup cycle
                     let stats = Arc::new(CleanupStats::new());
-                    let mut cleanup_handles = Vec::with_capacity(256);
+                    let mut cleanup_handles = Vec::with_capacity(cleanup_threads as usize);
 
-                    // Process shards concurrently with controlled parallelism
-                    for shard in 0u8..=255u8 {
+                    // Divide 256 shards among cleanup_threads
+                    let shards_per_thread = 256 / cleanup_threads as usize;
+                    let remainder = 256 % cleanup_threads as usize;
+
+                    for thread_idx in 0..cleanup_threads as usize {
                         let tracker_clone = Arc::clone(&torrent_tracker_clone);
-                        let sem_clone = Arc::clone(&sem_clone);
                         let stats_clone = Arc::clone(&stats);
-                        
+
+                        // Calculate shard range for this thread
+                        let start_shard = thread_idx * shards_per_thread + thread_idx.min(remainder);
+                        let extra = if thread_idx < remainder { 1 } else { 0 };
+                        let end_shard = start_shard + shards_per_thread + extra;
 
                         let handle = tokio::spawn(async move {
-                            let _permit = sem_clone.acquire().await.ok()?;
-                            Self::cleanup_shard_optimized(
-                                tracker_clone,
-                                shard,
-                                peer_timeout,
-                                persistent,
-                                stats_clone
-                            ).await;
-                            Some(())
+                            for shard in start_shard..end_shard {
+                                Self::cleanup_shard_optimized(
+                                    tracker_clone.clone(),
+                                    shard as u8,
+                                    peer_timeout,
+                                    persistent,
+                                    stats_clone.clone()
+                                ).await;
+                            }
                         });
 
                         cleanup_handles.push(handle);
@@ -110,7 +109,7 @@ impl TorrentSharding {
         // Shutdown the runtime properly
         cleanup_pool.shutdown_background();
     }
-
+    
     async fn cleanup_shard_optimized(
         torrent_tracker: Arc<TorrentTracker>,
         shard: u8,
