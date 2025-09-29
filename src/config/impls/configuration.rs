@@ -150,6 +150,7 @@ impl Configuration {
     
     #[tracing::instrument(level = "debug")]
     pub fn env_overrides(config: &mut Configuration) -> &mut Configuration {
+        // Config
         if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
         if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = value.parse::<u64>().unwrap_or(60u64); }
         

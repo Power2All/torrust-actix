@@ -249,13 +249,14 @@ pub fn api_service_torrents_return_torrent_json(torrent: TorrentEntry) -> Value
 {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
 
+    // Create separate functions for seeds and peers to handle the type differences
     let process_seed = |(peer_id, torrent_peer): (&PeerId, &crate::tracker::structs::torrent_peer::TorrentPeer)| {
         let elapsed_ms = torrent_peer.updated.elapsed().as_millis();
         let timestamp = now.saturating_sub(elapsed_ms);
         let timestamp_final = ((timestamp as f64 / 2.0).round() * 2.0) as u64;
 
         json!({
-            "peer_id": peer_id.0,
+            "peer_id": peer_id.0, // Access the inner Vec<u8> if PeerId is a wrapper
             "peer_addr": torrent_peer.peer_addr,
             "updated": timestamp_final,
             "uploaded": torrent_peer.uploaded.0 as u64,
@@ -270,7 +271,7 @@ pub fn api_service_torrents_return_torrent_json(torrent: TorrentEntry) -> Value
         let timestamp_final = ((timestamp as f64 / 2.0).round() * 2.0) as u64;
 
         json!({
-            "peer_id": peer_id.0,
+            "peer_id": peer_id.0, // Access the inner Vec<u8> if PeerId is a wrapper
             "peer_addr": torrent_peer.peer_addr,
             "updated": timestamp_final,
             "uploaded": torrent_peer.uploaded.0 as u64,

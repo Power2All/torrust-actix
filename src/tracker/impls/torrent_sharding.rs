@@ -37,6 +37,7 @@ impl TorrentSharding {
         let cleanup_interval = torrent_tracker.config.tracker_config.peers_cleanup_interval;
         let cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
 
+        // Create a separate runtime for blocking operations
         let cleanup_pool = Builder::new_multi_thread()
             .worker_threads(cleanup_threads as usize)
             .thread_name("cleanup-worker")
@@ -44,9 +45,12 @@ impl TorrentSharding {
             .build()
             .unwrap();
 
+        // Use semaphore to limit concurrent shard cleanups
+        // Increase parallelism based on available threads
         let max_concurrent = std::cmp::max(cleanup_threads as usize * 2, 8);
         let semaphore = Arc::new(Semaphore::new(max_concurrent));
 
+        // Pre-allocate cleanup handles vector
         let cleanup_handles_capacity = 256;
 
         let timer_handle: JoinHandle<()> = cleanup_pool.spawn({
@@ -55,6 +59,7 @@ impl TorrentSharding {
             let sem_clone = Arc::clone(&semaphore);
 
             async move {
+                // Pre-compute batch size for better load distribution
                 let batch_size = 256 / max_concurrent;
 
                 loop {
@@ -65,9 +70,11 @@ impl TorrentSharding {
                         break;
                     }
 
+                    // Shared stats accumulator for this cleanup cycle with atomic counters
                     let stats = Arc::new(CleanupStatsAtomic::new());
                     let mut cleanup_handles = Vec::with_capacity(cleanup_handles_capacity);
 
+                    // Pre-compute cutoff time once for all shards
                     let cutoff = Instant::now() - peer_timeout;
 
                     // Process shards in batches for better cache locality

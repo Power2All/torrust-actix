@@ -56,9 +56,9 @@ tracing = "^0.1"
 utoipa = { version = "^5", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
 lazy_static = "^1.5"
-crossbeam = "^0.8"
-futures = "^0.3"
-rayon = "^1.11"
+crossbeam = "0.8.4"
+futures = "0.3.31"
+rayon = "1.11.0"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"

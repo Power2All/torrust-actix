@@ -83,10 +83,12 @@ impl Request {
 
     #[tracing::instrument(level = "debug")]
     pub fn from_bytes(bytes: &[u8], max_scrape_torrents: u8) -> Result<Self, RequestParseError> {
+        // Quick length check
         if bytes.len() < 16 {
             return Err(RequestParseError::unsendable_text("Packet too short"));
         }
 
+        // Use array references instead of cursor for faster parsing
         let connection_id = i64::from_be_bytes(bytes[0..8].try_into().map_err(|_|
             RequestParseError::unsendable_io(io::Error::new(io::ErrorKind::InvalidData, "Invalid connection_id"))
         )?);
@@ -99,6 +101,7 @@ impl Request {
             RequestParseError::unsendable_io(io::Error::new(io::ErrorKind::InvalidData, "Invalid transaction_id"))
         )?);
 
+        // Fast path for connect requests
         if action == 0 {
             if connection_id == PROTOCOL_IDENTIFIER {
                 return Ok(ConnectRequest {
@@ -109,8 +112,9 @@ impl Request {
             }
         }
 
+        // For announce and scrape, continue with cursor-based parsing
         let mut cursor = Cursor::new(bytes);
-        cursor.set_position(16);
+        cursor.set_position(16); // Skip already parsed bytes
 
         match action {
             // Connect
@@ -132,6 +136,7 @@ impl Request {
                 let mut peer_id = [0; 20];
                 let mut ip = [0; 4];
 
+                // Create error closure to avoid repeated code
                 let sendable_err = |err: io::Error| {
                     RequestParseError::sendable_io(err, connection_id, transaction_id)
                 };
@@ -156,6 +161,7 @@ impl Request {
                     Some(Ipv4Addr::from(ip))
                 };
 
+                // Handle optional path more efficiently
                 let path = if cursor.position() < bytes.len() as u64 {
                     let option_byte = cursor.read_u8().ok();
                     let option_size = cursor.read_u8().ok();
@@ -166,6 +172,7 @@ impl Request {
                             if cursor.position() + size_usize as u64 <= bytes.len() as u64 {
                                 let start_pos = cursor.position() as usize;
                                 let end_pos = start_pos + size_usize;
+                                // Use string slice directly instead of converting to String
                                 std::str::from_utf8(&bytes[start_pos..end_pos])
                                     .unwrap_or_default()
                                     .to_string()
@@ -204,6 +211,7 @@ impl Request {
                 let position = cursor.position() as usize;
                 let remaining_bytes = &bytes[position..];
 
+                // Calculate exact number of info hashes to avoid over-allocation
                 let max_hashes = max_scrape_torrents as usize;
                 let available_hashes = remaining_bytes.len() / 20;
                 let actual_hashes = available_hashes.min(max_hashes);
