@@ -7,7 +7,7 @@ use crate::udp::structs::udp_packet::UdpPacket;
 
 impl DynamicQueue {
     pub fn new(initial_capacity: usize, segment_size: usize, max_segments: usize) -> Self {
-        let initial_segments = initial_capacity.div_ceil(segment_size);
+        let initial_segments = (initial_capacity + segment_size - 1) / segment_size;
         let mut segments = Vec::with_capacity(initial_segments);
 
         for _ in 0..initial_segments {
@@ -27,12 +27,12 @@ impl DynamicQueue {
     }
 
     /// Push a packet, growing the queue if necessary
-    pub fn push(&self, packet: UdpPacket) -> bool {
+    pub fn push(&self, packet: UdpPacket) -> Result<(), UdpPacket> {
         // Try fast path first - push to current segment
         if let Some(success) = self.try_push_fast(&packet) {
             if success {
                 self.total_items.fetch_add(1, Ordering::Relaxed);
-                return true;
+                return Ok(());
             }
         }
 
@@ -45,15 +45,16 @@ impl DynamicQueue {
         let segments = self.segments.read();
         let write_idx = self.current_write_segment.load(Ordering::Acquire);
 
-        if write_idx < segments.len()
-            && segments[write_idx].push(packet.clone()).is_ok() {
+        if write_idx < segments.len() {
+            if segments[write_idx].push(packet.clone()).is_ok() {
                 return Some(true);
             }
+        }
         None
     }
 
     /// Slow path - handle full segments and growing
-    fn push_slow(&self, packet: UdpPacket) -> bool {
+    fn push_slow(&self, packet: UdpPacket) -> Result<(), UdpPacket> {
         let mut attempts = 0;
         const MAX_ATTEMPTS: usize = 3;
 
@@ -69,7 +70,7 @@ impl DynamicQueue {
                         self.total_items.fetch_add(1, Ordering::Relaxed);
                         // Update write segment hint for next time
                         self.current_write_segment.store(idx, Ordering::Release);
-                        return true;
+                        return Ok(());
                     }
                 }
             }
@@ -106,7 +107,7 @@ impl DynamicQueue {
 
         if current_segments >= self.max_segments {
             self.is_growing.store(false, Ordering::Release);
-            warn!("Parse pool at maximum capacity: {current_segments} segments");
+            warn!("Parse pool at maximum capacity: {} segments", current_segments);
             return false;
         }
 
@@ -125,17 +126,17 @@ impl DynamicQueue {
     }
 
     /// Emergency push - used when queue is completely full
-    fn emergency_push(&self, packet: UdpPacket) -> bool {
+    fn emergency_push(&self, packet: UdpPacket) -> Result<(), UdpPacket> {
         // Try one more time after potential growth
         if let Some(success) = self.try_push_fast(&packet) {
             if success {
                 self.total_items.fetch_add(1, Ordering::Relaxed);
-                return true;
+                return Ok(());
             }
         }
 
         warn!("Parse pool full despite growth attempts, dropping packet");
-        false
+        Err(packet)
     }
 
     /// Pop a packet from the queue
@@ -185,12 +186,6 @@ impl DynamicQueue {
         self.total_items.load(Ordering::Relaxed)
     }
 
-    /// Returns true if the queue contains no items.
-    /// This uses the same atomic counter as `len()` and is O(1).
-    pub fn is_empty(&self) -> bool {
-        self.total_items.load(Ordering::Relaxed) == 0
-    }
-
     /// Get current capacity
     pub fn capacity(&self) -> usize {
         self.total_capacity.load(Ordering::Relaxed)
@@ -231,7 +226,7 @@ impl DynamicQueue {
 
         // Don't shrink if we have items in later segments
         for i in target_segments..segments.len() {
-            if !segments[i].is_empty() {
+            if segments[i].len() > 0 {
                 self.is_growing.store(false, Ordering::Release);
                 return;
             }

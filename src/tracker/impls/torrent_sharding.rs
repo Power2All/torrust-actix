@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use log::info;
 use parking_lot::RwLock;
+use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 use tokio_shutdown::Shutdown;
 use crate::common::common::shutdown_waiting;
@@ -80,7 +81,7 @@ impl TorrentSharding {
                     stats.apply_to_tracker(&torrent_tracker_clone);
                 }
 
-                info!("Cleanup thread group {group_idx} shutting down");
+                info!("Cleanup thread group {} shutting down", group_idx);
             });
 
             cleanup_handles.push(handle);
@@ -98,7 +99,7 @@ impl TorrentSharding {
 
     // Optimized cleanup for dedicated thread model
     async fn cleanup_shard_dedicated(
-        _torrent_tracker: Arc<TorrentTracker>,
+        torrent_tracker: Arc<TorrentTracker>,
         shards: &[Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>; 256],
         shard_idx: u8,
         cutoff: Instant,

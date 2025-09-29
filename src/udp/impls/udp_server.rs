@@ -37,7 +37,6 @@ use crate::udp::udp::MAX_SCRAPE_TORRENTS;
 
 impl UdpServer {
     #[tracing::instrument(level = "debug")]
-    #[allow(clippy::too_many_arguments)]
     pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, initial_capacity: usize, segment_size: usize, max_capacity: usize) -> tokio::io::Result<UdpServer>
     {
         let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
@@ -122,7 +121,7 @@ impl UdpServer {
                                             socket: socket_clone.clone(),
                                         };
 
-                                        if !parse_pool_clone.payload.push(packet) {
+                                        if parse_pool_clone.payload.push(packet).is_err() {
                                             warn!("Parse pool queue full, dropping packet");
                                         }
                                     }
