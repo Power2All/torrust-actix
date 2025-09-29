@@ -61,7 +61,7 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
-        let parse_pool = Arc::new(ParsePool::new(10000)); // Bounded queue
+        let parse_pool = Arc::new(ParsePool::new(1000000)); // Bounded queue
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone()).await;
 
         // Periodically update UDP queue length in stats
