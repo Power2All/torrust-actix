@@ -1,19 +1,3 @@
-use std::borrow::Cow;
-use std::fs::File;
-use std::future::Future;
-use std::io::{BufReader, Write};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::process::exit;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use actix_cors::Cors;
-use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
-use actix_web::dev::ServerHandle;
-use actix_web::http::header::ContentType;
-use actix_web::web::{Data, ServiceConfig};
-use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
-use log::{debug, error, info};
 use crate::common::common::parse_query;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
@@ -24,6 +8,22 @@ use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
+use actix_cors::Cors;
+use actix_web::dev::ServerHandle;
+use actix_web::http::header::ContentType;
+use actix_web::web::{Data, ServiceConfig};
+use actix_web::{http, web, App, HttpRequest, HttpResponse, HttpServer};
+use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
+use log::{debug, error, info};
+use std::borrow::Cow;
+use std::fs::File;
+use std::future::Future;
+use std::io::{BufReader, Write};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::process::exit;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 #[tracing::instrument(level = "debug")]
 pub fn http_service_cors() -> Cors
@@ -578,10 +578,10 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
     };
 
     let scrape = data.validate_scrape(query_map).await;
-    if scrape.is_err() {
+    if let Err(scrape) = scrape {
         http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-            "failure reason" => ben_bytes!(scrape.unwrap_err().to_string())
+            "failure reason" => ben_bytes!(scrape.to_string())
         }.encode());
     }
 

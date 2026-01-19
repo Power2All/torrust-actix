@@ -1,8 +1,3 @@
-use std::collections::{BTreeMap, HashMap};
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
-use std::time::SystemTime;
-use log::debug;
 use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::tracker::enums::announce_event::AnnounceEvent;
@@ -15,6 +10,11 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
+use log::debug;
+use std::collections::{BTreeMap, HashMap};
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
+use std::time::SystemTime;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
@@ -28,10 +28,8 @@ impl TorrentTracker {
                 .first()
                 .ok_or_else(|| CustomError::new(&format!("no {field} given")))?;
 
-            if let Some(len) = expected_len {
-                if value.len() != len {
-                    return Err(CustomError::new(&format!("invalid {field} size")));
-                }
+            if let Some(len) = expected_len && value.len() != len {
+                return Err(CustomError::new(&format!("invalid {field} size")));
             }
 
             Ok(value.as_slice())
@@ -141,17 +139,13 @@ impl TorrentTracker {
                     );
                 }
 
-                if users_enabled {
-                    if let Some(user_id) = user_key {
-                        if let Some(mut user) = data.get_user(user_id) {
-                            let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                            user.updated = now;
-                            user.torrents_active.insert(announce_query.info_hash, now);
-                            data.add_user(user_id, user.clone());
-                            if is_persistent {
-                                data.add_user_update(user_id, user, UpdatesAction::Add);
-                            }
-                        }
+                if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
+                    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    user.updated = now;
+                    user.torrents_active.insert(announce_query.info_hash, now);
+                    data.add_user(user_id, user.clone());
+                    if is_persistent {
+                        data.add_user_update(user_id, user, UpdatesAction::Add);
                     }
                 }
 
@@ -176,18 +170,14 @@ impl TorrentTracker {
                     false
                 ) {
                     (Some(_), Some(new_torrent)) => {
-                        if users_enabled {
-                            if let Some(user_id) = user_key {
-                                if let Some(mut user) = data.get_user(user_id) {
-                                    user.uploaded += announce_query.uploaded;
-                                    user.downloaded += announce_query.downloaded;
-                                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                                    user.torrents_active.remove(&announce_query.info_hash);
-                                    data.add_user(user_id, user.clone());
-                                    if is_persistent {
-                                        data.add_user_update(user_id, user, UpdatesAction::Add);
-                                    }
-                                }
+                        if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
+                            user.uploaded += announce_query.uploaded;
+                            user.downloaded += announce_query.downloaded;
+                            user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                            user.torrents_active.remove(&announce_query.info_hash);
+                            data.add_user(user_id, user.clone());
+                            if is_persistent {
+                                data.add_user_update(user_id, user, UpdatesAction::Add);
                             }
                         }
                         new_torrent
@@ -227,16 +217,12 @@ impl TorrentTracker {
                     );
                 }
 
-                if users_enabled {
-                    if let Some(user_id) = user_key {
-                        if let Some(mut user) = data.get_user(user_id) {
-                            user.completed += 1;
-                            user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                            data.add_user(user_id, user.clone());
-                            if is_persistent {
-                                data.add_user_update(user_id, user, UpdatesAction::Add);
-                            }
-                        }
+                if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
+                    user.completed += 1;
+                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    data.add_user(user_id, user.clone());
+                    if is_persistent {
+                        data.add_user_update(user_id, user, UpdatesAction::Add);
                     }
                 }
 

@@ -1,13 +1,3 @@
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::time::Duration;
-use log::info;
-use parking_lot::RwLock;
-use tokio::runtime::Builder;
-use tokio::sync::Semaphore;
-use tokio::task::JoinHandle;
-use tokio_shutdown::Shutdown;
 use crate::common::common::shutdown_waiting;
 use crate::tracker::impls::cleanup_stats::CleanupStats;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -15,6 +5,15 @@ use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_sharding::TorrentSharding;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use log::info;
+use parking_lot::RwLock;
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::runtime::Builder;
+use tokio::task::JoinHandle;
+use tokio_shutdown::Shutdown;
 
 impl Default for TorrentSharding {
     fn default() -> Self {

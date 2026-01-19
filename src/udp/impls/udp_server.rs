@@ -1,10 +1,3 @@
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::sync::Arc;
-use std::time::Duration;
-use log::{debug, info};
-use socket2::{Socket, Domain, Type, Protocol};
-use tokio::net::UdpSocket;
-use tokio::runtime::Builder;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
@@ -34,6 +27,13 @@ use crate::udp::structs::transaction_id::TransactionId;
 use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
 use crate::udp::udp::MAX_SCRAPE_TORRENTS;
+use log::{debug, info};
+use socket2::{Domain, Protocol, Socket, Type};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::net::UdpSocket;
+use tokio::runtime::Builder;
 
 impl UdpServer {
     #[tracing::instrument(level = "debug")]
@@ -164,7 +164,7 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
-        use std::hash::{Hasher, DefaultHasher};
+        use std::hash::{DefaultHasher, Hasher};
         use std::time::Instant;
 
         let mut hasher = DefaultHasher::new();
@@ -182,16 +182,12 @@ impl UdpServer {
     #[tracing::instrument(level = "debug")]
     pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>) -> Response {
         // Fast path for connect requests (most common)
-        if payload.len() == 16 {
-            if let [_, _, _, _, action1, action2, action3, action4, ..] = payload {
-                if *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 {
-                    // Collapsed if let pattern - combining the Ok check with the Connect variant check
-                    if let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
-                        return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
-                            Ok(response) => response,
-                            Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
-                        }
-                    }
+        if payload.len() == 16 && let [_, _, _, _, action1, action2, action3, action4, ..] = payload && *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 {
+            // Collapsed if let pattern - combining the Ok check with the Connect variant check
+            if let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
+                return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
+                    Ok(response) => response,
+                    Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
                 }
             }
         }

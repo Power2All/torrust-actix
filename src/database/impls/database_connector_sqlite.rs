@@ -1,15 +1,3 @@
-use std::collections::BTreeMap;
-use std::ops::Deref;
-use std::process::exit;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use async_std::task;
-use futures_util::TryStreamExt;
-use log::{error, info};
-use sha1::{Digest, Sha1};
-use sqlx::{ConnectOptions, Error, Sqlite, Pool, Row, Transaction};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use crate::config::structs::configuration::Configuration;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
@@ -21,6 +9,18 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use async_std::task;
+use futures_util::TryStreamExt;
+use log::{error, info};
+use sha1::{Digest, Sha1};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::{ConnectOptions, Error, Pool, Row, Sqlite, Transaction};
+use std::collections::BTreeMap;
+use std::ops::Deref;
+use std::process::exit;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 impl DatabaseConnectorSQLite {
     #[tracing::instrument(level = "debug")]
@@ -36,9 +36,9 @@ impl DatabaseConnectorSQLite {
     pub async fn database_connector(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
         let sqlite_connect = DatabaseConnectorSQLite::create(config.database.clone().path.as_str()).await;
-        if sqlite_connect.is_err() {
+        if let Err(sqlite_connect) = sqlite_connect {
             error!("[SQLite] Unable to connect to SQLite on DSL {}", config.database.clone().path);
-            error!("[SQLite] Message: {:#?}", sqlite_connect.unwrap_err().into_database_error().unwrap().message());
+            error!("[SQLite] Message: {:#?}", sqlite_connect.into_database_error().unwrap().message());
             exit(1);
         }
 
