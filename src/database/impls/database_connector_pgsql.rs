@@ -50,7 +50,7 @@ impl DatabaseConnectorPgSQL {
             let pool = &structure.pgsql.clone().unwrap().pool;
             info!("[BOOT] Database creation triggered for PgSQL.");
 
-            // Create Torrent DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().torrents.table_name);
             match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
@@ -87,7 +87,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
 
-            // Create Whitelist DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().whitelist.table_name);
             match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
@@ -118,7 +118,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
 
-            // Create Blacklist DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().blacklist.table_name);
             match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
@@ -149,7 +149,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
 
-            // Create Keys DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().keys.table_name);
             match config.database_structure.clone().keys.bin_type_hash {
                 true => {
@@ -182,7 +182,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
 
-            // Create Users DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().users.table_name);
             match config.database_structure.clone().users.id_uuid {
                 true => {

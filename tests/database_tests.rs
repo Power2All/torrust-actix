@@ -11,13 +11,13 @@ async fn create_sqlite_test_config() -> Arc<Configuration> {
     let mut config = Configuration::init();
     config.database.engine = DatabaseDrivers::sqlite3;
     config.database.persistent = true;
-    config.database.path = ":memory:".to_string(); // In-memory SQLite for testing
+    config.database.path = ":memory:".to_string(); 
     Arc::new(config)
 }
 
 #[tokio::test]
 async fn test_database_connector_creation() {
-    let config = create_sqlite_test_config().await;
+    let _config = create_sqlite_test_config().await;
 }
 
 #[tokio::test]
@@ -38,7 +38,7 @@ async fn test_save_and_load_whitelist() {
     let config = create_sqlite_test_config().await;
     let tracker = Arc::new(TorrentTracker::new(config, true).await);
 
-    // Create test whitelist
+    
     let info_hash1 = common::random_info_hash();
     let info_hash2 = common::random_info_hash();
 
@@ -47,11 +47,11 @@ async fn test_save_and_load_whitelist() {
         (info_hash2, UpdatesAction::Add),
     ];
 
-    // Save whitelist
+    
     let save_result = tracker.sqlx.save_whitelist(tracker.clone(), whitelists).await;
     assert!(save_result.is_ok(), "Should save whitelist successfully");
 
-    // Load whitelist
+    
     let load_result = tracker.sqlx.load_whitelist(tracker.clone()).await;
     assert!(load_result.is_ok(), "Should load whitelist successfully");
 
@@ -98,11 +98,11 @@ async fn test_save_and_load_keys() {
 
 #[tokio::test]
 async fn test_database_optimization_no_clone() {
-    // This test verifies that the optimization (using as_ref() instead of clone().unwrap()) works
+    
     let config = create_sqlite_test_config().await;
     let tracker = Arc::new(TorrentTracker::new(config, true).await);
 
-    // This should work without panicking (tests the new pattern matching approach)
+    
     let result = tracker.sqlx.load_torrents(tracker.clone()).await;
     assert!(result.is_ok(), "Optimized database connector should work correctly");
 }
@@ -114,11 +114,11 @@ async fn test_database_update_action_add() {
 
     let info_hash = common::random_info_hash();
 
-    // Add to whitelist
+    
     let whitelists = vec![(info_hash, UpdatesAction::Add)];
     tracker.sqlx.save_whitelist(tracker.clone(), whitelists).await.unwrap();
 
-    // Verify it was added
+    
     tracker.sqlx.load_whitelist(tracker.clone()).await.unwrap();
     let is_whitelisted = tracker.check_whitelist(info_hash);
     assert!(is_whitelisted, "InfoHash should be in whitelist after Add action");
@@ -131,11 +131,11 @@ async fn test_database_update_action_remove() {
 
     let info_hash = common::random_info_hash();
 
-    // First add
+    
     tracker.sqlx.save_whitelist(tracker.clone(), vec![(info_hash, UpdatesAction::Add)]).await.unwrap();
     tracker.sqlx.load_whitelist(tracker.clone()).await.unwrap();
 
-    // Then remove
+    
     tracker.sqlx.save_whitelist(tracker.clone(), vec![(info_hash, UpdatesAction::Remove)]).await.unwrap();
     tracker.sqlx.load_whitelist(tracker.clone()).await.unwrap();
 
@@ -154,11 +154,11 @@ async fn test_reset_seeds_peers() {
 
 #[tokio::test]
 async fn test_concurrent_database_writes() {
-    // Test the parallel database update optimization
+    
     let config = create_sqlite_test_config().await;
     let tracker = Arc::new(TorrentTracker::new(config, true).await);
 
-    // Spawn multiple concurrent database writes
+    
     let mut handles = vec![];
 
     for _i in 0..10 {
@@ -172,7 +172,7 @@ async fn test_concurrent_database_writes() {
         handles.push(handle);
     }
 
-    // Wait for all writes to complete
+    
     for handle in handles {
         let result = handle.await.expect("Task should complete");
         assert!(result.is_ok(), "Concurrent writes should succeed");

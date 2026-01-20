@@ -48,7 +48,7 @@ dsn = ""
 
     fs::write(&config_path, config_content).unwrap();
 
-    // Test that TOML file can be loaded (this assumes your config has a from_file method)
+    
     assert!(config_path.exists(), "Config file should exist");
 }
 
@@ -56,7 +56,7 @@ dsn = ""
 async fn test_config_database_settings() {
     let config = common::create_test_config().await;
 
-    // Verify database configuration
+    
     assert!(!config.database.path.is_empty(), "Database path should not be empty");
 }
 
@@ -64,13 +64,13 @@ async fn test_config_database_settings() {
 async fn test_config_tracker_limits() {
     let config = common::create_test_config().await;
 
-    // Verify request intervals are sensible
+    
     assert!(
         config.tracker_config.request_interval_minimum <= config.tracker_config.request_interval,
         "Min request interval should be <= request interval"
     );
 
-    // Verify timeout is reasonable
+    
     assert!(
         config.tracker_config.peers_timeout > config.tracker_config.request_interval,
         "Peers timeout should be greater than request interval"
@@ -81,7 +81,7 @@ async fn test_config_tracker_limits() {
 async fn test_config_udp_server_settings() {
     let config = common::create_test_config().await;
 
-    // Verify UDP server configuration exists
+    
     if !config.udp_server.is_empty() { let udp_config = &&config.udp_server[0];
         assert!(!udp_config.bind_address.is_empty(), "UDP bind address should not be empty");
         assert!(udp_config.udp_threads > 0, "UDP threads should be positive");
@@ -93,7 +93,7 @@ async fn test_config_udp_server_settings() {
 async fn test_config_http_server_settings() {
     let config = common::create_test_config().await;
 
-    // Verify HTTP server configuration exists
+    
     if !config.http_server.is_empty() { let http_config = &&config.http_server[0];
         assert!(!http_config.bind_address.is_empty(), "HTTP bind address should not be empty");
         assert!(http_config.threads > 0, "HTTP threads should be positive");
@@ -104,7 +104,7 @@ async fn test_config_http_server_settings() {
 async fn test_config_sentry_disabled_by_default() {
     let config = common::create_test_config().await;
 
-    // Sentry should be disabled in test configuration
+    
     assert!(!config.sentry_config.enabled, "Sentry should be disabled by default");
 }
 
@@ -112,7 +112,7 @@ async fn test_config_sentry_disabled_by_default() {
 async fn test_config_validation() {
     let config = common::create_test_config().await;
 
-    // Test that configuration values are within acceptable ranges
+    
     assert!(
         config.tracker_config.request_interval >= 1 && config.tracker_config.request_interval <= 3600,
         "Request interval should be between 1 and 3600 seconds"
@@ -133,7 +133,7 @@ async fn test_config_validation() {
 async fn test_config_thread_safety() {
     let config = common::create_test_config().await;
 
-    // Test that Arc<Configuration> can be cloned safely
+    
     let config_clone1 = config.clone();
     let config_clone2 = config.clone();
 
@@ -154,7 +154,7 @@ async fn test_config_thread_safety() {
 async fn test_config_concurrent_access() {
     let config = common::create_test_config().await;
 
-    // Test concurrent access to configuration
+    
     let mut handles = vec![];
 
     for _ in 0..10 {

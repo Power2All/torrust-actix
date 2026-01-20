@@ -34,7 +34,7 @@ impl TorrentSharding {
         let cleanup_interval = torrent_tracker.config.tracker_config.peers_cleanup_interval;
         let cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
 
-        // Create a separate runtime for blocking operations
+        
         let cleanup_pool = Builder::new_multi_thread()
             .worker_threads(cleanup_threads as usize)
             .thread_name("cleanup-worker")
@@ -55,11 +55,11 @@ impl TorrentSharding {
                         break;
                     }
 
-                    // Shared stats accumulator for this cleanup cycle
+                    
                     let stats = Arc::new(CleanupStats::new());
                     let mut cleanup_handles = Vec::with_capacity(cleanup_threads as usize);
 
-                    // Divide 256 shards among cleanup_threads
+                    
                     let shards_per_thread = 256 / cleanup_threads as usize;
                     let remainder = 256 % cleanup_threads as usize;
 
@@ -67,7 +67,7 @@ impl TorrentSharding {
                         let tracker_clone = Arc::clone(&torrent_tracker_clone);
                         let stats_clone = Arc::clone(&stats);
 
-                        // Calculate shard range for this thread
+                        
                         let start_shard = thread_idx * shards_per_thread + thread_idx.min(remainder);
                         let extra = if thread_idx < remainder { 1 } else { 0 };
                         let end_shard = start_shard + shards_per_thread + extra;
@@ -87,25 +87,25 @@ impl TorrentSharding {
                         cleanup_handles.push(handle);
                     }
 
-                    // Wait for all cleanups to complete
+                    
                     for handle in cleanup_handles {
                         let _ = handle.await;
                     }
 
-                    // Apply batch stats update
+                    
                     stats.apply_to_tracker(&torrent_tracker_clone);
                 }
             }
         });
 
-        // Wait for shutdown signal
+        
         shutdown.handle().await;
 
-        // Cancel the cleanup task
+        
         timer_handle.abort();
         let _ = timer_handle.await;
 
-        // Shutdown the runtime properly
+        
         cleanup_pool.shutdown_background();
     }
     
@@ -119,19 +119,19 @@ impl TorrentSharding {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
 
         if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
-            // Precompute cutoff once to avoid per-peer Instant::now calls
+            
             let cutoff = std::time::Instant::now() - peer_timeout;
 
-            // Local buffers to avoid cross-shard contention
+            
             let mut expired_full: Vec<InfoHash> = Vec::new();
             let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
 
-            // Quick read pass to identify expired entries
+            
             {
                 let shard_read = shard_arc.read();
 
                 for (info_hash, torrent_entry) in shard_read.iter() {
-                    // Fast path: torrent not updated within timeout => all peers are expired
+                    
                     if torrent_entry.updated < cutoff {
                         expired_full.push(*info_hash);
                         continue;
@@ -141,7 +141,7 @@ impl TorrentSharding {
                     let mut expired_seeds = Vec::new();
                     let mut expired_peers = Vec::new();
 
-                    // Check seeds - use capacity hint for better allocation
+                    
                     expired_seeds.reserve(torrent_entry.seeds.len() / 10);
                     for (peer_id, torrent_peer) in &torrent_entry.seeds {
                         if torrent_peer.updated < cutoff {
@@ -150,7 +150,7 @@ impl TorrentSharding {
                         }
                     }
 
-                    // Check peers - use capacity hint
+                    
                     expired_peers.reserve(torrent_entry.peers.len() / 10);
                     for (peer_id, torrent_peer) in &torrent_entry.peers {
                         if torrent_peer.updated < cutoff {
@@ -165,30 +165,30 @@ impl TorrentSharding {
                 }
             }
 
-            // Process removals if needed
+            
             if !expired_partial.is_empty() || !expired_full.is_empty() {
                 let mut shard_write = shard_arc.write();
 
-                // Process partial expirations
+                
                 for (info_hash, expired_seeds, expired_peers) in expired_partial.iter() {
                     if let Entry::Occupied(mut entry) = shard_write.entry(*info_hash) {
                         let torrent_entry = entry.get_mut();
 
-                        // Batch remove seeds
+                        
                         for peer_id in expired_seeds {
                             if torrent_entry.seeds.remove(peer_id).is_some() {
                                 seeds_removed += 1;
                             }
                         }
 
-                        // Batch remove peers
+                        
                         for peer_id in expired_peers {
                             if torrent_entry.peers.remove(peer_id).is_some() {
                                 peers_removed += 1;
                             }
                         }
 
-                        // Remove empty torrent if allowed
+                        
                         if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
                             entry.remove();
                             torrents_removed += 1;
@@ -196,11 +196,11 @@ impl TorrentSharding {
                     }
                 }
 
-                // Process full expirations (entire torrent stale)
+                
                 for info_hash in expired_full.iter() {
                     if let Entry::Occupied(entry) = shard_write.entry(*info_hash) {
                         let mut entry = entry;
-                        // Safety re-check: skip if torrent was updated after read phase
+                        
                         if entry.get().updated >= cutoff { continue; }
 
                         let torrent_entry = entry.get_mut();
@@ -208,13 +208,13 @@ impl TorrentSharding {
                         let peers_len = torrent_entry.peers.len() as u64;
 
                         if !persistent {
-                            // Remove entire torrent
+                            
                             entry.remove();
                             torrents_removed += 1;
                             seeds_removed += seeds_len;
                             peers_removed += peers_len;
                         } else {
-                            // Clear peers but keep torrent entry
+                            
                             if seeds_len > 0 {
                                 torrent_entry.seeds.clear();
                                 seeds_removed += seeds_len;
@@ -229,7 +229,7 @@ impl TorrentSharding {
             }
         }
 
-        // Update shared stats atomically
+        
         if torrents_removed > 0 {
             stats.add_torrents(torrents_removed);
         }

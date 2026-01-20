@@ -64,7 +64,7 @@ impl Response {
                 bytes.write_i32::<NetworkEndian>(r.leechers.0)?;
                 bytes.write_i32::<NetworkEndian>(r.seeders.0)?;
 
-                // Pre-allocate buffer for peers to reduce write calls
+                
                 let peer_count = r.peers.len();
                 if peer_count > 0 {
                     let mut peer_buffer = Vec::with_capacity(peer_count * 6);
@@ -82,7 +82,7 @@ impl Response {
                 bytes.write_i32::<NetworkEndian>(r.leechers.0)?;
                 bytes.write_i32::<NetworkEndian>(r.seeders.0)?;
 
-                // Pre-allocate buffer for IPv6 peers
+                
                 let peer_count = r.peers.len();
                 if peer_count > 0 {
                     let mut peer_buffer = Vec::with_capacity(peer_count * 18);
@@ -97,7 +97,7 @@ impl Response {
                 bytes.write_i32::<NetworkEndian>(2)?;
                 bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
 
-                // Pre-allocate buffer for torrent stats
+                
                 let stats_count = r.torrent_stats.len();
                 if stats_count > 0 {
                     let mut stats_buffer = Vec::with_capacity(stats_count * 12);
@@ -128,7 +128,7 @@ impl Response {
         let transaction_id = cursor.read_i32::<NetworkEndian>()?;
 
         match action {
-            // Connect
+            
             0 => {
                 let connection_id = cursor.read_i64::<NetworkEndian>()?;
 
@@ -138,7 +138,7 @@ impl Response {
                 }
                     .into())
             }
-            // Announce
+            
             1 => {
                 let announce_interval = cursor.read_i32::<NetworkEndian>()?;
                 let leechers = cursor.read_i32::<NetworkEndian>()?;
@@ -169,7 +169,7 @@ impl Response {
                         .into())
                 }
             }
-            // Scrape
+            
             2 => {
                 let position = cursor.position() as usize;
                 let remaining_bytes = &bytes[position..];
@@ -181,7 +181,7 @@ impl Response {
                 }
                     .into())
             }
-            // Error
+            
             3 => {
                 let position = cursor.position() as usize;
                 let message_bytes = &bytes[position..];
@@ -212,7 +212,7 @@ impl Response {
         }
     }
 
-    // Helper method for writing to Vec<u8> with pre-allocation
+    
     #[inline]
     pub fn write_to_vec(&self) -> Result<Vec<u8>, io::Error> {
         let estimated_size = self.estimated_size();
@@ -221,8 +221,6 @@ impl Response {
         Ok(buffer)
     }
 }
-
-// Helper functions for parsing
 
 #[inline]
 fn parse_ipv4_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv4Addr>>, io::Error> {

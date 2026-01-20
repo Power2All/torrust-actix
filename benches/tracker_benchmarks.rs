@@ -1,5 +1,4 @@
-// Performance benchmarks for Torrust-Actix
-// Run with: cargo bench
+
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use std::net::{IpAddr, Ipv4Addr};
@@ -63,7 +62,7 @@ fn bench_get_peers_with_limit(c: &mut Criterion) {
     let tracker = rt.block_on(create_tracker());
     let info_hash = random_info_hash();
 
-    // Pre-populate with 1000 peers
+    
     for i in 0..1000 {
         let peer_id = random_peer_id();
         let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881);
@@ -139,12 +138,12 @@ fn bench_udp_packet_parsing(c: &mut Criterion) {
 
     let mut packet = vec![];
     packet.write_u64::<BigEndian>(PROTOCOL_IDENTIFIER).unwrap();
-    packet.write_u32::<BigEndian>(0).unwrap(); // Connect action
-    packet.write_u32::<BigEndian>(12345).unwrap(); // Transaction ID
+    packet.write_u32::<BigEndian>(0).unwrap(); 
+    packet.write_u32::<BigEndian>(12345).unwrap(); 
 
     c.bench_function("udp_connect_request_parse", |b| {
         b.iter(|| {
-            // This benchmarks the zero-copy optimization
+            
             black_box(Request::from_bytes(&packet[..], 74));
         });
     });
@@ -155,7 +154,7 @@ fn bench_peer_filtering_ipv4_vs_ipv6(c: &mut Criterion) {
     let tracker = rt.block_on(create_tracker());
     let info_hash = random_info_hash();
 
-    // Add mixed IPv4 and IPv6 peers
+    
     for i in 0..500 {
         let peer_id = random_peer_id();
         let peer = if i % 2 == 0 {

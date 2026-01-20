@@ -51,7 +51,7 @@ impl DatabaseConnectorMySQL {
             let pool = &structure.mysql.clone().unwrap().pool;
             info!("[BOOT] Database creation triggered for MySQL.");
 
-            // Create Torrent DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().torrents.table_name);
             match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
@@ -88,7 +88,7 @@ impl DatabaseConnectorMySQL {
                 }
             }
 
-            // Create Whitelist DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().whitelist.table_name);
             match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
@@ -119,7 +119,7 @@ impl DatabaseConnectorMySQL {
                 }
             }
 
-            // Create Blacklist DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().blacklist.table_name);
             match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
@@ -150,7 +150,7 @@ impl DatabaseConnectorMySQL {
                 }
             }
 
-            // Create Keys DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().keys.table_name);
             match config.database_structure.clone().keys.bin_type_hash {
                 true => {
@@ -183,7 +183,7 @@ impl DatabaseConnectorMySQL {
                 }
             }
 
-            // Create Users DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().users.table_name);
             match config.database_structure.clone().users.id_uuid {
                 true => {

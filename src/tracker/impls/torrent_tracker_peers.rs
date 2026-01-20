@@ -61,7 +61,7 @@ impl TorrentTracker {
         let mut result = BTreeMap::new();
 
         for (peer_id, torrent_peer) in peers.iter() {
-            // Early exit if we've collected enough peers
+            
             if amount != 0 && result.len() >= amount {
                 break;
             }

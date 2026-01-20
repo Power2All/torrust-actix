@@ -47,7 +47,7 @@ impl ParsePool {
                             return;
                         }
                         _ = interval.tick() => {
-                            // Batch process packets
+                            
                             while let Some(packet) = payload.pop() {
                                 batch.push(packet);
                                 if batch.len() >= 32 { break; }
@@ -63,7 +63,7 @@ impl ParsePool {
             });
         }
 
-        // Leak the runtime to prevent it from ever being dropped
+        
         let runtime = self.udp_runtime.clone();
         std::mem::forget(runtime);
     }

@@ -25,7 +25,7 @@ async fn test_add_seed_to_torrent() {
     let peer_id = common::random_peer_id();
 
     let mut seed = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
-    seed.left = NumberOfBytes(0); // Mark as seed
+    seed.left = NumberOfBytes(0); 
 
     let (_previous, current) = tracker.add_torrent_peer(info_hash, peer_id, seed, false);
 
@@ -39,11 +39,11 @@ async fn test_peer_to_seed_transition() {
     let info_hash = common::random_info_hash();
     let peer_id = common::random_peer_id();
 
-    // Add as peer first
+    
     let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
 
-    // Transition to seed
+    
     let mut seed = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
     seed.left = NumberOfBytes(0);
 
@@ -62,11 +62,11 @@ async fn test_remove_peer_from_torrent() {
     let info_hash = common::random_info_hash();
     let peer_id = common::random_peer_id();
 
-    // Add peer
+    
     let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
 
-    // Remove peer
+    
     let (previous, current) = tracker.remove_torrent_peer(info_hash, peer_id, false, false);
 
     assert!(previous.is_some(), "Should have previous entry");
@@ -78,14 +78,14 @@ async fn test_get_peers_with_limit() {
     let tracker = common::create_test_tracker().await;
     let info_hash = common::random_info_hash();
 
-    // Add 10 peers
+    
     for i in 0..10 {
         let peer_id = common::random_peer_id();
         let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, i as u8)), 6881);
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }
 
-    // Get peers with limit of 5
+    
     let result = tracker.get_torrent_peers(info_hash, 5, TorrentPeersType::IPv4, None);
 
     assert!(result.is_some(), "Should return peers");
@@ -98,17 +98,17 @@ async fn test_get_peers_ipv4_filtering() {
     let tracker = common::create_test_tracker().await;
     let info_hash = common::random_info_hash();
 
-    // Add IPv4 peer
+    
     let peer_id_v4 = common::random_peer_id();
     let peer_v4 = common::create_test_peer(peer_id_v4, IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id_v4, peer_v4, false);
 
-    // Add IPv6 peer
+    
     let peer_id_v6 = common::random_peer_id();
     let peer_v6 = common::create_test_peer(peer_id_v6, IpAddr::V6("::1".parse().unwrap()), 6881);
     tracker.add_torrent_peer(info_hash, peer_id_v6, peer_v6, false);
 
-    // Get only IPv4 peers
+    
     let result = tracker.get_torrent_peers(info_hash, 0, TorrentPeersType::IPv4, None);
 
     assert!(result.is_some());
@@ -121,7 +121,7 @@ async fn test_get_peers_ipv4_filtering() {
 async fn test_torrent_sharding_distribution() {
     let tracker = common::create_test_tracker().await;
 
-    // Add torrents with different info hashes to test sharding
+    
     for _ in 0..256 {
         let info_hash = common::random_info_hash();
         let peer_id = common::random_peer_id();
@@ -138,7 +138,7 @@ async fn test_concurrent_peer_additions() {
     let tracker = common::create_test_tracker().await;
     let info_hash = common::random_info_hash();
 
-    // Spawn 100 concurrent tasks to add peers
+    
     let mut handles = vec![];
     for i in 0..100 {
         let tracker_clone = tracker.clone();
@@ -150,12 +150,12 @@ async fn test_concurrent_peer_additions() {
         handles.push(handle);
     }
 
-    // Wait for all to complete
+    
     for handle in handles {
         handle.await.expect("Task should complete");
     }
 
-    // Verify all peers were added
+    
     let result = tracker.get_torrent_peers(info_hash, 0, TorrentPeersType::All, None);
     assert!(result.is_some());
     let peers = result.unwrap();
@@ -175,7 +175,7 @@ async fn test_stats_tracking() {
     let initial_torrents = initial_stats.torrents;
     let initial_peers = initial_stats.peers;
 
-    // Add a peer
+    
     let peer_id = common::random_peer_id();
     let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
@@ -190,10 +190,10 @@ async fn test_whitelist_filtering() {
     let tracker = common::create_test_tracker().await;
     let info_hash = common::random_info_hash();
 
-    // Add to whitelist
+    
     tracker.add_whitelist(info_hash);
 
-    // Verify it's in whitelist
+    
     let is_whitelisted = tracker.check_whitelist(info_hash);
     assert!(is_whitelisted, "InfoHash should be whitelisted");
 }
@@ -203,10 +203,10 @@ async fn test_blacklist_filtering() {
     let tracker = common::create_test_tracker().await;
     let info_hash = common::random_info_hash();
 
-    // Add to blacklist
+    
     tracker.add_blacklist(info_hash);
 
-    // Verify it's in blacklist
+    
     let is_blacklisted = tracker.check_blacklist(info_hash);
     assert!(is_blacklisted, "InfoHash should be blacklisted");
 }

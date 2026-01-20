@@ -6,7 +6,7 @@ use torrust_actix::stats::enums::stats_event::StatsEvent;
 async fn test_stats_initial_values() {
     let tracker = common::create_test_tracker().await;
 
-    // Initial stats should be zero or consistent
+    
     let stats = tracker.get_stats();
 
     assert_eq!(stats.torrents, 0, "Initial torrents count should be 0");
@@ -19,7 +19,7 @@ async fn test_stats_initial_values() {
 async fn test_stats_increment_decrement() {
     let tracker = common::create_test_tracker().await;
 
-    // Test increment
+    
     tracker.update_stats(StatsEvent::Torrents, 1);
     tracker.update_stats(StatsEvent::Seeds, 5);
     tracker.update_stats(StatsEvent::Peers, 10);
@@ -29,7 +29,7 @@ async fn test_stats_increment_decrement() {
     assert_eq!(stats.seeds, 5, "Seeds should be 5");
     assert_eq!(stats.peers, 10, "Peers should be 10");
 
-    // Test decrement
+    
     tracker.update_stats(StatsEvent::Seeds, -2);
     tracker.update_stats(StatsEvent::Peers, -3);
 
@@ -42,7 +42,7 @@ async fn test_stats_increment_decrement() {
 async fn test_stats_concurrent_updates() {
     let tracker = common::create_test_tracker().await;
 
-    // Perform concurrent stats updates
+    
     let mut handles = vec![];
 
     for _ in 0..100 {
@@ -67,7 +67,7 @@ async fn test_stats_completed_tracking() {
     let info_hash = common::random_info_hash();
     let peer_id = common::random_peer_id();
 
-    // Add a peer with completed event
+    
     let peer = common::create_test_peer(
         peer_id,
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
@@ -85,7 +85,7 @@ async fn test_stats_seed_peer_ratio() {
     let tracker = common::create_test_tracker().await;
     let info_hash = common::random_info_hash();
 
-    // Add seeds
+    
     for i in 0..5 {
         let peer_id = common::random_peer_id();
         let mut peer = common::create_test_peer(
@@ -97,7 +97,7 @@ async fn test_stats_seed_peer_ratio() {
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }
 
-    // Add peers
+    
     for i in 0..10 {
         let peer_id = common::random_peer_id();
         let mut peer = common::create_test_peer(
@@ -118,16 +118,16 @@ async fn test_stats_seed_peer_ratio() {
 async fn test_stats_prometheus_format() {
     let tracker = common::create_test_tracker().await;
 
-    // Add some data
+    
     tracker.update_stats(StatsEvent::Torrents, 5);
     tracker.update_stats(StatsEvent::Seeds, 10);
     tracker.update_stats(StatsEvent::Peers, 20);
 
-    // Note: Prometheus formatting is done in api_stats.rs api_service_prom_get()
-    // Here we just verify we can get the stats that would be formatted
+    
+    
     let stats = tracker.get_stats();
 
-    // Verify stats are available for Prometheus export
+    
     assert!(stats.torrents >= 0, "Should have torrents stat");
     assert!(stats.seeds >= 0, "Should have seeds stat");
     assert!(stats.peers >= 0, "Should have peers stat");
@@ -137,7 +137,7 @@ async fn test_stats_prometheus_format() {
 async fn test_stats_atomic_operations() {
     let tracker = common::create_test_tracker().await;
 
-    // Test that stats updates are atomic by performing rapid increments and decrements
+    
     let mut handles = vec![];
 
     for i in 0..50 {
@@ -157,7 +157,7 @@ async fn test_stats_atomic_operations() {
     }
 
     let stats = tracker.get_stats();
-    // With 25 increments and 25 decrements, should be 0
+    
     assert_eq!(stats.peers, 0, "Peers should be 0 after balanced operations");
 }
 
@@ -167,7 +167,7 @@ async fn test_stats_torrent_lifecycle() {
     let info_hash = common::random_info_hash();
     let peer_id = common::random_peer_id();
 
-    // Add peer (torrent created)
+    
     let peer = common::create_test_peer(
         peer_id,
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
@@ -179,7 +179,7 @@ async fn test_stats_torrent_lifecycle() {
     assert_eq!(stats_after_add.torrents, 1, "Torrents should be 1");
     assert_eq!(stats_after_add.peers, 1, "Peers should be 1");
 
-    // Remove peer (torrent removed if non-persistent)
+    
     tracker.remove_torrent_peer(info_hash, peer_id, false, false);
 
     let stats_after_remove = tracker.get_stats();
@@ -191,13 +191,13 @@ async fn test_stats_torrent_lifecycle() {
 async fn test_stats_overflow_protection() {
     let tracker = common::create_test_tracker().await;
 
-    // Test large increments don't cause issues
+    
     tracker.update_stats(StatsEvent::Peers, i64::MAX / 2);
     let stats = tracker.get_stats();
 
     assert!(stats.peers > 0, "Large increment should work");
 
-    // Test that decrements work with large values
+    
     tracker.update_stats(StatsEvent::Peers, -(i64::MAX / 4));
     let stats_after = tracker.get_stats();
 
@@ -208,7 +208,7 @@ async fn test_stats_overflow_protection() {
 async fn test_stats_http_tcp_separation() {
     let tracker = common::create_test_tracker().await;
 
-    // Test HTTP stats
+    
     tracker.update_stats(StatsEvent::Tcp4AnnouncesHandled, 10);
     tracker.update_stats(StatsEvent::Tcp4ScrapesHandled, 5);
 
@@ -216,7 +216,7 @@ async fn test_stats_http_tcp_separation() {
     assert_eq!(stats.tcp4_announces_handled, 10, "TCP4 announces should be tracked");
     assert_eq!(stats.tcp4_scrapes_handled, 5, "TCP4 scrapes should be tracked");
 
-    // Test IPv6 stats
+    
     tracker.update_stats(StatsEvent::Tcp6AnnouncesHandled, 3);
     let stats = tracker.get_stats();
     assert_eq!(stats.tcp6_announces_handled, 3, "TCP6 announces should be tracked");

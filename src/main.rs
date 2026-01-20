@@ -233,8 +233,8 @@ fn main() -> std::io::Result<()>
 
             tokio_core.spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(console_interval));
-                // Track last totals to compute per-second rates
-                let mut last_udp: Option<(i64,i64,i64,i64,i64,i64,i64)> = None; // (t, c4,a4,s4,c6,a6,s6)
+                
+                let mut last_udp: Option<(i64,i64,i64,i64,i64,i64,i64)> = None; 
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
@@ -257,7 +257,7 @@ fn main() -> std::io::Result<()>
                                 stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found
                             );
 
-                            // Compute per-second handled deltas for UDP
+                            
                             let now = chrono::Utc::now().timestamp();
                             let (udp_c4_ps, udp_a4_ps, udp_s4_ps, udp_c6_ps, udp_a6_ps, udp_s6_ps) = if let Some((t,c4,a4,s4,c6,a6,s6)) = last_udp {
                                 let dt = (now - t).max(1);
@@ -350,7 +350,7 @@ fn main() -> std::io::Result<()>
 
                                 info!("[DATABASE UPDATES] Starting batch updates...");
 
-                                // Parallel database updates for better performance
+                                
                                 let mut tasks = vec![
                                     tokio::spawn({
                                         let tracker = tracker_spawn_updates.clone();
@@ -396,7 +396,7 @@ fn main() -> std::io::Result<()>
                                     }));
                                 }
 
-                                // Wait for all database updates to complete
+                                
                                 for task in tasks {
                                     let _ = task.await;
                                 }
@@ -435,7 +435,7 @@ fn main() -> std::io::Result<()>
 
                         info!("Saving final data to database...");
 
-                        // Parallel final database saves for faster shutdown
+                        
                         let mut tasks = vec![
                             tokio::spawn({
                                 let tracker_clone = tracker.clone();
@@ -481,7 +481,7 @@ fn main() -> std::io::Result<()>
                             }));
                         }
 
-                        // Wait for all final saves to complete
+                        
                         for task in tasks {
                             let _ = task.await;
                         }

@@ -38,7 +38,7 @@ async fn test_api_torrent_delete() {
     let api_config = common::create_test_api_config();
     let info_hash = common::random_info_hash();
 
-    // Add a torrent first
+    
     let peer_id = common::random_peer_id();
     let peer = common::create_test_peer(peer_id, std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
@@ -59,7 +59,7 @@ async fn test_api_torrent_delete() {
     let req = test::TestRequest::delete().uri(&uri).to_request();
     let resp = test::call_service(&app, req).await;
 
-    // Note: This will fail auth without token, but tests the endpoint setup
+    
     assert!(resp.status().as_u16() == 401 || resp.status().as_u16() == 400,
             "Delete torrent should require authentication");
 }
@@ -70,7 +70,7 @@ async fn test_api_whitelist_delete() {
     let api_config = common::create_test_api_config();
     let info_hash = common::random_info_hash();
 
-    // Add to whitelist first
+    
     tracker.add_whitelist(info_hash);
 
     let service_data = Arc::new(ApiServiceData {
@@ -89,7 +89,7 @@ async fn test_api_whitelist_delete() {
     let req = test::TestRequest::delete().uri(&uri).to_request();
     let resp = test::call_service(&app, req).await;
 
-    // Note: This will fail auth without token
+    
     assert!(resp.status().as_u16() == 401 || resp.status().as_u16() == 400,
             "Delete whitelist should require authentication");
 }
@@ -100,7 +100,7 @@ async fn test_api_blacklist_delete() {
     let api_config = common::create_test_api_config();
     let info_hash = common::random_info_hash();
 
-    // Add to blacklist first
+    
     tracker.add_blacklist(info_hash);
 
     let service_data = Arc::new(ApiServiceData {
@@ -119,7 +119,7 @@ async fn test_api_blacklist_delete() {
     let req = test::TestRequest::delete().uri(&uri).to_request();
     let resp = test::call_service(&app, req).await;
 
-    // Note: This will fail auth without token
+    
     assert!(resp.status().as_u16() == 401 || resp.status().as_u16() == 400,
             "Delete blacklist should require authentication");
 }
@@ -130,7 +130,7 @@ async fn test_api_key_delete() {
     let api_config = common::create_test_api_config();
     let info_hash = common::random_info_hash();
 
-    // Add key first
+    
     tracker.add_key(info_hash, 12345);
 
     let service_data = Arc::new(ApiServiceData {
@@ -149,7 +149,7 @@ async fn test_api_key_delete() {
     let req = test::TestRequest::delete().uri(&uri).to_request();
     let resp = test::call_service(&app, req).await;
 
-    // Note: This will fail auth without token
+    
     assert!(resp.status().as_u16() == 401 || resp.status().as_u16() == 400,
             "Delete key should require authentication");
 }
@@ -225,7 +225,7 @@ async fn test_api_stats_content_type() {
 
     assert!(resp.status().is_success(), "Stats endpoint should succeed");
 
-    // Prometheus metrics should return text/plain
+    
     let content_type = resp.headers().get("content-type");
     assert!(content_type.is_some(), "Content-Type header should be present");
 }
@@ -240,8 +240,8 @@ async fn test_api_concurrent_operations() {
         http_trackers_config: http_config,
     });
 
-    // Note: actix-web test utilities use Rc which isn't Send,
-    // so we can't use tokio::spawn. Instead, test sequential requests.
+    
+    
     let app = test::init_service(
         App::new()
             .app_data(web::Data::new(service_data.clone()))
@@ -249,7 +249,7 @@ async fn test_api_concurrent_operations() {
     )
         .await;
 
-    // Perform multiple sequential API operations to verify stability
+    
     for _ in 0..10 {
         let req = test::TestRequest::get().uri("/metrics").to_request();
         let resp = test::call_service(&app, req).await;

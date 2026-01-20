@@ -79,7 +79,7 @@ async fn test_http_cors_headers() {
     )
     .await;
 
-    // Note: TestRequest doesn't have options() method, using get() for CORS test
+    
     let req = test::TestRequest::get()
         .uri("/announce")
         .insert_header(("Origin", "http://localhost"))
@@ -87,7 +87,7 @@ async fn test_http_cors_headers() {
 
     let resp = test::call_service(&app, req).await;
 
-    // CORS should add appropriate headers
+    
     assert!(resp.headers().contains_key("access-control-allow-origin") ||
             resp.headers().contains_key("access-control-allow-methods"),
             "CORS headers should be present");
@@ -121,7 +121,7 @@ async fn test_http_invalid_endpoint() {
 async fn test_http_announce_with_ipv6() {
     let tracker = common::create_test_tracker().await;
 
-    // Add an IPv6 peer
+    
     let info_hash = common::random_info_hash();
     let peer_id = common::random_peer_id();
     let ipv6_peer = common::create_test_peer(
@@ -132,7 +132,7 @@ async fn test_http_announce_with_ipv6() {
 
     tracker.add_torrent_peer(info_hash, peer_id, ipv6_peer, false);
 
-    // Verify IPv6 peer was added
+    
     let result = tracker.get_torrent_peers(
         info_hash,
         0,
@@ -147,11 +147,11 @@ async fn test_http_announce_with_ipv6() {
 
 #[actix_web::test]
 async fn test_http_server_cleanup_optimization() {
-    // Test that the HTTP server code cleanup (extracting service_data) works
+    
     let tracker = common::create_test_tracker().await;
     let http_config = std::sync::Arc::new(common::create_test_http_config().as_ref().clone());
 
-    // This tests the refactored HTTP server creation
+    
     let service_data = std::sync::Arc::new(HttpServiceData {
         torrent_tracker: tracker.clone(),
         http_trackers_config: http_config.clone(),

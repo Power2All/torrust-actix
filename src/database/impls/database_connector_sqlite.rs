@@ -56,7 +56,7 @@ impl DatabaseConnectorSQLite {
             let _ = sqlx::query("PRAGMA page_size = 32768;").execute(pool).await;
             let _ = sqlx::query("PRAGMA synchronous = full;").execute(pool).await;
 
-            // Create Torrent DB
+            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().torrents.table_name);
             match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
@@ -91,7 +91,7 @@ impl DatabaseConnectorSQLite {
                 }
             }
 
-            // Create Whitelist DB
+            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().whitelist.table_name);
             match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
@@ -120,7 +120,7 @@ impl DatabaseConnectorSQLite {
                 }
             }
 
-            // Create Blacklist DB
+            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().blacklist.table_name);
             match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
@@ -149,7 +149,7 @@ impl DatabaseConnectorSQLite {
                 }
             }
 
-            // Create Keys DB
+            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().keys.table_name);
             match config.database_structure.clone().keys.bin_type_hash {
                 true => {
@@ -180,7 +180,7 @@ impl DatabaseConnectorSQLite {
                 }
             }
 
-            // Create Users DB
+            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().users.table_name);
             match config.database_structure.clone().users.id_uuid {
                 true => {
