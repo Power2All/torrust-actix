@@ -10,7 +10,7 @@ async fn test_config_default_values() {
     assert!(config.tracker_config.request_interval > 0, "Request interval should be positive");
     assert!(config.tracker_config.request_interval_minimum > 0, "Min request interval should be positive");
     assert!(config.tracker_config.peers_timeout > 0, "Peers timeout should be positive");
-    assert_eq!(config.database.persistent, false, "Default should be non-persistent");
+    assert!(!config.database.persistent, "Default should be non-persistent");
 }
 
 #[tokio::test]
@@ -57,7 +57,7 @@ async fn test_config_database_settings() {
     let config = common::create_test_config().await;
 
     // Verify database configuration
-    assert!(config.database.path.len() > 0, "Database path should not be empty");
+    assert!(!config.database.path.is_empty(), "Database path should not be empty");
 }
 
 #[tokio::test]
@@ -82,7 +82,7 @@ async fn test_config_udp_server_settings() {
     let config = common::create_test_config().await;
 
     // Verify UDP server configuration exists
-    if !config.udp_server.is_empty() { let ref udp_config = &config.udp_server[0];
+    if !config.udp_server.is_empty() { let udp_config = &&config.udp_server[0];
         assert!(!udp_config.bind_address.is_empty(), "UDP bind address should not be empty");
         assert!(udp_config.udp_threads > 0, "UDP threads should be positive");
         assert!(udp_config.worker_threads > 0, "UDP worker threads should be positive");
@@ -94,7 +94,7 @@ async fn test_config_http_server_settings() {
     let config = common::create_test_config().await;
 
     // Verify HTTP server configuration exists
-    if !config.http_server.is_empty() { let ref http_config = &config.http_server[0];
+    if !config.http_server.is_empty() { let http_config = &&config.http_server[0];
         assert!(!http_config.bind_address.is_empty(), "HTTP bind address should not be empty");
         assert!(http_config.threads > 0, "HTTP threads should be positive");
     }
@@ -105,7 +105,7 @@ async fn test_config_sentry_disabled_by_default() {
     let config = common::create_test_config().await;
 
     // Sentry should be disabled in test configuration
-    assert_eq!(config.sentry_config.enabled, false, "Sentry should be disabled by default");
+    assert!(!config.sentry_config.enabled, "Sentry should be disabled by default");
 }
 
 #[tokio::test]

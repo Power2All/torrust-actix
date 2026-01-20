@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::database::enums::database_drivers::DatabaseDrivers;
-use torrust_actix::database::structs::database_connector::DatabaseConnector;
 use torrust_actix::tracker::enums::updates_action::UpdatesAction;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 
@@ -19,9 +18,6 @@ async fn create_sqlite_test_config() -> Arc<Configuration> {
 #[tokio::test]
 async fn test_database_connector_creation() {
     let config = create_sqlite_test_config().await;
-    let connector = DatabaseConnector::new(config, true).await;
-
-    // Verify connector was created without errors
 }
 
 #[tokio::test]

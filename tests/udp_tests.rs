@@ -48,7 +48,7 @@ fn test_udp_connect_response_writing() {
     let result = Response::Connect(response).write(&mut buffer);
 
     assert!(result.is_ok(), "Should write connect response successfully");
-    assert!(buffer.len() > 0, "Buffer should contain data");
+    assert!(!buffer.is_empty(), "Buffer should contain data");
     assert_eq!(buffer.len(), 16, "Connect response should be 16 bytes");
 }
 
