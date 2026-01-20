@@ -1,11 +1,8 @@
-// Integration tests for UDP Tracker Protocol
-
 mod common;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use torrust_actix::udp::enums::request::Request;
 use torrust_actix::udp::enums::response::Response;
-use torrust_actix::udp::structs::connect_request::ConnectRequest;
 use torrust_actix::udp::structs::transaction_id::TransactionId;
 use torrust_actix::udp::udp::PROTOCOL_IDENTIFIER;
 

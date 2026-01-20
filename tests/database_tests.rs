@@ -1,5 +1,3 @@
-// Integration tests for Database Layer
-
 mod common;
 
 use std::collections::BTreeMap;

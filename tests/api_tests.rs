@@ -1,5 +1,3 @@
-// Integration tests for RESTful API Endpoints
-
 mod common;
 
 use actix_web::{test, web, App};
@@ -43,7 +41,7 @@ async fn test_api_torrent_delete() {
 
     // Add a torrent first
     let peer_id = common::random_peer_id();
-    let peer = common::create_test_peer(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 6881);
+    let peer = common::create_test_peer(peer_id, std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
 
     let service_data = Arc::new(ApiServiceData {

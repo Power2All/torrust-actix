@@ -1,5 +1,3 @@
-// Integration tests for Statistics and Metrics
-
 mod common;
 
 use torrust_actix::stats::enums::stats_event::StatsEvent;
@@ -71,6 +69,7 @@ async fn test_stats_completed_tracking() {
 
     // Add a peer with completed event
     let peer = common::create_test_peer(
+        peer_id,
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
         6881,
     );
@@ -90,6 +89,7 @@ async fn test_stats_seed_peer_ratio() {
     for i in 0..5 {
         let peer_id = common::random_peer_id();
         let mut peer = common::create_test_peer(
+            peer_id,
             std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
             6881 + i,
         );
@@ -101,6 +101,7 @@ async fn test_stats_seed_peer_ratio() {
     for i in 0..10 {
         let peer_id = common::random_peer_id();
         let mut peer = common::create_test_peer(
+            peer_id,
             std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 2)),
             6881 + i,
         );
@@ -166,6 +167,7 @@ async fn test_stats_torrent_lifecycle() {
 
     // Add peer (torrent created)
     let peer = common::create_test_peer(
+        peer_id,
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
         6881,
     );

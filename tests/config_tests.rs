@@ -1,21 +1,16 @@
-// Integration tests for Configuration Management
-
 mod common;
 
 use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
 use tempfile::TempDir;
-use torrust_actix::config::structs::configuration::Configuration;
 
 #[tokio::test]
 async fn test_config_default_values() {
     let config = common::create_test_config().await;
 
-    assert!(config.tracker.announce_interval > 0, "Announce interval should be positive");
-    assert!(config.tracker.min_announce_interval > 0, "Min announce interval should be positive");
-    assert!(config.tracker.max_peer_returned > 0, "Max peers returned should be positive");
-    assert_eq!(config.tracker.persistent, false, "Default should be non-persistent");
+    assert!(config.tracker_config.request_interval > 0, "Request interval should be positive");
+    assert!(config.tracker_config.request_interval_minimum > 0, "Min request interval should be positive");
+    assert!(config.tracker_config.peers_timeout > 0, "Peers timeout should be positive");
+    assert_eq!(config.database.persistent, false, "Default should be non-persistent");
 }
 
 #[tokio::test]
@@ -69,16 +64,16 @@ async fn test_config_database_settings() {
 async fn test_config_tracker_limits() {
     let config = common::create_test_config().await;
 
-    // Verify announce intervals are sensible
+    // Verify request intervals are sensible
     assert!(
-        config.tracker.min_announce_interval <= config.tracker.announce_interval,
-        "Min announce interval should be <= announce interval"
+        config.tracker_config.request_interval_minimum <= config.tracker_config.request_interval,
+        "Min request interval should be <= request interval"
     );
 
-    // Verify peer limits
+    // Verify timeout is reasonable
     assert!(
-        config.tracker.max_peer_returned <= 200,
-        "Max peers returned should be reasonable"
+        config.tracker_config.peers_timeout > config.tracker_config.request_interval,
+        "Peers timeout should be greater than request interval"
     );
 }
 
@@ -119,18 +114,18 @@ async fn test_config_validation() {
 
     // Test that configuration values are within acceptable ranges
     assert!(
-        config.tracker.announce_interval >= 1 && config.tracker.announce_interval <= 3600,
-        "Announce interval should be between 1 and 3600 seconds"
+        config.tracker_config.request_interval >= 1 && config.tracker_config.request_interval <= 3600,
+        "Request interval should be between 1 and 3600 seconds"
     );
 
     assert!(
-        config.tracker.min_announce_interval >= 1 && config.tracker.min_announce_interval <= 3600,
-        "Min announce interval should be between 1 and 3600 seconds"
+        config.tracker_config.request_interval_minimum >= 1 && config.tracker_config.request_interval_minimum <= 3600,
+        "Min request interval should be between 1 and 3600 seconds"
     );
 
     assert!(
-        config.tracker.max_peer_returned >= 1 && config.tracker.max_peer_returned <= 1000,
-        "Max peer returned should be between 1 and 1000"
+        config.tracker_config.peers_timeout >= 60 && config.tracker_config.peers_timeout <= 7200,
+        "Peers timeout should be between 60 and 7200 seconds"
     );
 }
 
@@ -143,14 +138,14 @@ async fn test_config_thread_safety() {
     let config_clone2 = config.clone();
 
     assert_eq!(
-        config.tracker.announce_interval,
-        config_clone1.tracker.announce_interval,
+        config.tracker_config.request_interval,
+        config_clone1.tracker_config.request_interval,
         "Cloned config should have same values"
     );
 
     assert_eq!(
-        config_clone1.tracker.announce_interval,
-        config_clone2.tracker.announce_interval,
+        config_clone1.tracker_config.request_interval,
+        config_clone2.tracker_config.request_interval,
         "All clones should have same values"
     );
 }
@@ -165,7 +160,7 @@ async fn test_config_concurrent_access() {
     for _ in 0..10 {
         let config_clone = config.clone();
         let handle = tokio::spawn(async move {
-            let interval = config_clone.tracker.announce_interval;
+            let interval = config_clone.tracker_config.request_interval;
             interval > 0
         });
         handles.push(handle);
