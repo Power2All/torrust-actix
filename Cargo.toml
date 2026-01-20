@@ -57,5 +57,16 @@ utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
 lazy_static = "^1.5"
 crossbeam = "0.8.4"
 
+[dev-dependencies]
+tempfile = "^3.14"
+rand = "^0.8"
+criterion = { version = "^0.5", features = ["async_tokio"] }
+mockall = "^0.13"
+proptest = "^1.6"
+
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"
+
+[[bench]]
+name = "tracker_benchmarks"
+harness = false
