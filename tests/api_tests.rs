@@ -24,7 +24,7 @@ async fn test_api_stats_prometheus() {
             .app_data(web::Data::new(service_data))
             .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
     )
-    .await;
+        .await;
 
     let req = test::TestRequest::get().uri("/metrics").to_request();
     let resp = test::call_service(&app, req).await;
@@ -53,7 +53,7 @@ async fn test_api_torrent_delete() {
             .app_data(web::Data::new(service_data))
             .route("/api/torrent/{info_hash}", web::delete().to(api_service_torrent_delete)),
     )
-    .await;
+        .await;
 
     let uri = format!("/api/torrent/{}", info_hash);
     let req = test::TestRequest::delete().uri(&uri).to_request();
@@ -61,7 +61,7 @@ async fn test_api_torrent_delete() {
 
     // Note: This will fail auth without token, but tests the endpoint setup
     assert!(resp.status().as_u16() == 401 || resp.status().as_u16() == 400,
-        "Delete torrent should require authentication");
+            "Delete torrent should require authentication");
 }
 
 #[actix_web::test]
@@ -83,7 +83,7 @@ async fn test_api_whitelist_delete() {
             .app_data(web::Data::new(service_data))
             .route("/api/whitelist/{info_hash}", web::delete().to(api_service_whitelist_delete)),
     )
-    .await;
+        .await;
 
     let uri = format!("/api/whitelist/{}", info_hash);
     let req = test::TestRequest::delete().uri(&uri).to_request();
@@ -91,7 +91,7 @@ async fn test_api_whitelist_delete() {
 
     // Note: This will fail auth without token
     assert!(resp.status().as_u16() == 401 || resp.status().as_u16() == 400,
-        "Delete whitelist should require authentication");
+            "Delete whitelist should require authentication");
 }
 
 #[actix_web::test]
@@ -113,7 +113,7 @@ async fn test_api_blacklist_delete() {
             .app_data(web::Data::new(service_data))
             .route("/api/blacklist/{info_hash}", web::delete().to(api_service_blacklist_delete)),
     )
-    .await;
+        .await;
 
     let uri = format!("/api/blacklist/{}", info_hash);
     let req = test::TestRequest::delete().uri(&uri).to_request();
@@ -121,7 +121,7 @@ async fn test_api_blacklist_delete() {
 
     // Note: This will fail auth without token
     assert!(resp.status().as_u16() == 401 || resp.status().as_u16() == 400,
-        "Delete blacklist should require authentication");
+            "Delete blacklist should require authentication");
 }
 
 #[actix_web::test]
@@ -143,7 +143,7 @@ async fn test_api_key_delete() {
             .app_data(web::Data::new(service_data))
             .route("/api/key/{info_hash}", web::delete().to(api_service_key_delete)),
     )
-    .await;
+        .await;
 
     let uri = format!("/api/key/{}", info_hash);
     let req = test::TestRequest::delete().uri(&uri).to_request();
@@ -151,7 +151,7 @@ async fn test_api_key_delete() {
 
     // Note: This will fail auth without token
     assert!(resp.status().as_u16() == 401 || resp.status().as_u16() == 400,
-        "Delete key should require authentication");
+            "Delete key should require authentication");
 }
 
 #[actix_web::test]
@@ -169,7 +169,7 @@ async fn test_api_cors_headers() {
             .app_data(web::Data::new(service_data))
             .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
     )
-    .await;
+        .await;
 
     let req = test::TestRequest::get()
         .uri("/metrics")
@@ -195,7 +195,7 @@ async fn test_api_invalid_endpoint_404() {
             .app_data(web::Data::new(service_data))
             .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
     )
-    .await;
+        .await;
 
     let req = test::TestRequest::get().uri("/invalid/endpoint").to_request();
     let resp = test::call_service(&app, req).await;
@@ -218,7 +218,7 @@ async fn test_api_stats_content_type() {
             .app_data(web::Data::new(service_data))
             .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
     )
-    .await;
+        .await;
 
     let req = test::TestRequest::get().uri("/metrics").to_request();
     let resp = test::call_service(&app, req).await;
@@ -240,28 +240,19 @@ async fn test_api_concurrent_operations() {
         http_trackers_config: http_config,
     });
 
-    // Perform multiple concurrent API operations
-    let mut handles = vec![];
+    // Note: actix-web test utilities use Rc which isn't Send,
+    // so we can't use tokio::spawn. Instead, test sequential requests.
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(service_data.clone()))
+            .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
+    )
+        .await;
 
+    // Perform multiple sequential API operations to verify stability
     for _ in 0..10 {
-        let service_data_clone = service_data.clone();
-        let handle = tokio::spawn(async move {
-            let app = test::init_service(
-                App::new()
-                    .app_data(web::Data::new(service_data_clone))
-                    .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
-            )
-            .await;
-
-            let req = test::TestRequest::get().uri("/metrics").to_request();
-            let resp = test::call_service(&app, req).await;
-            resp.status().is_success()
-        });
-        handles.push(handle);
-    }
-
-    for handle in handles {
-        let success = handle.await.unwrap();
-        assert!(success, "Concurrent API requests should succeed");
+        let req = test::TestRequest::get().uri("/metrics").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert!(resp.status().is_success(), "API requests should succeed");
     }
 }
