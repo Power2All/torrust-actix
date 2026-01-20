@@ -126,7 +126,8 @@ impl Configuration {
                     worker_threads: available_parallelism().unwrap().get(),
                     receive_buffer_size: 134217728,
                     send_buffer_size: 67108864,
-                    reuse_address: true
+                    reuse_address: true,
+                    use_payload_ip: false
                 }
             ),
             api_server: vec!(

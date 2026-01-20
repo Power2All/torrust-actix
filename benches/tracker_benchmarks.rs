@@ -15,19 +15,22 @@ use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 fn random_info_hash() -> InfoHash {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let bytes: [u8; 20] = rng.gen();
+    let mut bytes = [0u8; 20];
+    rng.fill(&mut bytes);
     InfoHash(bytes)
 }
 
 fn random_peer_id() -> PeerId {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let bytes: [u8; 20] = rng.gen();
+    let mut bytes = [0u8; 20];
+    rng.fill(&mut bytes);
     PeerId(bytes)
 }
 
-fn create_test_peer(ip: IpAddr, port: u16) -> TorrentPeer {
+fn create_test_peer(ip: IpAddr, port: u16, peer_id: PeerId) -> TorrentPeer {
     TorrentPeer {
+        peer_id,
         peer_addr: std::net::SocketAddr::new(ip, port),
         updated: std::time::Instant::now(),
         uploaded: NumberOfBytes(0),
@@ -38,7 +41,7 @@ fn create_test_peer(ip: IpAddr, port: u16) -> TorrentPeer {
 }
 
 async fn create_tracker() -> Arc<TorrentTracker> {
-    let mut config = Configuration::default();
+    let mut config = Configuration::init();
     config.database.persistent = false;
     Arc::new(TorrentTracker::new(Arc::new(config), false).await)
 }
@@ -51,7 +54,7 @@ fn bench_add_peer(c: &mut Criterion) {
         b.iter(|| {
             let info_hash = random_info_hash();
             let peer_id = random_peer_id();
-            let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
+            let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881, peer_id);
             black_box(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
         });
     });
@@ -62,10 +65,10 @@ fn bench_get_peers_with_limit(c: &mut Criterion) {
     let tracker = rt.block_on(create_tracker());
     let info_hash = random_info_hash();
 
-    
+
     for i in 0..1000 {
         let peer_id = random_peer_id();
-        let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881);
+        let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881, peer_id);
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }
 
@@ -101,7 +104,7 @@ fn bench_concurrent_peer_additions(c: &mut Criterion) {
                     let tracker_clone = tracker.clone();
                     let handle = tokio::spawn(async move {
                         let peer_id = random_peer_id();
-                        let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(192, 168, 1, i)), 6881);
+                        let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(192, 168, 1, i)), 6881, peer_id);
                         tracker_clone.add_torrent_peer(info_hash, peer_id, peer, false);
                     });
                     handles.push(handle);
@@ -124,7 +127,7 @@ fn bench_sharding_distribution(c: &mut Criterion) {
             for _ in 0..256 {
                 let info_hash = random_info_hash();
                 let peer_id = random_peer_id();
-                let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
+                let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881, peer_id);
                 black_box(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
             }
         });
@@ -137,8 +140,8 @@ fn bench_udp_packet_parsing(c: &mut Criterion) {
     use torrust_actix::udp::udp::PROTOCOL_IDENTIFIER;
 
     let mut packet = vec![];
-    packet.write_u64::<BigEndian>(PROTOCOL_IDENTIFIER).unwrap();
-    packet.write_u32::<BigEndian>(0).unwrap(); 
+    packet.write_u64::<BigEndian>(PROTOCOL_IDENTIFIER as u64).unwrap();
+    packet.write_u32::<BigEndian>(0).unwrap();
     packet.write_u32::<BigEndian>(12345).unwrap(); 
 
     c.bench_function("udp_connect_request_parse", |b| {
@@ -154,13 +157,13 @@ fn bench_peer_filtering_ipv4_vs_ipv6(c: &mut Criterion) {
     let tracker = rt.block_on(create_tracker());
     let info_hash = random_info_hash();
 
-    
+
     for i in 0..500 {
         let peer_id = random_peer_id();
         let peer = if i % 2 == 0 {
-            create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881)
+            create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881, peer_id)
         } else {
-            create_test_peer(IpAddr::V6(format!("2001:db8::{:x}::{:x}", i / 256, i % 256).parse().unwrap()), 6881)
+            create_test_peer(IpAddr::V6(format!("2001:db8::{:x}::{:x}", i / 256, i % 256).parse().unwrap()), 6881, peer_id)
         };
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }

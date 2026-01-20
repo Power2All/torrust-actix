@@ -28,7 +28,7 @@ impl ParsePool {
         }
     }
 
-    pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>) {
+    pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>, use_payload_ip: bool) {
         for i in 0..threads {
             let payload = self.payload.clone();
             let tracker_cloned = tracker.clone();
@@ -47,14 +47,14 @@ impl ParsePool {
                             return;
                         }
                         _ = interval.tick() => {
-                            
+
                             while let Some(packet) = payload.pop() {
                                 batch.push(packet);
                                 if batch.len() >= 32 { break; }
                             }
 
                             if !batch.is_empty() {
-                                Self::process_batch(batch, tracker_cloned.clone()).await;
+                                Self::process_batch(batch, tracker_cloned.clone(), use_payload_ip).await;
                                 batch = Vec::with_capacity(32);
                             }
                         }
@@ -63,14 +63,14 @@ impl ParsePool {
             });
         }
 
-        
+
         let runtime = self.udp_runtime.clone();
         std::mem::forget(runtime);
     }
 
-    async fn process_batch(packets: Vec<UdpPacket>, tracker: Arc<TorrentTracker>) {
+    async fn process_batch(packets: Vec<UdpPacket>, tracker: Arc<TorrentTracker>, use_payload_ip: bool) {
         for packet in packets {
-            let response = UdpServer::handle_packet(packet.remote_addr, &packet.data[..packet.data_len], tracker.clone()).await;
+            let response = UdpServer::handle_packet(packet.remote_addr, &packet.data[..packet.data_len], tracker.clone(), use_payload_ip).await;
             UdpServer::send_response(tracker.clone(), packet.socket.clone(), packet.remote_addr, response).await;
         }
     }
