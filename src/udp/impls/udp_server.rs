@@ -64,7 +64,6 @@ impl UdpServer {
         let parse_pool = Arc::new(ParsePool::new(1000000, self.worker_threads)); 
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone()).await;
 
-        
         let payload = parse_pool.payload.clone();
         let tracker_queue = self.tracker.clone();
         let mut rx_queue = rx.clone();
@@ -182,17 +181,13 @@ impl UdpServer {
     #[tracing::instrument(level = "debug")]
     pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>) -> Response {
         
-        if payload.len() == 16 && let [_, _, _, _, action1, action2, action3, action4, ..] = payload && *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 {
-            
-            if let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
-                return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
-                    Ok(response) => response,
-                    Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
-                }
+        if payload.len() == 16 && let [_, _, _, _, action1, action2, action3, action4, ..] = payload && *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 && let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
+            return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
+                Ok(response) => response,
+                Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
             }
         }
 
-        
         let transaction_id = match Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
             Ok(request) => {
                 let tid = match &request {
