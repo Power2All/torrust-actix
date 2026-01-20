@@ -4,7 +4,6 @@ use actix_web::{test, web, App};
 use std::sync::Arc;
 use torrust_actix::api::api_blacklists::api_service_blacklist_delete;
 use torrust_actix::api::api_keys::api_service_key_delete;
-use torrust_actix::api::api_stats::stats_prometheus;
 use torrust_actix::api::api_torrents::api_service_torrent_delete;
 use torrust_actix::api::api_whitelists::api_service_whitelist_delete;
 use torrust_actix::api::structs::api_service_data::ApiServiceData;
@@ -23,7 +22,7 @@ async fn test_api_stats_prometheus() {
     let app = test::init_service(
         App::new()
             .app_data(web::Data::new(service_data))
-            .route("/metrics", web::get().to(stats_prometheus)),
+            .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
     )
     .await;
 
@@ -168,7 +167,7 @@ async fn test_api_cors_headers() {
     let app = test::init_service(
         App::new()
             .app_data(web::Data::new(service_data))
-            .route("/metrics", web::get().to(stats_prometheus)),
+            .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
     )
     .await;
 
@@ -194,7 +193,7 @@ async fn test_api_invalid_endpoint_404() {
     let app = test::init_service(
         App::new()
             .app_data(web::Data::new(service_data))
-            .route("/metrics", web::get().to(stats_prometheus)),
+            .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
     )
     .await;
 
@@ -217,7 +216,7 @@ async fn test_api_stats_content_type() {
     let app = test::init_service(
         App::new()
             .app_data(web::Data::new(service_data))
-            .route("/metrics", web::get().to(stats_prometheus)),
+            .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
     )
     .await;
 
@@ -250,7 +249,7 @@ async fn test_api_concurrent_operations() {
             let app = test::init_service(
                 App::new()
                     .app_data(web::Data::new(service_data_clone))
-                    .route("/metrics", web::get().to(stats_prometheus)),
+                    .route("/metrics", web::get().to(torrust_actix::api::api_stats::api_service_prom_get)),
             )
             .await;
 

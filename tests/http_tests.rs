@@ -8,7 +8,7 @@ use torrust_actix::http::structs::http_service_data::HttpServiceData;
 #[actix_web::test]
 async fn test_http_announce_endpoint() {
     let tracker = common::create_test_tracker().await;
-    let http_config = std::sync::Arc::new(torrust_actix::config::structs::http_trackers_config::HttpTrackersConfig::default());
+    let http_config = std::sync::Arc::new(common::create_test_http_config().as_ref().clone());
 
     let app = test::init_service(
         App::new()
@@ -40,7 +40,7 @@ async fn test_http_announce_endpoint() {
 #[actix_web::test]
 async fn test_http_scrape_endpoint() {
     let tracker = common::create_test_tracker().await;
-    let http_config = std::sync::Arc::new(torrust_actix::config::structs::http_trackers_config::HttpTrackersConfig::default());
+    let http_config = std::sync::Arc::new(common::create_test_http_config().as_ref().clone());
 
     let app = test::init_service(
         App::new()
@@ -67,7 +67,7 @@ async fn test_http_scrape_endpoint() {
 #[actix_web::test]
 async fn test_http_cors_headers() {
     let tracker = common::create_test_tracker().await;
-    let http_config = std::sync::Arc::new(torrust_actix::config::structs::http_trackers_config::HttpTrackersConfig::default());
+    let http_config = std::sync::Arc::new(common::create_test_http_config().as_ref().clone());
 
     let app = test::init_service(
         App::new()
@@ -79,7 +79,8 @@ async fn test_http_cors_headers() {
     )
     .await;
 
-    let req = test::TestRequest::options()
+    // Note: TestRequest doesn't have options() method, using get() for CORS test
+    let req = test::TestRequest::get()
         .uri("/announce")
         .insert_header(("Origin", "http://localhost"))
         .to_request();
@@ -95,7 +96,7 @@ async fn test_http_cors_headers() {
 #[actix_web::test]
 async fn test_http_invalid_endpoint() {
     let tracker = common::create_test_tracker().await;
-    let http_config = std::sync::Arc::new(torrust_actix::config::structs::http_trackers_config::HttpTrackersConfig::default());
+    let http_config = std::sync::Arc::new(common::create_test_http_config().as_ref().clone());
 
     let app = test::init_service(
         App::new()
@@ -124,6 +125,7 @@ async fn test_http_announce_with_ipv6() {
     let info_hash = common::random_info_hash();
     let peer_id = common::random_peer_id();
     let ipv6_peer = common::create_test_peer(
+        peer_id,
         IpAddr::V6("2001:db8::1".parse().unwrap()),
         6881,
     );
@@ -147,7 +149,7 @@ async fn test_http_announce_with_ipv6() {
 async fn test_http_server_cleanup_optimization() {
     // Test that the HTTP server code cleanup (extracting service_data) works
     let tracker = common::create_test_tracker().await;
-    let http_config = std::sync::Arc::new(torrust_actix::config::structs::http_trackers_config::HttpTrackersConfig::default());
+    let http_config = std::sync::Arc::new(common::create_test_http_config().as_ref().clone());
 
     // This tests the refactored HTTP server creation
     let service_data = std::sync::Arc::new(HttpServiceData {

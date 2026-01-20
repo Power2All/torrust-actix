@@ -82,10 +82,10 @@ async fn test_config_udp_server_settings() {
     let config = common::create_test_config().await;
 
     // Verify UDP server configuration exists
-    if let Some(ref udp_config) = config.udp_server {
+    if !config.udp_server.is_empty() { let ref udp_config = &config.udp_server[0];
         assert!(!udp_config.bind_address.is_empty(), "UDP bind address should not be empty");
-        assert!(udp_config.threads > 0, "UDP threads should be positive");
-        assert!(udp_config.queue_size > 0, "UDP queue size should be positive");
+        assert!(udp_config.udp_threads > 0, "UDP threads should be positive");
+        assert!(udp_config.worker_threads > 0, "UDP worker threads should be positive");
     }
 }
 
@@ -94,9 +94,9 @@ async fn test_config_http_server_settings() {
     let config = common::create_test_config().await;
 
     // Verify HTTP server configuration exists
-    if let Some(ref http_config) = config.http_server {
+    if !config.http_server.is_empty() { let ref http_config = &config.http_server[0];
         assert!(!http_config.bind_address.is_empty(), "HTTP bind address should not be empty");
-        assert!(http_config.workers > 0, "HTTP workers should be positive");
+        assert!(http_config.threads > 0, "HTTP threads should be positive");
     }
 }
 

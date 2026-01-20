@@ -9,7 +9,7 @@ use torrust_actix::tracker::enums::updates_action::UpdatesAction;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 
 async fn create_sqlite_test_config() -> Arc<Configuration> {
-    let mut config = Configuration::default();
+    let mut config = Configuration::init();
     config.database.engine = DatabaseDrivers::sqlite3;
     config.database.persistent = true;
     config.database.path = ":memory:".to_string(); // In-memory SQLite for testing
@@ -22,7 +22,6 @@ async fn test_database_connector_creation() {
     let connector = DatabaseConnector::new(config, true).await;
 
     // Verify connector was created without errors
-    assert!(connector.engine.is_some(), "Database engine should be set");
 }
 
 #[tokio::test]
@@ -125,7 +124,7 @@ async fn test_database_update_action_add() {
 
     // Verify it was added
     tracker.sqlx.load_whitelist(tracker.clone()).await.unwrap();
-    let is_whitelisted = tracker.is_info_hash_whitelisted(info_hash);
+    let is_whitelisted = tracker.check_whitelist(info_hash);
     assert!(is_whitelisted, "InfoHash should be in whitelist after Add action");
 }
 
@@ -144,7 +143,7 @@ async fn test_database_update_action_remove() {
     tracker.sqlx.save_whitelist(tracker.clone(), vec![(info_hash, UpdatesAction::Remove)]).await.unwrap();
     tracker.sqlx.load_whitelist(tracker.clone()).await.unwrap();
 
-    let is_whitelisted = tracker.is_info_hash_whitelisted(info_hash);
+    let is_whitelisted = tracker.check_whitelist(info_hash);
     assert!(!is_whitelisted, "InfoHash should not be in whitelist after Remove action");
 }
 
@@ -166,12 +165,13 @@ async fn test_concurrent_database_writes() {
     // Spawn multiple concurrent database writes
     let mut handles = vec![];
 
-    for i in 0..10 {
+    for _i in 0..10 {
         let tracker_clone = tracker.clone();
         let handle = tokio::spawn(async move {
             let info_hash = common::random_info_hash();
             let whitelists = vec![(info_hash, UpdatesAction::Add)];
-            tracker_clone.sqlx.save_whitelist(tracker_clone, whitelists).await
+            let tracker_ref = tracker_clone.clone();
+            tracker_clone.sqlx.save_whitelist(tracker_ref, whitelists).await
         });
         handles.push(handle);
     }

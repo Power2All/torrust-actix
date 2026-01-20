@@ -100,12 +100,12 @@ async fn test_get_peers_ipv4_filtering() {
 
     // Add IPv4 peer
     let peer_id_v4 = common::random_peer_id();
-    let peer_v4 = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 6881);
+    let peer_v4 = common::create_test_peer(peer_id_v4, IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id_v4, peer_v4, false);
 
     // Add IPv6 peer
     let peer_id_v6 = common::random_peer_id();
-    let peer_v6 = common::create_test_peer(peer_id, IpAddr::V6("::1".parse().unwrap()), 6881);
+    let peer_v6 = common::create_test_peer(peer_id_v6, IpAddr::V6("::1".parse().unwrap()), 6881);
     tracker.add_torrent_peer(info_hash, peer_id_v6, peer_v6, false);
 
     // Get only IPv4 peers
