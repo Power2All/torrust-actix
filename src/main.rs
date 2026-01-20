@@ -12,7 +12,7 @@ use sentry::ClientInitGuard;
 use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
-use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
+use torrust_actix::common::common::{setup_logging, udp_check_host_and_port_used};
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
 use torrust_actix::structs::Cli;
@@ -325,7 +325,7 @@ fn main() -> std::io::Result<()>
                                 tracker_spawn_cleanup_keys.clean_keys();
                                 info!("[KEYS] Keys cleaned up.");
                             }
-                            _ = shutdown_waiting(Duration::from_secs(1), cleanup_keys_handler.clone()) => {
+                            _ = cleanup_keys_handler.handle() => {
                                 info!("[BOOT] Shutting down thread for keys cleanup...");
                                 return;
                             }
@@ -403,7 +403,7 @@ fn main() -> std::io::Result<()>
 
                                 info!("[DATABASE UPDATES] Batch updates completed");
                             }
-                            _ = shutdown_waiting(Duration::from_secs(1), updates_handler.clone()) => {
+                            _ = updates_handler.handle() => {
                                 info!("[BOOT] Shutting down thread for updates...");
                                 return;
                             }
