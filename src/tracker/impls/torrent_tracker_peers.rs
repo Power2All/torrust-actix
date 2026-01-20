@@ -58,20 +58,20 @@ impl TorrentTracker {
             ip_type_match && self_ip.is_none_or(|ip| ip != peer_addr.ip())
         };
 
-        let iter = peers.iter()
-            .filter_map(|(peer_id, torrent_peer)| {
-                if should_include(&torrent_peer.peer_addr) {
-                    Some((*peer_id, torrent_peer.clone()))
-                } else {
-                    None
-                }
-            });
+        let mut result = BTreeMap::new();
 
-        if amount != 0 {
-            iter.take(amount).collect()
-        } else {
-            iter.collect()
+        for (peer_id, torrent_peer) in peers.iter() {
+            // Early exit if we've collected enough peers
+            if amount != 0 && result.len() >= amount {
+                break;
+            }
+
+            if should_include(&torrent_peer.peer_addr) {
+                result.insert(*peer_id, torrent_peer.clone());
+            }
         }
+
+        result
     }
 
     #[tracing::instrument(level = "debug")]

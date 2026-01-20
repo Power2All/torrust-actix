@@ -70,7 +70,7 @@ impl ParsePool {
 
     async fn process_batch(packets: Vec<UdpPacket>, tracker: Arc<TorrentTracker>) {
         for packet in packets {
-            let response = UdpServer::handle_packet(packet.remote_addr, &Vec::from(&packet.data[..packet.data_len]), tracker.clone()).await;
+            let response = UdpServer::handle_packet(packet.remote_addr, &packet.data[..packet.data_len], tracker.clone()).await;
             UdpServer::send_response(tracker.clone(), packet.socket.clone(), packet.remote_addr, response).await;
         }
     }

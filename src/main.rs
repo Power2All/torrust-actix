@@ -350,19 +350,55 @@ fn main() -> std::io::Result<()>
 
                                 info!("[DATABASE UPDATES] Starting batch updates...");
 
-                                let _ = tracker_spawn_updates.save_torrent_updates(tracker_spawn_updates.clone()).await;
+                                // Parallel database updates for better performance
+                                let mut tasks = vec![
+                                    tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_torrent_updates(tracker.clone()).await;
+                                        }
+                                    })
+                                ];
 
                                 if tracker_spawn_updates.config.tracker_config.whitelist_enabled {
-                                    let _ = tracker_spawn_updates.save_whitelist_updates(tracker_spawn_updates.clone()).await;
+                                    tasks.push(tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_whitelist_updates(tracker.clone()).await;
+                                        }
+                                    }));
                                 }
+
                                 if tracker_spawn_updates.config.tracker_config.blacklist_enabled {
-                                    let _ = tracker_spawn_updates.save_blacklist_updates(tracker_spawn_updates.clone()).await;
+                                    tasks.push(tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_blacklist_updates(tracker.clone()).await;
+                                        }
+                                    }));
                                 }
+
                                 if tracker_spawn_updates.config.tracker_config.keys_enabled {
-                                    let _ = tracker_spawn_updates.save_key_updates(tracker_spawn_updates.clone()).await;
+                                    tasks.push(tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_key_updates(tracker.clone()).await;
+                                        }
+                                    }));
                                 }
+
                                 if tracker_spawn_updates.config.tracker_config.users_enabled {
-                                    let _ = tracker_spawn_updates.save_user_updates(tracker_spawn_updates.clone()).await;
+                                    tasks.push(tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_user_updates(tracker.clone()).await;
+                                        }
+                                    }));
+                                }
+
+                                // Wait for all database updates to complete
+                                for task in tasks {
+                                    let _ = task.await;
                                 }
 
                                 info!("[DATABASE UPDATES] Batch updates completed");
@@ -398,19 +434,56 @@ fn main() -> std::io::Result<()>
                         Configuration::save_from_config(tracker.config.clone(), "config.toml");
 
                         info!("Saving final data to database...");
-                        let _ = tracker.save_torrent_updates(tracker.clone()).await;
+
+                        // Parallel final database saves for faster shutdown
+                        let mut tasks = vec![
+                            tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_torrent_updates(tracker_clone.clone()).await;
+                                }
+                            })
+                        ];
 
                         if tracker_config.whitelist_enabled {
-                            let _ = tracker.save_whitelist_updates(tracker.clone()).await;
+                            tasks.push(tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_whitelist_updates(tracker_clone.clone()).await;
+                                }
+                            }));
                         }
+
                         if tracker_config.blacklist_enabled {
-                            let _ = tracker.save_blacklist_updates(tracker.clone()).await;
+                            tasks.push(tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_blacklist_updates(tracker_clone.clone()).await;
+                                }
+                            }));
                         }
+
                         if tracker_config.keys_enabled {
-                            let _ = tracker.save_key_updates(tracker.clone()).await;
+                            tasks.push(tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_key_updates(tracker_clone.clone()).await;
+                                }
+                            }));
                         }
+
                         if tracker_config.users_enabled {
-                            let _ = tracker.save_user_updates(tracker.clone()).await;
+                            tasks.push(tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_user_updates(tracker_clone.clone()).await;
+                                }
+                            }));
+                        }
+
+                        // Wait for all final saves to complete
+                        for task in tasks {
+                            let _ = task.await;
                         }
                     } else {
                         tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
