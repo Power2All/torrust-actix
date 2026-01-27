@@ -12,7 +12,7 @@ use sentry::ClientInitGuard;
 use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
-use torrust_actix::common::common::{setup_logging, shutdown_waiting, udp_check_host_and_port_used};
+use torrust_actix::common::common::{setup_logging, udp_check_host_and_port_used};
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
 use torrust_actix::structs::Cli;
@@ -216,6 +216,7 @@ fn main() -> std::io::Result<()>
                         udp_server_object.receive_buffer_size,
                         udp_server_object.send_buffer_size,
                         udp_server_object.reuse_address,
+                        udp_server_object.use_payload_ip,
                         tracker.clone(),
                         udp_rx.clone(),
                         tokio_udp.clone()
@@ -233,7 +234,8 @@ fn main() -> std::io::Result<()>
 
             tokio_core.spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(console_interval));
-                let mut last_udp: Option<(i64,i64,i64,i64,i64,i64,i64)> = None;
+                
+                let mut last_udp: Option<(i64,i64,i64,i64,i64,i64,i64)> = None; 
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
@@ -256,6 +258,7 @@ fn main() -> std::io::Result<()>
                                 stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found
                             );
 
+                            
                             let now = chrono::Utc::now().timestamp();
                             let (udp_c4_ps, udp_a4_ps, udp_s4_ps, udp_c6_ps, udp_a6_ps, udp_s6_ps) = if let Some((t,c4,a4,s4,c6,a6,s6)) = last_udp {
                                 let dt = (now - t).max(1);
@@ -323,7 +326,7 @@ fn main() -> std::io::Result<()>
                                 tracker_spawn_cleanup_keys.clean_keys();
                                 info!("[KEYS] Keys cleaned up.");
                             }
-                            _ = shutdown_waiting(Duration::from_secs(1), cleanup_keys_handler.clone()) => {
+                            _ = cleanup_keys_handler.handle() => {
                                 info!("[BOOT] Shutting down thread for keys cleanup...");
                                 return;
                             }
@@ -348,24 +351,60 @@ fn main() -> std::io::Result<()>
 
                                 info!("[DATABASE UPDATES] Starting batch updates...");
 
-                                let _ = tracker_spawn_updates.save_torrent_updates(tracker_spawn_updates.clone()).await;
+                                
+                                let mut tasks = vec![
+                                    tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_torrent_updates(tracker.clone()).await;
+                                        }
+                                    })
+                                ];
 
                                 if tracker_spawn_updates.config.tracker_config.whitelist_enabled {
-                                    let _ = tracker_spawn_updates.save_whitelist_updates(tracker_spawn_updates.clone()).await;
+                                    tasks.push(tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_whitelist_updates(tracker.clone()).await;
+                                        }
+                                    }));
                                 }
+
                                 if tracker_spawn_updates.config.tracker_config.blacklist_enabled {
-                                    let _ = tracker_spawn_updates.save_blacklist_updates(tracker_spawn_updates.clone()).await;
+                                    tasks.push(tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_blacklist_updates(tracker.clone()).await;
+                                        }
+                                    }));
                                 }
+
                                 if tracker_spawn_updates.config.tracker_config.keys_enabled {
-                                    let _ = tracker_spawn_updates.save_key_updates(tracker_spawn_updates.clone()).await;
+                                    tasks.push(tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_key_updates(tracker.clone()).await;
+                                        }
+                                    }));
                                 }
+
                                 if tracker_spawn_updates.config.tracker_config.users_enabled {
-                                    let _ = tracker_spawn_updates.save_user_updates(tracker_spawn_updates.clone()).await;
+                                    tasks.push(tokio::spawn({
+                                        let tracker = tracker_spawn_updates.clone();
+                                        async move {
+                                            let _ = tracker.save_user_updates(tracker.clone()).await;
+                                        }
+                                    }));
+                                }
+
+                                
+                                for task in tasks {
+                                    let _ = task.await;
                                 }
 
                                 info!("[DATABASE UPDATES] Batch updates completed");
                             }
-                            _ = shutdown_waiting(Duration::from_secs(1), updates_handler.clone()) => {
+                            _ = updates_handler.handle() => {
                                 info!("[BOOT] Shutting down thread for updates...");
                                 return;
                             }
@@ -396,19 +435,56 @@ fn main() -> std::io::Result<()>
                         Configuration::save_from_config(tracker.config.clone(), "config.toml");
 
                         info!("Saving final data to database...");
-                        let _ = tracker.save_torrent_updates(tracker.clone()).await;
+
+                        
+                        let mut tasks = vec![
+                            tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_torrent_updates(tracker_clone.clone()).await;
+                                }
+                            })
+                        ];
 
                         if tracker_config.whitelist_enabled {
-                            let _ = tracker.save_whitelist_updates(tracker.clone()).await;
+                            tasks.push(tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_whitelist_updates(tracker_clone.clone()).await;
+                                }
+                            }));
                         }
+
                         if tracker_config.blacklist_enabled {
-                            let _ = tracker.save_blacklist_updates(tracker.clone()).await;
+                            tasks.push(tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_blacklist_updates(tracker_clone.clone()).await;
+                                }
+                            }));
                         }
+
                         if tracker_config.keys_enabled {
-                            let _ = tracker.save_key_updates(tracker.clone()).await;
+                            tasks.push(tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_key_updates(tracker_clone.clone()).await;
+                                }
+                            }));
                         }
+
                         if tracker_config.users_enabled {
-                            let _ = tracker.save_user_updates(tracker.clone()).await;
+                            tasks.push(tokio::spawn({
+                                let tracker_clone = tracker.clone();
+                                async move {
+                                    let _ = tracker_clone.save_user_updates(tracker_clone.clone()).await;
+                                }
+                            }));
+                        }
+
+                        
+                        for task in tasks {
+                            let _ = task.await;
                         }
                     } else {
                         tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);

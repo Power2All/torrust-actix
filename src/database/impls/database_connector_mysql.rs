@@ -1,15 +1,3 @@
-use std::collections::BTreeMap;
-use std::ops::Deref;
-use std::process::exit;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use async_std::task;
-use futures_util::TryStreamExt;
-use log::{error, info};
-use sha1::{Digest, Sha1};
-use sqlx::{ConnectOptions, Error, MySql, Pool, Row, Transaction};
-use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use crate::config::structs::configuration::Configuration;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
@@ -21,6 +9,18 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use async_std::task;
+use futures_util::TryStreamExt;
+use log::{error, info};
+use sha1::{Digest, Sha1};
+use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
+use sqlx::{ConnectOptions, Error, MySql, Pool, Row, Transaction};
+use std::collections::BTreeMap;
+use std::ops::Deref;
+use std::process::exit;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 impl DatabaseConnectorMySQL {
     #[tracing::instrument(level = "debug")]
@@ -37,9 +37,9 @@ impl DatabaseConnectorMySQL {
     pub async fn database_connector(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
         let mysql_connect = DatabaseConnectorMySQL::create(config.database.clone().path.as_str()).await;
-        if mysql_connect.is_err() {
+        if let Err(mysql_connect) = mysql_connect {
             error!("[MySQL] Unable to connect to MySQL on DSL {}", config.database.clone().path);
-            error!("[MySQL] Message: {:#?}", mysql_connect.unwrap_err().into_database_error().unwrap().message());
+            error!("[MySQL] Message: {:#?}", mysql_connect.into_database_error().unwrap().message());
             exit(1);
         }
 
@@ -51,7 +51,7 @@ impl DatabaseConnectorMySQL {
             let pool = &structure.mysql.clone().unwrap().pool;
             info!("[BOOT] Database creation triggered for MySQL.");
 
-            // Create Torrent DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().torrents.table_name);
             match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
@@ -88,7 +88,7 @@ impl DatabaseConnectorMySQL {
                 }
             }
 
-            // Create Whitelist DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().whitelist.table_name);
             match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
@@ -119,7 +119,7 @@ impl DatabaseConnectorMySQL {
                 }
             }
 
-            // Create Blacklist DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().blacklist.table_name);
             match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
@@ -150,7 +150,7 @@ impl DatabaseConnectorMySQL {
                 }
             }
 
-            // Create Keys DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().keys.table_name);
             match config.database_structure.clone().keys.bin_type_hash {
                 true => {
@@ -183,7 +183,7 @@ impl DatabaseConnectorMySQL {
                 }
             }
 
-            // Create Users DB
+            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().users.table_name);
             match config.database_structure.clone().users.id_uuid {
                 true => {

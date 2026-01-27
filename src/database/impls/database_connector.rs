@@ -28,154 +28,319 @@ impl DatabaseConnector {
     #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_torrents(tracker.clone()).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_torrents(tracker.clone()).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_torrents(tracker.clone()).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.load_torrents(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.load_torrents(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.load_torrents(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_whitelist(tracker.clone()).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_whitelist(tracker.clone()).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_whitelist(tracker.clone()).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.load_whitelist(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.load_whitelist(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.load_whitelist(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_blacklist(tracker.clone()).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_blacklist(tracker.clone()).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_blacklist(tracker.clone()).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.load_blacklist(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.load_blacklist(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.load_blacklist(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_keys(tracker.clone()).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_keys(tracker.clone()).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_keys(tracker.clone()).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.load_keys(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.load_keys(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.load_keys(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().load_users(tracker.clone()).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().load_users(tracker.clone()).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().load_users(tracker.clone()).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.load_users(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.load_users(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.load_users(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_whitelist(tracker.clone(), whitelists).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_whitelist(tracker.clone(), whitelists).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_whitelist(tracker.clone(), whitelists).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.save_whitelist(tracker, whitelists).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.save_whitelist(tracker, whitelists).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.save_whitelist(tracker, whitelists).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_blacklist(tracker.clone(), blacklists).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_blacklist(tracker.clone(), blacklists).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_blacklist(tracker.clone(), blacklists).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.save_blacklist(tracker, blacklists).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.save_blacklist(tracker, blacklists).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.save_blacklist(tracker, blacklists).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<u64, Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_keys(tracker.clone(), keys).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_keys(tracker.clone(), keys).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_keys(tracker.clone(), keys).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.save_keys(tracker, keys).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.save_keys(tracker, keys).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.save_keys(tracker, keys).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_torrents(tracker.clone(), torrents).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.save_torrents(tracker, torrents).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.save_torrents(tracker, torrents).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.save_torrents(tracker, torrents).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().save_users(tracker.clone(), users).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().save_users(tracker.clone(), users).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().save_users(tracker.clone(), users).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.save_users(tracker, users).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.save_users(tracker, users).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.save_users(tracker, users).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error>
     {
-        if self.engine.is_some() {
-            return match self.engine.clone().unwrap() {
-                DatabaseDrivers::sqlite3 => { self.sqlite.clone().unwrap().reset_seeds_peers(tracker.clone()).await }
-                DatabaseDrivers::mysql => { self.mysql.clone().unwrap().reset_seeds_peers(tracker.clone()).await }
-                DatabaseDrivers::pgsql => { self.pgsql.clone().unwrap().reset_seeds_peers(tracker.clone()).await }
-            };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlite.reset_seeds_peers(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    mysql.reset_seeds_peers(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    pgsql.reset_seeds_peers(tracker).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
         }
-
-        Err(Error::RowNotFound)
     }
 }

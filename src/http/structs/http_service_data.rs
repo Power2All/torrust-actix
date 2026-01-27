@@ -4,6 +4,6 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 
 #[derive(Debug)]
 pub struct HttpServiceData {
-    pub(crate) torrent_tracker: Arc<TorrentTracker>,
-    pub(crate) http_trackers_config: Arc<HttpTrackersConfig>
+    pub torrent_tracker: Arc<TorrentTracker>,
+    pub http_trackers_config: Arc<HttpTrackersConfig>
 }

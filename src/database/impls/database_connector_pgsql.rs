@@ -1,15 +1,3 @@
-use std::collections::BTreeMap;
-use std::ops::Deref;
-use std::process::exit;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use async_std::task;
-use futures_util::TryStreamExt;
-use log::{error, info};
-use sha1::{Digest, Sha1};
-use sqlx::{ConnectOptions, Error, Pool, Postgres, Row, Transaction};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use crate::config::structs::configuration::Configuration;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
@@ -21,6 +9,18 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use async_std::task;
+use futures_util::TryStreamExt;
+use log::{error, info};
+use sha1::{Digest, Sha1};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{ConnectOptions, Error, Pool, Postgres, Row, Transaction};
+use std::collections::BTreeMap;
+use std::ops::Deref;
+use std::process::exit;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 impl DatabaseConnectorPgSQL {
     #[tracing::instrument(level = "debug")]
@@ -36,9 +36,9 @@ impl DatabaseConnectorPgSQL {
     pub async fn database_connector(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector
     {
         let pgsql_connect = DatabaseConnectorPgSQL::create(config.database.clone().path.as_str()).await;
-        if pgsql_connect.is_err() {
+        if let Err(pgsql_connect) = pgsql_connect {
             error!("[PgSQL] Unable to connect to PgSQL on DSL {}", config.database.clone().path);
-            error!("[PgSQL] Message: {:#?}", pgsql_connect.unwrap_err().into_database_error().unwrap().message());
+            error!("[PgSQL] Message: {:#?}", pgsql_connect.into_database_error().unwrap().message());
             exit(1);
         }
 
@@ -50,7 +50,7 @@ impl DatabaseConnectorPgSQL {
             let pool = &structure.pgsql.clone().unwrap().pool;
             info!("[BOOT] Database creation triggered for PgSQL.");
 
-            // Create Torrent DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().torrents.table_name);
             match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
@@ -87,7 +87,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
 
-            // Create Whitelist DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().whitelist.table_name);
             match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
@@ -118,7 +118,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
 
-            // Create Blacklist DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().blacklist.table_name);
             match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
@@ -149,7 +149,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
 
-            // Create Keys DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().keys.table_name);
             match config.database_structure.clone().keys.bin_type_hash {
                 true => {
@@ -182,7 +182,7 @@ impl DatabaseConnectorPgSQL {
                 }
             }
 
-            // Create Users DB
+            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().users.table_name);
             match config.database_structure.clone().users.id_uuid {
                 true => {

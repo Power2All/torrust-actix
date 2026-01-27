@@ -9,5 +9,4 @@ pub mod user_entry_item;
 pub mod user_id;
 pub mod torrent_peers;
 pub mod torrent_sharding;
-pub mod cleanup_stats_atomic;
-pub mod padded_atomic_u64;
+pub mod cleanup_stats;

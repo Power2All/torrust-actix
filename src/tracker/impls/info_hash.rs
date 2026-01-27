@@ -20,6 +20,7 @@ impl std::str::FromStr for InfoHash {
         let mut result = InfoHash([0u8; 20]);
         let bytes = s.as_bytes();
 
+        
         for (i, chunk) in bytes.chunks_exact(2).enumerate() {
             let high = hex_to_nibble(chunk[0]);
             let low = hex_to_nibble(chunk[1]);
@@ -55,13 +56,14 @@ impl serde::ser::Serialize for InfoHash {
         const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
         let mut buffer = [0u8; 40];
 
+        
         for (i, &byte) in self.0.iter().enumerate() {
             let idx = i * 2;
             buffer[idx] = HEX_CHARS[(byte >> 4) as usize];
             buffer[idx + 1] = HEX_CHARS[(byte & 0xf) as usize];
         }
 
-        // SAFETY: We know the buffer contains only valid ASCII hex characters
+        
         let str_out = unsafe { std::str::from_utf8_unchecked(&buffer) };
         serializer.serialize_str(str_out)
     }
@@ -103,6 +105,7 @@ impl<'de> serde::de::Deserialize<'de> for InfoHash {
                 Ok(result)
             }
 
+            // Add visit_bytes for direct byte processing
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,

@@ -8,4 +8,5 @@ pub struct UdpServer {
     pub(crate) udp_threads: usize,
     pub(crate) worker_threads: usize,
     pub(crate) tracker: Arc<TorrentTracker>,
+    pub(crate) use_payload_ip: bool,
 }

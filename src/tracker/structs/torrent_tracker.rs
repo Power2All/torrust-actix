@@ -13,7 +13,6 @@ use crate::tracker::types::keys_updates::KeysUpdates;
 use crate::tracker::types::torrents_updates::TorrentsUpdates;
 use crate::tracker::types::users_updates::UsersUpdates;
 
-
 #[derive(Debug)]
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,

@@ -1,15 +1,15 @@
+use crate::common::structs::custom_error::CustomError;
+use crate::config::structs::configuration::Configuration;
+use async_std::future;
+use byteorder::{BigEndian, ReadBytesExt};
+use fern::colors::{Color, ColoredLevelConfig};
+use log::info;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 use std::io::Cursor;
 use std::time::{Duration, SystemTime};
-use async_std::future;
-use byteorder::{BigEndian, ReadBytesExt};
-use fern::colors::{Color, ColoredLevelConfig};
-use log::info;
 use tokio_shutdown::Shutdown;
-use crate::common::structs::custom_error::CustomError;
-use crate::config::structs::configuration::Configuration;
 
 pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>>, CustomError> {
     let mut queries = HashMap::new();
@@ -23,7 +23,7 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>
             if let Some(equal_pos) = query_item.find('=') {
                 let (key_part, value_part) = query_item.split_at(equal_pos);
                 let key_name_raw = key_part;
-                let value_data_raw = &value_part[1..];
+                let value_data_raw = &value_part[1..]; 
 
                 let key_name = percent_encoding::percent_decode_str(key_name_raw)
                     .decode_utf8_lossy()
@@ -60,11 +60,9 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>
 }
 
 pub fn udp_check_host_and_port_used(bind_address: String) {
-    if cfg!(target_os = "windows") {
-        if let Err(data) = std::net::UdpSocket::bind(&bind_address) {
-            sentry::capture_error(&data);
-            panic!("Unable to bind to {} ! Exiting...", &bind_address);
-        }
+    if cfg!(target_os = "windows") && let Err(data) = std::net::UdpSocket::bind(&bind_address) {
+        sentry::capture_error(&data);
+        panic!("Unable to bind to {} ! Exiting...", &bind_address);
     }
 }
 

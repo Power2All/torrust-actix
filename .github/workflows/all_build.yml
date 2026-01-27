@@ -27,6 +27,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.toolchain }}
-          
+
+      - name: Test project
+        run: cargo test --all-features --verbose
+
       - name: Build project
         run: cargo build --release --verbose

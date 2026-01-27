@@ -64,6 +64,7 @@ impl Response {
                 bytes.write_i32::<NetworkEndian>(r.leechers.0)?;
                 bytes.write_i32::<NetworkEndian>(r.seeders.0)?;
 
+                
                 let peer_count = r.peers.len();
                 if peer_count > 0 {
                     let mut peer_buffer = Vec::with_capacity(peer_count * 6);
@@ -81,6 +82,7 @@ impl Response {
                 bytes.write_i32::<NetworkEndian>(r.leechers.0)?;
                 bytes.write_i32::<NetworkEndian>(r.seeders.0)?;
 
+                
                 let peer_count = r.peers.len();
                 if peer_count > 0 {
                     let mut peer_buffer = Vec::with_capacity(peer_count * 18);
@@ -95,6 +97,7 @@ impl Response {
                 bytes.write_i32::<NetworkEndian>(2)?;
                 bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
 
+                
                 let stats_count = r.torrent_stats.len();
                 if stats_count > 0 {
                     let mut stats_buffer = Vec::with_capacity(stats_count * 12);
@@ -125,7 +128,7 @@ impl Response {
         let transaction_id = cursor.read_i32::<NetworkEndian>()?;
 
         match action {
-            // Connect
+            
             0 => {
                 let connection_id = cursor.read_i64::<NetworkEndian>()?;
 
@@ -135,7 +138,7 @@ impl Response {
                 }
                     .into())
             }
-            // Announce
+            
             1 => {
                 let announce_interval = cursor.read_i32::<NetworkEndian>()?;
                 let leechers = cursor.read_i32::<NetworkEndian>()?;
@@ -166,7 +169,7 @@ impl Response {
                         .into())
                 }
             }
-            // Scrape
+            
             2 => {
                 let position = cursor.position() as usize;
                 let remaining_bytes = &bytes[position..];
@@ -178,7 +181,7 @@ impl Response {
                 }
                     .into())
             }
-            // Error
+            
             3 => {
                 let position = cursor.position() as usize;
                 let message_bytes = &bytes[position..];
@@ -209,6 +212,7 @@ impl Response {
         }
     }
 
+    
     #[inline]
     pub fn write_to_vec(&self) -> Result<Vec<u8>, io::Error> {
         let estimated_size = self.estimated_size();

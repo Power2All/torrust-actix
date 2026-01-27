@@ -3,5 +3,6 @@ use crate::udp::structs::udp_packet::UdpPacket;
 use crossbeam::queue::ArrayQueue;
 
 pub struct ParsePool {
-    pub payload: Arc<ArrayQueue<UdpPacket>>
+    pub payload: Arc<ArrayQueue<UdpPacket>>,
+    pub udp_runtime: Arc<tokio::runtime::Runtime>,
 }

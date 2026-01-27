@@ -60,7 +60,7 @@ impl serde::ser::Serialize for UserId {
             buffer[i * 2 + 1] = HEX_CHARS[(byte & 0xf) as usize];
         }
 
-        // SAFETY: We know the buffer contains only valid ASCII hex characters
+        
         let str_out = unsafe { std::str::from_utf8_unchecked(&buffer) };
         serializer.serialize_str(str_out)
     }

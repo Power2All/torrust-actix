@@ -8,5 +8,7 @@ pub struct UdpTrackersConfig {
     pub worker_threads: usize,
     pub receive_buffer_size: usize,
     pub send_buffer_size: usize,
-    pub reuse_address: bool
+    pub reuse_address: bool,
+    #[serde(default)]
+    pub use_payload_ip: bool
 }

@@ -1,19 +1,3 @@
-use std::borrow::Cow;
-use std::fs::File;
-use std::future::Future;
-use std::io::{BufReader, Write};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::process::exit;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use actix_cors::Cors;
-use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
-use actix_web::dev::ServerHandle;
-use actix_web::http::header::ContentType;
-use actix_web::web::{Data, ServiceConfig};
-use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
-use log::{debug, error, info};
 use crate::common::common::parse_query;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
@@ -24,6 +8,22 @@ use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
+use actix_cors::Cors;
+use actix_web::dev::ServerHandle;
+use actix_web::http::header::ContentType;
+use actix_web::web::{Data, ServiceConfig};
+use actix_web::{http, web, App, HttpRequest, HttpResponse, HttpServer};
+use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
+use log::{debug, error, info};
+use std::borrow::Cow;
+use std::fs::File;
+use std::future::Future;
+use std::io::{BufReader, Write};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::process::exit;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 #[tracing::instrument(level = "debug")]
 pub fn http_service_cors() -> Cors
@@ -105,88 +105,83 @@ pub async fn http_service(
             Err(data) => { panic!("[HTTPS] SSL config couldn't be created: {data}"); }
         };
 
-        let server = match data.config.sentry_config.clone().enabled {
-            true => {
-                HttpServer::new(move || {
-                    App::new()
-                        .wrap(sentry_actix::Sentry::new())
-                        .wrap(http_service_cors())
-                        .configure(http_service_routes(Arc::new(HttpServiceData {
-                            torrent_tracker: data.clone(),
-                            http_trackers_config: Arc::new(http_server_object.clone())
-                        })))
-                })
-                    .keep_alive(Duration::from_secs(keep_alive))
-                    .client_request_timeout(Duration::from_secs(request_timeout))
-                    .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                    .workers(worker_threads)
-                    .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                    .unwrap()
-                    .disable_signals()
-                    .run()
-            }
-            false => {
-                HttpServer::new(move || {
-                    App::new()
-                        .wrap(http_service_cors())
-                        .configure(http_service_routes(Arc::new(HttpServiceData {
-                            torrent_tracker: data.clone(),
-                            http_trackers_config: Arc::new(http_server_object.clone())
-                        })))
-                })
-                    .keep_alive(Duration::from_secs(keep_alive))
-                    .client_request_timeout(Duration::from_secs(request_timeout))
-                    .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                    .workers(worker_threads)
-                    .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                    .unwrap()
-                    .disable_signals()
-                    .run()
-            }
+        let service_data = Arc::new(HttpServiceData {
+            torrent_tracker: data.clone(),
+            http_trackers_config: Arc::new(http_server_object.clone())
+        });
+        let sentry_enabled = data.config.sentry_config.enabled;
+
+        let server = if sentry_enabled {
+            HttpServer::new(move || {
+                App::new()
+                    .wrap(sentry_actix::Sentry::new())
+                    .wrap(http_service_cors())
+                    .configure(http_service_routes(service_data.clone()))
+            })
+                .keep_alive(Duration::from_secs(keep_alive))
+                .client_request_timeout(Duration::from_secs(request_timeout))
+                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                .workers(worker_threads)
+                .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
+                .unwrap()
+                .disable_signals()
+                .run()
+        } else {
+            HttpServer::new(move || {
+                App::new()
+                    .wrap(http_service_cors())
+                    .configure(http_service_routes(service_data.clone()))
+            })
+                .keep_alive(Duration::from_secs(keep_alive))
+                .client_request_timeout(Duration::from_secs(request_timeout))
+                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+                .workers(worker_threads)
+                .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
+                .unwrap()
+                .disable_signals()
+                .run()
         };
 
         return (server.handle(), server);
     }
 
     info!("[HTTP] Starting server listener on {addr}");
-    let server = match data.config.sentry_config.clone().enabled {
-        true => {
-            HttpServer::new(move || {
-                App::new()
-                    .wrap(sentry_actix::Sentry::new())
-                    .wrap(http_service_cors())
-                    .configure(http_service_routes(Arc::new(HttpServiceData {
-                        torrent_tracker: data.clone(),
-                        http_trackers_config: Arc::new(http_server_object.clone())
-                    })))
-            })
-                .keep_alive(Duration::from_secs(keep_alive))
-                .client_request_timeout(Duration::from_secs(request_timeout))
-                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                .workers(worker_threads)
-                .bind((addr.ip(), addr.port()))
-                .unwrap()
-                .disable_signals()
-                .run()
-        }
-        false => {
-            HttpServer::new(move || {
-                App::new()
-                    .wrap(http_service_cors())
-                    .configure(http_service_routes(Arc::new(HttpServiceData {
-                        torrent_tracker: data.clone(),
-                        http_trackers_config: Arc::new(http_server_object.clone())
-                    })))
-            })
-                .keep_alive(Duration::from_secs(keep_alive))
-                .client_request_timeout(Duration::from_secs(request_timeout))
-                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                .workers(worker_threads)
-                .bind((addr.ip(), addr.port()))
-                .unwrap()
-                .disable_signals()
-                .run()
-        }
+
+    let service_data = Arc::new(HttpServiceData {
+        torrent_tracker: data.clone(),
+        http_trackers_config: Arc::new(http_server_object.clone())
+    });
+    let sentry_enabled = data.config.sentry_config.enabled;
+
+    let server = if sentry_enabled {
+        HttpServer::new(move || {
+            App::new()
+                .wrap(sentry_actix::Sentry::new())
+                .wrap(http_service_cors())
+                .configure(http_service_routes(service_data.clone()))
+        })
+            .keep_alive(Duration::from_secs(keep_alive))
+            .client_request_timeout(Duration::from_secs(request_timeout))
+            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+            .workers(worker_threads)
+            .bind((addr.ip(), addr.port()))
+            .unwrap()
+            .disable_signals()
+            .run()
+    } else {
+        HttpServer::new(move || {
+            App::new()
+                .wrap(http_service_cors())
+                .configure(http_service_routes(service_data.clone()))
+        })
+            .keep_alive(Duration::from_secs(keep_alive))
+            .client_request_timeout(Duration::from_secs(request_timeout))
+            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
+            .workers(worker_threads)
+            .bind((addr.ip(), addr.port()))
+            .unwrap()
+            .disable_signals()
+            .run()
     };
 
     (server.handle(), server)
@@ -257,6 +252,7 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
 #[tracing::instrument(level = "debug")]
 pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
+    
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
             http_stat_update(ip, data.torrent_tracker.clone(), StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
@@ -577,10 +573,10 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
     };
 
     let scrape = data.validate_scrape(query_map).await;
-    if scrape.is_err() {
+    if let Err(scrape) = scrape {
         http_stat_update(ip, data.clone(), StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-            "failure reason" => ben_bytes!(scrape.unwrap_err().to_string())
+            "failure reason" => ben_bytes!(scrape.to_string())
         }.encode());
     }
 

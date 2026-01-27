@@ -122,11 +122,12 @@ impl Configuration {
                 UdpTrackersConfig {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:6969"),
-                    udp_threads: 4,
+                    udp_threads: 2,
                     worker_threads: available_parallelism().unwrap().get(),
                     receive_buffer_size: 134217728,
                     send_buffer_size: 67108864,
-                    reuse_address: true
+                    reuse_address: true,
+                    use_payload_ip: false
                 }
             ),
             api_server: vec!(
@@ -150,10 +151,11 @@ impl Configuration {
     
     #[tracing::instrument(level = "debug")]
     pub fn env_overrides(config: &mut Configuration) -> &mut Configuration {
+        
         if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
         if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = value.parse::<u64>().unwrap_or(60u64); }
         
-        // Tracker config
+        
         if let Ok(value) = env::var("TRACKER__API_KEY") {
             config.tracker_config.api_key = value
         }
@@ -194,7 +196,7 @@ impl Configuration {
             config.tracker_config.prometheus_id = value;
         }
         
-        // Sentry config
+        
         if let Ok(value) = env::var("SENTRY__ENABLED") {
             config.sentry_config.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
         }
@@ -220,7 +222,7 @@ impl Configuration {
             config.sentry_config.traces_sample_rate = value.parse::<f32>().unwrap_or(1.0);
         }
         
-        // Database config
+        
         if let Ok(value) = env::var("DATABASE__PERSISTENT") {
             config.database.persistent = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
         }
@@ -251,7 +253,7 @@ impl Configuration {
             config.database.persistent_interval = value.parse::<u64>().unwrap_or(60u64);
         }
 
-        // Database Structure Torrents config
+        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH") {
             config.database_structure.torrents.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -271,7 +273,7 @@ impl Configuration {
             config.database_structure.torrents.column_completed = value;
         }
 
-        // Database Structure Whitelist config
+        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH") {
             config.database_structure.whitelist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -282,7 +284,7 @@ impl Configuration {
             config.database_structure.whitelist.column_infohash = value;
         }
 
-        // Database Structure Blacklist config
+        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH") {
             config.database_structure.blacklist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -293,7 +295,7 @@ impl Configuration {
             config.database_structure.blacklist.column_infohash = value;
         }
 
-        // Database Structure Keys config
+        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH") {
             config.database_structure.keys.bin_type_hash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -307,7 +309,7 @@ impl Configuration {
             config.database_structure.keys.column_timeout = value;
         }
 
-        // Database Structure Users config
+        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__ID_UUID") {
             config.database_structure.users.id_uuid = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -342,7 +344,7 @@ impl Configuration {
             config.database_structure.users.column_updated = value;
         }
 
-        // Possible overrides for the API stack
+        
         let mut api_iteration = 0;
         loop {
             match config.api_server.get_mut(api_iteration) {
@@ -391,7 +393,7 @@ impl Configuration {
             api_iteration += 1;
         }
 
-        // Possible overrides for the HTTP stack
+        
         let mut http_iteration = 0;
         loop {
             match config.http_server.get_mut(http_iteration) {
@@ -440,7 +442,7 @@ impl Configuration {
             http_iteration += 1;
         }
 
-        // Possible overrides for the UDP stack
+        
         let mut udp_iteration = 0;
         loop {
             match config.udp_server.get_mut(udp_iteration) {
@@ -559,7 +561,7 @@ impl Configuration {
 
     #[tracing::instrument(level = "debug")]
     pub fn validate(config: Configuration) {
-        // Check Map
+        
         let check_map = vec![
             ("[TRACKER_CONFIG] prometheus_id", config.tracker_config.clone().prometheus_id, r"^[a-zA-Z0-9_]+$".to_string()),
             
@@ -586,7 +588,7 @@ impl Configuration {
             ("[DB: users] Column: updated", config.database_structure.clone().users.column_updated, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
         ];
 
-        // Validation
+        
         for (name, value, regex) in check_map {
             Self::validate_value(name, value, regex);
         }
