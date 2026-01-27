@@ -65,7 +65,6 @@ fn bench_get_peers_with_limit(c: &mut Criterion) {
     let tracker = rt.block_on(create_tracker());
     let info_hash = random_info_hash();
 
-
     for i in 0..1000 {
         let peer_id = random_peer_id();
         let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881, peer_id);
@@ -156,7 +155,6 @@ fn bench_peer_filtering_ipv4_vs_ipv6(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let tracker = rt.block_on(create_tracker());
     let info_hash = random_info_hash();
-
 
     for i in 0..500 {
         let peer_id = random_peer_id();

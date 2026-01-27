@@ -61,15 +61,15 @@ pub fn create_temp_dir() -> TempDir {
 
 pub fn random_info_hash() -> torrust_actix::tracker::structs::info_hash::InfoHash {
     use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let bytes: [u8; 20] = rng.r#gen();
+    let mut rng = rand::rng();
+    let bytes: [u8; 20] = rng.random();
     torrust_actix::tracker::structs::info_hash::InfoHash(bytes)
 }
 
 pub fn random_peer_id() -> torrust_actix::tracker::structs::peer_id::PeerId {
     use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let bytes: [u8; 20] = rng.r#gen();
+    let mut rng = rand::rng();
+    let bytes: [u8; 20] = rng.random();
     torrust_actix::tracker::structs::peer_id::PeerId(bytes)
 }
 
