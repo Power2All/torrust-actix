@@ -29,6 +29,7 @@ use std::time::Duration;
 pub fn http_service_cors() -> Cors
 {
     Cors::default()
+        .allow_any_origin()
         .send_wildcard()
         .allowed_methods(vec!["GET"])
         .allowed_headers(vec![http::header::X_FORWARDED_FOR, http::header::ACCEPT])
