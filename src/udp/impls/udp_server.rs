@@ -166,10 +166,14 @@ impl UdpServer {
     #[tracing::instrument(level = "debug")]
     pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
         use std::hash::{DefaultHasher, Hasher};
-        use std::time::Instant;
+        use std::time::{SystemTime, UNIX_EPOCH};
 
         let mut hasher = DefaultHasher::new();
-        hasher.write_u64(Instant::now().elapsed().as_nanos() as u64);
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos() as u64;
+        hasher.write_u64(timestamp);
         hasher.write_u16(remote_address.port());
         if let std::net::IpAddr::V4(ipv4) = remote_address.ip() {
             hasher.write(&ipv4.octets());
