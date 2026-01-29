@@ -51,7 +51,7 @@ Run the code using `--help` argument for using in your enironment:
 ```bash
 ./target/release/torrust-actix --help
 ```
-Before you can run the server, you need to either have persietency turned off, and when enabled, make sure your database is created and working. See the help argument above how to fix your setup as you wish.
+Before you can run the server, you need to either have persistence turned off, and when enabled, make sure your database is created and working. See the help argument above how to fix your setup as you wish.
 
 Swagger UI is introduced, and when enabled in the configuration, is accessible through the API via `/swagger-ui/`.
 
@@ -167,10 +167,24 @@ HTTP_0_TLS_CONNECTION_RATE <UINT64>
 
 UDP_0_ENABLED <true | false>
 UDP_0_BIND_ADDRESS <STRING>
-UDP_0_THREADS <UINT64>
+UDP_0_UDP_THREADS <UINT64>
+UDP_0_WORKER_THREADS <UINT64>
+UDP_0_RECEIVE_BUFFER_SIZE <UINT64>
+UDP_0_SEND_BUFFER_SIZE <UINT64>
+UDP_0_REUSE_ADDRESS <true | false>
 ```
 
 ### ChangeLog
+
+#### v4.0.16
+* Small debug and hotfixes
+* Fixed the unit test that somehow failed
+* Updated this readme file
+
+#### v4.0.15
+* More code optimizations thanks to AI scanning further
+* UDP performance tweaks (some new config options added)
+* Added an initial unit testing for checking if all functions and features work as expected
 
 #### v4.0.14
 * Code optimizations thanks to AI scanning

@@ -80,9 +80,11 @@ async fn test_http_cors_headers() {
     .await;
 
     
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::default()
+        .method(actix_web::http::Method::OPTIONS)
         .uri("/announce")
         .insert_header(("Origin", "http://localhost"))
+        .insert_header(("Access-Control-Request-Method", "GET"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -110,6 +112,7 @@ async fn test_http_invalid_endpoint() {
 
     let req = test::TestRequest::get()
         .uri("/nonexistent")
+        .peer_addr("127.0.0.1:12345".parse().unwrap())
         .to_request();
 
     let resp = test::call_service(&app, req).await;

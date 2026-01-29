@@ -4,12 +4,15 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - master
 
 env:
   CARGO_TERM_COLOR: always
-  
+
 jobs:
-  upgrade:
+  build:
     name: Build on ${{ matrix.os }} (${{ matrix.toolchain }})
     runs-on: ${{ matrix.os }}
 
@@ -22,8 +25,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - id: setup
-        name: Setup Toolchain
+      - name: Setup Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.toolchain }}

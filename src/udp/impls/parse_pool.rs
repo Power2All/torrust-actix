@@ -63,7 +63,6 @@ impl ParsePool {
             });
         }
 
-
         let runtime = self.udp_runtime.clone();
         std::mem::forget(runtime);
     }

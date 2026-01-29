@@ -68,11 +68,12 @@ async fn test_stats_completed_tracking() {
     let peer_id = common::random_peer_id();
 
     
-    let peer = common::create_test_peer(
+    let mut peer = common::create_test_peer(
         peer_id,
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
         6881,
     );
+    peer.left = torrust_actix::common::structs::number_of_bytes::NumberOfBytes(0);
 
     tracker.add_torrent_peer(info_hash, peer_id, peer, true);
 
