@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 use chrono::Utc;
@@ -12,13 +12,18 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
+        
+        let tracker_config = &config.tracker_config;
+
         TorrentTracker {
             config: config.clone(),
             torrents_sharding: Arc::new(Default::default()),
             torrents_updates: Arc::new(RwLock::new(HashMap::new())),
-            torrents_whitelist: Arc::new(RwLock::new(Vec::new())),
+            
+            torrents_whitelist: Arc::new(RwLock::new(HashSet::new())),
             torrents_whitelist_updates: Arc::new(RwLock::new(HashMap::new())),
-            torrents_blacklist: Arc::new(RwLock::new(Vec::new())),
+            
+            torrents_blacklist: Arc::new(RwLock::new(HashSet::new())),
             torrents_blacklist_updates: Arc::new(RwLock::new(HashMap::new())),
             keys: Arc::new(RwLock::new(BTreeMap::new())),
             keys_updates: Arc::new(RwLock::new(HashMap::new())),
@@ -35,13 +40,13 @@ impl TorrentTracker {
                 seeds: AtomicI64::new(0),
                 peers: AtomicI64::new(0),
                 completed: AtomicI64::new(0),
-                whitelist_enabled: AtomicBool::new(config.tracker_config.clone().whitelist_enabled),
+                whitelist_enabled: AtomicBool::new(tracker_config.whitelist_enabled),
                 whitelist: AtomicI64::new(0),
                 whitelist_updates: AtomicI64::new(0),
-                blacklist_enabled: AtomicBool::new(config.tracker_config.clone().blacklist_enabled),
+                blacklist_enabled: AtomicBool::new(tracker_config.blacklist_enabled),
                 blacklist: AtomicI64::new(0),
                 blacklist_updates: AtomicI64::new(0),
-                keys_enabled: AtomicBool::new(config.tracker_config.clone().keys_enabled),
+                keys_enabled: AtomicBool::new(tracker_config.keys_enabled),
                 keys: AtomicI64::new(0),
                 keys_updates: AtomicI64::new(0),
                 tcp4_connections_handled: AtomicI64::new(0),

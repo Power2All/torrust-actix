@@ -7,6 +7,8 @@ use crate::udp::structs::parse_pool::ParsePool;
 use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
 
+const BATCH_SIZE: usize = 64;
+
 impl Default for ParsePool {
     fn default() -> Self {
         Self::new(0, 1)
@@ -37,25 +39,47 @@ impl ParsePool {
 
             runtime.spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
-                let mut batch = Vec::with_capacity(32);
-                let mut interval = tokio::time::interval(Duration::from_millis(1));
+                
+                let mut batch: Vec<UdpPacket> = Vec::with_capacity(BATCH_SIZE);
+                
+                let mut interval = tokio::time::interval(Duration::from_micros(100));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
                 loop {
                     tokio::select! {
+                        biased;
+
                         _ = shutdown_handler.changed() => {
                             info!("[UDP] Shutting down the Parse Pool thread {i}...");
                             return;
                         }
                         _ = interval.tick() => {
-
-                            while let Some(packet) = payload.pop() {
-                                batch.push(packet);
-                                if batch.len() >= 32 { break; }
+                            
+                            while batch.len() < BATCH_SIZE {
+                                if let Some(packet) = payload.pop() {
+                                    batch.push(packet);
+                                } else {
+                                    break;
+                                }
                             }
 
                             if !batch.is_empty() {
-                                Self::process_batch(batch, tracker_cloned.clone(), use_payload_ip).await;
-                                batch = Vec::with_capacity(32);
+                                
+                                for packet in batch.drain(..) {
+                                    let response = UdpServer::handle_packet(
+                                        packet.remote_addr,
+                                        &packet.data[..packet.data_len],
+                                        tracker_cloned.clone(),
+                                        use_payload_ip
+                                    ).await;
+                                    UdpServer::send_response(
+                                        tracker_cloned.clone(),
+                                        packet.socket.clone(),
+                                        packet.remote_addr,
+                                        response
+                                    ).await;
+                                }
+                                
                             }
                         }
                     }
@@ -65,12 +89,5 @@ impl ParsePool {
 
         let runtime = self.udp_runtime.clone();
         std::mem::forget(runtime);
-    }
-
-    async fn process_batch(packets: Vec<UdpPacket>, tracker: Arc<TorrentTracker>, use_payload_ip: bool) {
-        for packet in packets {
-            let response = UdpServer::handle_packet(packet.remote_addr, &packet.data[..packet.data_len], tracker.clone(), use_payload_ip).await;
-            UdpServer::send_response(tracker.clone(), packet.socket.clone(), packet.remote_addr, response).await;
-        }
     }
 }

@@ -1,6 +1,7 @@
 FROM rust:alpine
 
-RUN apk add git musl-dev curl pkgconfig openssl-dev openssl-libs-static
+RUN apk update --no-interactive
+RUN apk add git musl-dev curl pkgconfig openssl-dev openssl-libs-static --no-interactive
 RUN git clone https://github.com/Power2All/torrust-actix.git /app/torrust-actix
 RUN cd /app/torrust-actix && git checkout tags/v4.0.16
 WORKDIR /app/torrust-actix

@@ -10,12 +10,13 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use async_std::task;
+use std::collections::BTreeMap;
 use futures_util::TryStreamExt;
 use log::{error, info};
 use sha1::{Digest, Sha1};
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use sqlx::{ConnectOptions, Error, MySql, Pool, Row, Transaction};
-use std::collections::BTreeMap;
+use crate::tracker::structs::torrent_entry::AHashMap;
 use std::ops::Deref;
 use std::process::exit;
 use std::str::FromStr;
@@ -319,8 +320,8 @@ impl DatabaseConnectorMySQL {
                 tracker.add_torrent(
                     InfoHash(info_hash),
                     TorrentEntry {
-                        seeds: BTreeMap::new(),
-                        peers: BTreeMap::new(),
+                        seeds: AHashMap::default(),
+                        peers: AHashMap::default(),
                         completed: completed_count,
                         updated: std::time::Instant::now()
                     }

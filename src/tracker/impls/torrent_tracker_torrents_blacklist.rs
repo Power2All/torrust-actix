@@ -31,11 +31,12 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
+    #[inline]
     pub fn add_blacklist(&self, info_hash: InfoHash) -> bool
     {
         let mut lock = self.torrents_blacklist.write();
-        if !lock.contains(&info_hash) {
-            lock.push(info_hash);
+        
+        if lock.insert(info_hash) {
             self.update_stats(StatsEvent::Blacklist, 1);
             return true;
         }
@@ -45,23 +46,26 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn get_blacklist(&self) -> Vec<InfoHash>
     {
-        let lock = self.torrents_blacklist.read_recursive();
-        lock.clone()
+        let lock = self.torrents_blacklist.read();
+        lock.iter().copied().collect()
     }
 
     #[tracing::instrument(level = "debug")]
+    #[inline]
     pub fn check_blacklist(&self, info_hash: InfoHash) -> bool
     {
-        let lock = self.torrents_blacklist.read_recursive();
+        
+        let lock = self.torrents_blacklist.read();
         lock.contains(&info_hash)
     }
 
     #[tracing::instrument(level = "debug")]
+    #[inline]
     pub fn remove_blacklist(&self, info_hash: InfoHash) -> bool
     {
         let mut lock = self.torrents_blacklist.write();
-        if let Some(index) = lock.iter().position(|r| *r == info_hash) {
-            lock.swap_remove(index);
+        
+        if lock.remove(&info_hash) {
             self.update_stats(StatsEvent::Blacklist, -1);
             true
         } else {

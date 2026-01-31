@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::net::{IpAddr, SocketAddr};
 use log::info;
@@ -7,7 +6,7 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::structs::torrent_entry::{AHashMap, TorrentEntry};
 use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -18,10 +17,10 @@ impl TorrentTracker {
     {
         self.get_torrent(info_hash).map(|data| {
             let mut returned_data = TorrentPeers {
-                seeds_ipv4: BTreeMap::new(),
-                seeds_ipv6: BTreeMap::new(),
-                peers_ipv4: BTreeMap::new(),
-                peers_ipv6: BTreeMap::new()
+                seeds_ipv4: AHashMap::default(),
+                seeds_ipv6: AHashMap::default(),
+                peers_ipv4: AHashMap::default(),
+                peers_ipv6: AHashMap::default()
             };
 
             match ip_type {
@@ -46,7 +45,8 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub fn get_peers(&self, peers: &BTreeMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_ip: Option<IpAddr>, amount: usize) -> BTreeMap<PeerId, TorrentPeer>
+    #[inline]
+    pub fn get_peers(&self, peers: &AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_ip: Option<IpAddr>, amount: usize) -> AHashMap<PeerId, TorrentPeer>
     {
         let should_include = |peer_addr: &SocketAddr| -> bool {
             let ip_type_match = match type_ip {
@@ -58,10 +58,12 @@ impl TorrentTracker {
             ip_type_match && self_ip.is_none_or(|ip| ip != peer_addr.ip())
         };
 
-        let mut result = BTreeMap::new();
+        
+        let mut result = AHashMap::default();
+        result.reserve(amount.min(peers.len()));
 
         for (peer_id, torrent_peer) in peers.iter() {
-            
+
             if amount != 0 && result.len() >= amount {
                 break;
             }
@@ -83,8 +85,8 @@ impl TorrentTracker {
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
                 let mut torrent_entry = TorrentEntry {
-                    seeds: BTreeMap::new(),
-                    peers: BTreeMap::new(),
+                    seeds: AHashMap::default(),
+                    peers: AHashMap::default(),
                     completed: 0,
                     updated: std::time::Instant::now()
                 };
