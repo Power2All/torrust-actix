@@ -47,7 +47,7 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>
 
                 queries
                     .entry(key_name)
-                    .or_insert_with(SmallVec::new)
+                    .or_default()
                     .push(value_data);
             } else {
                 let key_name = if query_item.contains('%') || query_item.contains('+') {
@@ -64,7 +64,7 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>
 
                 queries
                     .entry(key_name)
-                    .or_insert_with(SmallVec::new)
+                    .or_default()
                     .push(Vec::new());
             }
         }
