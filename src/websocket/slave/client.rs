@@ -160,20 +160,26 @@ pub async fn start_slave_client(tracker: Arc<TorrentTracker>) {
     let config = tracker.config.clone();
     let master_address = &config.tracker_config.cluster_master_address;
     let token = &config.tracker_config.cluster_token;
+    let use_ssl = config.tracker_config.cluster_ssl;
     let reconnect_interval = config.tracker_config.cluster_reconnect_interval;
+
+    
+    
+    let protocol = if use_ssl { "wss" } else { "ws" };
+    let websocket_url = format!("{}://{}/cluster", protocol, master_address);
 
     
     let slave_id = hostname::get()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_else(|_| format!("slave-{}", std::process::id()));
 
-    info!("[WEBSOCKET SLAVE] Starting slave client, connecting to {}", master_address);
+    info!("[WEBSOCKET SLAVE] Starting slave client, connecting to {}", websocket_url);
     info!("[WEBSOCKET SLAVE] Slave ID: {}", slave_id);
 
     loop {
         match connect_to_master(
             &tracker,
-            master_address,
+            &websocket_url,
             token,
             &slave_id,
         ).await {
@@ -216,14 +222,14 @@ pub async fn start_slave_client(tracker: Arc<TorrentTracker>) {
 
 async fn connect_to_master(
     tracker: &Arc<TorrentTracker>,
-    master_address: &str,
+    websocket_url: &str,
     token: &str,
     slave_id: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    info!("[WEBSOCKET SLAVE] Connecting to master: {}", master_address);
+    debug!("[WEBSOCKET SLAVE] Connecting to master: {}", websocket_url);
 
     
-    let (ws_stream, _) = connect_async(master_address).await?;
+    let (ws_stream, _) = connect_async(websocket_url).await?;
     let (mut write, mut read) = ws_stream.split();
 
     info!("[WEBSOCKET SLAVE] Connected, sending handshake...");

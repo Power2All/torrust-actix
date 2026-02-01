@@ -54,7 +54,7 @@ impl Configuration {
                 cluster_request_timeout: 15,
                 cluster_disconnect_timeout: 15,
                 cluster_reconnect_interval: 5,
-                cluster_max_connections: 10,
+                cluster_max_connections: 25000,
                 cluster_threads: available_parallelism().unwrap().get() as u64,
                 cluster_ssl: false,
                 cluster_ssl_key: String::from(""),
@@ -667,6 +667,36 @@ impl Configuration {
         }
 
         
+        for (index, api_server) in config.api_server.iter().enumerate() {
+            if api_server.enabled {
+                Self::validate_socket_address(
+                    &format!("api_server[{}].bind_address", index),
+                    &api_server.bind_address,
+                );
+            }
+        }
+
+        
+        for (index, http_server) in config.http_server.iter().enumerate() {
+            if http_server.enabled {
+                Self::validate_socket_address(
+                    &format!("http_server[{}].bind_address", index),
+                    &http_server.bind_address,
+                );
+            }
+        }
+
+        
+        for (index, udp_server) in config.udp_server.iter().enumerate() {
+            if udp_server.enabled {
+                Self::validate_socket_address(
+                    &format!("udp_server[{}].bind_address", index),
+                    &udp_server.bind_address,
+                );
+            }
+        }
+
+        
         Self::validate_cluster(&config);
     }
 
@@ -696,6 +726,9 @@ impl Configuration {
                 }
 
                 
+                Self::validate_socket_address("cluster_bind_address", &config.tracker_config.cluster_bind_address);
+
+                
                 if config.tracker_config.cluster_ssl {
                     if config.tracker_config.cluster_ssl_key.is_empty() {
                         panic!("[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_key' is not set");
@@ -707,6 +740,7 @@ impl Configuration {
 
                 println!("[VALIDATE] Cluster encoding: {:?}", config.tracker_config.cluster_encoding);
                 println!("[VALIDATE] Cluster bind address: {}", config.tracker_config.cluster_bind_address);
+                println!("[VALIDATE] Cluster SSL: {}", if config.tracker_config.cluster_ssl { "wss" } else { "ws" });
             }
             ClusterMode::slave => {
                 println!("[VALIDATE] Cluster mode: slave");
@@ -722,12 +756,31 @@ impl Configuration {
                 }
 
                 
-                if !config.tracker_config.cluster_master_address.starts_with("ws://")
-                    && !config.tracker_config.cluster_master_address.starts_with("wss://") {
-                    panic!("[VALIDATE CONFIG] 'cluster_master_address' must start with 'ws://' or 'wss://'");
-                }
+                
+                Self::validate_socket_address("cluster_master_address", &config.tracker_config.cluster_master_address);
 
                 println!("[VALIDATE] Cluster master address: {}", config.tracker_config.cluster_master_address);
+                println!("[VALIDATE] Cluster SSL: {}", if config.tracker_config.cluster_ssl { "wss" } else { "ws" });
+            }
+        }
+    }
+
+    
+    #[tracing::instrument(level = "debug")]
+    pub fn validate_socket_address(field_name: &str, address: &str) {
+        use std::net::SocketAddr;
+
+        match address.parse::<SocketAddr>() {
+            Ok(addr) => {
+                println!("[VALIDATE] {} is valid: {}", field_name, addr);
+            }
+            Err(e) => {
+                panic!(
+                    "[VALIDATE CONFIG] '{}' has invalid format: '{}'. \
+                    Expected IPv4 format or IPv6 format, example '0.0.0.0:1234' or '[::]:1234'. \
+                    Error: {}",
+                    field_name, address, e
+                );
             }
         }
     }
