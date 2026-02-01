@@ -10,7 +10,8 @@ authors = [
 description = "A rich, fast and efficient Bittorrent Tracker."
 
 [profile.release]
-opt-level = 'z'
+# Use opt-level 3 for maximum speed (was 'z' for size)
+opt-level = 3
 debug = false
 debug-assertions = false
 overflow-checks = false
@@ -20,6 +21,10 @@ incremental = false
 codegen-units = 1
 rpath = false
 strip = "debuginfo"
+
+# Optimize dependencies in release mode
+[profile.release.package."*"]
+opt-level = 3
 
 [dependencies]
 actix-cors = "^0.7"
@@ -56,6 +61,10 @@ tracing = "^0.1"
 utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
 lazy_static = "^1.5"
 crossbeam = "^0.8"
+# SmallVec for query parsing optimization - avoids heap allocation for small vectors
+smallvec = { version = "^1.13", features = ["union", "const_generics"] }
+# Fast hasher for HashMap - faster than default SipHash for short keys
+ahash = "^0.8"
 
 [dev-dependencies]
 tempfile = "^3.14"

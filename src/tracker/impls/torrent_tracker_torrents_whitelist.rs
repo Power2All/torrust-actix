@@ -31,11 +31,12 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
+    #[inline]
     pub fn add_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let mut lock = self.torrents_whitelist.write();
-        if !lock.contains(&info_hash) {
-            lock.push(info_hash);
+        
+        if lock.insert(info_hash) {
             self.update_stats(StatsEvent::Whitelist, 1);
             return true;
         }
@@ -45,23 +46,26 @@ impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub fn get_whitelist(&self) -> Vec<InfoHash>
     {
-        let lock = self.torrents_whitelist.read_recursive();
-        lock.clone()
+        let lock = self.torrents_whitelist.read();
+        lock.iter().copied().collect()
     }
 
     #[tracing::instrument(level = "debug")]
+    #[inline]
     pub fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
-        let lock = self.torrents_whitelist.read_recursive();
+        
+        let lock = self.torrents_whitelist.read();
         lock.contains(&info_hash)
     }
 
     #[tracing::instrument(level = "debug")]
+    #[inline]
     pub fn remove_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let mut lock = self.torrents_whitelist.write();
-        if let Some(index) = lock.iter().position(|r| *r == info_hash) {
-            lock.swap_remove(index);
+        
+        if lock.remove(&info_hash) {
             self.update_stats(StatsEvent::Whitelist, -1);
             true
         } else {

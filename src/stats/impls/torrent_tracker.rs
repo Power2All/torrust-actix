@@ -56,6 +56,7 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
+    #[inline]
     pub fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
         match event {

@@ -1,11 +1,11 @@
-use std::collections::BTreeMap;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::structs::torrent_entry::{AHashMap, TorrentEntry};
 
 impl TorrentEntry {
+    #[inline]
     pub fn new() -> TorrentEntry {
         TorrentEntry {
-            peers: BTreeMap::new(),
-            seeds: BTreeMap::new(),
+            peers: AHashMap::default(),
+            seeds: AHashMap::default(),
             completed: 0u64,
             updated: std::time::Instant::now(),
         }

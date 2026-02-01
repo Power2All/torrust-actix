@@ -176,6 +176,11 @@ UDP_0_REUSE_ADDRESS <true | false>
 
 ### ChangeLog
 
+#### v4.0.17
+* Another little overhaul, changing some memory tools for enhancement and performance
+* Less CPU cycles applied when requests are handled
+* Preparing for v4.1 to add some more database engines to the mix apart from SQLx
+
 #### v4.0.16
 * Small debug and hotfixes
 * Fixed the unit test that somehow failed
