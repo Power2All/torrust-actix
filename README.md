@@ -21,6 +21,7 @@ This project originated from Torrust-Tracker code originally developed by Mick v
 * [X] User account support, configurable for also database support
 * [X] Swagger UI built-in in the API (toggleable), useful both for testing API and documentation for API
 * [X] Sentry SaaS and self-hosted support
+* [X] Full Stand-Alone/Master/Slave cluster mode
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -88,6 +89,22 @@ TRACKER__PEERS_TIMEOUT <UINT64>
 TRACKER__PEERS_CLEANUP_INTERVAL <UINT64>
 TRACKER__PEERS_CLEANUP_THREADS <UINT64>
 TRACKER__PROMETHEUS_ID <STRING>
+
+TRACKER__CLUSTER <standalone | master | slave>
+TRACKER__CLUSTER_ENCODING <binary | json | msgpack>
+TRACKER__CLUSTER_TOKEN <STRING>
+TRACKER__CLUSTER_BIND_ADDRESS <STRING>
+TRACKER__CLUSTER_MASTER_ADDRESS <STRING>
+TRACKER__CLUSTER_KEEP_ALIVE <UINT64>
+TRACKER__CLUSTER_REQUEST_TIMEOUT <UINT64>
+TRACKER__CLUSTER_DISCONNECT_TIMEOUT <UINT64>
+TRACKER__CLUSTER_RECONNECT_INTERVAL <UINT64>
+TRACKER__CLUSTER_MAX_CONNECTIONS <UINT64>
+TRACKER__CLUSTER_THREADS <UINT64>
+TRACKER__CLUSTER_SSL <true | false>
+TRACKER__CLUSTER_SSL_KEY <STRING>
+TRACKER__CLUSTER_SSL_CERT <STRING>
+TRACKER__CLUSTER_TLS_CONNECTION_RATE <UINT64>
 
 SENTRY__ENABLED <true | false>
 SENTRY__DEBUG <true | false>
@@ -175,6 +192,17 @@ UDP_0_REUSE_ADDRESS <true | false>
 ```
 
 ### ChangeLog
+
+#### v4.1.0
+* Added a full Cluster first version through WebSockets
+* Option to run the app in Stand-Alone (which is default, as single server), or using the cluster mode
+* When set to Master, it still functions as if being Stand-Alone, but with WebSocket support for clustering
+* When set to Slave, it will forward all the requests to the Master server to be handled
+* Added configurations to be applied in config.toml and the environment variables
+* Added statistics, also showing cluster statistics next to the rest. Slave will only show active requests
+* WebSocket data can be sent in 3 different ways, but Master server is the leading what way to talk
+* This is a very early version of the WebSocket cluster implementation, and needs thorough testing
+* Moved the more database engines additions to another version (and MeiliSearch/ElasticSearch support for v4.2)
 
 #### v4.0.17
 * Another little overhaul, changing some memory tools for enhancement and performance

@@ -1,9 +1,6 @@
-use std::fs::File;
-use std::io::Write;
-use std::sync::Arc;
-use std::thread::available_parallelism;
-use regex::Regex;
 use crate::common::structs::custom_error::CustomError;
+use crate::config::enums::cluster_encoding::ClusterEncoding;
+use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::enums::configuration_error::ConfigurationError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
@@ -18,10 +15,13 @@ use crate::config::structs::http_trackers_config::HttpTrackersConfig;
 use crate::config::structs::sentry_config::SentryConfig;
 use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
-use crate::config::enums::cluster_encoding::ClusterEncoding;
-use crate::config::enums::cluster_mode::ClusterMode;
 use crate::database::enums::database_drivers::DatabaseDrivers;
+use regex::Regex;
 use std::env;
+use std::fs::File;
+use std::io::Write;
+use std::sync::Arc;
+use std::thread::available_parallelism;
 
 impl Configuration {
     #[tracing::instrument(level = "debug")]
@@ -54,7 +54,7 @@ impl Configuration {
                 cluster_request_timeout: 15,
                 cluster_disconnect_timeout: 15,
                 cluster_reconnect_interval: 5,
-                cluster_max_connections: 25000,
+                cluster_max_connections: 10,
                 cluster_threads: available_parallelism().unwrap().get() as u64,
                 cluster_ssl: false,
                 cluster_ssl_key: String::from(""),
