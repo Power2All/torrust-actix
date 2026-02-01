@@ -52,6 +52,16 @@ impl TorrentTracker {
             udp6_announces_handled: self.stats.udp6_announces_handled.load(Ordering::Relaxed),
             udp6_scrapes_handled: self.stats.udp6_scrapes_handled.load(Ordering::Relaxed),
             udp_queue_len: self.stats.udp_queue_len.load(Ordering::Relaxed),
+            
+            ws_connections_active: self.stats.ws_connections_active.load(Ordering::Relaxed),
+            ws_requests_sent: self.stats.ws_requests_sent.load(Ordering::Relaxed),
+            ws_requests_received: self.stats.ws_requests_received.load(Ordering::Relaxed),
+            ws_responses_sent: self.stats.ws_responses_sent.load(Ordering::Relaxed),
+            ws_responses_received: self.stats.ws_responses_received.load(Ordering::Relaxed),
+            ws_timeouts: self.stats.ws_timeouts.load(Ordering::Relaxed),
+            ws_reconnects: self.stats.ws_reconnects.load(Ordering::Relaxed),
+            ws_auth_success: self.stats.ws_auth_success.load(Ordering::Relaxed),
+            ws_auth_failed: self.stats.ws_auth_failed.load(Ordering::Relaxed),
         }
     }
 
@@ -186,6 +196,34 @@ impl TorrentTracker {
             StatsEvent::UdpQueueLen => {
                 self.stats.udp_queue_len.store(value, Ordering::Release);
             }
+            
+            StatsEvent::WsConnectionsActive => {
+                self.update_counter(&self.stats.ws_connections_active, value);
+            }
+            StatsEvent::WsRequestsSent => {
+                self.update_counter(&self.stats.ws_requests_sent, value);
+            }
+            StatsEvent::WsRequestsReceived => {
+                self.update_counter(&self.stats.ws_requests_received, value);
+            }
+            StatsEvent::WsResponsesSent => {
+                self.update_counter(&self.stats.ws_responses_sent, value);
+            }
+            StatsEvent::WsResponsesReceived => {
+                self.update_counter(&self.stats.ws_responses_received, value);
+            }
+            StatsEvent::WsTimeouts => {
+                self.update_counter(&self.stats.ws_timeouts, value);
+            }
+            StatsEvent::WsReconnects => {
+                self.update_counter(&self.stats.ws_reconnects, value);
+            }
+            StatsEvent::WsAuthSuccess => {
+                self.update_counter(&self.stats.ws_auth_success, value);
+            }
+            StatsEvent::WsAuthFailed => {
+                self.update_counter(&self.stats.ws_auth_failed, value);
+            }
         };
         self.get_stats()
     }
@@ -319,6 +357,34 @@ impl TorrentTracker {
             }
             StatsEvent::UdpQueueLen => {
                 self.stats.udp_queue_len.store(value, Ordering::Release);
+            }
+            
+            StatsEvent::WsConnectionsActive => {
+                self.stats.ws_connections_active.store(value, Ordering::Release);
+            }
+            StatsEvent::WsRequestsSent => {
+                self.stats.ws_requests_sent.store(value, Ordering::Release);
+            }
+            StatsEvent::WsRequestsReceived => {
+                self.stats.ws_requests_received.store(value, Ordering::Release);
+            }
+            StatsEvent::WsResponsesSent => {
+                self.stats.ws_responses_sent.store(value, Ordering::Release);
+            }
+            StatsEvent::WsResponsesReceived => {
+                self.stats.ws_responses_received.store(value, Ordering::Release);
+            }
+            StatsEvent::WsTimeouts => {
+                self.stats.ws_timeouts.store(value, Ordering::Release);
+            }
+            StatsEvent::WsReconnects => {
+                self.stats.ws_reconnects.store(value, Ordering::Release);
+            }
+            StatsEvent::WsAuthSuccess => {
+                self.stats.ws_auth_success.store(value, Ordering::Release);
+            }
+            StatsEvent::WsAuthFailed => {
+                self.stats.ws_auth_failed.store(value, Ordering::Release);
             }
         };
         self.get_stats()

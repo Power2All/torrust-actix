@@ -18,6 +18,8 @@ use crate::config::structs::http_trackers_config::HttpTrackersConfig;
 use crate::config::structs::sentry_config::SentryConfig;
 use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
+use crate::config::enums::cluster_encoding::ClusterEncoding;
+use crate::config::enums::cluster_mode::ClusterMode;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use std::env;
 
@@ -41,7 +43,23 @@ impl Configuration {
                 peers_cleanup_threads: 256,
                 total_downloads: 0,
                 swagger: false,
-                prometheus_id: String::from("torrust_actix")
+                prometheus_id: String::from("torrust_actix"),
+                
+                cluster: ClusterMode::standalone,
+                cluster_encoding: ClusterEncoding::binary,
+                cluster_token: String::from(""),
+                cluster_bind_address: String::from("0.0.0.0:8888"),
+                cluster_master_address: String::from(""),
+                cluster_keep_alive: 60,
+                cluster_request_timeout: 15,
+                cluster_disconnect_timeout: 15,
+                cluster_reconnect_interval: 5,
+                cluster_max_connections: 25000,
+                cluster_threads: available_parallelism().unwrap().get() as u64,
+                cluster_ssl: false,
+                cluster_ssl_key: String::from(""),
+                cluster_ssl_cert: String::from(""),
+                cluster_tls_connection_rate: 256,
             },
             sentry_config: SentryConfig {
                 enabled: false,
@@ -195,8 +213,64 @@ impl Configuration {
         if let Ok(value) = env::var("TRACKER__PROMETHEUS_ID") {
             config.tracker_config.prometheus_id = value;
         }
+
         
-        
+        if let Ok(value) = env::var("TRACKER__CLUSTER") {
+            config.tracker_config.cluster = match value.as_str() {
+                "standalone" => ClusterMode::standalone,
+                "master" => ClusterMode::master,
+                "slave" => ClusterMode::slave,
+                _ => ClusterMode::standalone
+            };
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_ENCODING") {
+            config.tracker_config.cluster_encoding = match value.as_str() {
+                "binary" => ClusterEncoding::binary,
+                "json" => ClusterEncoding::json,
+                "msgpack" => ClusterEncoding::msgpack,
+                _ => ClusterEncoding::binary
+            };
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_TOKEN") {
+            config.tracker_config.cluster_token = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_BIND_ADDRESS") {
+            config.tracker_config.cluster_bind_address = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_MASTER_ADDRESS") {
+            config.tracker_config.cluster_master_address = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_KEEP_ALIVE") {
+            config.tracker_config.cluster_keep_alive = value.parse::<u64>().unwrap_or(60u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_REQUEST_TIMEOUT") {
+            config.tracker_config.cluster_request_timeout = value.parse::<u64>().unwrap_or(15u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_DISCONNECT_TIMEOUT") {
+            config.tracker_config.cluster_disconnect_timeout = value.parse::<u64>().unwrap_or(15u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_RECONNECT_INTERVAL") {
+            config.tracker_config.cluster_reconnect_interval = value.parse::<u64>().unwrap_or(5u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_MAX_CONNECTIONS") {
+            config.tracker_config.cluster_max_connections = value.parse::<u64>().unwrap_or(25000u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_THREADS") {
+            config.tracker_config.cluster_threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL") {
+            config.tracker_config.cluster_ssl = match value.as_str() { "true" => true, "false" => false, _ => false };
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL_KEY") {
+            config.tracker_config.cluster_ssl_key = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL_CERT") {
+            config.tracker_config.cluster_ssl_cert = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_TLS_CONNECTION_RATE") {
+            config.tracker_config.cluster_tls_connection_rate = value.parse::<u64>().unwrap_or(256u64);
+        }
+
         if let Ok(value) = env::var("SENTRY__ENABLED") {
             config.sentry_config.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
         }
@@ -588,9 +662,73 @@ impl Configuration {
             ("[DB: users] Column: updated", config.database_structure.clone().users.column_updated, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
         ];
 
-        
         for (name, value, regex) in check_map {
             Self::validate_value(name, value, regex);
+        }
+
+        
+        Self::validate_cluster(&config);
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub fn validate_cluster(config: &Configuration) {
+        match config.tracker_config.cluster {
+            ClusterMode::standalone => {
+                
+                println!("[VALIDATE] Cluster mode: standalone");
+            }
+            ClusterMode::master => {
+                println!("[VALIDATE] Cluster mode: master");
+
+                
+                if config.tracker_config.cluster_token.is_empty() {
+                    panic!("[VALIDATE CONFIG] Cluster mode 'master' requires 'cluster_token' to be set for authentication");
+                }
+
+                
+                if !config.tracker_config.cluster_ssl {
+                    eprintln!("[VALIDATE WARNING] Cluster SSL is disabled - cluster_token will be transmitted in plaintext!");
+                }
+
+                
+                if config.tracker_config.cluster_bind_address.is_empty() {
+                    panic!("[VALIDATE CONFIG] Cluster mode 'master' requires 'cluster_bind_address' to be set");
+                }
+
+                
+                if config.tracker_config.cluster_ssl {
+                    if config.tracker_config.cluster_ssl_key.is_empty() {
+                        panic!("[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_key' is not set");
+                    }
+                    if config.tracker_config.cluster_ssl_cert.is_empty() {
+                        panic!("[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_cert' is not set");
+                    }
+                }
+
+                println!("[VALIDATE] Cluster encoding: {:?}", config.tracker_config.cluster_encoding);
+                println!("[VALIDATE] Cluster bind address: {}", config.tracker_config.cluster_bind_address);
+            }
+            ClusterMode::slave => {
+                println!("[VALIDATE] Cluster mode: slave");
+
+                
+                if config.tracker_config.cluster_token.is_empty() {
+                    panic!("[VALIDATE CONFIG] Cluster mode 'slave' requires 'cluster_token' to be set for authentication");
+                }
+
+                
+                if config.tracker_config.cluster_master_address.is_empty() {
+                    panic!("[VALIDATE CONFIG] Cluster mode 'slave' requires 'cluster_master_address' to be set");
+                }
+
+                
+                if !config.tracker_config.cluster_master_address.starts_with("ws://")
+                    && !config.tracker_config.cluster_master_address.starts_with("wss://") {
+                    panic!("[VALIDATE CONFIG] 'cluster_master_address' must start with 'ws://' or 'wss://'");
+                }
+
+                println!("[VALIDATE] Cluster master address: {}", config.tracker_config.cluster_master_address);
+            }
         }
     }
 

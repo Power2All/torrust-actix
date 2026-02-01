@@ -1,11 +1,15 @@
 use std::sync::Arc;
 use std::time::Duration;
-use log::info;
+use log::{debug, info};
 use crossbeam::queue::ArrayQueue;
+use crate::config::enums::cluster_mode::ClusterMode;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::udp::structs::parse_pool::ParsePool;
 use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
+use crate::websocket::enums::protocol_type::ProtocolType;
+use crate::websocket::enums::request_type::RequestType;
+use crate::websocket::slave::forwarder::forward_request;
 
 const BATCH_SIZE: usize = 64;
 
@@ -31,6 +35,9 @@ impl ParsePool {
     }
 
     pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>, use_payload_ip: bool) {
+        
+        let is_slave_mode = tracker.config.tracker_config.cluster == ClusterMode::slave;
+
         for i in 0..threads {
             let payload = self.payload.clone();
             let tracker_cloned = tracker.clone();
@@ -39,9 +46,9 @@ impl ParsePool {
 
             runtime.spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
-                
+
                 let mut batch: Vec<UdpPacket> = Vec::with_capacity(BATCH_SIZE);
-                
+
                 let mut interval = tokio::time::interval(Duration::from_micros(100));
                 interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -54,7 +61,7 @@ impl ParsePool {
                             return;
                         }
                         _ = interval.tick() => {
-                            
+
                             while batch.len() < BATCH_SIZE {
                                 if let Some(packet) = payload.pop() {
                                     batch.push(packet);
@@ -64,22 +71,31 @@ impl ParsePool {
                             }
 
                             if !batch.is_empty() {
-                                
+
                                 for packet in batch.drain(..) {
-                                    let response = UdpServer::handle_packet(
-                                        packet.remote_addr,
-                                        &packet.data[..packet.data_len],
-                                        tracker_cloned.clone(),
-                                        use_payload_ip
-                                    ).await;
-                                    UdpServer::send_response(
-                                        tracker_cloned.clone(),
-                                        packet.socket.clone(),
-                                        packet.remote_addr,
-                                        response
-                                    ).await;
+                                    if is_slave_mode {
+                                        
+                                        Self::handle_slave_forward(
+                                            &tracker_cloned,
+                                            packet,
+                                        ).await;
+                                    } else {
+                                        
+                                        let response = UdpServer::handle_packet(
+                                            packet.remote_addr,
+                                            &packet.data[..packet.data_len],
+                                            tracker_cloned.clone(),
+                                            use_payload_ip
+                                        ).await;
+                                        UdpServer::send_response(
+                                            tracker_cloned.clone(),
+                                            packet.socket.clone(),
+                                            packet.remote_addr,
+                                            response
+                                        ).await;
+                                    }
                                 }
-                                
+
                             }
                         }
                     }
@@ -89,5 +105,31 @@ impl ParsePool {
 
         let runtime = self.udp_runtime.clone();
         std::mem::forget(runtime);
+    }
+
+    
+    async fn handle_slave_forward(tracker: &Arc<TorrentTracker>, packet: UdpPacket) {
+        let remote_addr = packet.remote_addr;
+        let packet_data = packet.data[..packet.data_len].to_vec();
+
+        
+        match forward_request(
+            tracker,
+            ProtocolType::Udp,
+            RequestType::UdpPacket,
+            remote_addr.ip(),
+            remote_addr.port(),
+            packet_data,
+        ).await {
+            Ok(response) => {
+                
+                UdpServer::send_packet(packet.socket, &remote_addr, &response.payload).await;
+            }
+            Err(e) => {
+                
+                
+                debug!("[UDP SLAVE] Failed to forward packet to master: {}", e);
+            }
+        }
     }
 }

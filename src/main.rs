@@ -6,19 +6,22 @@ use std::time::Duration;
 use async_std::task;
 use clap::Parser;
 use futures_util::future::try_join_all;
-use log::{error, info};
+use log::{error, info, warn};
 use parking_lot::deadlock;
 use sentry::ClientInitGuard;
 use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{setup_logging, udp_check_host_and_port_used};
+use torrust_actix::config::enums::cluster_mode::ClusterMode;
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
 use torrust_actix::structs::Cli;
 use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
+use torrust_actix::websocket::master::server::websocket_master_service;
+use torrust_actix::websocket::slave::client::start_slave_client;
 
 #[tracing::instrument(level = "debug")]
 fn main() -> std::io::Result<()>
@@ -227,6 +230,69 @@ fn main() -> std::io::Result<()>
                 }
             }
 
+            
+            let cluster_mode = tracker_config.cluster.clone();
+            let mut ws_futures = Vec::new();
+
+            match cluster_mode {
+                ClusterMode::master => {
+                    
+                    let bind_address = &tracker_config.cluster_bind_address;
+                    if !bind_address.is_empty() {
+                        http_check_host_and_port_used(bind_address.clone());
+                        let address: SocketAddr = bind_address.parse().expect("Invalid cluster_bind_address");
+
+                        info!("[CLUSTER] Starting WebSocket master server on {}", address);
+
+                        let (handle, future) = websocket_master_service(
+                            address,
+                            tracker.clone(),
+                        ).await;
+
+                        ws_futures.push((handle, future));
+                    } else {
+                        warn!("[CLUSTER] Master mode enabled but cluster_bind_address is empty");
+                    }
+                }
+                ClusterMode::slave => {
+                    
+                    let master_address = &tracker_config.cluster_master_address;
+                    if !master_address.is_empty() {
+                        info!("[CLUSTER] Starting WebSocket slave client connecting to {}", master_address);
+
+                        
+                        let tracker_slave = tracker.clone();
+                        let shutdown_handler = tokio_shutdown.clone();
+                        tokio_core.spawn(async move {
+                            tokio::select! {
+                                _ = start_slave_client(tracker_slave) => {
+                                    info!("[CLUSTER] Slave client stopped");
+                                }
+                                _ = shutdown_handler.handle() => {
+                                    info!("[CLUSTER] Shutting down slave client...");
+                                }
+                            }
+                        });
+                    } else {
+                        error!("[CLUSTER] Slave mode enabled but cluster_master_address is empty");
+                        exit(1);
+                    }
+                }
+                ClusterMode::standalone => {
+                    
+                    info!("[CLUSTER] Running in standalone mode");
+                }
+            }
+
+            
+            if !ws_futures.is_empty() {
+                let (handles, futures): (Vec<_>, Vec<_>) = ws_futures.into_iter().unzip();
+                tokio_core.spawn(async move {
+                    let _ = try_join_all(futures).await;
+                    drop(handles);
+                });
+            }
+
             let stats_handler = tokio_shutdown.clone();
             let tracker_spawn_stats = tracker.clone();
             let console_interval = tracker_spawn_stats.config.log_console_interval;
@@ -282,6 +348,18 @@ fn main() -> std::io::Result<()>
                                 stats.udp6_invalid_request, stats.udp6_bad_request,
                                 stats.udp_queue_len
                             );
+
+                            
+                            if tracker_spawn_stats.config.tracker_config.cluster != ClusterMode::standalone {
+                                info!(
+                                    "[STATS WS] Conn:{} | Req: Sent:{} Recv:{} | Resp: Sent:{} Recv:{} | TO:{} Recon:{} | Auth: OK:{} Fail:{}",
+                                    stats.ws_connections_active,
+                                    stats.ws_requests_sent, stats.ws_requests_received,
+                                    stats.ws_responses_sent, stats.ws_responses_received,
+                                    stats.ws_timeouts, stats.ws_reconnects,
+                                    stats.ws_auth_success, stats.ws_auth_failed
+                                );
+                            }
                         }
                         _ = stats_handler.handle() => {
                             info!("[BOOT] Shutting down thread for console updates...");

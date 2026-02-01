@@ -1,5 +1,6 @@
 use crate::common::common::parse_query;
 use crate::common::structs::custom_error::CustomError;
+use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
 use crate::http::structs::http_service_data::HttpServiceData;
 use crate::http::types::{HttpServiceQueryHashingMapErr, HttpServiceQueryHashingMapOk};
@@ -8,6 +9,9 @@ use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
+use crate::websocket::enums::protocol_type::ProtocolType;
+use crate::websocket::enums::request_type::RequestType;
+use crate::websocket::slave::forwarder::{create_cluster_error_response, forward_request};
 use actix_cors::Cors;
 use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
@@ -293,6 +297,40 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<HttpServ
 #[tracing::instrument(level = "debug")]
 pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>, user_key: Option<UserId>) -> HttpResponse
 {
+    
+    if data.config.tracker_config.cluster == ClusterMode::slave {
+        let query_string = request.query_string().to_string();
+        let protocol = if request.connection_info().scheme() == "https" {
+            ProtocolType::Https
+        } else {
+            ProtocolType::Http
+        };
+
+        
+        let client_port = request.peer_addr().map(|a| a.port()).unwrap_or(0);
+
+        match forward_request(
+            &data,
+            protocol,
+            RequestType::Announce,
+            ip,
+            client_port,
+            query_string.into_bytes(),
+        ).await {
+            Ok(response) => {
+                return HttpResponse::Ok()
+                    .content_type(ContentType::plaintext())
+                    .body(response.payload);
+            }
+            Err(e) => {
+                http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                return HttpResponse::Ok()
+                    .content_type(ContentType::plaintext())
+                    .body(create_cluster_error_response(&e));
+            }
+        }
+    }
+
     let query_map_result = parse_query(Some(request.query_string().to_string()));
     let query_map = match http_service_query_hashing(query_map_result) {
         Ok(result) => { result }
@@ -559,6 +597,40 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
 #[tracing::instrument(level = "debug")]
 pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
 {
+    
+    if data.config.tracker_config.cluster == ClusterMode::slave {
+        let query_string = request.query_string().to_string();
+        let protocol = if request.connection_info().scheme() == "https" {
+            ProtocolType::Https
+        } else {
+            ProtocolType::Http
+        };
+
+        
+        let client_port = request.peer_addr().map(|a| a.port()).unwrap_or(0);
+
+        match forward_request(
+            &data,
+            protocol,
+            RequestType::Scrape,
+            ip,
+            client_port,
+            query_string.into_bytes(),
+        ).await {
+            Ok(response) => {
+                return HttpResponse::Ok()
+                    .content_type(ContentType::plaintext())
+                    .body(response.payload);
+            }
+            Err(e) => {
+                http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                return HttpResponse::Ok()
+                    .content_type(ContentType::plaintext())
+                    .body(create_cluster_error_response(&e));
+            }
+        }
+    }
+
     let query_map_result = parse_query(Some(request.query_string().to_string()));
     let query_map = match http_service_query_hashing(query_map_result) {
         Ok(result) => { result }
