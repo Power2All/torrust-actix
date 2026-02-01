@@ -4,6 +4,7 @@ use async_std::future;
 use byteorder::{BigEndian, ReadBytesExt};
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
+use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
@@ -11,8 +12,12 @@ use std::io::Cursor;
 use std::time::{Duration, SystemTime};
 use tokio_shutdown::Shutdown;
 
-pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>>, CustomError> {
-    let mut queries = HashMap::new();
+pub type QueryValues = SmallVec<[Vec<u8>; 1]>;
+
+#[inline]
+pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>, CustomError> {
+    
+    let mut queries: HashMap<String, QueryValues> = HashMap::with_capacity(12);
 
     if let Some(result) = query {
         for query_item in result.split('&') {
@@ -23,11 +28,16 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>
             if let Some(equal_pos) = query_item.find('=') {
                 let (key_part, value_part) = query_item.split_at(equal_pos);
                 let key_name_raw = key_part;
-                let value_data_raw = &value_part[1..]; 
+                let value_data_raw = &value_part[1..];
 
-                let key_name = percent_encoding::percent_decode_str(key_name_raw)
-                    .decode_utf8_lossy()
-                    .to_lowercase();
+                
+                let key_name = if key_name_raw.contains('%') || key_name_raw.contains('+') {
+                    percent_encoding::percent_decode_str(key_name_raw)
+                        .decode_utf8_lossy()
+                        .to_lowercase()
+                } else {
+                    key_name_raw.to_ascii_lowercase()
+                };
 
                 if key_name.is_empty() {
                     continue;
@@ -37,12 +47,16 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>
 
                 queries
                     .entry(key_name)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(value_data);
             } else {
-                let key_name = percent_encoding::percent_decode_str(query_item)
-                    .decode_utf8_lossy()
-                    .to_lowercase();
+                let key_name = if query_item.contains('%') || query_item.contains('+') {
+                    percent_encoding::percent_decode_str(query_item)
+                        .decode_utf8_lossy()
+                        .to_lowercase()
+                } else {
+                    query_item.to_ascii_lowercase()
+                };
 
                 if key_name.is_empty() {
                     continue;
@@ -50,7 +64,7 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, Vec<Vec<u8>>
 
                 queries
                     .entry(key_name)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(Vec::new());
             }
         }
@@ -142,20 +156,23 @@ pub fn setup_logging(config: &Configuration) {
     info!("logging initialized.");
 }
 
-pub async fn current_time() -> u64 {
+#[inline]
+pub fn current_time() -> u64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("System time before UNIX epoch")
         .as_secs()
 }
 
-pub async fn convert_int_to_bytes(number: &u64) -> Vec<u8> {
+#[inline]
+pub fn convert_int_to_bytes(number: &u64) -> Vec<u8> {
     let bytes = number.to_be_bytes();
     let leading_zeros = number.leading_zeros() as usize / 8;
     bytes[leading_zeros..].to_vec()
 }
 
-pub async fn convert_bytes_to_int(array: &[u8]) -> u64 {
+#[inline]
+pub fn convert_bytes_to_int(array: &[u8]) -> u64 {
     let mut array_fixed = [0u8; 8];
     let start_idx = 8 - array.len();
     array_fixed[start_idx..].copy_from_slice(array);

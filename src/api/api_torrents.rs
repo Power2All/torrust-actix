@@ -1,5 +1,6 @@
 use crate::tracker::structs::peer_id::PeerId;
-use std::collections::{BTreeMap, HashMap};
+use crate::tracker::structs::torrent_entry::AHashMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use actix_web::{web, HttpRequest, HttpResponse};
@@ -98,8 +99,8 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
     };
 
     let torrent_entry = TorrentEntry {
-        seeds: BTreeMap::new(),
-        peers: BTreeMap::new(),
+        seeds: AHashMap::default(),
+        peers: AHashMap::default(),
         completed,
         updated: std::time::Instant::now(),
     };
@@ -139,8 +140,8 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
                 Ok(hash) => {
                     let info_hash = InfoHash(hash);
                     let torrent_entry = TorrentEntry {
-                        seeds: BTreeMap::new(),
-                        peers: BTreeMap::new(),
+                        seeds: AHashMap::default(),
+                        peers: AHashMap::default(),
                         completed,
                         updated: std::time::Instant::now(),
                     };

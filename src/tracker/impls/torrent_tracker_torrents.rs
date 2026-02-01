@@ -104,6 +104,7 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
+    #[inline]
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();

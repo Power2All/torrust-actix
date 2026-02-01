@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use parking_lot::RwLock;
 use crate::config::structs::configuration::Configuration;
@@ -19,9 +19,11 @@ pub struct TorrentTracker {
     pub sqlx: DatabaseConnector,
     pub torrents_sharding: Arc<TorrentSharding>,
     pub torrents_updates: TorrentsUpdates,
-    pub torrents_whitelist: Arc<RwLock<Vec<InfoHash>>>,
+    
+    pub torrents_whitelist: Arc<RwLock<HashSet<InfoHash>>>,
     pub torrents_whitelist_updates: Arc<RwLock<HashMap<u128, (InfoHash, UpdatesAction)>>>,
-    pub torrents_blacklist: Arc<RwLock<Vec<InfoHash>>>,
+    
+    pub torrents_blacklist: Arc<RwLock<HashSet<InfoHash>>>,
     pub torrents_blacklist_updates: Arc<RwLock<HashMap<u128, (InfoHash, UpdatesAction)>>>,
     pub keys: Arc<RwLock<BTreeMap<InfoHash, i64>>>,
     pub keys_updates: KeysUpdates,

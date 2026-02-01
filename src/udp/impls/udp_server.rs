@@ -266,7 +266,8 @@ impl UdpServer {
 
     #[tracing::instrument(level = "debug")]
     pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Result<Response, ServerError> {
-        let config = tracker.config.tracker_config.clone();
+        
+        let config = &tracker.config.tracker_config;
 
         let effective_remote_addr = if use_payload_ip {
             if let Some(payload_ip) = request.ip_address {
@@ -370,8 +371,8 @@ impl UdpServer {
         let torrent_peers = tracker.get_torrent_peers(request.info_hash, 72, TorrentPeersType::All, Some(effective_remote_addr.ip()));
 
         let (peers, peers6) = if let Some(torrent_peers_unwrapped) = torrent_peers {
-            let mut peers = Vec::with_capacity(72);
-            let mut peers6 = Vec::with_capacity(72);
+            let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::with_capacity(72);
+            let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(72);
             let mut count = 0;
 
             
@@ -379,7 +380,8 @@ impl UdpServer {
                 if effective_remote_addr.is_ipv4() {
                     for torrent_peer in torrent_peers_unwrapped.seeds_ipv4.values().take(72) {
                         if count >= 72 { break; }
-                        if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
+                        
+                        if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                             peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                             count += 1;
                         }
@@ -387,7 +389,8 @@ impl UdpServer {
                 } else {
                     for torrent_peer in torrent_peers_unwrapped.seeds_ipv6.values().take(72) {
                         if count >= 72 { break; }
-                        if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
+                        
+                        if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                             peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                             count += 1;
                         }
@@ -398,13 +401,15 @@ impl UdpServer {
             
             if remote_addr.is_ipv4() {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv4.values().take(72 - count) {
-                    if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv4Addr>() {
+                    
+                    if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                         peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }
             } else {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv6.values().take(72 - count) {
-                    if let Ok(ip) = torrent_peer.peer_addr.ip().to_string().parse::<Ipv6Addr>() {
+                    
+                    if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                         peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }
@@ -416,20 +421,25 @@ impl UdpServer {
         };
 
         
+        let request_interval = config.request_interval as i32;
+        let leechers = torrent.peers.len() as i32;
+        let seeders = torrent.seeds.len() as i32;
+
+        
         let response = if effective_remote_addr.is_ipv6() {
             Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
-                announce_interval: AnnounceInterval(config.request_interval as i32),
-                leechers: NumberOfPeers(torrent.peers.len() as i32),
-                seeders: NumberOfPeers(torrent.seeds.len() as i32),
+                announce_interval: AnnounceInterval(request_interval),
+                leechers: NumberOfPeers(leechers),
+                seeders: NumberOfPeers(seeders),
                 peers: peers6,
             })
         } else {
             Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
-                announce_interval: AnnounceInterval(config.request_interval as i32),
-                leechers: NumberOfPeers(torrent.peers.len() as i32),
-                seeders: NumberOfPeers(torrent.seeds.len() as i32),
+                announce_interval: AnnounceInterval(request_interval),
+                leechers: NumberOfPeers(leechers),
+                seeders: NumberOfPeers(seeders),
                 peers,
             })
         };

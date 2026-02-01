@@ -1,3 +1,4 @@
+use crate::common::common::QueryValues;
 use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::tracker::enums::announce_event::AnnounceEvent;
@@ -18,11 +19,12 @@ use std::time::SystemTime;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
-    pub async fn validate_announce(&self, remote_addr: IpAddr, query: HashMap<String, Vec<Vec<u8>>>) -> Result<AnnounceQueryRequest, CustomError>
+    pub async fn validate_announce(&self, remote_addr: IpAddr, query: HashMap<String, QueryValues>) -> Result<AnnounceQueryRequest, CustomError>
     {
         let now = std::time::Instant::now();
 
-        fn get_required_bytes<'a>(query: &'a HashMap<String, Vec<Vec<u8>>>, field: &str, expected_len: Option<usize>) -> Result<&'a [u8], CustomError> {
+        #[inline]
+        fn get_required_bytes<'a>(query: &'a HashMap<String, QueryValues>, field: &str, expected_len: Option<usize>) -> Result<&'a [u8], CustomError> {
             let value = query.get(field)
                 .ok_or_else(|| CustomError::new(&format!("missing {field}")))?
                 .first()
@@ -35,7 +37,8 @@ impl TorrentTracker {
             Ok(value.as_slice())
         }
 
-        fn parse_integer<T: std::str::FromStr>(query: &HashMap<String, Vec<Vec<u8>>>, field: &str) -> Result<T, CustomError> {
+        #[inline]
+        fn parse_integer<T: std::str::FromStr>(query: &HashMap<String, QueryValues>, field: &str) -> Result<T, CustomError> {
             let bytes = get_required_bytes(query, field, None)?;
             let str_value = std::str::from_utf8(bytes)
                 .map_err(|_| CustomError::new(&format!("invalid {field}")))?;
@@ -235,7 +238,7 @@ impl TorrentTracker {
     }
 
     #[tracing::instrument(level = "debug")]
-    pub async fn validate_scrape(&self, query: HashMap<String, Vec<Vec<u8>>>) -> Result<ScrapeQueryRequest, CustomError>
+    pub async fn validate_scrape(&self, query: HashMap<String, QueryValues>) -> Result<ScrapeQueryRequest, CustomError>
     {
         let now = std::time::Instant::now();
 
@@ -249,7 +252,7 @@ impl TorrentTracker {
                 // Optimized batch parsing of info hashes
                 let mut info_hash_vec = Vec::with_capacity(result.len());
 
-                for hash in result {
+                for hash in result.iter() {
                     if hash.len() != 20 {
                         return Err(CustomError::new("an invalid info_hash was given"));
                     }
