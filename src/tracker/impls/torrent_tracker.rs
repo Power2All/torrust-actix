@@ -1,8 +1,10 @@
+use crate::cache::structs::cache_connector::CacheConnector;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use chrono::Utc;
+use log::{info, warn};
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicI64};
@@ -13,8 +15,31 @@ impl TorrentTracker {
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
         let tracker_config = &config.tracker_config;
+        let cache = if let Some(ref cache_config) = config.cache {
+            if cache_config.enabled {
+                match CacheConnector::new(cache_config).await {
+                    Ok(connector) => {
+                        info!("[Cache] Successfully connected to {} cache", match cache_config.engine {
+                            crate::cache::enums::cache_engine::CacheEngine::redis => "Redis",
+                            crate::cache::enums::cache_engine::CacheEngine::memcache => "Memcache",
+                        });
+                        Some(connector)
+                    }
+                    Err(e) => {
+                        warn!("[Cache] Failed to connect to cache: {}. Continuing without cache.", e);
+                        None
+                    }
+                }
+            } else {
+                info!("[Cache] Cache is disabled in configuration");
+                None
+            }
+        } else {
+            None
+        };
         TorrentTracker {
             config: config.clone(),
+            cache,
             torrents_sharding: Arc::new(Default::default()),
             torrents_updates: Arc::new(RwLock::new(HashMap::new())),
             torrents_whitelist: Arc::new(RwLock::new(HashSet::new())),

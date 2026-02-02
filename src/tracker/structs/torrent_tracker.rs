@@ -1,3 +1,4 @@
+use crate::cache::structs::cache_connector::CacheConnector;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 pub struct TorrentTracker {
     pub config: Arc<Configuration>,
     pub sqlx: DatabaseConnector,
+    pub cache: Option<CacheConnector>,
     pub torrents_sharding: Arc<TorrentSharding>,
     pub torrents_updates: TorrentsUpdates,
     pub torrents_whitelist: Arc<RwLock<HashSet<InfoHash>>>,

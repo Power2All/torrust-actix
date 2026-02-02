@@ -22,6 +22,7 @@ This project originated from Torrust-Tracker code originally developed by Mick v
 * [X] Swagger UI built-in in the API (toggleable), useful both for testing API and documentation for API
 * [X] Sentry SaaS and self-hosted support
 * [X] Full Stand-Alone/Master/Slave cluster mode
+* [X] Optional Redis/Memcache Caching for peers data (can be used to show on a website for instance, to less burden SQL)
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -105,6 +106,12 @@ TRACKER__CLUSTER_SSL <true | false>
 TRACKER__CLUSTER_SSL_KEY <STRING>
 TRACKER__CLUSTER_SSL_CERT <STRING>
 TRACKER__CLUSTER_TLS_CONNECTION_RATE <UINT64>
+
+CACHE__ENABLED <true | false>
+CACHE__ENGINE <redis | memcache>
+CACHE__ADDRESS <STRING>
+CACHE__PREFIX <STRING>
+CACHE__TTL <UINT64>
 
 SENTRY__ENABLED <true | false>
 SENTRY__DEBUG <true | false>
@@ -203,6 +210,8 @@ UDP_0_REUSE_ADDRESS <true | false>
 * WebSocket data can be sent in 3 different ways, but Master server is the leading what way to talk
 * This is a very early version of the WebSocket cluster implementation, and needs thorough testing
 * Moved the more database engines additions to another version (and MeiliSearch/ElasticSearch support for v4.2)
+* Refactored the database engine to be less massive, more logical and less redundancy
+* Implemented a Redis and Memcache cache optionally to push peer data to, for usage on websites (without burdening SQL)
 
 #### v4.0.17
 * Another little overhaul, changing some memory tools for enhancement and performance

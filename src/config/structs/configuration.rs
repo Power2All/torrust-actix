@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
+use crate::config::structs::cache_config::CacheConfig;
 use crate::config::structs::database_config::DatabaseConfig;
 use crate::config::structs::database_structure_config::DatabaseStructureConfig;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
@@ -15,6 +16,8 @@ pub struct Configuration {
     pub sentry_config: SentryConfig,
     pub database: DatabaseConfig,
     pub database_structure: DatabaseStructureConfig,
+    #[serde(default)]
+    pub cache: Option<CacheConfig>,
     pub http_server: Vec<HttpTrackersConfig>,
     pub udp_server: Vec<UdpTrackersConfig>,
     pub api_server: Vec<ApiTrackersConfig>

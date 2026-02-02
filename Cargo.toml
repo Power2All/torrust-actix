@@ -1,6 +1,6 @@
 [package]
 name = "torrust-actix"
-version = "4.0.16"
+version = "4.1.0"
 edition = "2024"
 license = "AGPL-3.0"
 authors = [
@@ -57,6 +57,9 @@ serde_millis = "^0.1"
 sha1 = "^0.10"
 socket2 = "^0.6"
 sqlx = { version = "^0.8", features = ["mysql", "postgres", "sqlite", "runtime-tokio-rustls"] }
+async-trait = "^0.1"
+redis = { version = "^1.0", features = ["tokio-comp", "connection-manager"] }
+memcache = { version = "^0.19", default-features = false }
 thiserror = "^2.0"
 tokio = { version = "^1.49", features = ["full"] }
 tokio-shutdown = "^0.1"

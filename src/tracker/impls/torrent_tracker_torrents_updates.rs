@@ -1,9 +1,10 @@
+use crate::cache::traits::cache_backend::CacheBackend;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{error, info};
+use log::{debug, error, info, warn};
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -110,9 +111,36 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, torrent_entry, updates_action))| (*info_hash, (torrent_entry.clone(), *updates_action)))
             .collect();
-        match self.save_torrents(torrent_tracker, torrents_to_save).await {
+        match self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await {
             Ok(_) => {
                 info!("[SYNC TORRENT UPDATES] Synced {mapping_len} torrents");
+                if let Some(ref cache) = self.cache {
+                    let cache_ttl = self.config.cache.as_ref().and_then(|c| {
+                        if c.ttl > 0 { Some(c.ttl) } else { None }
+                    });
+                    let cache_data: Vec<_> = torrents_to_save
+                        .iter()
+                        .filter(|(_, (_, action))| *action != UpdatesAction::Remove)
+                        .map(|(hash, (entry, _))| (*hash, entry.seeds.len() as u64, entry.peers.len() as u64))
+                        .collect();
+                    if !cache_data.is_empty() {
+                        match cache.set_torrent_peers_batch(&cache_data, cache_ttl).await {
+                            Ok(_) => {
+                                debug!("[Cache] Updated {} torrent peer counts", cache_data.len());
+                            }
+                            Err(e) => {
+                                warn!("[Cache] Failed to update peer counts: {}", e);
+                            }
+                        }
+                    }
+                    for (hash, (_, action)) in &torrents_to_save {
+                        if *action == UpdatesAction::Remove {
+                            if let Err(e) = cache.delete_torrent(hash).await {
+                                warn!("[Cache] Failed to delete torrent {}: {}", hash, e);
+                            }
+                        }
+                    }
+                }
                 let mut lock = self.torrents_updates.write();
                 let mut removed_count = 0i64;
                 for (_, (timestamp, _, _)) in mapping {

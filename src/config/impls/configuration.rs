@@ -1,8 +1,10 @@
+use crate::cache::enums::cache_engine::CacheEngine;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::enums::configuration_error::ConfigurationError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
+use crate::config::structs::cache_config::CacheConfig;
 use crate::config::structs::configuration::Configuration;
 use crate::config::structs::database_config::DatabaseConfig;
 use crate::config::structs::database_structure_config::DatabaseStructureConfig;
@@ -80,6 +82,7 @@ impl Configuration {
                 update_completed: true,
                 update_peers: false,
             },
+            cache: None,
             database_structure: DatabaseStructureConfig {
                 torrents: DatabaseStructureConfigTorrents {
                     table_name: String::from("torrents"),
@@ -316,6 +319,57 @@ impl Configuration {
         }
         if let Ok(value) = env::var("DATABASE__PERSISTENT_INTERVAL") {
             config.database.persistent_interval = value.parse::<u64>().unwrap_or(60u64);
+        }
+        if let Ok(value) = env::var("CACHE__ENABLED") {
+            let enabled = match value.as_str() { "true" => true, "false" => false, _ => false };
+            if let Some(ref mut cache) = config.cache {
+                cache.enabled = enabled;
+            } else if enabled {
+                config.cache = Some(CacheConfig::default());
+                config.cache.as_mut().unwrap().enabled = enabled;
+            }
+        }
+        if let Ok(value) = env::var("CACHE__ENGINE") {
+            let engine = match value.as_str() {
+                "redis" => CacheEngine::redis,
+                "memcache" => CacheEngine::memcache,
+                _ => CacheEngine::redis
+            };
+            if let Some(ref mut cache) = config.cache {
+                cache.engine = engine;
+            } else {
+                let mut cache_config = CacheConfig::default();
+                cache_config.engine = engine;
+                config.cache = Some(cache_config);
+            }
+        }
+        if let Ok(value) = env::var("CACHE__ADDRESS") {
+            if let Some(ref mut cache) = config.cache {
+                cache.address = value;
+            } else {
+                let mut cache_config = CacheConfig::default();
+                cache_config.address = value;
+                config.cache = Some(cache_config);
+            }
+        }
+        if let Ok(value) = env::var("CACHE__PREFIX") {
+            if let Some(ref mut cache) = config.cache {
+                cache.prefix = value;
+            } else {
+                let mut cache_config = CacheConfig::default();
+                cache_config.prefix = value;
+                config.cache = Some(cache_config);
+            }
+        }
+        if let Ok(value) = env::var("CACHE__TTL") {
+            let ttl = value.parse::<u64>().unwrap_or(300u64);
+            if let Some(ref mut cache) = config.cache {
+                cache.ttl = ttl;
+            } else {
+                let mut cache_config = CacheConfig::default();
+                cache_config.ttl = ttl;
+                config.cache = Some(cache_config);
+            }
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH") {
             config.database_structure.torrents.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
@@ -659,6 +713,23 @@ impl Configuration {
             }
         }
         Self::validate_cluster(&config);
+        Self::validate_cache(&config);
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub fn validate_cache(config: &Configuration) {
+        if let Some(ref cache) = config.cache {
+            if cache.enabled {
+                println!("[VALIDATE] Cache enabled: {}", cache.engine.to_string());
+                Self::validate_socket_address("cache.address", &cache.address);
+                println!("[VALIDATE] Cache prefix: {}", cache.prefix);
+                println!("[VALIDATE] Cache TTL: {} seconds", cache.ttl);
+            } else {
+                println!("[VALIDATE] Cache: disabled");
+            }
+        } else {
+            println!("[VALIDATE] Cache: not configured");
+        }
     }
 
     #[tracing::instrument(level = "debug")]
