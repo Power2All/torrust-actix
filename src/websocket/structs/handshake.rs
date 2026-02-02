@@ -33,16 +33,19 @@ pub struct HandshakeResponse {
     pub encoding: Option<ClusterEncoding>,
     
     pub version: u8,
+    
+    pub master_id: Option<String>,
 }
 
 impl HandshakeResponse {
     
-    pub fn success(encoding: ClusterEncoding) -> Self {
+    pub fn success(encoding: ClusterEncoding, master_id: String) -> Self {
         Self {
             success: true,
             error: None,
             encoding: Some(encoding),
             version: CLUSTER_PROTOCOL_VERSION,
+            master_id: Some(master_id),
         }
     }
 
@@ -53,6 +56,7 @@ impl HandshakeResponse {
             error: Some(error),
             encoding: None,
             version: CLUSTER_PROTOCOL_VERSION,
+            master_id: None,
         }
     }
 }

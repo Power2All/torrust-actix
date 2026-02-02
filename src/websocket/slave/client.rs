@@ -169,12 +169,10 @@ pub async fn start_slave_client(tracker: Arc<TorrentTracker>) {
     let websocket_url = format!("{}://{}/cluster", protocol, master_address);
 
     
-    let slave_id = hostname::get()
-        .map(|h| h.to_string_lossy().to_string())
-        .unwrap_or_else(|_| format!("slave-{}", std::process::id()));
+    let slave_id = uuid::Uuid::new_v4().to_string();
 
     info!("[WEBSOCKET SLAVE] Starting slave client, connecting to {}", websocket_url);
-    info!("[WEBSOCKET SLAVE] Slave ID: {}", slave_id);
+    info!("[WEBSOCKET SLAVE] Slave UUID: {}", slave_id);
 
     loop {
         match connect_to_master(
@@ -264,9 +262,10 @@ async fn connect_to_master(
     }
 
     let encoding = handshake_response.encoding.unwrap_or(ClusterEncoding::binary);
+    let master_id = handshake_response.master_id.unwrap_or_else(|| "unknown".to_string());
     info!(
-        "[WEBSOCKET SLAVE] Handshake successful, using encoding: {:?}",
-        encoding
+        "[WEBSOCKET SLAVE] Handshake successful, connected to master UUID: {}, using encoding: {:?}",
+        master_id, encoding
     );
 
     tracker.update_stats(StatsEvent::WsAuthSuccess, 1);

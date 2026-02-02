@@ -32,7 +32,7 @@ actix-web-actors = "^4"
 tokio-tungstenite = { version = "^0.28", features = ["rustls-tls-webpki-roots"] }
 rmp-serde = "^1.3"
 once_cell = "^1.21"
-hostname = "^0.4"
+uuid = { version = "^1.16", features = ["v4"] }
 async-std = "^1"
 binascii = "^0.1"
 bip_bencode = "^0.4"

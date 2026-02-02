@@ -27,6 +27,8 @@ use super::handler::process_cluster_request;
 pub struct WebSocketServiceData {
     pub tracker: Arc<TorrentTracker>,
     pub config: Arc<Configuration>,
+    
+    pub master_id: String,
 }
 
 pub struct ClusterConnection {
@@ -120,7 +122,7 @@ impl ClusterConnection {
         self.slave_id = Some(handshake.slave_id.clone());
 
         info!(
-            "[WEBSOCKET MASTER] Slave authenticated: {}",
+            "[WEBSOCKET MASTER] Slave connected with UUID: {}",
             handshake.slave_id
         );
 
@@ -129,7 +131,7 @@ impl ClusterConnection {
         self.data.tracker.update_stats(StatsEvent::WsConnectionsActive, 1);
 
         
-        let response = HandshakeResponse::success(self.encoding.clone());
+        let response = HandshakeResponse::success(self.encoding.clone(), self.data.master_id.clone());
         if let Ok(encoded) = serde_json::to_vec(&response) {
             ctx.binary(encoded);
         }
@@ -187,7 +189,7 @@ impl Actor for ClusterConnection {
     fn stopped(&mut self, _ctx: &mut Self::Context) {
         if self.authenticated {
             if let Some(ref slave_id) = self.slave_id {
-                info!("[WEBSOCKET MASTER] Slave disconnected: {}", slave_id);
+                info!("[WEBSOCKET MASTER] Slave disconnected with UUID: {}", slave_id);
             }
             self.data.tracker.update_stats(StatsEvent::WsConnectionsActive, -1);
         }
@@ -248,9 +250,14 @@ pub async fn websocket_master_service(
     let worker_threads = config.tracker_config.cluster_threads as usize;
     let max_connections = config.tracker_config.cluster_max_connections as usize;
 
+    
+    let master_id = uuid::Uuid::new_v4().to_string();
+    info!("[WEBSOCKET MASTER] Master UUID: {}", master_id);
+
     let service_data = Arc::new(WebSocketServiceData {
         tracker: tracker.clone(),
         config: config.clone(),
+        master_id,
     });
 
     if config.tracker_config.cluster_ssl {
