@@ -1,28 +1,24 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI64};
-use chrono::Utc;
-use parking_lot::RwLock;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use chrono::Utc;
+use parking_lot::RwLock;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicI64};
+use std::sync::Arc;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
-        
         let tracker_config = &config.tracker_config;
-
         TorrentTracker {
             config: config.clone(),
             torrents_sharding: Arc::new(Default::default()),
             torrents_updates: Arc::new(RwLock::new(HashMap::new())),
-            
             torrents_whitelist: Arc::new(RwLock::new(HashSet::new())),
             torrents_whitelist_updates: Arc::new(RwLock::new(HashMap::new())),
-            
             torrents_blacklist: Arc::new(RwLock::new(HashSet::new())),
             torrents_blacklist_updates: Arc::new(RwLock::new(HashMap::new())),
             keys: Arc::new(RwLock::new(BTreeMap::new())),
@@ -72,7 +68,6 @@ impl TorrentTracker {
                 udp6_announces_handled: AtomicI64::new(0),
                 udp6_scrapes_handled: AtomicI64::new(0),
                 udp_queue_len: AtomicI64::new(0),
-                
                 ws_connections_active: AtomicI64::new(0),
                 ws_requests_sent: AtomicI64::new(0),
                 ws_requests_received: AtomicI64::new(0),

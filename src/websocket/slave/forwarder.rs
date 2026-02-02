@@ -1,26 +1,18 @@
-
-
-use std::net::IpAddr;
-use std::sync::Arc;
-
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::websocket::enums::protocol_type::ProtocolType;
 use crate::websocket::enums::request_type::RequestType;
 use crate::websocket::slave::client::{send_request, SLAVE_CLIENT};
 use crate::websocket::structs::cluster_request::ClusterRequest;
 use crate::websocket::structs::cluster_response::ClusterResponse;
+use std::net::IpAddr;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum ForwardError {
-    
     NotConnected,
-    
     Timeout,
-    
     MasterError(String),
-    
     ConnectionLost,
-    
     EncodingError(String),
 }
 
@@ -50,13 +42,10 @@ pub async fn forward_request(
     client_port: u16,
     payload: Vec<u8>,
 ) -> Result<ClusterResponse, ForwardError> {
-    // Generate unique request_id
     let request_id = {
         let mut state = SLAVE_CLIENT.write();
         state.next_request_id()
     };
-
-    // Create ClusterRequest
     let request = ClusterRequest::new(
         request_id,
         protocol,
@@ -65,8 +54,6 @@ pub async fn forward_request(
         client_port,
         payload,
     );
-
-    // Send to master and wait for response
     send_request(tracker, request).await
 }
 
@@ -79,8 +66,5 @@ pub fn create_cluster_error_response(error: &ForwardError) -> Vec<u8> {
         ForwardError::ConnectionLost => "Cluster connection lost",
         ForwardError::EncodingError(_) => "Cluster encoding error",
     };
-
-    // Create a bencode failure response
-    // d14:failure reason<len>:<message>e
     format!("d14:failure reason{}:{}e", message.len(), message).into_bytes()
 }

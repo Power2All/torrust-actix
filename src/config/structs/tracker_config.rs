@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::config::enums::cluster_mode::ClusterMode;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackerConfig {
@@ -18,8 +18,6 @@ pub struct TrackerConfig {
     pub total_downloads: u64,
     pub swagger: bool,
     pub prometheus_id: String,
-
-    
     pub cluster: ClusterMode,
     pub cluster_encoding: ClusterEncoding,
     pub cluster_token: String,

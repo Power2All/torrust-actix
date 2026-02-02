@@ -1,14 +1,14 @@
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use log::{error, info};
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
@@ -125,11 +125,9 @@ impl TorrentTracker {
     {
         let current_time = SystemTime::now();
         let timeout_threshold = current_time.duration_since(UNIX_EPOCH).unwrap().as_secs() - peer_timeout.as_secs();
-        
         let remove_active_torrents = {
             let lock = self.users.read_recursive();
             info!("[USERS] Scanning {} users with dead active torrents", lock.len());
-            
             let mut to_remove = Vec::new();
             for (user_id, user_entry_item) in lock.iter() {
                 for (info_hash, &updated) in &user_entry_item.torrents_active {
@@ -140,9 +138,7 @@ impl TorrentTracker {
             }
             to_remove
         };
-
         let torrents_cleaned = remove_active_torrents.len() as u64;
-        
         if !remove_active_torrents.is_empty() {
             let mut lock = self.users.write();
             for (user_id, info_hash) in remove_active_torrents {
@@ -151,7 +147,6 @@ impl TorrentTracker {
                 }
             }
         }
-        
         info!("[USERS] Removed {torrents_cleaned} active torrents in users");
     }
 }

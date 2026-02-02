@@ -1,5 +1,5 @@
-use serde::{de::DeserializeOwned, Serialize};
 use crate::config::enums::cluster_encoding::ClusterEncoding;
+use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Debug)]
 pub enum EncodingError {
@@ -38,7 +38,6 @@ pub fn decode<T: DeserializeOwned>(encoding: &ClusterEncoding, data: &[u8]) -> R
 
 /// Binary encoding using bincode-style format (simple length-prefixed binary)
 fn encode_binary<T: Serialize>(value: &T) -> Result<Vec<u8>, EncodingError> {
-    // Use MessagePack as the binary format since it's compact and well-supported
     rmp_serde::to_vec(value)
         .map_err(|e| EncodingError::SerializationError(e.to_string()))
 }
@@ -71,9 +70,9 @@ fn decode_msgpack<T: DeserializeOwned>(data: &[u8]) -> Result<T, EncodingError> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::websocket::structs::cluster_request::ClusterRequest;
     use crate::websocket::enums::protocol_type::ProtocolType;
     use crate::websocket::enums::request_type::RequestType;
+    use crate::websocket::structs::cluster_request::ClusterRequest;
     use std::net::IpAddr;
 
     #[test]
@@ -86,10 +85,8 @@ mod tests {
             6969,
             vec![1, 2, 3, 4],
         );
-
         let encoded = encode(&ClusterEncoding::json, &request).unwrap();
         let decoded: ClusterRequest = decode(&ClusterEncoding::json, &encoded).unwrap();
-
         assert_eq!(request.request_id, decoded.request_id);
         assert_eq!(request.protocol, decoded.protocol);
         assert_eq!(request.payload, decoded.payload);
@@ -105,10 +102,8 @@ mod tests {
             6969,
             vec![5, 6, 7, 8],
         );
-
         let encoded = encode(&ClusterEncoding::msgpack, &request).unwrap();
         let decoded: ClusterRequest = decode(&ClusterEncoding::msgpack, &encoded).unwrap();
-
         assert_eq!(request.request_id, decoded.request_id);
         assert_eq!(request.protocol, decoded.protocol);
         assert_eq!(request.payload, decoded.payload);
@@ -127,10 +122,8 @@ mod tests {
             8080,
             vec![],
         );
-
         let encoded = encode(&ClusterEncoding::binary, &request).unwrap();
         let decoded: ClusterRequest = decode(&ClusterEncoding::binary, &encoded).unwrap();
-
         assert_eq!(request.request_id, decoded.request_id);
         assert_eq!(request.protocol, decoded.protocol);
     }

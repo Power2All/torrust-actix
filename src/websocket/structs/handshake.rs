@@ -1,15 +1,12 @@
-use serde::{Deserialize, Serialize};
 use crate::config::enums::cluster_encoding::ClusterEncoding;
+use serde::{Deserialize, Serialize};
 
 pub const CLUSTER_PROTOCOL_VERSION: u8 = 1;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HandshakeRequest {
-    
     pub token: String,
-    
     pub slave_id: String,
-    
     pub version: u8,
 }
 
@@ -25,20 +22,14 @@ impl HandshakeRequest {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HandshakeResponse {
-    
     pub success: bool,
-    
     pub error: Option<String>,
-    
     pub encoding: Option<ClusterEncoding>,
-    
     pub version: u8,
-    
     pub master_id: Option<String>,
 }
 
 impl HandshakeResponse {
-    
     pub fn success(encoding: ClusterEncoding, master_id: String) -> Self {
         Self {
             success: true,
@@ -49,7 +40,6 @@ impl HandshakeResponse {
         }
     }
 
-    
     pub fn failure(error: String) -> Self {
         Self {
             success: false,

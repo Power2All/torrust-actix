@@ -1,13 +1,13 @@
-use std::collections::{BTreeMap, HashMap};
-use std::collections::hash_map::Entry;
-use std::sync::Arc;
-use std::time::SystemTime;
-use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use log::{error, info};
+use std::collections::hash_map::Entry;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+use std::time::SystemTime;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
@@ -15,7 +15,6 @@ impl TorrentTracker {
     {
         let mut lock = self.torrents_updates.write();
         let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
-        
         if lock.insert(timestamp, (info_hash, torrent_entry, updates_action)).is_none() {
             self.update_stats(StatsEvent::TorrentsUpdates, 1);
             true
@@ -31,7 +30,6 @@ impl TorrentTracker {
         let mut returned_data = BTreeMap::new();
         let mut success_count = 0i64;
         let mut remove_count = 0i64;
-        
         for (timestamp, (info_hash, torrent_entry, updates_action)) in hashes {
             let new_timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
             let success = lock.insert(new_timestamp, (info_hash, torrent_entry, updates_action)).is_none();
@@ -39,19 +37,16 @@ impl TorrentTracker {
                 success_count += 1;
             }
             returned_data.insert(info_hash, success);
-            
             if lock.remove(&timestamp).is_some() {
                 remove_count += 1;
             }
         }
-        
         if success_count > 0 {
             self.update_stats(StatsEvent::TorrentsUpdates, success_count);
         }
         if remove_count > 0 {
             self.update_stats(StatsEvent::TorrentsUpdates, -remove_count);
         }
-        
         returned_data
     }
 
@@ -89,14 +84,11 @@ impl TorrentTracker {
             let lock = self.torrents_updates.read_recursive();
             lock.clone()
         };
-
         if updates.is_empty() {
             return Ok(());
         }
-
         let mut mapping: HashMap<InfoHash, (u128, TorrentEntry, UpdatesAction)> = HashMap::with_capacity(updates.len());
         let mut timestamps_to_remove = Vec::new();
-
         for (timestamp, (info_hash, torrent_entry, updates_action)) in updates {
             match mapping.entry(info_hash) {
                 Entry::Occupied(mut o) => {
@@ -113,36 +105,29 @@ impl TorrentTracker {
                 }
             }
         }
-
         let mapping_len = mapping.len();
         let torrents_to_save: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)> = mapping
             .iter()
             .map(|(info_hash, (_, torrent_entry, updates_action))| (*info_hash, (torrent_entry.clone(), *updates_action)))
             .collect();
-
         match self.save_torrents(torrent_tracker, torrents_to_save).await {
             Ok(_) => {
                 info!("[SYNC TORRENT UPDATES] Synced {mapping_len} torrents");
-                
                 let mut lock = self.torrents_updates.write();
                 let mut removed_count = 0i64;
-                
                 for (_, (timestamp, _, _)) in mapping {
                     if lock.remove(&timestamp).is_some() {
                         removed_count += 1;
                     }
                 }
-
                 for timestamp in timestamps_to_remove {
                     if lock.remove(&timestamp).is_some() {
                         removed_count += 1;
                     }
                 }
-                
                 if removed_count > 0 {
                     self.update_stats(StatsEvent::TorrentsUpdates, -removed_count);
                 }
-
                 Ok(())
             }
             Err(_) => {

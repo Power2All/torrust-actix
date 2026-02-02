@@ -46,7 +46,6 @@ pub struct Stats {
     pub udp6_announces_handled: i64,
     pub udp6_scrapes_handled: i64,
     pub udp_queue_len: i64,
-    
     pub ws_connections_active: i64,
     pub ws_requests_sent: i64,
     pub ws_requests_received: i64,

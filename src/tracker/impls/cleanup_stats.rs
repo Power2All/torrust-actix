@@ -34,8 +34,6 @@ impl CleanupStats {
         let torrents = self.torrents.swap(0, Ordering::Relaxed);
         let seeds = self.seeds.swap(0, Ordering::Relaxed);
         let peers = self.peers.swap(0, Ordering::Relaxed);
-
-        
         if torrents > 0 {
             tracker.update_stats(StatsEvent::Torrents, -(torrents as i64));
         }

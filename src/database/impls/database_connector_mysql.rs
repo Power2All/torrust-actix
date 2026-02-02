@@ -5,18 +5,18 @@ use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
+use crate::tracker::structs::torrent_entry::AHashMap;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use async_std::task;
-use std::collections::BTreeMap;
 use futures_util::TryStreamExt;
 use log::{error, info};
 use sha1::{Digest, Sha1};
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use sqlx::{ConnectOptions, Error, MySql, Pool, Row, Transaction};
-use crate::tracker::structs::torrent_entry::AHashMap;
+use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::process::exit;
 use std::str::FromStr;
@@ -43,16 +43,12 @@ impl DatabaseConnectorMySQL {
             error!("[MySQL] Message: {:#?}", mysql_connect.into_database_error().unwrap().message());
             exit(1);
         }
-
         let mut structure = DatabaseConnector { mysql: None, sqlite: None, pgsql: None, engine: None };
         structure.mysql = Some(DatabaseConnectorMySQL { pool: mysql_connect.unwrap() });
         structure.engine = Some(DatabaseDrivers::mysql);
-
         if create_database {
             let pool = &structure.mysql.clone().unwrap().pool;
             info!("[BOOT] Database creation triggered for MySQL.");
-
-            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().torrents.table_name);
             match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
@@ -88,8 +84,6 @@ impl DatabaseConnectorMySQL {
                     }
                 }
             }
-
-            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().whitelist.table_name);
             match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
@@ -119,8 +113,6 @@ impl DatabaseConnectorMySQL {
                     }
                 }
             }
-
-            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().blacklist.table_name);
             match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
@@ -150,8 +142,6 @@ impl DatabaseConnectorMySQL {
                     }
                 }
             }
-
-            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().keys.table_name);
             match config.database_structure.clone().keys.bin_type_hash {
                 true => {
@@ -183,8 +173,6 @@ impl DatabaseConnectorMySQL {
                     }
                 }
             }
-
-            
             info!("[BOOT MySQL] Creating table {}", config.database_structure.clone().users.table_name);
             match config.database_structure.clone().users.id_uuid {
                 true => {
@@ -276,7 +264,6 @@ impl DatabaseConnectorMySQL {
             task::sleep(Duration::from_secs(1)).await;
             exit(0);
         }
-
         structure
     }
 

@@ -5,18 +5,18 @@ use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
+use crate::tracker::structs::torrent_entry::AHashMap;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use async_std::task;
-use std::collections::BTreeMap;
 use futures_util::TryStreamExt;
 use log::{error, info};
 use sha1::{Digest, Sha1};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Row, Sqlite, Transaction};
-use crate::tracker::structs::torrent_entry::AHashMap;
+use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::process::exit;
 use std::str::FromStr;
@@ -42,22 +42,17 @@ impl DatabaseConnectorSQLite {
             error!("[SQLite] Message: {:#?}", sqlite_connect.into_database_error().unwrap().message());
             exit(1);
         }
-
         let mut structure = DatabaseConnector { mysql: None, sqlite: None, pgsql: None, engine: None };
         structure.sqlite = Some(DatabaseConnectorSQLite { pool: sqlite_connect.unwrap() });
         structure.engine = Some(DatabaseDrivers::sqlite3);
-
         if create_database {
             let pool = &structure.sqlite.clone().unwrap().pool;
             info!("[BOOT] Database creation triggered for SQLite.");
-
             info!("[BOOT SQLite] Setting the PRAGMA config...");
             let _ = sqlx::query("PRAGMA temp_store = memory;").execute(pool).await;
             let _ = sqlx::query("PRAGMA mmap_size = 30000000000;").execute(pool).await;
             let _ = sqlx::query("PRAGMA page_size = 32768;").execute(pool).await;
             let _ = sqlx::query("PRAGMA synchronous = full;").execute(pool).await;
-
-            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().torrents.table_name);
             match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
@@ -91,8 +86,6 @@ impl DatabaseConnectorSQLite {
                     }
                 }
             }
-
-            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().whitelist.table_name);
             match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
@@ -120,8 +113,6 @@ impl DatabaseConnectorSQLite {
                     }
                 }
             }
-
-            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().blacklist.table_name);
             match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
@@ -149,8 +140,6 @@ impl DatabaseConnectorSQLite {
                     }
                 }
             }
-
-            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().keys.table_name);
             match config.database_structure.clone().keys.bin_type_hash {
                 true => {
@@ -180,8 +169,6 @@ impl DatabaseConnectorSQLite {
                     }
                 }
             }
-
-            
             info!("[BOOT SQLite] Creating table {}", config.database_structure.clone().users.table_name);
             match config.database_structure.clone().users.id_uuid {
                 true => {
@@ -269,7 +256,6 @@ impl DatabaseConnectorSQLite {
             task::sleep(Duration::from_secs(1)).await;
             exit(0);
         }
-
         structure
     }
 

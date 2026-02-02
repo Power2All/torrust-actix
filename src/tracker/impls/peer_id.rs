@@ -98,21 +98,16 @@ impl Serialize for PeerId {
     {
         const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
         let mut buffer = [0u8; 40];
-
         for (i, &byte) in self.0.iter().enumerate() {
             buffer[i * 2] = HEX_CHARS[(byte >> 4) as usize];
             buffer[i * 2 + 1] = HEX_CHARS[(byte & 0xf) as usize];
         }
-
-        // SAFETY: We know the buffer contains only valid ASCII hex characters
         let id = unsafe { std::str::from_utf8_unchecked(&buffer) };
-
         #[derive(Serialize)]
         struct PeerIdInfo<'a> {
             id: &'a str,
             client: Option<&'a str>,
         }
-
         let obj = PeerIdInfo {
             id,
             client: self.get_client_name(),
@@ -128,21 +123,16 @@ impl std::str::FromStr for PeerId {
         if s.len() != 40 {
             return Err(binascii::ConvertError::InvalidInputLength);
         }
-
         let mut result = PeerId([0u8; 20]);
         let bytes = s.as_bytes();
-
         for i in 0..20 {
             let high = hex_char_to_nibble(bytes[i * 2]);
             let low = hex_char_to_nibble(bytes[i * 2 + 1]);
-
             if high == 0xFF || low == 0xFF {
                 return Err(binascii::ConvertError::InvalidInput);
             }
-
             result.0[i] = (high << 4) | low;
         }
-
         Ok(result)
     }
 }
@@ -177,28 +167,22 @@ impl<'de> serde::de::Deserialize<'de> for PeerId {
                         &"expected a 40 character long string",
                     ));
                 }
-
                 let mut res = PeerId([0u8; 20]);
                 let bytes = v.as_bytes();
-
                 for i in 0..20 {
                     let high = hex_char_to_nibble(bytes[i * 2]);
                     let low = hex_char_to_nibble(bytes[i * 2 + 1]);
-
                     if high == 0xFF || low == 0xFF {
                         return Err(serde::de::Error::invalid_value(
                             serde::de::Unexpected::Str(v),
                             &"expected a hexadecimal string",
                         ));
                     }
-
                     res.0[i] = (high << 4) | low;
                 }
-
                 Ok(res)
             }
         }
-
         des.deserialize_str(PeerIdVisitor)
     }
 }

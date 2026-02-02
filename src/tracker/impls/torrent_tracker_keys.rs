@@ -1,13 +1,13 @@
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use chrono::{TimeZone, Utc};
-use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use chrono::{TimeZone, Utc};
+use log::{error, info};
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
@@ -39,7 +39,6 @@ impl TorrentTracker {
         let mut lock = self.keys.write();
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let timeout_unix = timestamp.as_secs() as i64 + timeout;
-
         match lock.entry(hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Key, 1);
@@ -88,7 +87,6 @@ impl TorrentTracker {
                 .single()
                 .map(SystemTime::from)
                 .unwrap_or(UNIX_EPOCH);
-
             key_time > SystemTime::now()
         })
     }
@@ -106,7 +104,6 @@ impl TorrentTracker {
     {
         let now = SystemTime::now();
         let mut keys_to_remove = Vec::new();
-
         {
             let lock = self.keys.read_recursive();
             for (&hash, &key_time) in lock.iter() {
@@ -114,13 +111,11 @@ impl TorrentTracker {
                     .single()
                     .map(SystemTime::from)
                     .unwrap_or(UNIX_EPOCH);
-
                 if time <= now {
                     keys_to_remove.push(hash);
                 }
             }
         }
-
         for hash in keys_to_remove {
             self.remove_key(hash);
         }

@@ -8,7 +8,5 @@ pub enum RequestType {
         endpoint: String,
         method: String,
     },
-    
-    
     UdpPacket,
 }

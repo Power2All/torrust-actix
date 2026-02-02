@@ -1,7 +1,7 @@
-use std::sync::atomic::Ordering;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::stats::structs::stats::Stats;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use std::sync::atomic::Ordering;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
@@ -52,7 +52,6 @@ impl TorrentTracker {
             udp6_announces_handled: self.stats.udp6_announces_handled.load(Ordering::Relaxed),
             udp6_scrapes_handled: self.stats.udp6_scrapes_handled.load(Ordering::Relaxed),
             udp_queue_len: self.stats.udp_queue_len.load(Ordering::Relaxed),
-            
             ws_connections_active: self.stats.ws_connections_active.load(Ordering::Relaxed),
             ws_requests_sent: self.stats.ws_requests_sent.load(Ordering::Relaxed),
             ws_requests_received: self.stats.ws_requests_received.load(Ordering::Relaxed),
@@ -358,7 +357,6 @@ impl TorrentTracker {
             StatsEvent::UdpQueueLen => {
                 self.stats.udp_queue_len.store(value, Ordering::Release);
             }
-            
             StatsEvent::WsConnectionsActive => {
                 self.stats.ws_connections_active.store(value, Ordering::Release);
             }

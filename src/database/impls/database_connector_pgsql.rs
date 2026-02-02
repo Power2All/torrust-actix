@@ -5,18 +5,18 @@ use crate::database::structs::database_connector_pgsql::DatabaseConnectorPgSQL;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
+use crate::tracker::structs::torrent_entry::AHashMap;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use async_std::task;
-use std::collections::BTreeMap;
 use futures_util::TryStreamExt;
 use log::{error, info};
 use sha1::{Digest, Sha1};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres, Row, Transaction};
-use crate::tracker::structs::torrent_entry::AHashMap;
+use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::process::exit;
 use std::str::FromStr;
@@ -42,16 +42,12 @@ impl DatabaseConnectorPgSQL {
             error!("[PgSQL] Message: {:#?}", pgsql_connect.into_database_error().unwrap().message());
             exit(1);
         }
-
         let mut structure = DatabaseConnector { mysql: None, sqlite: None, pgsql: None, engine: None };
         structure.pgsql = Some(DatabaseConnectorPgSQL { pool: pgsql_connect.unwrap() });
         structure.engine = Some(DatabaseDrivers::pgsql);
-
         if create_database {
             let pool = &structure.pgsql.clone().unwrap().pool;
             info!("[BOOT] Database creation triggered for PgSQL.");
-
-            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().torrents.table_name);
             match config.database_structure.clone().torrents.bin_type_infohash {
                 true => {
@@ -87,8 +83,6 @@ impl DatabaseConnectorPgSQL {
                     }
                 }
             }
-
-            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().whitelist.table_name);
             match config.database_structure.clone().whitelist.bin_type_infohash {
                 true => {
@@ -118,8 +112,6 @@ impl DatabaseConnectorPgSQL {
                     }
                 }
             }
-
-            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().blacklist.table_name);
             match config.database_structure.clone().blacklist.bin_type_infohash {
                 true => {
@@ -149,8 +141,6 @@ impl DatabaseConnectorPgSQL {
                     }
                 }
             }
-
-            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().keys.table_name);
             match config.database_structure.clone().keys.bin_type_hash {
                 true => {
@@ -182,8 +172,6 @@ impl DatabaseConnectorPgSQL {
                     }
                 }
             }
-
-            
             info!("[BOOT PgSQL] Creating table {}", config.database_structure.clone().users.table_name);
             match config.database_structure.clone().users.id_uuid {
                 true => {
@@ -275,7 +263,6 @@ impl DatabaseConnectorPgSQL {
             task::sleep(Duration::from_secs(1)).await;
             exit(0);
         }
-
         structure
     }
 

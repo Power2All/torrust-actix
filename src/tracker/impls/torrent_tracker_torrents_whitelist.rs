@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use log::{error, info};
+use std::sync::Arc;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
@@ -35,7 +35,6 @@ impl TorrentTracker {
     pub fn add_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let mut lock = self.torrents_whitelist.write();
-        
         if lock.insert(info_hash) {
             self.update_stats(StatsEvent::Whitelist, 1);
             return true;
@@ -54,7 +53,6 @@ impl TorrentTracker {
     #[inline]
     pub fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
-        
         let lock = self.torrents_whitelist.read();
         lock.contains(&info_hash)
     }
@@ -64,7 +62,6 @@ impl TorrentTracker {
     pub fn remove_whitelist(&self, info_hash: InfoHash) -> bool
     {
         let mut lock = self.torrents_whitelist.write();
-        
         if lock.remove(&info_hash) {
             self.update_stats(StatsEvent::Whitelist, -1);
             true

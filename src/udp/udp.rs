@@ -1,11 +1,11 @@
+use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::udp::structs::udp_server::UdpServer;
+use log::{error, info};
 use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
-use log::{error, info};
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
-use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use crate::udp::structs::udp_server::UdpServer;
 
 pub const PROTOCOL_IDENTIFIER: i64 = 4_497_486_125_440;
 pub const MAX_SCRAPE_TORRENTS: u8 = 74;
@@ -18,7 +18,6 @@ pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: u
         error!("Could not listen to the UDP port: {e}");
         exit(1);
     });
-
     info!("[UDP] Starting a server listener on {addr} with {udp_threads} UDP threads and {worker_threads} worker threads");
     tokio_udp.spawn(async move {
         udp_server.start(rx).await;

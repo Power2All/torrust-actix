@@ -1,20 +1,3 @@
-use std::fs::File;
-use std::future::Future;
-use std::io::BufReader;
-use std::net::{IpAddr, SocketAddr};
-use std::process::exit;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use actix_cors::Cors;
-use actix_web::{App, http, HttpRequest, HttpResponse, HttpServer, web};
-use actix_web::dev::ServerHandle;
-use actix_web::http::header::ContentType;
-use actix_web::web::{BytesMut, Data, ServiceConfig};
-use futures_util::StreamExt;
-use log::{error, info};
-use serde_json::json;
-use utoipa_swagger_ui::{Config, SwaggerUi};
 use crate::api::api_blacklists::{api_service_blacklist_delete, api_service_blacklist_get, api_service_blacklist_post, api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
 use crate::api::api_keys::{api_service_key_delete, api_service_key_get, api_service_key_post, api_service_keys_delete, api_service_keys_get, api_service_keys_post};
 use crate::api::api_stats::{api_service_prom_get, api_service_stats_get};
@@ -27,6 +10,23 @@ use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use actix_cors::Cors;
+use actix_web::dev::ServerHandle;
+use actix_web::http::header::ContentType;
+use actix_web::web::{BytesMut, Data, ServiceConfig};
+use actix_web::{http, web, App, HttpRequest, HttpResponse, HttpServer};
+use futures_util::StreamExt;
+use log::{error, info};
+use serde_json::json;
+use std::fs::File;
+use std::future::Future;
+use std::io::BufReader;
+use std::net::{IpAddr, SocketAddr};
+use std::process::exit;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+use utoipa_swagger_ui::{Config, SwaggerUi};
 
 #[tracing::instrument(level = "debug")]
 pub fn api_service_cors() -> Cors
@@ -45,10 +45,8 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
     Box::new(move |cfg: &mut ServiceConfig| {
         cfg.app_data(Data::new(Arc::clone(&data)));
         cfg.default_service(web::route().to(api_service_not_found));
-
         cfg.service(web::resource("stats").route(web::get().to(api_service_stats_get)));
         cfg.service(web::resource("metrics").route(web::get().to(api_service_prom_get)));
-
         cfg.service(web::resource("api/torrent/{info_hash}")
             .route(web::get().to(api_service_torrent_get))
             .route(web::delete().to(api_service_torrent_delete))
@@ -59,7 +57,6 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::post().to(api_service_torrents_post))
             .route(web::delete().to(api_service_torrents_delete))
         );
-
         cfg.service(web::resource("api/whitelist/{info_hash}")
             .route(web::get().to(api_service_whitelist_get))
             .route(web::post().to(api_service_whitelist_post))
@@ -70,7 +67,6 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::post().to(api_service_whitelists_post))
             .route(web::delete().to(api_service_whitelists_delete))
         );
-
         cfg.service(web::resource("api/blacklist/{info_hash}")
             .route(web::get().to(api_service_blacklist_get))
             .route(web::post().to(api_service_blacklist_post))
@@ -81,7 +77,6 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::post().to(api_service_blacklists_post))
             .route(web::delete().to(api_service_blacklists_delete))
         );
-
         cfg.service(web::resource("api/key/{key_hash}")
             .route(web::get().to(api_service_key_get))
             .route(web::delete().to(api_service_key_delete))
@@ -94,7 +89,6 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::post().to(api_service_keys_post))
             .route(web::delete().to(api_service_keys_delete))
         );
-
         cfg.service(web::resource("api/user/{id}")
             .route(web::get().to(api_service_user_get))
             .route(web::delete().to(api_service_user_delete))
@@ -107,7 +101,6 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::post().to(api_service_users_post))
             .route(web::delete().to(api_service_users_delete))
         );
-
         if data.torrent_tracker.config.tracker_config.swagger {
             cfg.service(SwaggerUi::new("/swagger-ui/{_:.*}").config(Config::new(["/api/openapi.json"])));
             cfg.service(web::resource("/api/openapi.json")
@@ -128,49 +121,40 @@ pub async fn api_service(
     let request_timeout = api_server_object.request_timeout;
     let disconnect_timeout = api_server_object.disconnect_timeout;
     let worker_threads = api_server_object.threads as usize;
-
     let api_service_data = Arc::new(ApiServiceData {
         torrent_tracker: Arc::clone(&data),
         api_trackers_config: Arc::new(api_server_object.clone()),
     });
-
     let app_factory = move || {
         let cors = api_service_cors();
         let sentry_wrap = sentry_actix::Sentry::new();
-
         App::new()
             .wrap(cors)
             .wrap(sentry_wrap)
             .configure(api_service_routes(Arc::clone(&api_service_data)))
     };
-
     if api_server_object.ssl {
         info!("[APIS] Starting server listener with SSL on {addr}");
         if api_server_object.ssl_key.is_empty() || api_server_object.ssl_cert.is_empty() {
             error!("[APIS] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
-
         let key_file = &mut BufReader::new(File::open(api_server_object.ssl_key.clone()).unwrap_or_else(|data| {
             sentry::capture_error(&data);
             panic!("[APIS] SSL key unreadable: {data}");
         }));
-
         let certs_file = &mut BufReader::new(File::open(api_server_object.ssl_cert.clone()).unwrap_or_else(|data| {
             sentry::capture_error(&data);
             panic!("[APIS] SSL cert unreadable: {data}");
         }));
-
         let tls_certs = rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>().unwrap_or_else(|data| {
             sentry::capture_error(&data);
             panic!("[APIS] SSL cert couldn't be extracted: {data}");
         });
-
         let tls_key = rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap().unwrap_or_else(|data| {
             sentry::capture_error(&data);
             panic!("[APIS] SSL key couldn't be extracted: {data}");
         });
-
         let tls_config = rustls::ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key))
@@ -178,7 +162,6 @@ pub async fn api_service(
                 sentry::capture_error(&data);
                 panic!("[APIS] SSL config couldn't be created: {data}");
             });
-
         let server = HttpServer::new(app_factory)
             .keep_alive(Duration::from_secs(keep_alive))
             .client_request_timeout(Duration::from_secs(request_timeout))
@@ -188,12 +171,9 @@ pub async fn api_service(
             .unwrap()
             .disable_signals()
             .run();
-
         return (server.handle(), server);
     }
-
     info!("[API] Starting server listener on {addr}");
-
     let server = HttpServer::new(app_factory)
         .keep_alive(Duration::from_secs(keep_alive))
         .client_request_timeout(Duration::from_secs(request_timeout))
@@ -203,7 +183,6 @@ pub async fn api_service(
         .unwrap()
         .disable_signals()
         .run();
-
     (server.handle(), server)
 }
 
@@ -229,13 +208,11 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
             })));
         }
     };
-
     if token_code != config.tracker_config.api_key {
         return Some(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
             "status": "invalid token"
         })));
     }
-
     None
 }
 
@@ -243,7 +220,6 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
 pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
-
     request.headers()
         .get(&data.real_ip)
         .and_then(|header| header.to_str().ok())
@@ -274,7 +250,6 @@ pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServi
     if let Some(error_return) = api_validation(&request, &data).await {
         return error_return;
     }
-
     HttpResponse::NotFound().content_type(ContentType::json()).json(json!({
         "status": "not found"
     }))
@@ -326,7 +301,6 @@ pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, Custo
         if body.len() + chunk.len() > 1_048_576 {
             return Err(CustomError::new("chunk size exceeded"));
         }
-
         body.extend_from_slice(&chunk);
     }
     Ok(body)
