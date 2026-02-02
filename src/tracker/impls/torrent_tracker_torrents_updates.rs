@@ -134,11 +134,10 @@ impl TorrentTracker {
                         }
                     }
                     for (hash, (_, action)) in &torrents_to_save {
-                        if *action == UpdatesAction::Remove {
-                            if let Err(e) = cache.delete_torrent(hash).await {
+                        if *action == UpdatesAction::Remove
+                            && let Err(e) = cache.delete_torrent(hash).await {
                                 warn!("[Cache] Failed to delete torrent {}: {}", hash, e);
                             }
-                        }
                     }
                 }
                 let mut lock = self.torrents_updates.write();

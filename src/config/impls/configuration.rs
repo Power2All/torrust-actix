@@ -338,27 +338,30 @@ impl Configuration {
             if let Some(ref mut cache) = config.cache {
                 cache.engine = engine;
             } else {
-                let mut cache_config = CacheConfig::default();
-                cache_config.engine = engine;
-                config.cache = Some(cache_config);
+                config.cache = Some(CacheConfig {
+                    engine,
+                    ..Default::default()
+                });
             }
         }
         if let Ok(value) = env::var("CACHE__ADDRESS") {
             if let Some(ref mut cache) = config.cache {
                 cache.address = value;
             } else {
-                let mut cache_config = CacheConfig::default();
-                cache_config.address = value;
-                config.cache = Some(cache_config);
+                config.cache = Some(CacheConfig {
+                    address: value,
+                    ..Default::default()
+                });
             }
         }
         if let Ok(value) = env::var("CACHE__PREFIX") {
             if let Some(ref mut cache) = config.cache {
                 cache.prefix = value;
             } else {
-                let mut cache_config = CacheConfig::default();
-                cache_config.prefix = value;
-                config.cache = Some(cache_config);
+                config.cache = Some(CacheConfig {
+                    prefix: value,
+                    ..Default::default()
+                });
             }
         }
         if let Ok(value) = env::var("CACHE__TTL") {
@@ -366,9 +369,10 @@ impl Configuration {
             if let Some(ref mut cache) = config.cache {
                 cache.ttl = ttl;
             } else {
-                let mut cache_config = CacheConfig::default();
-                cache_config.ttl = ttl;
-                config.cache = Some(cache_config);
+                config.cache = Some(CacheConfig {
+                    ttl,
+                    ..Default::default()
+                });
             }
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH") {
@@ -720,7 +724,7 @@ impl Configuration {
     pub fn validate_cache(config: &Configuration) {
         if let Some(ref cache) = config.cache {
             if cache.enabled {
-                println!("[VALIDATE] Cache enabled: {}", cache.engine.to_string());
+                println!("[VALIDATE] Cache enabled: {}", cache.engine);
                 Self::validate_socket_address("cache.address", &cache.address);
                 println!("[VALIDATE] Cache prefix: {}", cache.prefix);
                 println!("[VALIDATE] Cache TTL: {} seconds", cache.ttl);

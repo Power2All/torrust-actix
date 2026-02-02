@@ -48,13 +48,12 @@ impl CacheBackend for CacheConnectorRedis {
         conn.hset_multiple::<_, _, _, ()>(&key, &[("s", seeds), ("p", peers)])
             .await
             .map_err(CacheError::RedisError)?;
-        if let Some(ttl_secs) = ttl {
-            if ttl_secs > 0 {
+        if let Some(ttl_secs) = ttl
+            && ttl_secs > 0 {
                 conn.expire::<_, ()>(&key, ttl_secs as i64)
                     .await
                     .map_err(CacheError::RedisError)?;
             }
-        }
         debug!("[Redis] Set torrent {} seeds={} peers={}", info_hash, seeds, peers);
         Ok(())
     }
@@ -102,11 +101,10 @@ impl CacheBackend for CacheConnectorRedis {
         for (info_hash, seeds, peers) in data {
             let key = self.torrent_key(info_hash);
             pipe.hset_multiple(&key, &[("s", *seeds), ("p", *peers)]);
-            if let Some(ttl_secs) = ttl {
-                if ttl_secs > 0 {
+            if let Some(ttl_secs) = ttl
+                && ttl_secs > 0 {
                     pipe.expire(&key, ttl_secs as i64);
                 }
-            }
         }
         pipe.query_async::<()>(&mut conn)
             .await
