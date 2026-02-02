@@ -1,14 +1,14 @@
-use std::mem;
-use std::net::SocketAddr;
-use std::process::exit;
-use std::sync::Arc;
-use std::time::Duration;
 use async_std::task;
 use clap::Parser;
 use futures_util::future::try_join_all;
 use log::{error, info, warn};
 use parking_lot::deadlock;
 use sentry::ClientInitGuard;
+use std::mem;
+use std::net::SocketAddr;
+use std::process::exit;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
@@ -16,8 +16,8 @@ use torrust_actix::common::common::{setup_logging, udp_check_host_and_port_used}
 use torrust_actix::config::enums::cluster_mode::ClusterMode;
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
-use torrust_actix::structs::Cli;
 use torrust_actix::stats::enums::stats_event::StatsEvent;
+use torrust_actix::structs::Cli;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
 use torrust_actix::websocket::master::server::websocket_master_service;
@@ -27,14 +27,11 @@ use torrust_actix::websocket::slave::client::start_slave_client;
 fn main() -> std::io::Result<()>
 {
     let args = Cli::parse();
-
     let config = match Configuration::load_from_file(args.create_config) {
         Ok(config) => Arc::new(config),
         Err(_) => exit(101)
     };
-
     setup_logging(&config);
-
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
     #[warn(unused_variables)]
@@ -474,7 +471,6 @@ fn main() -> std::io::Result<()>
                                         }
                                     }));
                                 }
-
                                 
                                 for task in tasks {
                                     let _ = task.await;
@@ -514,7 +510,6 @@ fn main() -> std::io::Result<()>
 
                         info!("Saving final data to database...");
 
-                        
                         let mut tasks = vec![
                             tokio::spawn({
                                 let tracker_clone = tracker.clone();

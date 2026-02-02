@@ -3,7 +3,6 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
-    
     #[arg(long)]
     pub create_config: bool,
     
@@ -12,7 +11,6 @@ pub struct Cli {
     
     #[arg(long)]
     pub create_selfsigned: bool,
-
     
     #[arg(long, requires("create_selfsigned"), default_value = "localhost")]
     pub selfsigned_domain: String,
@@ -23,7 +21,6 @@ pub struct Cli {
     #[arg(long, requires("create_selfsigned"), default_value = "cert.pem")]
     pub selfsigned_certfile: String,
 
-    
     #[arg(long)]
     pub export: bool,
     
@@ -42,7 +39,6 @@ pub struct Cli {
     #[arg(long, requires("export"), default_value = "users.json")]
     pub export_file_users: String,
 
-    
     #[arg(long)]
     pub import: bool,
     
