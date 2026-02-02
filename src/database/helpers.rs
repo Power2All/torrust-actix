@@ -240,11 +240,11 @@ mod tests {
         );
         assert_eq!(
             format_hash_value(DatabaseDrivers::mysql, hash, true),
-            "X'0123456789abcdef0123456789abcdef01234567'"
+            "UNHEX('0123456789abcdef0123456789abcdef01234567')"
         );
         assert_eq!(
             format_hash_value(DatabaseDrivers::pgsql, hash, true),
-            "'\\x0123456789abcdef0123456789abcdef01234567'::bytea"
+            "decode('0123456789abcdef0123456789abcdef01234567', 'hex')"
         );
     }
 
