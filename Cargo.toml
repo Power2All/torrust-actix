@@ -1,6 +1,6 @@
 [package]
 name = "torrust-actix"
-version = "4.0.16"
+version = "4.1.0"
 edition = "2024"
 license = "AGPL-3.0"
 authors = [
@@ -10,7 +10,6 @@ authors = [
 description = "A rich, fast and efficient Bittorrent Tracker."
 
 [profile.release]
-# Use opt-level 3 for maximum speed (was 'z' for size)
 opt-level = 3
 debug = false
 debug-assertions = false
@@ -22,13 +21,18 @@ codegen-units = 1
 rpath = false
 strip = "debuginfo"
 
-# Optimize dependencies in release mode
 [profile.release.package."*"]
 opt-level = 3
 
 [dependencies]
+actix = "^0.13"
 actix-cors = "^0.7"
 actix-web = { version = "^4", features = ["rustls-0_23"] }
+actix-web-actors = "^4"
+tokio-tungstenite = { version = "^0.28", features = ["rustls-tls-webpki-roots"] }
+rmp-serde = "^1.3"
+once_cell = "^1.21"
+uuid = { version = "^1.16", features = ["v4"] }
 async-std = "^1"
 binascii = "^0.1"
 bip_bencode = "^0.4"
@@ -53,6 +57,9 @@ serde_millis = "^0.1"
 sha1 = "^0.10"
 socket2 = "^0.6"
 sqlx = { version = "^0.8", features = ["mysql", "postgres", "sqlite", "runtime-tokio-rustls"] }
+async-trait = "^0.1"
+redis = { version = "^1.0", features = ["tokio-comp", "connection-manager"] }
+memcache = { version = "^0.19", default-features = false }
 thiserror = "^2.0"
 tokio = { version = "^1.49", features = ["full"] }
 tokio-shutdown = "^0.1"
@@ -61,9 +68,7 @@ tracing = "^0.1"
 utoipa-swagger-ui = { version = "^9", features = ["actix-web"] }
 lazy_static = "^1.5"
 crossbeam = "^0.8"
-# SmallVec for query parsing optimization - avoids heap allocation for small vectors
 smallvec = { version = "^1.13", features = ["union", "const_generics"] }
-# Fast hasher for HashMap - faster than default SipHash for short keys
 ahash = "^0.8"
 
 [dev-dependencies]

@@ -29,11 +29,9 @@ impl TorrentTracker {
                 .ok_or_else(|| CustomError::new(&format!("missing {field}")))?
                 .first()
                 .ok_or_else(|| CustomError::new(&format!("no {field} given")))?;
-
             if let Some(len) = expected_len && value.len() != len {
                 return Err(CustomError::new(&format!("invalid {field} size")));
             }
-
             Ok(value.as_slice())
         }
 
@@ -46,27 +44,20 @@ impl TorrentTracker {
                 .map_err(|_| CustomError::new(&format!("missing or invalid {field}")))
         }
 
-        // Fast path: validate required parameters first
         let info_hash_bytes = get_required_bytes(&query, "info_hash", Some(20))?;
         let peer_id_bytes = get_required_bytes(&query, "peer_id", Some(20))?;
         let port_integer = parse_integer::<u16>(&query, "port")?;
-
-        // Parse info_hash with optimized conversion
         let info_hash = InfoHash::from(info_hash_bytes);
         let peer_id = PeerId::from(peer_id_bytes);
-
-        // Parse optional parameters with defaults
         let uploaded_integer = parse_integer::<u64>(&query, "uploaded").unwrap_or(0);
         let downloaded_integer = parse_integer::<u64>(&query, "downloaded").unwrap_or(0);
         let left_integer = parse_integer::<u64>(&query, "left").unwrap_or(0);
-
         let compact_bool = query.get("compact")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .and_then(|s| s.parse::<u8>().ok())
             .map(|v| v == 1)
             .unwrap_or(false);
-
         let event_integer = query.get("event")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
@@ -76,19 +67,15 @@ impl TorrentTracker {
                 _ => AnnounceEvent::Started,
             })
             .unwrap_or(AnnounceEvent::Started);
-
         let no_peer_id_bool = query.contains_key("no_peer_id");
-
         let numwant_integer = query.get("numwant")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .and_then(|s| s.parse::<u64>().ok())
             .map(|v| if v == 0 || v > 72 { 72 } else { v })
             .unwrap_or(72);
-
         let elapsed = now.elapsed();
         debug!("[PERF] Announce validation took: {:?}", elapsed);
-
         Ok(AnnounceQueryRequest {
             info_hash,
             peer_id,
@@ -108,7 +95,6 @@ impl TorrentTracker {
     pub async fn handle_announce(&self, data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
     {
         let now = std::time::Instant::now();
-
         let mut torrent_peer = TorrentPeer {
             peer_id: announce_query.peer_id,
             peer_addr: SocketAddr::new(announce_query.remote_addr, announce_query.port),
@@ -118,22 +104,18 @@ impl TorrentTracker {
             left: NumberOfBytes(announce_query.left as i64),
             event: AnnounceEvent::None,
         };
-
         let is_persistent = data.config.database.persistent;
         let users_enabled = data.config.tracker_config.users_enabled;
-
         match announce_query.event {
             AnnounceEvent::Started | AnnounceEvent::None => {
                 torrent_peer.event = AnnounceEvent::Started;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
-
                 let torrent_entry = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer.clone(),
                     false
                 );
-
                 if is_persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
@@ -141,7 +123,6 @@ impl TorrentTracker {
                         UpdatesAction::Add
                     );
                 }
-
                 if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
                     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                     user.updated = now;
@@ -151,10 +132,8 @@ impl TorrentTracker {
                         data.add_user_update(user_id, user, UpdatesAction::Add);
                     }
                 }
-
                 let elapsed = now.elapsed();
                 debug!("[PERF] Announce Started handling took: {elapsed:?}");
-
                 Ok((torrent_peer, TorrentEntry {
                     seeds: torrent_entry.1.seeds,
                     peers: torrent_entry.1.peers,
@@ -165,7 +144,6 @@ impl TorrentTracker {
             AnnounceEvent::Stopped => {
                 torrent_peer.event = AnnounceEvent::Stopped;
                 debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
-
                 let torrent_entry = match data.remove_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
@@ -187,7 +165,6 @@ impl TorrentTracker {
                     }
                     _ => TorrentEntry::new()
                 };
-
                 if is_persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
@@ -195,23 +172,19 @@ impl TorrentTracker {
                         UpdatesAction::Add
                     );
                 }
-
                 let elapsed = now.elapsed();
                 debug!("[PERF] Announce Stopped handling took: {elapsed:?}");
-
                 Ok((torrent_peer, torrent_entry))
             }
             AnnounceEvent::Completed => {
                 torrent_peer.event = AnnounceEvent::Completed;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
-
                 let torrent_entry = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer.clone(),
                     true
                 );
-
                 if is_persistent {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
@@ -219,7 +192,6 @@ impl TorrentTracker {
                         UpdatesAction::Add
                     );
                 }
-
                 if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
                     user.completed += 1;
                     user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
@@ -228,10 +200,8 @@ impl TorrentTracker {
                         data.add_user_update(user_id, user, UpdatesAction::Add);
                     }
                 }
-
                 let elapsed = now.elapsed();
                 debug!("[PERF] Announce Completed handling took: {elapsed:?}");
-
                 Ok((torrent_peer, torrent_entry.1))
             }
         }
@@ -241,27 +211,21 @@ impl TorrentTracker {
     pub async fn validate_scrape(&self, query: HashMap<String, QueryValues>) -> Result<ScrapeQueryRequest, CustomError>
     {
         let now = std::time::Instant::now();
-
         match query.get("info_hash") {
             None => Err(CustomError::new("missing info_hash")),
             Some(result) => {
                 if result.is_empty() {
                     return Err(CustomError::new("no info_hash given"));
                 }
-
-                // Optimized batch parsing of info hashes
                 let mut info_hash_vec = Vec::with_capacity(result.len());
-
                 for hash in result.iter() {
                     if hash.len() != 20 {
                         return Err(CustomError::new("an invalid info_hash was given"));
                     }
                     info_hash_vec.push(InfoHash::from(hash.as_slice()));
                 }
-
                 let elapsed = now.elapsed();
                 debug!("[PERF] Scrape validation took: {elapsed:?}");
-
                 Ok(ScrapeQueryRequest { info_hash: info_hash_vec })
             }
         }
@@ -271,17 +235,14 @@ impl TorrentTracker {
     pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, TorrentEntry>
     {
         let now = std::time::Instant::now();
-
         let result = scrape_query.info_hash.iter()
             .map(|&info_hash| {
                 let entry = data.get_torrent(info_hash).unwrap_or_default();
                 (info_hash, entry)
             })
             .collect();
-
         let elapsed = now.elapsed();
         debug!("[PERF] Scrape handling took: {:?}", elapsed);
-
         result
     }
 }

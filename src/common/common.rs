@@ -16,21 +16,16 @@ pub type QueryValues = SmallVec<[Vec<u8>; 1]>;
 
 #[inline]
 pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>, CustomError> {
-    
     let mut queries: HashMap<String, QueryValues> = HashMap::with_capacity(12);
-
     if let Some(result) = query {
         for query_item in result.split('&') {
             if query_item.is_empty() {
                 continue;
             }
-
             if let Some(equal_pos) = query_item.find('=') {
                 let (key_part, value_part) = query_item.split_at(equal_pos);
                 let key_name_raw = key_part;
                 let value_data_raw = &value_part[1..];
-
-                
                 let key_name = if key_name_raw.contains('%') || key_name_raw.contains('+') {
                     percent_encoding::percent_decode_str(key_name_raw)
                         .decode_utf8_lossy()
@@ -38,13 +33,10 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>
                 } else {
                     key_name_raw.to_ascii_lowercase()
                 };
-
                 if key_name.is_empty() {
                     continue;
                 }
-
                 let value_data = percent_encoding::percent_decode_str(value_data_raw).collect::<Vec<u8>>();
-
                 queries
                     .entry(key_name)
                     .or_default()
@@ -57,11 +49,9 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>
                 } else {
                     query_item.to_ascii_lowercase()
                 };
-
                 if key_name.is_empty() {
                     continue;
                 }
-
                 queries
                     .entry(key_name)
                     .or_default()
@@ -69,7 +59,6 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>
             }
         }
     }
-
     Ok(queries)
 }
 
@@ -152,7 +141,6 @@ pub fn setup_logging(config: &Configuration) {
         .chain(std::io::stdout())
         .apply()
         .unwrap_or_else(|_| panic!("Failed to initialize logging."));
-
     info!("logging initialized.");
 }
 

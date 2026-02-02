@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicBool, AtomicI64};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, AtomicI64};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StatsAtomics {
@@ -47,4 +47,13 @@ pub struct StatsAtomics {
     pub udp6_announces_handled: AtomicI64,
     pub udp6_scrapes_handled: AtomicI64,
     pub udp_queue_len: AtomicI64,
+    pub ws_connections_active: AtomicI64,
+    pub ws_requests_sent: AtomicI64,
+    pub ws_requests_received: AtomicI64,
+    pub ws_responses_sent: AtomicI64,
+    pub ws_responses_received: AtomicI64,
+    pub ws_timeouts: AtomicI64,
+    pub ws_reconnects: AtomicI64,
+    pub ws_auth_success: AtomicI64,
+    pub ws_auth_failed: AtomicI64,
 }

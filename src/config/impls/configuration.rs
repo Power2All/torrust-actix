@@ -1,11 +1,10 @@
-use std::fs::File;
-use std::io::Write;
-use std::sync::Arc;
-use std::thread::available_parallelism;
-use regex::Regex;
+use crate::cache::enums::cache_engine::CacheEngine;
 use crate::common::structs::custom_error::CustomError;
+use crate::config::enums::cluster_encoding::ClusterEncoding;
+use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::enums::configuration_error::ConfigurationError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
+use crate::config::structs::cache_config::CacheConfig;
 use crate::config::structs::configuration::Configuration;
 use crate::config::structs::database_config::DatabaseConfig;
 use crate::config::structs::database_structure_config::DatabaseStructureConfig;
@@ -19,7 +18,12 @@ use crate::config::structs::sentry_config::SentryConfig;
 use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
+use regex::Regex;
 use std::env;
+use std::fs::File;
+use std::io::Write;
+use std::sync::Arc;
+use std::thread::available_parallelism;
 
 impl Configuration {
     #[tracing::instrument(level = "debug")]
@@ -41,7 +45,22 @@ impl Configuration {
                 peers_cleanup_threads: 256,
                 total_downloads: 0,
                 swagger: false,
-                prometheus_id: String::from("torrust_actix")
+                prometheus_id: String::from("torrust_actix"),
+                cluster: ClusterMode::standalone,
+                cluster_encoding: ClusterEncoding::binary,
+                cluster_token: String::from(""),
+                cluster_bind_address: String::from("0.0.0.0:8888"),
+                cluster_master_address: String::from(""),
+                cluster_keep_alive: 60,
+                cluster_request_timeout: 15,
+                cluster_disconnect_timeout: 15,
+                cluster_reconnect_interval: 5,
+                cluster_max_connections: 25000,
+                cluster_threads: available_parallelism().unwrap().get() as u64,
+                cluster_ssl: false,
+                cluster_ssl_key: String::from(""),
+                cluster_ssl_cert: String::from(""),
+                cluster_tls_connection_rate: 256,
             },
             sentry_config: SentryConfig {
                 enabled: false,
@@ -63,6 +82,7 @@ impl Configuration {
                 update_completed: true,
                 update_peers: false,
             },
+            cache: None,
             database_structure: DatabaseStructureConfig {
                 torrents: DatabaseStructureConfigTorrents {
                     table_name: String::from("torrents"),
@@ -127,7 +147,8 @@ impl Configuration {
                     receive_buffer_size: 134217728,
                     send_buffer_size: 67108864,
                     reuse_address: true,
-                    use_payload_ip: false
+                    use_payload_ip: false,
+                    simple_proxy_protocol: false,
                 }
             ),
             api_server: vec!(
@@ -151,11 +172,8 @@ impl Configuration {
     
     #[tracing::instrument(level = "debug")]
     pub fn env_overrides(config: &mut Configuration) -> &mut Configuration {
-        
         if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
         if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = value.parse::<u64>().unwrap_or(60u64); }
-        
-        
         if let Ok(value) = env::var("TRACKER__API_KEY") {
             config.tracker_config.api_key = value
         }
@@ -195,8 +213,61 @@ impl Configuration {
         if let Ok(value) = env::var("TRACKER__PROMETHEUS_ID") {
             config.tracker_config.prometheus_id = value;
         }
-        
-        
+        if let Ok(value) = env::var("TRACKER__CLUSTER") {
+            config.tracker_config.cluster = match value.as_str() {
+                "standalone" => ClusterMode::standalone,
+                "master" => ClusterMode::master,
+                "slave" => ClusterMode::slave,
+                _ => ClusterMode::standalone
+            };
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_ENCODING") {
+            config.tracker_config.cluster_encoding = match value.as_str() {
+                "binary" => ClusterEncoding::binary,
+                "json" => ClusterEncoding::json,
+                "msgpack" => ClusterEncoding::msgpack,
+                _ => ClusterEncoding::binary
+            };
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_TOKEN") {
+            config.tracker_config.cluster_token = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_BIND_ADDRESS") {
+            config.tracker_config.cluster_bind_address = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_MASTER_ADDRESS") {
+            config.tracker_config.cluster_master_address = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_KEEP_ALIVE") {
+            config.tracker_config.cluster_keep_alive = value.parse::<u64>().unwrap_or(60u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_REQUEST_TIMEOUT") {
+            config.tracker_config.cluster_request_timeout = value.parse::<u64>().unwrap_or(15u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_DISCONNECT_TIMEOUT") {
+            config.tracker_config.cluster_disconnect_timeout = value.parse::<u64>().unwrap_or(15u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_RECONNECT_INTERVAL") {
+            config.tracker_config.cluster_reconnect_interval = value.parse::<u64>().unwrap_or(5u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_MAX_CONNECTIONS") {
+            config.tracker_config.cluster_max_connections = value.parse::<u64>().unwrap_or(25000u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_THREADS") {
+            config.tracker_config.cluster_threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL") {
+            config.tracker_config.cluster_ssl = match value.as_str() { "true" => true, "false" => false, _ => false };
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL_KEY") {
+            config.tracker_config.cluster_ssl_key = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL_CERT") {
+            config.tracker_config.cluster_ssl_cert = value;
+        }
+        if let Ok(value) = env::var("TRACKER__CLUSTER_TLS_CONNECTION_RATE") {
+            config.tracker_config.cluster_tls_connection_rate = value.parse::<u64>().unwrap_or(256u64);
+        }
         if let Ok(value) = env::var("SENTRY__ENABLED") {
             config.sentry_config.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
         }
@@ -221,8 +292,6 @@ impl Configuration {
         if let Ok(value) = env::var("SENTRY__TRACES_SAMPLE_RATE") {
             config.sentry_config.traces_sample_rate = value.parse::<f32>().unwrap_or(1.0);
         }
-        
-        
         if let Ok(value) = env::var("DATABASE__PERSISTENT") {
             config.database.persistent = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
         }
@@ -252,8 +321,61 @@ impl Configuration {
         if let Ok(value) = env::var("DATABASE__PERSISTENT_INTERVAL") {
             config.database.persistent_interval = value.parse::<u64>().unwrap_or(60u64);
         }
-
-        
+        if let Ok(value) = env::var("CACHE__ENABLED") {
+            let enabled = match value.as_str() { "true" => true, "false" => false, _ => false };
+            if let Some(ref mut cache) = config.cache {
+                cache.enabled = enabled;
+            } else if enabled {
+                config.cache = Some(CacheConfig::default());
+                config.cache.as_mut().unwrap().enabled = enabled;
+            }
+        }
+        if let Ok(value) = env::var("CACHE__ENGINE") {
+            let engine = match value.as_str() {
+                "redis" => CacheEngine::redis,
+                "memcache" => CacheEngine::memcache,
+                _ => CacheEngine::redis
+            };
+            if let Some(ref mut cache) = config.cache {
+                cache.engine = engine;
+            } else {
+                config.cache = Some(CacheConfig {
+                    engine,
+                    ..Default::default()
+                });
+            }
+        }
+        if let Ok(value) = env::var("CACHE__ADDRESS") {
+            if let Some(ref mut cache) = config.cache {
+                cache.address = value;
+            } else {
+                config.cache = Some(CacheConfig {
+                    address: value,
+                    ..Default::default()
+                });
+            }
+        }
+        if let Ok(value) = env::var("CACHE__PREFIX") {
+            if let Some(ref mut cache) = config.cache {
+                cache.prefix = value;
+            } else {
+                config.cache = Some(CacheConfig {
+                    prefix: value,
+                    ..Default::default()
+                });
+            }
+        }
+        if let Ok(value) = env::var("CACHE__TTL") {
+            let ttl = value.parse::<u64>().unwrap_or(300u64);
+            if let Some(ref mut cache) = config.cache {
+                cache.ttl = ttl;
+            } else {
+                config.cache = Some(CacheConfig {
+                    ttl,
+                    ..Default::default()
+                });
+            }
+        }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH") {
             config.database_structure.torrents.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -272,8 +394,6 @@ impl Configuration {
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_COMPLETED") {
             config.database_structure.torrents.column_completed = value;
         }
-
-        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH") {
             config.database_structure.whitelist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -283,8 +403,6 @@ impl Configuration {
         if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__COLUMN_INFOHASH") {
             config.database_structure.whitelist.column_infohash = value;
         }
-
-        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH") {
             config.database_structure.blacklist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -294,8 +412,6 @@ impl Configuration {
         if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__COLUMN_INFOHASH") {
             config.database_structure.blacklist.column_infohash = value;
         }
-
-        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH") {
             config.database_structure.keys.bin_type_hash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -308,8 +424,6 @@ impl Configuration {
         if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__COLUMN_TIMEOUT") {
             config.database_structure.keys.column_timeout = value;
         }
-
-        
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__ID_UUID") {
             config.database_structure.users.id_uuid = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -343,8 +457,6 @@ impl Configuration {
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_UPDATED") {
             config.database_structure.users.column_updated = value;
         }
-
-        
         let mut api_iteration = 0;
         loop {
             match config.api_server.get_mut(api_iteration) {
@@ -392,8 +504,6 @@ impl Configuration {
             }
             api_iteration += 1;
         }
-
-        
         let mut http_iteration = 0;
         loop {
             match config.http_server.get_mut(http_iteration) {
@@ -441,8 +551,6 @@ impl Configuration {
             }
             http_iteration += 1;
         }
-
-        
         let mut udp_iteration = 0;
         loop {
             match config.udp_server.get_mut(udp_iteration) {
@@ -471,11 +579,13 @@ impl Configuration {
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
                         block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
                     }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL")) {
+                        block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+                    }
                 }
             }
             udp_iteration += 1;
         }
-
         config
     }
 
@@ -530,13 +640,11 @@ impl Configuration {
             Err(error) => {
                 eprintln!("No config file found or corrupt.");
                 eprintln!("[ERROR] {error}");
-
                 if !create {
                     eprintln!("You can either create your own config.toml file, or start this app using '--create-config' as parameter.");
                     return Err(CustomError::new("will not create automatically config.toml file"));
                 }
                 eprintln!("Creating config file..");
-
                 let config_toml = toml::to_string(&config).unwrap();
                 let save_file = Configuration::save_file("config.toml", config_toml);
                 return match save_file {
@@ -553,7 +661,6 @@ impl Configuration {
             }
         };
         Self::env_overrides(&mut config);
-
         println!("[VALIDATE] Validating configuration...");
         Self::validate(config.clone());
         Ok(config)
@@ -564,7 +671,6 @@ impl Configuration {
         
         let check_map = vec![
             ("[TRACKER_CONFIG] prometheus_id", config.tracker_config.clone().prometheus_id, r"^[a-zA-Z0-9_]+$".to_string()),
-            
             ("[DB: torrents]", config.database_structure.clone().torrents.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: infohash", config.database_structure.clone().torrents.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: torrents] Column: seeds", config.database_structure.clone().torrents.column_seeds, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
@@ -587,10 +693,113 @@ impl Configuration {
             ("[DB: users] Column: active", config.database_structure.clone().users.column_active, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
             ("[DB: users] Column: updated", config.database_structure.clone().users.column_updated, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
         ];
-
-        
         for (name, value, regex) in check_map {
             Self::validate_value(name, value, regex);
+        }
+        for (index, api_server) in config.api_server.iter().enumerate() {
+            if api_server.enabled {
+                Self::validate_socket_address(
+                    &format!("api_server[{}].bind_address", index),
+                    &api_server.bind_address,
+                );
+            }
+        }
+        for (index, http_server) in config.http_server.iter().enumerate() {
+            if http_server.enabled {
+                Self::validate_socket_address(
+                    &format!("http_server[{}].bind_address", index),
+                    &http_server.bind_address,
+                );
+            }
+        }
+        for (index, udp_server) in config.udp_server.iter().enumerate() {
+            if udp_server.enabled {
+                Self::validate_socket_address(
+                    &format!("udp_server[{}].bind_address", index),
+                    &udp_server.bind_address,
+                );
+            }
+        }
+        Self::validate_cluster(&config);
+        Self::validate_cache(&config);
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub fn validate_cache(config: &Configuration) {
+        if let Some(ref cache) = config.cache {
+            if cache.enabled {
+                println!("[VALIDATE] Cache enabled: {}", cache.engine);
+                Self::validate_socket_address("cache.address", &cache.address);
+                println!("[VALIDATE] Cache prefix: {}", cache.prefix);
+                println!("[VALIDATE] Cache TTL: {} seconds", cache.ttl);
+            } else {
+                println!("[VALIDATE] Cache: disabled");
+            }
+        } else {
+            println!("[VALIDATE] Cache: not configured");
+        }
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub fn validate_cluster(config: &Configuration) {
+        match config.tracker_config.cluster {
+            ClusterMode::standalone => {
+                println!("[VALIDATE] Cluster mode: standalone");
+            }
+            ClusterMode::master => {
+                println!("[VALIDATE] Cluster mode: master");
+                if config.tracker_config.cluster_token.is_empty() {
+                    panic!("[VALIDATE CONFIG] Cluster mode 'master' requires 'cluster_token' to be set for authentication");
+                }
+                if !config.tracker_config.cluster_ssl {
+                    eprintln!("[VALIDATE WARNING] Cluster SSL is disabled - cluster_token will be transmitted in plaintext!");
+                }
+                if config.tracker_config.cluster_bind_address.is_empty() {
+                    panic!("[VALIDATE CONFIG] Cluster mode 'master' requires 'cluster_bind_address' to be set");
+                }
+                Self::validate_socket_address("cluster_bind_address", &config.tracker_config.cluster_bind_address);
+                if config.tracker_config.cluster_ssl {
+                    if config.tracker_config.cluster_ssl_key.is_empty() {
+                        panic!("[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_key' is not set");
+                    }
+                    if config.tracker_config.cluster_ssl_cert.is_empty() {
+                        panic!("[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_cert' is not set");
+                    }
+                }
+                println!("[VALIDATE] Cluster encoding: {:?}", config.tracker_config.cluster_encoding);
+                println!("[VALIDATE] Cluster bind address: {}", config.tracker_config.cluster_bind_address);
+                println!("[VALIDATE] Cluster SSL: {}", if config.tracker_config.cluster_ssl { "wss" } else { "ws" });
+            }
+            ClusterMode::slave => {
+                println!("[VALIDATE] Cluster mode: slave");
+                if config.tracker_config.cluster_token.is_empty() {
+                    panic!("[VALIDATE CONFIG] Cluster mode 'slave' requires 'cluster_token' to be set for authentication");
+                }
+                if config.tracker_config.cluster_master_address.is_empty() {
+                    panic!("[VALIDATE CONFIG] Cluster mode 'slave' requires 'cluster_master_address' to be set");
+                }
+                Self::validate_socket_address("cluster_master_address", &config.tracker_config.cluster_master_address);
+                println!("[VALIDATE] Cluster master address: {}", config.tracker_config.cluster_master_address);
+                println!("[VALIDATE] Cluster SSL: {}", if config.tracker_config.cluster_ssl { "wss" } else { "ws" });
+            }
+        }
+    }
+    
+    #[tracing::instrument(level = "debug")]
+    pub fn validate_socket_address(field_name: &str, address: &str) {
+        use std::net::SocketAddr;
+        match address.parse::<SocketAddr>() {
+            Ok(addr) => {
+                println!("[VALIDATE] {} is valid: {}", field_name, addr);
+            }
+            Err(e) => {
+                panic!(
+                    "[VALIDATE CONFIG] '{}' has invalid format: '{}'. \
+                    Expected IPv4 format '1.2.3.4:8888' or IPv6 format '[2a00:1768:1001:0026::0183]:80'. \
+                    Error: {}",
+                    field_name, address, e
+                );
+            }
         }
     }
 

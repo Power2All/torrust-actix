@@ -1,12 +1,12 @@
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
-use std::sync::Arc;
-use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use log::{error, info};
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
@@ -53,25 +53,21 @@ impl TorrentTracker {
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
-
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Torrents, 1);
                 self.update_stats(StatsEvent::Completed, torrent_entry.completed as i64);
                 self.update_stats(StatsEvent::Seeds, torrent_entry.seeds.len() as i64);
                 self.update_stats(StatsEvent::Peers, torrent_entry.peers.len() as i64);
-
                 let entry_clone = torrent_entry.clone();
                 v.insert(torrent_entry);
                 (entry_clone, true)
             }
             Entry::Occupied(mut o) => {
                 let current = o.get_mut();
-
                 let completed_delta = torrent_entry.completed as i64 - current.completed as i64;
                 let seeds_delta = torrent_entry.seeds.len() as i64 - current.seeds.len() as i64;
                 let peers_delta = torrent_entry.peers.len() as i64 - current.peers.len() as i64;
-
                 if completed_delta != 0 {
                     self.update_stats(StatsEvent::Completed, completed_delta);
                 }
@@ -81,12 +77,10 @@ impl TorrentTracker {
                 if peers_delta != 0 {
                     self.update_stats(StatsEvent::Peers, peers_delta);
                 }
-
                 current.completed = torrent_entry.completed;
                 current.seeds = torrent_entry.seeds;
                 current.peers = torrent_entry.peers;
                 current.updated = torrent_entry.updated;
-
                 (current.clone(), false)
             }
         }
@@ -129,10 +123,8 @@ impl TorrentTracker {
         if !self.torrents_sharding.contains_torrent(info_hash) {
             return None;
         }
-
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
-
         if let Some(data) = lock.remove(&info_hash) {
             self.update_stats(StatsEvent::Torrents, -1);
             self.update_stats(StatsEvent::Seeds, -(data.seeds.len() as i64));

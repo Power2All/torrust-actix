@@ -1,6 +1,4 @@
-
-
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
@@ -64,15 +62,12 @@ fn bench_get_peers_with_limit(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let tracker = rt.block_on(create_tracker());
     let info_hash = random_info_hash();
-
     for i in 0..1000 {
         let peer_id = random_peer_id();
         let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881, peer_id);
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }
-
     let mut group = c.benchmark_group("get_peers_with_early_exit");
-
     for limit in [10, 50, 100, 200].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(limit), limit, |b, &limit| {
             b.iter(|| {
@@ -85,19 +80,16 @@ fn bench_get_peers_with_limit(c: &mut Criterion) {
             });
         });
     }
-
     group.finish();
 }
 
 fn bench_concurrent_peer_additions(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-
     c.bench_function("concurrent_100_peers", |b| {
         b.iter(|| {
             rt.block_on(async {
                 let tracker = create_tracker().await;
                 let info_hash = random_info_hash();
-
                 let mut handles = vec![];
                 for i in 0..100 {
                     let tracker_clone = tracker.clone();
@@ -108,7 +100,6 @@ fn bench_concurrent_peer_additions(c: &mut Criterion) {
                     });
                     handles.push(handle);
                 }
-
                 for handle in handles {
                     handle.await.unwrap();
                 }
@@ -120,7 +111,6 @@ fn bench_concurrent_peer_additions(c: &mut Criterion) {
 fn bench_sharding_distribution(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let tracker = rt.block_on(create_tracker());
-
     c.bench_function("shard_access_256_torrents", |b| {
         b.iter(|| {
             for _ in 0..256 {
@@ -141,11 +131,9 @@ fn bench_udp_packet_parsing(c: &mut Criterion) {
     let mut packet = vec![];
     packet.write_u64::<BigEndian>(PROTOCOL_IDENTIFIER as u64).unwrap();
     packet.write_u32::<BigEndian>(0).unwrap();
-    packet.write_u32::<BigEndian>(12345).unwrap(); 
-
+    packet.write_u32::<BigEndian>(12345).unwrap();
     c.bench_function("udp_connect_request_parse", |b| {
         b.iter(|| {
-            
             black_box(Request::from_bytes(&packet[..], 74));
         });
     });
@@ -155,7 +143,6 @@ fn bench_peer_filtering_ipv4_vs_ipv6(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let tracker = rt.block_on(create_tracker());
     let info_hash = random_info_hash();
-
     for i in 0..500 {
         let peer_id = random_peer_id();
         let peer = if i % 2 == 0 {
@@ -165,27 +152,22 @@ fn bench_peer_filtering_ipv4_vs_ipv6(c: &mut Criterion) {
         };
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }
-
     let mut group = c.benchmark_group("peer_filtering");
-
     group.bench_function("ipv4_only", |b| {
         b.iter(|| {
             black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::IPv4, None));
         });
     });
-
     group.bench_function("ipv6_only", |b| {
         b.iter(|| {
             black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::IPv6, None));
         });
     });
-
     group.bench_function("all_types", |b| {
         b.iter(|| {
             black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::All, None));
         });
     });
-
     group.finish();
 }
 

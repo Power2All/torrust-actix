@@ -43,5 +43,14 @@ pub enum StatsEvent {
     Udp6ConnectionsHandled,
     Udp6AnnouncesHandled,
     Udp6ScrapesHandled,
-    UdpQueueLen
+    UdpQueueLen,
+    WsConnectionsActive,
+    WsRequestsSent,
+    WsRequestsReceived,
+    WsResponsesSent,
+    WsResponsesReceived,
+    WsTimeouts,
+    WsReconnects,
+    WsAuthSuccess,
+    WsAuthFailed,
 }

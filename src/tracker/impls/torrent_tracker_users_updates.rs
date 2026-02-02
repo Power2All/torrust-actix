@@ -1,13 +1,13 @@
-use std::collections::{BTreeMap, HashMap};
-use std::collections::hash_map::Entry;
-use std::sync::Arc;
-use std::time::SystemTime;
-use log::{error, info};
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use log::{error, info};
+use std::collections::hash_map::Entry;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+use std::time::SystemTime;
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]
@@ -15,7 +15,6 @@ impl TorrentTracker {
     {
         let mut lock = self.users_updates.write();
         let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
-        
         if lock.insert(timestamp, (user_id, user_entry_item.clone(), updates_action)).is_none() {
             self.update_stats(StatsEvent::UsersUpdates, 1);
             (user_entry_item, true)
@@ -58,14 +57,11 @@ impl TorrentTracker {
             let lock = self.users_updates.read_recursive();
             lock.clone()
         };
-
         if updates.is_empty() {
             return Ok(());
         }
-
         let mut mapping: HashMap<UserId, (u128, UserEntryItem, UpdatesAction)> = HashMap::with_capacity(updates.len());
         let mut timestamps_to_remove = Vec::new();
-
         for (timestamp, (user_id, user_entry_item, updates_action)) in updates {
             match mapping.entry(user_id) {
                 Entry::Occupied(mut o) => {
@@ -82,36 +78,29 @@ impl TorrentTracker {
                 }
             }
         }
-
         let mapping_len = mapping.len();
         let users_to_save: BTreeMap<UserId, (UserEntryItem, UpdatesAction)> = mapping
             .iter()
             .map(|(user_id, (_, user_entry_item, updates_action))| (*user_id, (user_entry_item.clone(), *updates_action)))
             .collect();
-
         match self.save_users(torrent_tracker, users_to_save).await {
             Ok(_) => {
                 info!("[SYNC USER UPDATES] Synced {mapping_len} users");
-                
                 let mut lock = self.users_updates.write();
                 let mut removed_count = 0i64;
-                
                 for (_, (timestamp, _, _)) in mapping {
                     if lock.remove(&timestamp).is_some() {
                         removed_count += 1;
                     }
                 }
-
                 for timestamp in timestamps_to_remove {
                     if lock.remove(&timestamp).is_some() {
                         removed_count += 1;
                     }
                 }
-                
                 if removed_count > 0 {
                     self.update_stats(StatsEvent::UsersUpdates, -removed_count);
                 }
-
                 Ok(())
             }
             Err(_) => {
