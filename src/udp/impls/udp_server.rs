@@ -38,7 +38,7 @@ use tokio::runtime::Builder;
 impl UdpServer {
     #[tracing::instrument(level = "debug")]
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool) -> tokio::io::Result<UdpServer>
     {
         let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
@@ -55,13 +55,14 @@ impl UdpServer {
             worker_threads,
             tracker,
             use_payload_ip,
+            simple_proxy_protocol,
         })
     }
 
     #[tracing::instrument(level = "debug")]
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
         let parse_pool = Arc::new(ParsePool::new(1000000, self.worker_threads));
-        parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone(), self.use_payload_ip).await;
+        parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone(), self.use_payload_ip, self.simple_proxy_protocol).await;
         let payload = parse_pool.payload.clone();
         let tracker_queue = self.tracker.clone();
         let mut rx_queue = rx.clone();

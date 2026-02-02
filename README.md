@@ -23,6 +23,7 @@ This project originated from Torrust-Tracker code originally developed by Mick v
 * [X] Sentry SaaS and self-hosted support
 * [X] Full Stand-Alone/Master/Slave cluster mode
 * [X] Optional Redis/Memcache Caching for peers data (can be used to show on a website for instance, to less burden SQL)
+* [X] Cloudflare's "Simple Proxy Protocol" support added (https://developers.cloudflare.com/spectrum/how-to/enable-proxy-protocol/#enable-simple-proxy-protocol-for-udp)
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -196,6 +197,7 @@ UDP_0_WORKER_THREADS <UINT64>
 UDP_0_RECEIVE_BUFFER_SIZE <UINT64>
 UDP_0_SEND_BUFFER_SIZE <UINT64>
 UDP_0_REUSE_ADDRESS <true | false>
+UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 ```
 
 ### ChangeLog
@@ -212,6 +214,7 @@ UDP_0_REUSE_ADDRESS <true | false>
 * Moved the more database engines additions to another version (and MeiliSearch/ElasticSearch support for v4.2)
 * Refactored the database engine to be less massive, more logical and less redundancy
 * Implemented a Redis and Memcache cache optionally to push peer data to, for usage on websites (without burdening SQL)
+* Added UDP support for Cloudflare's "Simple Proxy Protocol" (https://developers.cloudflare.com/spectrum/how-to/enable-proxy-protocol/#enable-simple-proxy-protocol-for-udp)
 
 #### v4.0.17
 * Another little overhaul, changing some memory tools for enhancement and performance

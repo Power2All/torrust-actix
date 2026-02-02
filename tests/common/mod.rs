@@ -1,16 +1,16 @@
-
 #![allow(dead_code)]
-
 use std::sync::Arc;
 use tempfile::TempDir;
-use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::config::structs::api_trackers_config::ApiTrackersConfig;
+use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::config::structs::http_trackers_config::HttpTrackersConfig;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 
-pub async fn create_test_config() -> Arc<Configuration> {
-    let mut config = Configuration::init();
-    
+pub type TestTracker = Arc<TorrentTracker>;
+pub type TestConfig = Arc<Configuration>;
+
+pub async fn create_test_config() -> TestConfig {
+    let mut config: Configuration = Configuration::init();
     config.database.path = ":memory:".to_string();
     config.database.persistent = false;
     Arc::new(config)
@@ -50,8 +50,8 @@ pub fn create_test_api_config() -> Arc<ApiTrackersConfig> {
     })
 }
 
-pub async fn create_test_tracker() -> Arc<TorrentTracker> {
-    let config = create_test_config().await;
+pub async fn create_test_tracker() -> TestTracker {
+    let config: TestConfig = create_test_config().await;
     Arc::new(TorrentTracker::new(config, false).await)
 }
 
@@ -61,6 +61,7 @@ pub fn create_temp_dir() -> TempDir {
 
 pub fn random_info_hash() -> torrust_actix::tracker::structs::info_hash::InfoHash {
     use rand::Rng;
+
     let mut rng = rand::rng();
     let bytes: [u8; 20] = rng.random();
     torrust_actix::tracker::structs::info_hash::InfoHash(bytes)
@@ -68,6 +69,7 @@ pub fn random_info_hash() -> torrust_actix::tracker::structs::info_hash::InfoHas
 
 pub fn random_peer_id() -> torrust_actix::tracker::structs::peer_id::PeerId {
     use rand::Rng;
+
     let mut rng = rand::rng();
     let bytes: [u8; 20] = rng.random();
     torrust_actix::tracker::structs::peer_id::PeerId(bytes)

@@ -169,7 +169,7 @@ pub fn build_upsert_torrent_query(
     engine: DatabaseDrivers,
     table_name: &str,
     column_infohash: &str,
-    value_columns: &[(&str, &str)], // (column_name, value)
+    value_columns: &[(&str, &str)],
     update_columns: &[&str],
     hash_value: &str,
     is_binary: bool,
@@ -197,7 +197,7 @@ pub fn build_update_ignore_torrent_query(
     engine: DatabaseDrivers,
     table_name: &str,
     column_infohash: &str,
-    set_columns: &[(&str, &str)], // (column_name, value)
+    set_columns: &[(&str, &str)],
     hash_value: &str,
     is_binary: bool,
 ) -> String {

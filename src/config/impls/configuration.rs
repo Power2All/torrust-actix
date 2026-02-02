@@ -147,7 +147,8 @@ impl Configuration {
                     receive_buffer_size: 134217728,
                     send_buffer_size: 67108864,
                     reuse_address: true,
-                    use_payload_ip: false
+                    use_payload_ip: false,
+                    simple_proxy_protocol: false,
                 }
             ),
             api_server: vec!(
@@ -577,6 +578,9 @@ impl Configuration {
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
                         block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL")) {
+                        block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
                     }
                 }
             }

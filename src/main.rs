@@ -217,6 +217,7 @@ fn main() -> std::io::Result<()>
                         udp_server_object.send_buffer_size,
                         udp_server_object.reuse_address,
                         udp_server_object.use_payload_ip,
+                        udp_server_object.simple_proxy_protocol,
                         tracker.clone(),
                         udp_rx.clone(),
                         tokio_udp.clone()
