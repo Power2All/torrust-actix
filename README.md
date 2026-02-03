@@ -202,6 +202,10 @@ UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 
 ### ChangeLog
 
+#### v4.1.1
+* Added hot reloading of SSL certificates for renewal
+* API has an extra endpoint to run the hot reloading
+
 #### v4.1.0
 * Added a full Cluster first version through WebSockets
 * Option to run the app in Stand-Alone (which is default, as single server), or using the cluster mode
