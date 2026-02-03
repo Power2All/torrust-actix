@@ -1,6 +1,7 @@
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
+use crate::ssl::certificate_store::CertificateStore;
 use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -19,6 +20,7 @@ pub struct TorrentTracker {
     pub config: Arc<Configuration>,
     pub sqlx: DatabaseConnector,
     pub cache: Option<CacheConnector>,
+    pub certificate_store: Arc<CertificateStore>,
     pub torrents_sharding: Arc<TorrentSharding>,
     pub torrents_updates: TorrentsUpdates,
     pub torrents_whitelist: Arc<RwLock<HashSet<InfoHash>>>,

@@ -4,6 +4,7 @@ pub mod common;
 pub mod config;
 pub mod database;
 pub mod http;
+pub mod ssl;
 pub mod stats;
 pub mod structs;
 pub mod tracker;

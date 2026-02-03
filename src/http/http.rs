@@ -4,6 +4,8 @@ use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
 use crate::http::structs::http_service_data::HttpServiceData;
 use crate::http::types::{HttpServiceQueryHashingMapErr, HttpServiceQueryHashingMapOk};
+use crate::ssl::certificate_resolver::DynamicCertificateResolver;
+use crate::ssl::certificate_store::ServerIdentifier;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -21,9 +23,8 @@ use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use std::borrow::Cow;
-use std::fs::File;
 use std::future::Future;
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use std::process::exit;
 use std::str::FromStr;
@@ -96,29 +97,24 @@ pub async fn http_service(
             error!("[HTTPS] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
-        let key_file = &mut BufReader::new(match File::open(http_server_object.ssl_key.clone()) {
-            Ok(data) => { data }
-            Err(data) => {
-                sentry::capture_error(&data);
-                panic!("[HTTPS] SSL key unreadable: {data}");
-            }
-        });
-        let certs_file = &mut BufReader::new(match File::open(http_server_object.ssl_cert.clone()) {
-            Ok(data) => { data }
-            Err(data) => { panic!("[HTTPS] SSL cert unreadable: {data}"); }
-        });
-        let tls_certs = match rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>() {
-            Ok(data) => { data }
-            Err(data) => { panic!("[HTTPS] SSL cert couldn't be extracted: {data}"); }
+        let server_id = ServerIdentifier::HttpTracker(addr.to_string());
+        if let Err(e) = data.certificate_store.load_certificate(
+            server_id.clone(),
+            &http_server_object.ssl_cert,
+            &http_server_object.ssl_key,
+        ) {
+            panic!("[HTTPS] Failed to load SSL certificate: {}", e);
+        }
+        let resolver = match DynamicCertificateResolver::new(
+            Arc::clone(&data.certificate_store),
+            server_id,
+        ) {
+            Ok(resolver) => Arc::new(resolver),
+            Err(e) => panic!("[HTTPS] Failed to create certificate resolver: {}", e),
         };
-        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
-            Ok(data) => { data }
-            Err(data) => { panic!("[HTTPS] SSL key couldn't be extracted: {data}"); }
-        };
-        let tls_config = match rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key)) {
-            Ok(data) => { data }
-            Err(data) => { panic!("[HTTPS] SSL config couldn't be created: {data}"); }
-        };
+        let tls_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_cert_resolver(resolver);
         let service_data = Arc::new(HttpServiceData {
             torrent_tracker: data.clone(),
             http_trackers_config: Arc::new(http_server_object.clone())
@@ -680,54 +676,37 @@ pub fn http_service_stats_log(ip: IpAddr, tracker: &TorrentTracker)
 }
 
 #[tracing::instrument(level = "debug")]
+#[inline]
 pub async fn http_service_decode_hex_hash(hash: String) -> Result<InfoHash, HttpResponse>
 {
-    match hex::decode(hash) {
-        Ok(hash_result) => { Ok(InfoHash(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap())) }
-        Err(_) => {
-            Err(HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
-        }
-    }
+    hex::decode(&hash)
+        .ok()
+        .and_then(|bytes| bytes.get(..20).and_then(|slice| <[u8; 20]>::try_from(slice).ok()))
+        .map(InfoHash)
+        .ok_or_else(|| HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
 }
 
 #[tracing::instrument(level = "debug")]
+#[inline]
 pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, HttpResponse>
 {
-    match hex::decode(hash) {
-        Ok(hash_result) => { Ok(UserId(<[u8; 20]>::try_from(hash_result[0..20].as_ref()).unwrap())) }
-        Err(_) => {
-            Err(HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
-        }
-    }
+    hex::decode(&hash)
+        .ok()
+        .and_then(|bytes| bytes.get(..20).and_then(|slice| <[u8; 20]>::try_from(slice).ok()))
+        .map(UserId)
+        .ok_or_else(|| HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
 }
 
 #[tracing::instrument(level = "debug")]
 pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<HttpTrackersConfig>) -> Result<IpAddr, ()>
 {
-    let origin_ip = match request.peer_addr() {
-        None => {
-            return Err(());
-        }
-        Some(ip) => {
-            ip.ip()
-        }
-    };
-    match request.headers().get(data.real_ip.clone()) {
-        Some(header) => {
-            if header.to_str().is_ok() {
-                if let Ok(ip) = IpAddr::from_str(header.to_str().unwrap()) {
-                    Ok(ip)
-                } else {
-                    Err(())
-                }
-            } else {
-                Err(())
-            }
-        }
-        None => {
-            Ok(origin_ip)
-        }
-    }
+    let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
+    request.headers()
+        .get(&data.real_ip)
+        .and_then(|header| header.to_str().ok())
+        .and_then(|ip_str| IpAddr::from_str(ip_str).ok())
+        .map(Ok)
+        .unwrap_or(Ok(origin_ip))
 }
 
 #[tracing::instrument(level = "debug")]

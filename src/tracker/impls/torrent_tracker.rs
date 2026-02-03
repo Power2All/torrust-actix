@@ -1,6 +1,7 @@
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
+use crate::ssl::certificate_store::CertificateStore;
 use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use chrono::Utc;
@@ -40,6 +41,7 @@ impl TorrentTracker {
         TorrentTracker {
             config: config.clone(),
             cache,
+            certificate_store: Arc::new(CertificateStore::new()),
             torrents_sharding: Arc::new(Default::default()),
             torrents_updates: Arc::new(RwLock::new(HashMap::new())),
             torrents_whitelist: Arc::new(RwLock::new(HashSet::new())),

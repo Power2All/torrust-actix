@@ -1,14 +1,12 @@
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::configuration::Configuration;
 use async_std::future;
-use byteorder::{BigEndian, ReadBytesExt};
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
-use std::io::Cursor;
 use std::time::{Duration, SystemTime};
 use tokio_shutdown::Shutdown;
 
@@ -162,9 +160,9 @@ pub fn convert_int_to_bytes(number: &u64) -> Vec<u8> {
 #[inline]
 pub fn convert_bytes_to_int(array: &[u8]) -> u64 {
     let mut array_fixed = [0u8; 8];
-    let start_idx = 8 - array.len();
-    array_fixed[start_idx..].copy_from_slice(array);
-    Cursor::new(array_fixed).read_u64::<BigEndian>().unwrap()
+    let len = array.len().min(8);
+    array_fixed[8 - len..].copy_from_slice(&array[..len]);
+    u64::from_be_bytes(array_fixed)
 }
 
 pub async fn shutdown_waiting(timeout: Duration, shutdown_handler: Shutdown) -> bool {

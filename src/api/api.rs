@@ -1,4 +1,5 @@
 use crate::api::api_blacklists::{api_service_blacklist_delete, api_service_blacklist_get, api_service_blacklist_post, api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
+use crate::api::api_certificate::{api_service_certificate_reload, api_service_certificate_status};
 use crate::api::api_keys::{api_service_key_delete, api_service_key_get, api_service_key_post, api_service_keys_delete, api_service_keys_get, api_service_keys_post};
 use crate::api::api_stats::{api_service_prom_get, api_service_stats_get};
 use crate::api::api_torrents::{api_service_torrent_delete, api_service_torrent_get, api_service_torrent_post, api_service_torrents_delete, api_service_torrents_get, api_service_torrents_post};
@@ -8,6 +9,8 @@ use crate::api::structs::api_service_data::ApiServiceData;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
+use crate::ssl::certificate_resolver::DynamicCertificateResolver;
+use crate::ssl::certificate_store::ServerIdentifier;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use actix_cors::Cors;
@@ -18,9 +21,7 @@ use actix_web::{http, web, App, HttpRequest, HttpResponse, HttpServer};
 use futures_util::StreamExt;
 use log::{error, info};
 use serde_json::json;
-use std::fs::File;
 use std::future::Future;
-use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::process::exit;
 use std::str::FromStr;
@@ -101,6 +102,12 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::post().to(api_service_users_post))
             .route(web::delete().to(api_service_users_delete))
         );
+        cfg.service(web::resource("api/certificate/reload")
+            .route(web::post().to(api_service_certificate_reload))
+        );
+        cfg.service(web::resource("api/certificate/status")
+            .route(web::get().to(api_service_certificate_status))
+        );
         if data.torrent_tracker.config.tracker_config.swagger {
             cfg.service(SwaggerUi::new("/swagger-ui/{_:.*}").config(Config::new(["/api/openapi.json"])));
             cfg.service(web::resource("/api/openapi.json")
@@ -139,29 +146,24 @@ pub async fn api_service(
             error!("[APIS] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
-        let key_file = &mut BufReader::new(File::open(api_server_object.ssl_key.clone()).unwrap_or_else(|data| {
-            sentry::capture_error(&data);
-            panic!("[APIS] SSL key unreadable: {data}");
-        }));
-        let certs_file = &mut BufReader::new(File::open(api_server_object.ssl_cert.clone()).unwrap_or_else(|data| {
-            sentry::capture_error(&data);
-            panic!("[APIS] SSL cert unreadable: {data}");
-        }));
-        let tls_certs = rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>().unwrap_or_else(|data| {
-            sentry::capture_error(&data);
-            panic!("[APIS] SSL cert couldn't be extracted: {data}");
-        });
-        let tls_key = rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap().unwrap_or_else(|data| {
-            sentry::capture_error(&data);
-            panic!("[APIS] SSL key couldn't be extracted: {data}");
-        });
+        let server_id = ServerIdentifier::ApiServer(addr.to_string());
+        if let Err(e) = data.certificate_store.load_certificate(
+            server_id.clone(),
+            &api_server_object.ssl_cert,
+            &api_server_object.ssl_key,
+        ) {
+            panic!("[APIS] Failed to load SSL certificate: {}", e);
+        }
+        let resolver = match DynamicCertificateResolver::new(
+            Arc::clone(&data.certificate_store),
+            server_id,
+        ) {
+            Ok(resolver) => Arc::new(resolver),
+            Err(e) => panic!("[APIS] Failed to create certificate resolver: {}", e),
+        };
         let tls_config = rustls::ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key))
-            .unwrap_or_else(|data| {
-                sentry::capture_error(&data);
-                panic!("[APIS] SSL config couldn't be created: {data}");
-            });
+            .with_cert_resolver(resolver);
         let server = HttpServer::new(app_factory)
             .keep_alive(Duration::from_secs(keep_alive))
             .client_request_timeout(Duration::from_secs(request_timeout))
