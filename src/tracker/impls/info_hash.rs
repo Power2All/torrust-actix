@@ -1,3 +1,8 @@
+//! Implementation of traits and methods for InfoHash.
+//!
+//! Provides Display, FromStr, Serialize, and Deserialize implementations
+//! for the 20-byte info hash type.
+
 use std::fmt;
 use std::fmt::Formatter;
 use crate::common::common::bin2hex;

@@ -1,3 +1,8 @@
+//! Core utility functions used throughout the tracker.
+//!
+//! This module provides common helper functions for query parsing, hex encoding,
+//! logging setup, time utilities, and graceful shutdown handling.
+
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::configuration::Configuration;
 use async_std::future;
@@ -10,8 +15,33 @@ use std::fmt::Formatter;
 use std::time::{Duration, SystemTime};
 use tokio_shutdown::Shutdown;
 
+/// Type alias for query parameter values (optimized for single values).
+///
+/// Uses `SmallVec` to avoid heap allocation for the common case of
+/// a single value per parameter.
 pub type QueryValues = SmallVec<[Vec<u8>; 1]>;
 
+/// Parses a URL query string into a HashMap of parameter names to values.
+///
+/// Handles URL percent-encoding and supports multiple values per parameter
+/// (e.g., multiple `info_hash` parameters in scrape requests).
+///
+/// # Arguments
+///
+/// * `query` - Optional query string (without the leading `?`)
+///
+/// # Returns
+///
+/// A HashMap mapping lowercase parameter names to their decoded byte values.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use torrust_actix::common::common::parse_query;
+///
+/// let params = parse_query(Some("info_hash=%ab%cd...&peer_id=%12%34...".to_string()))?;
+/// let info_hash = params.get("info_hash").and_then(|v| v.first());
+/// ```
 #[inline]
 pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>, CustomError> {
     let mut queries: HashMap<String, QueryValues> = HashMap::with_capacity(12);

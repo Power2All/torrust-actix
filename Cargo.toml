@@ -1,6 +1,6 @@
 [package]
 name = "torrust-actix"
-version = "4.1.1"
+version = "4.1.2"
 edition = "2024"
 license = "AGPL-3.0"
 authors = [
@@ -8,6 +8,11 @@ authors = [
     "Mick van Dijke <mick@dutchbits.nl>"
 ]
 description = "A rich, fast and efficient Bittorrent Tracker."
+documentation = "https://docs.rs/torrust-actix"
+repository = "https://github.com/Power2All/torrust-actix"
+readme = "README.md"
+keywords = ["bittorrent", "tracker", "torrent", "actix", "async"]
+categories = ["network-programming", "web-programming"]
 
 [profile.release]
 opt-level = 3

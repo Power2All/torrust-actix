@@ -1,3 +1,8 @@
+//! Implementation of traits and methods for UserId.
+//!
+//! Provides Display, FromStr, Serialize, and Deserialize implementations
+//! for the 20-byte user identifier type.
+
 use crate::common::common::bin2hex;
 use crate::tracker::structs::user_id::UserId;
 use std::fmt;

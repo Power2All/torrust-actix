@@ -1,3 +1,8 @@
+//! Implementation of traits and methods for PeerId.
+//!
+//! Provides Display, FromStr, Serialize, Deserialize implementations
+//! and BitTorrent client detection from peer ID patterns.
+
 use std::fmt;
 use std::fmt::Formatter;
 use serde::Serialize;

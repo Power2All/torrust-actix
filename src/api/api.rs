@@ -1,3 +1,12 @@
+//! Core API service implementation.
+//!
+//! This module provides the main API server functionality including:
+//! - Server initialization and configuration
+//! - CORS configuration
+//! - Route registration
+//! - Request validation and authentication
+//! - IP address resolution from headers
+
 use crate::api::api_blacklists::{api_service_blacklist_delete, api_service_blacklist_get, api_service_blacklist_post, api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
 use crate::api::api_certificate::{api_service_certificate_reload, api_service_certificate_status};
 use crate::api::api_keys::{api_service_key_delete, api_service_key_get, api_service_key_post, api_service_keys_delete, api_service_keys_get, api_service_keys_post};
@@ -29,6 +38,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use utoipa_swagger_ui::{Config, SwaggerUi};
 
+/// Creates the CORS configuration for the API server.
+///
+/// Allows:
+/// - Wildcard origins (send_wildcard)
+/// - GET, POST, PUT, DELETE methods
+/// - X-Forwarded-For, Accept, and Content-Type headers
+/// - Max age of 1 second for preflight caching
+///
+/// # Returns
+///
+/// A configured `Cors` middleware instance.
 #[tracing::instrument(level = "debug")]
 pub fn api_service_cors() -> Cors
 {

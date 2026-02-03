@@ -1,3 +1,8 @@
+//! Core TorrentTracker initialization and construction.
+//!
+//! Contains the main constructor for creating a new tracker instance
+//! with all required subsystems initialized.
+
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
@@ -12,6 +17,35 @@ use std::sync::atomic::{AtomicBool, AtomicI64};
 use std::sync::Arc;
 
 impl TorrentTracker {
+    /// Creates a new TorrentTracker instance with all subsystems initialized.
+    ///
+    /// This is the main constructor for the tracker. It initializes:
+    /// - Database connection (SQLite, MySQL, or PostgreSQL)
+    /// - Optional cache connection (Redis or Memcache)
+    /// - SSL certificate store
+    /// - Sharded torrent storage (256 shards)
+    /// - Statistics counters
+    /// - Update queues for batched database writes
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Shared configuration containing all tracker settings
+    /// * `create_database` - If true, creates database tables if they don't exist
+    ///
+    /// # Returns
+    ///
+    /// A fully initialized `TorrentTracker` instance ready to handle requests.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use std::sync::Arc;
+    /// use torrust_actix::config::structs::configuration::Configuration;
+    /// use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+    ///
+    /// let config = Arc::new(Configuration::default());
+    /// let tracker = TorrentTracker::new(config, true).await;
+    /// ```
     #[tracing::instrument(level = "debug")]
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {

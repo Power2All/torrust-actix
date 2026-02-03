@@ -1,3 +1,8 @@
+//! Certificate storage with hot-reload support.
+//!
+//! This module provides thread-safe certificate storage and management,
+//! allowing certificates to be loaded, retrieved, and reloaded at runtime.
+
 use parking_lot::RwLock;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::collections::HashMap;
@@ -6,6 +11,10 @@ use std::io::BufReader;
 use std::sync::Arc;
 use thiserror::Error;
 
+/// A loaded certificate bundle containing the certificate chain and private key.
+///
+/// This struct holds the parsed certificate data ready for use with rustls,
+/// along with metadata about when and from where it was loaded.
 pub struct CertificateBundle {
     pub certs: Vec<CertificateDer<'static>>,
     pub key: PrivateKeyDer<'static>,

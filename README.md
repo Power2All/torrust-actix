@@ -202,6 +202,10 @@ UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 
 ### ChangeLog
 
+#### v4.1.2
+* Applied documentation inside the source code, for publishing at Crate.io and Docs.rs
+* Updated the openapi.json file for SwaggerUI to be updated and improved
+
 #### v4.1.1
 * Added hot reloading of SSL certificates for renewal
 * API has an extra endpoint to run the hot reloading
