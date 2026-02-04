@@ -21,8 +21,16 @@
   ],
   "tags": [
     {
+      "name": "Statistics",
+      "description": "Tracker statistics endpoints"
+    },
+    {
       "name": "Prometheus Metrics",
       "description": "Endpoints for Prometheus metrics collection"
+    },
+    {
+      "name": "Certificate",
+      "description": "SSL certificate management operations"
     },
     {
       "name": "Torrent",
@@ -66,6 +74,80 @@
     }
   ],
   "paths": {
+    "/stats": {
+      "get": {
+        "tags": ["Statistics"],
+        "summary": "Get tracker statistics",
+        "description": "Returns comprehensive tracker statistics in JSON format including torrent counts, peer counts, connection statistics, and WebSocket metrics.",
+        "operationId": "getStats",
+        "responses": {
+          "200": {
+            "description": "Statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/StatsResponse"},
+                "example": {
+                  "started": 1706976000,
+                  "timestamp_run_save": 1706976100,
+                  "timestamp_run_timeout": 1706976200,
+                  "timestamp_run_console": 1706976300,
+                  "timestamp_run_keys_timeout": 1706976400,
+                  "torrents": 1523,
+                  "torrents_updates": 150,
+                  "users": 5000,
+                  "users_updates": 25,
+                  "seeds": 3500,
+                  "peers": 1200,
+                  "completed": 45000,
+                  "whitelist_enabled": true,
+                  "whitelist": 100,
+                  "whitelist_updates": 5,
+                  "blacklist_enabled": true,
+                  "blacklist": 50,
+                  "blacklist_updates": 2,
+                  "keys_enabled": true,
+                  "keys": 200,
+                  "keys_updates": 10,
+                  "tcp4_not_found": 100,
+                  "tcp4_failure": 50,
+                  "tcp4_connections_handled": 150000,
+                  "tcp4_api_handled": 5000,
+                  "tcp4_announces_handled": 120000,
+                  "tcp4_scrapes_handled": 25000,
+                  "tcp6_not_found": 20,
+                  "tcp6_failure": 10,
+                  "tcp6_connections_handled": 30000,
+                  "tcp6_api_handled": 1000,
+                  "tcp6_announces_handled": 25000,
+                  "tcp6_scrapes_handled": 4000,
+                  "udp4_bad_request": 50,
+                  "udp4_invalid_request": 25,
+                  "udp4_connections_handled": 200000,
+                  "udp4_announces_handled": 180000,
+                  "udp4_scrapes_handled": 20000,
+                  "udp6_bad_request": 10,
+                  "udp6_invalid_request": 5,
+                  "udp6_connections_handled": 40000,
+                  "udp6_announces_handled": 35000,
+                  "udp6_scrapes_handled": 5000,
+                  "udp_queue_len": 0,
+                  "ws_connections_active": 10,
+                  "ws_requests_sent": 5000,
+                  "ws_requests_received": 5000,
+                  "ws_responses_sent": 4900,
+                  "ws_responses_received": 4900,
+                  "ws_timeouts": 50,
+                  "ws_reconnects": 5,
+                  "ws_auth_success": 100,
+                  "ws_auth_failed": 2
+                }
+              }
+            }
+          }
+        },
+        "security": [{"token_auth": []}]
+      }
+    },
     "/metrics": {
       "get": {
         "tags": ["Prometheus Metrics"],
@@ -167,13 +249,66 @@
         },
         "security": [{"token_auth": []}]
       },
-      "post": {
+      "delete": {
         "tags": ["Torrent"],
-        "summary": "Add or update torrent",
-        "description": "Adds a new torrent to the tracker or updates an existing one.",
-        "operationId": "postTorrent",
+        "summary": "Delete torrent",
+        "description": "Removes a torrent from the tracker.",
+        "operationId": "deleteTorrent",
         "parameters": [
           {"$ref": "#/components/parameters/InfoHashPath"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Torrent deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
+                "example": {"status": "ok"}
+              }
+            }
+          },
+          "304": {
+            "description": "Torrent not found",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/StatusResponse"},
+                "example": {"status": "unknown info_hash 0123456789abcdef0123456789abcdef01234567"}
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid info_hash",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                "example": {"status": "invalid info_hash 123"}
+              }
+            }
+          }
+        },
+        "security": [{"token_auth": []}]
+      }
+    },
+    "/api/torrent/{infohash}/{completed}": {
+      "post": {
+        "tags": ["Torrent"],
+        "summary": "Add or update torrent with completed count",
+        "description": "Adds a new torrent to the tracker or updates an existing one with a specified completed download count.",
+        "operationId": "postTorrent",
+        "parameters": [
+          {"$ref": "#/components/parameters/InfoHashPath"},
+          {
+            "name": "completed",
+            "in": "path",
+            "required": true,
+            "description": "Number of completed downloads for this torrent",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "example": 100
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -209,45 +344,6 @@
                     "value": {"status": "bad info_hash"}
                   }
                 }
-              }
-            }
-          }
-        },
-        "security": [{"token_auth": []}]
-      },
-      "delete": {
-        "tags": ["Torrent"],
-        "summary": "Delete torrent",
-        "description": "Removes a torrent from the tracker.",
-        "operationId": "deleteTorrent",
-        "parameters": [
-          {"$ref": "#/components/parameters/InfoHashPath"}
-        ],
-        "responses": {
-          "200": {
-            "description": "Torrent deleted successfully",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/SuccessResponse"},
-                "example": {"status": "ok"}
-              }
-            }
-          },
-          "304": {
-            "description": "Torrent not found",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/StatusResponse"},
-                "example": {"status": "unknown info_hash 0123456789abcdef0123456789abcdef01234567"}
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid info_hash",
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-                "example": {"status": "invalid info_hash 123"}
               }
             }
           }
@@ -1506,6 +1602,134 @@
         },
         "security": [{"token_auth": []}]
       }
+    },
+    "/api/certificate/status": {
+      "get": {
+        "tags": ["Certificate"],
+        "summary": "Get SSL certificate status",
+        "description": "Returns the status of all loaded SSL certificates including their paths and load timestamps.",
+        "operationId": "getCertificateStatus",
+        "responses": {
+          "200": {
+            "description": "Certificate status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CertificateStatusResponse"},
+                "example": {
+                  "status": "ok",
+                  "certificates": [
+                    {
+                      "server_type": "api",
+                      "bind_address": "0.0.0.0:8443",
+                      "cert_path": "/etc/ssl/certs/tracker.crt",
+                      "key_path": "/etc/ssl/private/tracker.key",
+                      "loaded_at": "2024-02-03T12:00:00Z"
+                    },
+                    {
+                      "server_type": "http",
+                      "bind_address": "0.0.0.0:443",
+                      "cert_path": "/etc/ssl/certs/tracker.crt",
+                      "key_path": "/etc/ssl/private/tracker.key",
+                      "loaded_at": "2024-02-03T12:00:00Z"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [{"token_auth": []}]
+      }
+    },
+    "/api/certificate/reload": {
+      "post": {
+        "tags": ["Certificate"],
+        "summary": "Reload SSL certificates",
+        "description": "Reloads SSL certificates from disk. Can optionally filter by server type and/or bind address to reload specific certificates.",
+        "operationId": "reloadCertificate",
+        "requestBody": {
+          "description": "Optional filter to reload specific certificates",
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CertificateReloadRequest"},
+              "examples": {
+                "reload_all": {
+                  "summary": "Reload all certificates",
+                  "value": {}
+                },
+                "reload_api": {
+                  "summary": "Reload API server certificate",
+                  "value": {
+                    "server_type": "api"
+                  }
+                },
+                "reload_specific": {
+                  "summary": "Reload specific server certificate",
+                  "value": {
+                    "server_type": "http",
+                    "bind_address": "0.0.0.0:443"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Certificate reload result",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CertificateReloadResponse"},
+                "examples": {
+                  "success": {
+                    "summary": "All certificates reloaded successfully",
+                    "value": {
+                      "status": "ok",
+                      "reloaded": [
+                        {
+                          "server_type": "api",
+                          "bind_address": "0.0.0.0:8443",
+                          "loaded_at": "2024-02-03T14:30:00Z"
+                        }
+                      ],
+                      "errors": []
+                    }
+                  },
+                  "partial": {
+                    "summary": "Some certificates failed to reload",
+                    "value": {
+                      "status": "partial",
+                      "reloaded": [
+                        {
+                          "server_type": "api",
+                          "bind_address": "0.0.0.0:8443",
+                          "loaded_at": "2024-02-03T14:30:00Z"
+                        }
+                      ],
+                      "errors": [
+                        {
+                          "server_type": "http",
+                          "bind_address": "0.0.0.0:443",
+                          "error": "Certificate file not found"
+                        }
+                      ]
+                    }
+                  },
+                  "no_certificates": {
+                    "summary": "No certificates found to reload",
+                    "value": {
+                      "status": "no_certificates",
+                      "message": "No SSL certificates found to reload"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{"token_auth": []}]
+      }
     }
   },
   "components": {
@@ -1974,6 +2198,127 @@
           }
         },
         "required": ["status"]
+      },
+      "StatsResponse": {
+        "type": "object",
+        "description": "Comprehensive tracker statistics",
+        "properties": {
+          "started": {"type": "integer", "format": "int64", "description": "Tracker start timestamp"},
+          "timestamp_run_save": {"type": "integer", "format": "int64", "description": "Last save operation timestamp"},
+          "timestamp_run_timeout": {"type": "integer", "format": "int64", "description": "Last timeout check timestamp"},
+          "timestamp_run_console": {"type": "integer", "format": "int64", "description": "Last console output timestamp"},
+          "timestamp_run_keys_timeout": {"type": "integer", "format": "int64", "description": "Last keys timeout check timestamp"},
+          "torrents": {"type": "integer", "format": "int64", "description": "Total tracked torrents"},
+          "torrents_updates": {"type": "integer", "format": "int64", "description": "Pending torrent updates"},
+          "users": {"type": "integer", "format": "int64", "description": "Total registered users"},
+          "users_updates": {"type": "integer", "format": "int64", "description": "Pending user updates"},
+          "seeds": {"type": "integer", "format": "int64", "description": "Total seeders across all torrents"},
+          "peers": {"type": "integer", "format": "int64", "description": "Total leechers across all torrents"},
+          "completed": {"type": "integer", "format": "int64", "description": "Total completed downloads"},
+          "whitelist_enabled": {"type": "boolean", "description": "Whether whitelist mode is enabled"},
+          "whitelist": {"type": "integer", "format": "int64", "description": "Number of whitelisted torrents"},
+          "whitelist_updates": {"type": "integer", "format": "int64", "description": "Pending whitelist updates"},
+          "blacklist_enabled": {"type": "boolean", "description": "Whether blacklist mode is enabled"},
+          "blacklist": {"type": "integer", "format": "int64", "description": "Number of blacklisted torrents"},
+          "blacklist_updates": {"type": "integer", "format": "int64", "description": "Pending blacklist updates"},
+          "keys_enabled": {"type": "boolean", "description": "Whether API keys are enabled"},
+          "keys": {"type": "integer", "format": "int64", "description": "Number of API keys"},
+          "keys_updates": {"type": "integer", "format": "int64", "description": "Pending key updates"},
+          "tcp4_not_found": {"type": "integer", "format": "int64", "description": "TCP IPv4 not found errors"},
+          "tcp4_failure": {"type": "integer", "format": "int64", "description": "TCP IPv4 failures"},
+          "tcp4_connections_handled": {"type": "integer", "format": "int64", "description": "TCP IPv4 connections handled"},
+          "tcp4_api_handled": {"type": "integer", "format": "int64", "description": "TCP IPv4 API requests handled"},
+          "tcp4_announces_handled": {"type": "integer", "format": "int64", "description": "TCP IPv4 announces handled"},
+          "tcp4_scrapes_handled": {"type": "integer", "format": "int64", "description": "TCP IPv4 scrapes handled"},
+          "tcp6_not_found": {"type": "integer", "format": "int64", "description": "TCP IPv6 not found errors"},
+          "tcp6_failure": {"type": "integer", "format": "int64", "description": "TCP IPv6 failures"},
+          "tcp6_connections_handled": {"type": "integer", "format": "int64", "description": "TCP IPv6 connections handled"},
+          "tcp6_api_handled": {"type": "integer", "format": "int64", "description": "TCP IPv6 API requests handled"},
+          "tcp6_announces_handled": {"type": "integer", "format": "int64", "description": "TCP IPv6 announces handled"},
+          "tcp6_scrapes_handled": {"type": "integer", "format": "int64", "description": "TCP IPv6 scrapes handled"},
+          "udp4_bad_request": {"type": "integer", "format": "int64", "description": "UDP IPv4 bad requests"},
+          "udp4_invalid_request": {"type": "integer", "format": "int64", "description": "UDP IPv4 invalid requests"},
+          "udp4_connections_handled": {"type": "integer", "format": "int64", "description": "UDP IPv4 connections handled"},
+          "udp4_announces_handled": {"type": "integer", "format": "int64", "description": "UDP IPv4 announces handled"},
+          "udp4_scrapes_handled": {"type": "integer", "format": "int64", "description": "UDP IPv4 scrapes handled"},
+          "udp6_bad_request": {"type": "integer", "format": "int64", "description": "UDP IPv6 bad requests"},
+          "udp6_invalid_request": {"type": "integer", "format": "int64", "description": "UDP IPv6 invalid requests"},
+          "udp6_connections_handled": {"type": "integer", "format": "int64", "description": "UDP IPv6 connections handled"},
+          "udp6_announces_handled": {"type": "integer", "format": "int64", "description": "UDP IPv6 announces handled"},
+          "udp6_scrapes_handled": {"type": "integer", "format": "int64", "description": "UDP IPv6 scrapes handled"},
+          "udp_queue_len": {"type": "integer", "format": "int64", "description": "UDP queue length"},
+          "ws_connections_active": {"type": "integer", "format": "int64", "description": "Active WebSocket connections"},
+          "ws_requests_sent": {"type": "integer", "format": "int64", "description": "WebSocket requests sent"},
+          "ws_requests_received": {"type": "integer", "format": "int64", "description": "WebSocket requests received"},
+          "ws_responses_sent": {"type": "integer", "format": "int64", "description": "WebSocket responses sent"},
+          "ws_responses_received": {"type": "integer", "format": "int64", "description": "WebSocket responses received"},
+          "ws_timeouts": {"type": "integer", "format": "int64", "description": "WebSocket timeouts"},
+          "ws_reconnects": {"type": "integer", "format": "int64", "description": "WebSocket reconnects"},
+          "ws_auth_success": {"type": "integer", "format": "int64", "description": "Successful WebSocket authentications"},
+          "ws_auth_failed": {"type": "integer", "format": "int64", "description": "Failed WebSocket authentications"}
+        }
+      },
+      "CertificateStatusItem": {
+        "type": "object",
+        "description": "SSL certificate status information",
+        "properties": {
+          "server_type": {"type": "string", "description": "Type of server (api, http, etc.)", "example": "api"},
+          "bind_address": {"type": "string", "description": "Server bind address", "example": "0.0.0.0:8443"},
+          "cert_path": {"type": "string", "description": "Path to certificate file", "example": "/etc/ssl/certs/tracker.crt"},
+          "key_path": {"type": "string", "description": "Path to private key file", "example": "/etc/ssl/private/tracker.key"},
+          "loaded_at": {"type": "string", "format": "date-time", "description": "When the certificate was loaded", "example": "2024-02-03T12:00:00Z"}
+        }
+      },
+      "CertificateStatusResponse": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string", "example": "ok"},
+          "certificates": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/CertificateStatusItem"}
+          }
+        }
+      },
+      "CertificateReloadRequest": {
+        "type": "object",
+        "description": "Optional filter for certificate reload",
+        "properties": {
+          "server_type": {"type": "string", "description": "Filter by server type (api, http, etc.)", "example": "api"},
+          "bind_address": {"type": "string", "description": "Filter by bind address", "example": "0.0.0.0:8443"}
+        }
+      },
+      "CertificateReloadResult": {
+        "type": "object",
+        "properties": {
+          "server_type": {"type": "string", "example": "api"},
+          "bind_address": {"type": "string", "example": "0.0.0.0:8443"},
+          "loaded_at": {"type": "string", "format": "date-time", "example": "2024-02-03T14:30:00Z"}
+        }
+      },
+      "CertificateReloadError": {
+        "type": "object",
+        "properties": {
+          "server_type": {"type": "string", "example": "http"},
+          "bind_address": {"type": "string", "example": "0.0.0.0:443"},
+          "error": {"type": "string", "example": "Certificate file not found"}
+        }
+      },
+      "CertificateReloadResponse": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string", "enum": ["ok", "partial", "failed", "no_certificates"], "description": "Result status"},
+          "message": {"type": "string", "description": "Optional message for no_certificates status"},
+          "reloaded": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/CertificateReloadResult"},
+            "description": "Successfully reloaded certificates"
+          },
+          "errors": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/CertificateReloadError"},
+            "description": "Certificates that failed to reload"
+          }
+        }
       }
     }
   }
