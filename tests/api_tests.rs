@@ -1,6 +1,10 @@
 mod common;
 
-use actix_web::{test, web, App};
+use actix_web::{
+    test,
+    web,
+    App
+};
 use std::sync::Arc;
 use torrust_actix::api::api_blacklists::api_service_blacklist_delete;
 use torrust_actix::api::api_keys::api_service_key_delete;

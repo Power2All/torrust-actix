@@ -1,6 +1,8 @@
+#[allow(clippy::module_inception)]
+pub mod database;
 pub mod enums;
-pub mod helpers;
 pub mod impls;
-pub mod query_builder;
 pub mod structs;
 pub mod traits;
+#[cfg(test)]
+mod tests;

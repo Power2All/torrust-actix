@@ -2,12 +2,21 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use chrono::{TimeZone, Utc};
-use log::{error, info};
+use chrono::{
+    TimeZone,
+    Utc
+};
+use log::{
+    error,
+    info
+};
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{
+    SystemTime,
+    UNIX_EPOCH
+};
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]

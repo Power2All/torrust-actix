@@ -1,6 +1,9 @@
 use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::config::enums::cluster_mode::ClusterMode;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackerConfig {

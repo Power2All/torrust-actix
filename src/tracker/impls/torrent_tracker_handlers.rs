@@ -1,6 +1,6 @@
-use crate::common::common::QueryValues;
 use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
+use crate::common::types::QueryValues;
 use crate::tracker::enums::announce_event::AnnounceEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
@@ -12,8 +12,14 @@ use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 use log::debug;
-use std::collections::{BTreeMap, HashMap};
-use std::net::{IpAddr, SocketAddr};
+use std::collections::{
+    BTreeMap,
+    HashMap
+};
+use std::net::{
+    IpAddr,
+    SocketAddr
+};
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -103,6 +109,9 @@ impl TorrentTracker {
             downloaded: NumberOfBytes(announce_query.downloaded as i64),
             left: NumberOfBytes(announce_query.left as i64),
             event: AnnounceEvent::None,
+            webrtc_offer: None,
+            webrtc_offer_id: None,
+            is_webtorrent: false,
         };
         let is_persistent = data.config.database.persistent;
         let users_enabled = data.config.tracker_config.users_enabled;

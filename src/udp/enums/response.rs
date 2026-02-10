@@ -1,8 +1,11 @@
-use std::net::{Ipv4Addr, Ipv6Addr};
 use crate::udp::structs::announce_response::AnnounceResponse;
 use crate::udp::structs::connect_response::ConnectResponse;
 use crate::udp::structs::error_response::ErrorResponse;
 use crate::udp::structs::scrape_response::ScrapeResponse;
+use std::net::{
+    Ipv4Addr,
+    Ipv6Addr
+};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Response {

@@ -1,4 +1,4 @@
-use crate::cache::errors::CacheError;
+use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector_redis::CacheConnectorRedis;
 use crate::cache::traits::cache_backend::CacheBackend;
 use crate::tracker::structs::info_hash::InfoHash;

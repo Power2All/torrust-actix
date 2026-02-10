@@ -2,6 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use serde::Serialize;
 use crate::common::common::bin2hex;
+use crate::common::common::hex_char_to_nibble;
 use crate::tracker::structs::peer_id::PeerId;
 
 impl fmt::Display for PeerId {
@@ -184,15 +185,5 @@ impl<'de> serde::de::Deserialize<'de> for PeerId {
             }
         }
         des.deserialize_str(PeerIdVisitor)
-    }
-}
-
-#[inline(always)]
-fn hex_char_to_nibble(c: u8) -> u8 {
-    match c {
-        b'0'..=b'9' => c - b'0',
-        b'a'..=b'f' => c - b'a' + 10,
-        b'A'..=b'F' => c - b'A' + 10,
-        _ => 0xFF,
     }
 }

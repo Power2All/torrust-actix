@@ -1,7 +1,11 @@
 use async_std::task;
 use clap::Parser;
 use futures_util::future::try_join_all;
-use log::{error, info, warn};
+use log::{
+    error,
+    info,
+    warn
+};
 use parking_lot::deadlock;
 use sentry::ClientInitGuard;
 use std::mem;
@@ -12,16 +16,25 @@ use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
-use torrust_actix::common::common::{setup_logging, udp_check_host_and_port_used};
+use torrust_actix::common::common::{
+    setup_logging,
+    udp_check_host_and_port_used
+};
 use torrust_actix::config::enums::cluster_mode::ClusterMode;
 use torrust_actix::config::structs::configuration::Configuration;
-use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
+use torrust_actix::http::http::{
+    http_check_host_and_port_used,
+    http_service
+};
 use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::structs::Cli;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
-use torrust_actix::websocket::master::server::websocket_master_service;
-use torrust_actix::websocket::slave::client::start_slave_client;
+use torrust_actix::websocket::websocket::{
+    start_slave_client,
+    websocket_master_service
+};
+use torrust_actix::webtorrent::webtorrent::webtorrent_service;
 
 #[tracing::instrument(level = "debug")]
 fn main() -> std::io::Result<()>
@@ -228,13 +241,50 @@ fn main() -> std::io::Result<()>
                 }
             }
 
-            
+            let mut webtorrent_futures = Vec::new();
+            let mut webtorrents_futures = Vec::new();
+
+            for webtorrent_server_object in &config.webtorrent_server {
+                if webtorrent_server_object.enabled {
+                    http_check_host_and_port_used(webtorrent_server_object.bind_address.clone());
+                    let address: SocketAddr = webtorrent_server_object.bind_address.parse().unwrap();
+
+                    let (handle, future) = webtorrent_service(
+                        address,
+                        tracker.clone(),
+                        webtorrent_server_object.clone()
+                    ).await;
+
+                    if webtorrent_server_object.ssl {
+                        webtorrents_futures.push((handle, future));
+                    } else {
+                        webtorrent_futures.push((handle, future));
+                    }
+                }
+            }
+
+            if !webtorrent_futures.is_empty() {
+                let (handles, futures): (Vec<_>, Vec<_>) = webtorrent_futures.into_iter().unzip();
+                tokio_core.spawn(async move {
+                    let _ = try_join_all(futures).await;
+                    drop(handles);
+                });
+            }
+            if !webtorrents_futures.is_empty() {
+                let (handles, futures): (Vec<_>, Vec<_>) = webtorrents_futures.into_iter().unzip();
+                tokio_core.spawn(async move {
+                    let _ = try_join_all(futures).await;
+                    drop(handles);
+                });
+            }
+
+
             let cluster_mode = tracker_config.cluster.clone();
             let mut ws_futures = Vec::new();
 
             match cluster_mode {
                 ClusterMode::master => {
-                    
+
                     let bind_address = &tracker_config.cluster_bind_address;
                     if !bind_address.is_empty() {
                         http_check_host_and_port_used(bind_address.clone());
@@ -253,12 +303,12 @@ fn main() -> std::io::Result<()>
                     }
                 }
                 ClusterMode::slave => {
-                    
+
                     let master_address = &tracker_config.cluster_master_address;
                     if !master_address.is_empty() {
                         info!("[CLUSTER] Starting WebSocket slave client connecting to {}", master_address);
 
-                        
+
                         let tracker_slave = tracker.clone();
                         let shutdown_handler = tokio_shutdown.clone();
                         tokio_core.spawn(async move {
@@ -277,7 +327,7 @@ fn main() -> std::io::Result<()>
                     }
                 }
                 ClusterMode::standalone => {
-                    
+
                     info!("[CLUSTER] Running in standalone mode");
                 }
             }
@@ -347,7 +397,16 @@ fn main() -> std::io::Result<()>
                                 stats.udp_queue_len
                             );
 
-                            
+                            info!(
+                                "[STATS WT] IPv4: Conn:{} A:{} O:{} Ans:{} S:{} F:{} | IPv6: Conn:{} A:{} O:{} Ans:{} S:{} F:{}",
+                                stats.wt4_connections_handled, stats.wt4_announces_handled,
+                                stats.wt4_offers_handled, stats.wt4_answers_handled,
+                                stats.wt4_scrapes_handled, stats.wt4_failure,
+                                stats.wt6_connections_handled, stats.wt6_announces_handled,
+                                stats.wt6_offers_handled, stats.wt6_answers_handled,
+                                stats.wt6_scrapes_handled, stats.wt6_failure
+                            );
+
                             if tracker_spawn_stats.config.tracker_config.cluster != ClusterMode::standalone {
                                 info!(
                                     "[STATS WS] Conn:{} | Req: Sent:{} Recv:{} | Resp: Sent:{} Recv:{} | TO:{} Recon:{} | Auth: OK:{} Fail:{}",

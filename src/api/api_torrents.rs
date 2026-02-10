@@ -1,19 +1,33 @@
-use crate::api::api::{api_parse_body, api_service_token, api_validation};
+use crate::api::api::{
+    api_parse_body,
+    api_service_token,
+    api_validation
+};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_entry::AHashMap;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::types::ahash_map::AHashMap;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
-use actix_web::{web, HttpRequest, HttpResponse};
-use serde_json::{json, Value};
+use actix_web::{
+    web,
+    HttpRequest,
+    HttpResponse
+};
+use serde_json::{
+    json,
+    Value
+};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{
+    SystemTime,
+    UNIX_EPOCH
+};
 
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse

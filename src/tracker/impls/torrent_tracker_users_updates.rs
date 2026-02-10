@@ -3,9 +3,15 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{
+    BTreeMap,
+    HashMap
+};
 use std::sync::Arc;
 use std::time::SystemTime;
 

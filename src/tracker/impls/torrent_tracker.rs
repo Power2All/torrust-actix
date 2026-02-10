@@ -1,14 +1,24 @@
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
-use crate::ssl::certificate_store::CertificateStore;
+use crate::ssl::structs::certificate_store::CertificateStore;
 use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use chrono::Utc;
-use log::{info, warn};
+use log::{
+    info,
+    warn
+};
 use parking_lot::RwLock;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, AtomicI64};
+use std::collections::{
+    BTreeMap,
+    HashMap,
+    HashSet
+};
+use std::sync::atomic::{
+    AtomicBool,
+    AtomicI64
+};
 use std::sync::Arc;
 
 impl TorrentTracker {
@@ -104,6 +114,18 @@ impl TorrentTracker {
                 ws_reconnects: AtomicI64::new(0),
                 ws_auth_success: AtomicI64::new(0),
                 ws_auth_failed: AtomicI64::new(0),
+                wt4_connections_handled: AtomicI64::new(0),
+                wt4_announces_handled: AtomicI64::new(0),
+                wt4_offers_handled: AtomicI64::new(0),
+                wt4_answers_handled: AtomicI64::new(0),
+                wt4_scrapes_handled: AtomicI64::new(0),
+                wt4_failure: AtomicI64::new(0),
+                wt6_connections_handled: AtomicI64::new(0),
+                wt6_announces_handled: AtomicI64::new(0),
+                wt6_offers_handled: AtomicI64::new(0),
+                wt6_answers_handled: AtomicI64::new(0),
+                wt6_scrapes_handled: AtomicI64::new(0),
+                wt6_failure: AtomicI64::new(0),
             }),
             users: Arc::new(RwLock::new(BTreeMap::new())),
             users_updates: Arc::new(RwLock::new(HashMap::new())),

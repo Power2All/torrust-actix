@@ -1,6 +1,10 @@
 mod common;
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{
+    IpAddr,
+    Ipv4Addr,
+    SocketAddr
+};
 use torrust_actix::udp::enums::request::Request;
 use torrust_actix::udp::enums::response::Response;
 use torrust_actix::udp::structs::transaction_id::TransactionId;
@@ -59,7 +63,10 @@ fn test_udp_zero_copy_optimization() {
 
 #[tokio::test]
 async fn test_udp_announce_request_parsing() {
-    use byteorder::{BigEndian, WriteBytesExt};
+    use byteorder::{
+        BigEndian,
+        WriteBytesExt
+    };
 
     let mut packet = vec![];
     packet.write_u64::<BigEndian>(12345).unwrap();
@@ -88,7 +95,10 @@ async fn test_udp_announce_request_parsing() {
 
 #[tokio::test]
 async fn test_udp_scrape_request_parsing() {
-    use byteorder::{BigEndian, WriteBytesExt};
+    use byteorder::{
+        BigEndian,
+        WriteBytesExt
+    };
 
     let mut packet = vec![];
     packet.write_u64::<BigEndian>(12345).unwrap();
@@ -108,7 +118,10 @@ async fn test_udp_scrape_request_parsing() {
 
 #[tokio::test]
 async fn test_udp_packet_size_limits() {
-    use byteorder::{BigEndian, WriteBytesExt};
+    use byteorder::{
+        BigEndian,
+        WriteBytesExt
+    };
 
     let mut packet = vec![];
     packet.write_u64::<BigEndian>(12345).unwrap();

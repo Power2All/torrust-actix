@@ -5,7 +5,10 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs;

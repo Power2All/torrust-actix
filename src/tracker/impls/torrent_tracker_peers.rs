@@ -3,13 +3,17 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_entry::{AHashMap, TorrentEntry};
+use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::tracker::types::ahash_map::AHashMap;
 use log::info;
 use std::collections::btree_map::Entry;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{
+    IpAddr,
+    SocketAddr
+};
 
 impl TorrentTracker {
     #[tracing::instrument(level = "debug")]

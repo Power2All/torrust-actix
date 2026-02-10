@@ -1,18 +1,34 @@
-use crate::api::api::{api_parse_body, api_service_token, api_validation};
+use crate::api::api::{
+    api_parse_body,
+    api_service_token,
+    api_validation
+};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
-use crate::common::common::hex2bin;
+use crate::common::common::{
+    hash_id,
+    hex2bin
+};
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::web::Data;
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{
+    web,
+    HttpRequest,
+    HttpResponse
+};
 use regex::Regex;
-use serde_json::{json, Value};
-use sha1::{Digest, Sha1};
-use std::collections::{BTreeMap, HashMap};
+use serde_json::{
+    json,
+    Value
+};
+use std::collections::{
+    BTreeMap,
+    HashMap
+};
 use std::sync::Arc;
 
 lazy_static::lazy_static! {
@@ -290,10 +306,4 @@ pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>
             (StatusCode::OK, response)
         }
     }
-}
-
-fn hash_id(id: &str) -> [u8; 20] {
-    let mut hasher = Sha1::new();
-    hasher.update(id.as_bytes());
-    <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
 }

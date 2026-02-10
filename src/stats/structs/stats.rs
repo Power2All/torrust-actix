@@ -1,4 +1,7 @@
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize
+};
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct Stats {
@@ -55,4 +58,16 @@ pub struct Stats {
     pub ws_reconnects: i64,
     pub ws_auth_success: i64,
     pub ws_auth_failed: i64,
+    pub wt4_connections_handled: i64,
+    pub wt4_announces_handled: i64,
+    pub wt4_offers_handled: i64,
+    pub wt4_answers_handled: i64,
+    pub wt4_scrapes_handled: i64,
+    pub wt4_failure: i64,
+    pub wt6_connections_handled: i64,
+    pub wt6_announces_handled: i64,
+    pub wt6_offers_handled: i64,
+    pub wt6_answers_handled: i64,
+    pub wt6_scrapes_handled: i64,
+    pub wt6_failure: i64,
 }

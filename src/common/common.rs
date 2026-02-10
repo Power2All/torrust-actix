@@ -1,16 +1,21 @@
 use crate::common::structs::custom_error::CustomError;
+use crate::common::types::QueryValues;
 use crate::config::structs::configuration::Configuration;
 use async_std::future;
-use fern::colors::{Color, ColoredLevelConfig};
+use fern::colors::{
+    Color,
+    ColoredLevelConfig
+};
 use log::info;
-use smallvec::SmallVec;
+use sha1::Digest;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
-use std::time::{Duration, SystemTime};
+use std::time::{
+    Duration,
+    SystemTime
+};
 use tokio_shutdown::Shutdown;
-
-pub type QueryValues = SmallVec<[Vec<u8>; 1]>;
 
 #[inline]
 pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>, CustomError> {
@@ -169,4 +174,30 @@ pub async fn shutdown_waiting(timeout: Duration, shutdown_handler: Shutdown) -> 
     future::timeout(timeout, shutdown_handler.handle())
         .await
         .is_ok()
+}
+
+pub fn hash_id(id: &str) -> [u8; 20] {
+    let mut hasher = sha1::Sha1::new();
+    hasher.update(id.as_bytes());
+    <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
+}
+
+#[inline(always)]
+pub fn hex_to_nibble(c: u8) -> u8 {
+    match c {
+        b'0'..=b'9' => c - b'0',
+        b'a'..=b'f' => c - b'a' + 10,
+        b'A'..=b'F' => c - b'A' + 10,
+        _ => 0xFF,
+    }
+}
+
+#[inline(always)]
+pub fn hex_char_to_nibble(c: u8) -> u8 {
+    match c {
+        b'0'..=b'9' => c - b'0',
+        b'a'..=b'f' => c - b'a' + 10,
+        b'A'..=b'F' => c - b'A' + 10,
+        _ => 0xFF,
+    }
 }

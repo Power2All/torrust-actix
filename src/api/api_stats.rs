@@ -1,9 +1,16 @@
-use crate::api::api::{api_service_token, api_validation};
+use crate::api::api::{
+    api_service_token,
+    api_validation
+};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{
+    web,
+    HttpRequest,
+    HttpResponse
+};
 use std::sync::Arc;
 
 #[tracing::instrument(level = "debug")]
@@ -59,6 +66,18 @@ pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServic
     string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "udp6_connections_handled", stats.udp6_connections_handled, false, None));
     string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "udp6_announces_handled", stats.udp6_announces_handled, false, None));
     string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "udp6_scrapes_handled", stats.udp6_scrapes_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_connections_handled", stats.wt4_connections_handled, true, Some(&format!("{prometheus_id} WebTorrent counter metrics"))));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_announces_handled", stats.wt4_announces_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_offers_handled", stats.wt4_offers_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_answers_handled", stats.wt4_answers_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_scrapes_handled", stats.wt4_scrapes_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_failure", stats.wt4_failure, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_connections_handled", stats.wt6_connections_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_announces_handled", stats.wt6_announces_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_offers_handled", stats.wt6_offers_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_answers_handled", stats.wt6_answers_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_scrapes_handled", stats.wt6_scrapes_handled, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_failure", stats.wt6_failure, false, None));
     HttpResponse::Ok().content_type(ContentType::plaintext()).body(string_output)
 }
 

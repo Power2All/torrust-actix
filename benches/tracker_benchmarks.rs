@@ -1,5 +1,13 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use std::net::{IpAddr, Ipv4Addr};
+use criterion::{
+    criterion_group,
+    criterion_main,
+    BenchmarkId,
+    Criterion
+};
+use std::net::{
+    IpAddr,
+    Ipv4Addr
+};
 use std::sync::Arc;
 use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
 use torrust_actix::config::structs::configuration::Configuration;
@@ -11,18 +19,14 @@ use torrust_actix::tracker::structs::torrent_peer::TorrentPeer;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 
 fn random_info_hash() -> InfoHash {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
     let mut bytes = [0u8; 20];
-    rng.fill(&mut bytes);
+    rand::fill(&mut bytes);
     InfoHash(bytes)
 }
 
 fn random_peer_id() -> PeerId {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
     let mut bytes = [0u8; 20];
-    rng.fill(&mut bytes);
+    rand::fill(&mut bytes);
     PeerId(bytes)
 }
 
@@ -35,6 +39,9 @@ fn create_test_peer(ip: IpAddr, port: u16, peer_id: PeerId) -> TorrentPeer {
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(1000),
         event: AnnounceEvent::Started,
+        webrtc_offer: None,
+        webrtc_offer_id: None,
+        is_webtorrent: false,
     }
 }
 
@@ -53,7 +60,7 @@ fn bench_add_peer(c: &mut Criterion) {
             let info_hash = random_info_hash();
             let peer_id = random_peer_id();
             let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881, peer_id);
-            black_box(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
+            std::hint::black_box(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
         });
     });
 }
@@ -71,7 +78,7 @@ fn bench_get_peers_with_limit(c: &mut Criterion) {
     for limit in [10, 50, 100, 200].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(limit), limit, |b, &limit| {
             b.iter(|| {
-                black_box(tracker.get_torrent_peers(
+                std::hint::black_box(tracker.get_torrent_peers(
                     info_hash,
                     limit,
                     TorrentPeersType::IPv4,
@@ -117,7 +124,7 @@ fn bench_sharding_distribution(c: &mut Criterion) {
                 let info_hash = random_info_hash();
                 let peer_id = random_peer_id();
                 let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881, peer_id);
-                black_box(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
+                std::hint::black_box(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
             }
         });
     });
@@ -134,7 +141,7 @@ fn bench_udp_packet_parsing(c: &mut Criterion) {
     packet.write_u32::<BigEndian>(12345).unwrap();
     c.bench_function("udp_connect_request_parse", |b| {
         b.iter(|| {
-            black_box(Request::from_bytes(&packet[..], 74));
+            let _ = std::hint::black_box(Request::from_bytes(&packet[..], 74));
         });
     });
 }
@@ -155,17 +162,17 @@ fn bench_peer_filtering_ipv4_vs_ipv6(c: &mut Criterion) {
     let mut group = c.benchmark_group("peer_filtering");
     group.bench_function("ipv4_only", |b| {
         b.iter(|| {
-            black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::IPv4, None));
+            std::hint::black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::IPv4, None));
         });
     });
     group.bench_function("ipv6_only", |b| {
         b.iter(|| {
-            black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::IPv6, None));
+            std::hint::black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::IPv6, None));
         });
     });
     group.bench_function("all_types", |b| {
         b.iter(|| {
-            black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::All, None));
+            std::hint::black_box(tracker.get_torrent_peers(info_hash, 50, TorrentPeersType::All, None));
         });
     });
     group.finish();

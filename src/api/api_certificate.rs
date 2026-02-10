@@ -1,42 +1,25 @@
-use crate::api::api::{api_service_token, api_validation};
+use crate::api::api::{
+    api_service_token,
+    api_validation
+};
+use crate::api::structs::api_certificate::{
+    CertificateReloadRequest,
+    CertificateStatusItem,
+    CertificateReloadResult,
+    CertificateReloadError
+};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
-use crate::ssl::certificate_store::ServerIdentifier;
+use crate::ssl::enums::server_identifier::ServerIdentifier;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
-use actix_web::{web, HttpRequest, HttpResponse};
-use serde::{Deserialize, Serialize};
+use actix_web::{
+    web,
+    HttpRequest,
+    HttpResponse
+};
 use serde_json::json;
 use std::sync::Arc;
-
-#[derive(Debug, Deserialize)]
-pub struct CertificateReloadRequest {
-    pub server_type: Option<String>,
-    pub bind_address: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CertificateStatusItem {
-    pub server_type: String,
-    pub bind_address: String,
-    pub cert_path: String,
-    pub key_path: String,
-    pub loaded_at: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CertificateReloadResult {
-    pub server_type: String,
-    pub bind_address: String,
-    pub loaded_at: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CertificateReloadError {
-    pub server_type: String,
-    pub bind_address: String,
-    pub error: String,
-}
 
 #[tracing::instrument(level = "debug")]
 pub async fn api_service_certificate_reload(

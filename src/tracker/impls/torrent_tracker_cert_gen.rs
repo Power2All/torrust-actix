@@ -1,7 +1,13 @@
 use crate::structs::Cli;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{error, info};
-use rcgen::{generate_simple_self_signed, CertifiedKey};
+use log::{
+    error,
+    info
+};
+use rcgen::{
+    generate_simple_self_signed,
+    CertifiedKey
+};
 use std::fs;
 use std::process::exit;
 

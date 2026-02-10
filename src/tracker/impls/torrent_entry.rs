@@ -1,4 +1,5 @@
-use crate::tracker::structs::torrent_entry::{AHashMap, TorrentEntry};
+use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::types::ahash_map::AHashMap;
 
 impl TorrentEntry {
     #[inline]

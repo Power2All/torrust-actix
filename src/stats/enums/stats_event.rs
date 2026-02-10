@@ -1,4 +1,7 @@
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum StatsEvent {
@@ -53,4 +56,16 @@ pub enum StatsEvent {
     WsReconnects,
     WsAuthSuccess,
     WsAuthFailed,
+    Wt4ConnectionsHandled,
+    Wt4AnnouncesHandled,
+    Wt4OffersHandled,
+    Wt4AnswersHandled,
+    Wt4ScrapesHandled,
+    Wt4Failure,
+    Wt6ConnectionsHandled,
+    Wt6AnnouncesHandled,
+    Wt6OffersHandled,
+    Wt6AnswersHandled,
+    Wt6ScrapesHandled,
+    Wt6Failure,
 }

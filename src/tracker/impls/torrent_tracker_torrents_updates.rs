@@ -4,9 +4,17 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{debug, error, info, warn};
+use log::{
+    debug,
+    error,
+    info,
+    warn
+};
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{
+    BTreeMap,
+    HashMap
+};
 use std::sync::Arc;
 use std::time::SystemTime;
 

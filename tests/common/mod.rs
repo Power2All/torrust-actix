@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use rand::RngExt;
 use std::sync::Arc;
 use tempfile::TempDir;
 use torrust_actix::config::structs::api_trackers_config::ApiTrackersConfig;
@@ -60,16 +61,12 @@ pub fn create_temp_dir() -> TempDir {
 }
 
 pub fn random_info_hash() -> torrust_actix::tracker::structs::info_hash::InfoHash {
-    use rand::Rng;
-
     let mut rng = rand::rng();
     let bytes: [u8; 20] = rng.random();
     torrust_actix::tracker::structs::info_hash::InfoHash(bytes)
 }
 
 pub fn random_peer_id() -> torrust_actix::tracker::structs::peer_id::PeerId {
-    use rand::Rng;
-
     let mut rng = rand::rng();
     let bytes: [u8; 20] = rng.random();
     torrust_actix::tracker::structs::peer_id::PeerId(bytes)
@@ -91,5 +88,8 @@ pub fn create_test_peer(
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(1000),
         event: torrust_actix::tracker::enums::announce_event::AnnounceEvent::Started,
+        webrtc_offer: None,
+        webrtc_offer_id: None,
+        is_webtorrent: false,
     }
 }

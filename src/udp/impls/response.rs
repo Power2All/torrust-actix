@@ -4,18 +4,28 @@ use crate::udp::structs::announce_response::AnnounceResponse;
 use crate::udp::structs::connect_response::ConnectResponse;
 use crate::udp::structs::connection_id::ConnectionId;
 use crate::udp::structs::error_response::ErrorResponse;
-use crate::udp::structs::number_of_downloads::NumberOfDownloads;
 use crate::udp::structs::number_of_peers::NumberOfPeers;
-use crate::udp::structs::port::Port;
-use crate::udp::structs::response_peer::ResponsePeer;
 use crate::udp::structs::scrape_response::ScrapeResponse;
-use crate::udp::structs::torrent_scrape_statistics::TorrentScrapeStatistics;
 use crate::udp::structs::transaction_id::TransactionId;
-use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
-use std::convert::TryInto;
+use crate::udp::udp::{
+    parse_ipv4_peers,
+    parse_ipv6_peers,
+    parse_scrape_stats
+};
+use byteorder::{
+    NetworkEndian,
+    ReadBytesExt,
+    WriteBytesExt
+};
 use std::io;
-use std::io::{Cursor, Write};
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::io::{
+    Cursor,
+    Write
+};
+use std::net::{
+    Ipv4Addr,
+    Ipv6Addr
+};
 
 impl From<ConnectResponse> for Response {
     fn from(r: ConnectResponse) -> Self {
@@ -201,69 +211,4 @@ impl Response {
         self.write(&mut buffer)?;
         Ok(buffer)
     }
-}
-
-#[inline]
-fn parse_ipv4_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv4Addr>>, io::Error> {
-    let chunk_size = 6;
-    let peer_count = bytes.len() / chunk_size;
-    let mut peers = Vec::with_capacity(peer_count);
-    for chunk in bytes.chunks_exact(chunk_size) {
-        let ip_bytes: [u8; 4] = chunk[..4].try_into().map_err(|_|
-            io::Error::new(io::ErrorKind::InvalidData, "Invalid IPv4 address bytes")
-        )?;
-        let port = (&chunk[4..6]).read_u16::<NetworkEndian>().map_err(|e|
-            io::Error::new(io::ErrorKind::InvalidData, e)
-        )?;
-        peers.push(ResponsePeer {
-            ip_address: Ipv4Addr::from(ip_bytes),
-            port: Port(port),
-        });
-    }
-    Ok(peers)
-}
-
-#[inline]
-fn parse_ipv6_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv6Addr>>, io::Error> {
-    let chunk_size = 18;
-    let peer_count = bytes.len() / chunk_size;
-    let mut peers = Vec::with_capacity(peer_count);
-    for chunk in bytes.chunks_exact(chunk_size) {
-        let ip_bytes: [u8; 16] = chunk[..16].try_into().map_err(|_|
-            io::Error::new(io::ErrorKind::InvalidData, "Invalid IPv6 address bytes")
-        )?;
-        let port = (&chunk[16..18]).read_u16::<NetworkEndian>().map_err(|e|
-            io::Error::new(io::ErrorKind::InvalidData, e)
-        )?;
-        peers.push(ResponsePeer {
-            ip_address: Ipv6Addr::from(ip_bytes),
-            port: Port(port),
-        });
-    }
-    Ok(peers)
-}
-
-#[inline]
-fn parse_scrape_stats(bytes: &[u8]) -> Result<Vec<TorrentScrapeStatistics>, io::Error> {
-    let chunk_size = 12;
-    let stats_count = bytes.len() / chunk_size;
-    let mut stats = Vec::with_capacity(stats_count);
-    for chunk in bytes.chunks_exact(chunk_size) {
-        let mut cursor = Cursor::new(chunk);
-        let seeders = cursor.read_i32::<NetworkEndian>().map_err(|e|
-            io::Error::new(io::ErrorKind::InvalidData, e)
-        )?;
-        let downloads = cursor.read_i32::<NetworkEndian>().map_err(|e|
-            io::Error::new(io::ErrorKind::InvalidData, e)
-        )?;
-        let leechers = cursor.read_i32::<NetworkEndian>().map_err(|e|
-            io::Error::new(io::ErrorKind::InvalidData, e)
-        )?;
-        stats.push(TorrentScrapeStatistics {
-            seeders: NumberOfPeers(seeders),
-            completed: NumberOfDownloads(downloads),
-            leechers: NumberOfPeers(leechers),
-        });
-    }
-    Ok(stats)
 }

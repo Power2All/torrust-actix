@@ -1,5 +1,8 @@
 mod common;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{
+    IpAddr,
+    Ipv4Addr
+};
 use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
 use torrust_actix::tracker::enums::torrent_peers_type::TorrentPeersType;
 

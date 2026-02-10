@@ -1,6 +1,9 @@
 use crate::structs::Cli;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use std::fs;
 use std::process::exit;
 use std::sync::Arc;

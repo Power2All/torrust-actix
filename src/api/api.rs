@@ -1,33 +1,94 @@
-use crate::api::api_blacklists::{api_service_blacklist_delete, api_service_blacklist_get, api_service_blacklist_post, api_service_blacklists_delete, api_service_blacklists_get, api_service_blacklists_post};
-use crate::api::api_certificate::{api_service_certificate_reload, api_service_certificate_status};
-use crate::api::api_keys::{api_service_key_delete, api_service_key_get, api_service_key_post, api_service_keys_delete, api_service_keys_get, api_service_keys_post};
-use crate::api::api_stats::{api_service_prom_get, api_service_stats_get};
-use crate::api::api_torrents::{api_service_torrent_delete, api_service_torrent_get, api_service_torrent_post, api_service_torrents_delete, api_service_torrents_get, api_service_torrents_post};
-use crate::api::api_users::{api_service_user_delete, api_service_user_get, api_service_user_post, api_service_users_delete, api_service_users_get, api_service_users_post};
-use crate::api::api_whitelists::{api_service_whitelist_delete, api_service_whitelist_get, api_service_whitelist_post, api_service_whitelists_delete, api_service_whitelists_get, api_service_whitelists_post};
+use crate::api::api_blacklists::{
+    api_service_blacklist_delete,
+    api_service_blacklist_get,
+    api_service_blacklist_post,
+    api_service_blacklists_delete,
+    api_service_blacklists_get,
+    api_service_blacklists_post
+};
+use crate::api::api_certificate::{
+    api_service_certificate_reload,
+    api_service_certificate_status
+};
+use crate::api::api_keys::{
+    api_service_key_delete,
+    api_service_key_get,
+    api_service_key_post,
+    api_service_keys_delete,
+    api_service_keys_get,
+    api_service_keys_post
+};
+use crate::api::api_stats::{
+    api_service_prom_get,
+    api_service_stats_get
+};
+use crate::api::api_torrents::{
+    api_service_torrent_delete,
+    api_service_torrent_get,
+    api_service_torrent_post,
+    api_service_torrents_delete,
+    api_service_torrents_get,
+    api_service_torrents_post
+};
+use crate::api::api_users::{
+    api_service_user_delete,
+    api_service_user_get,
+    api_service_user_post,
+    api_service_users_delete,
+    api_service_users_get,
+    api_service_users_post
+};
+use crate::api::api_whitelists::{
+    api_service_whitelist_delete,
+    api_service_whitelist_get,
+    api_service_whitelist_post,
+    api_service_whitelists_delete,
+    api_service_whitelists_get,
+    api_service_whitelists_post
+};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
-use crate::ssl::certificate_resolver::DynamicCertificateResolver;
-use crate::ssl::certificate_store::ServerIdentifier;
+use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
+use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use actix_cors::Cors;
 use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
-use actix_web::web::{BytesMut, Data, ServiceConfig};
-use actix_web::{http, web, App, HttpRequest, HttpResponse, HttpServer};
+use actix_web::web::{
+    BytesMut,
+    Data,
+    ServiceConfig
+};
+use actix_web::{
+    http,
+    web,
+    App,
+    HttpRequest,
+    HttpResponse,
+    HttpServer
+};
 use futures_util::StreamExt;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use serde_json::json;
 use std::future::Future;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{
+    IpAddr,
+    SocketAddr
+};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use utoipa_swagger_ui::{Config, SwaggerUi};
+use utoipa_swagger_ui::{
+    Config,
+    SwaggerUi
+};
 
 #[tracing::instrument(level = "debug")]
 pub fn api_service_cors() -> Cors

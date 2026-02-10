@@ -3,9 +3,12 @@ use crate::common::structs::custom_error::CustomError;
 use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
 use crate::http::structs::http_service_data::HttpServiceData;
-use crate::http::types::{HttpServiceQueryHashingMapErr, HttpServiceQueryHashingMapOk};
-use crate::ssl::certificate_resolver::DynamicCertificateResolver;
-use crate::ssl::certificate_store::ServerIdentifier;
+use crate::http::types::{
+    HttpServiceQueryHashingMapErr,
+    HttpServiceQueryHashingMapOk
+};
+use crate::ssl::enums::server_identifier::ServerIdentifier;
+use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -13,19 +16,45 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 use crate::websocket::enums::protocol_type::ProtocolType;
 use crate::websocket::enums::request_type::RequestType;
-use crate::websocket::slave::forwarder::{create_cluster_error_response, forward_request};
+use crate::websocket::websocket::{
+    create_cluster_error_response,
+    forward_request
+};
 use actix_cors::Cors;
 use actix_web::dev::ServerHandle;
 use actix_web::http::header::ContentType;
-use actix_web::web::{Data, ServiceConfig};
-use actix_web::{http, web, App, HttpRequest, HttpResponse, HttpServer};
-use bip_bencode::{ben_bytes, ben_int, ben_list, ben_map, BMutAccess};
+use actix_web::web::{
+    Data,
+    ServiceConfig
+};
+use actix_web::{
+    http,
+    web,
+    App,
+    HttpRequest,
+    HttpResponse,
+    HttpServer
+};
+use bip_bencode::{
+    ben_bytes,
+    ben_int,
+    ben_list,
+    ben_map,
+    BMutAccess
+};
 use lazy_static::lazy_static;
-use log::{debug, error, info};
+use log::{
+    debug,
+    error,
+    info
+};
 use std::borrow::Cow;
 use std::future::Future;
 use std::io::Write;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{
+    IpAddr,
+    SocketAddr
+};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;

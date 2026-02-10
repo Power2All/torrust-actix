@@ -1,4 +1,7 @@
-use sqlx::{Pool, Postgres};
+use sqlx::{
+    Pool,
+    Postgres
+};
 
 #[derive(Debug, Clone)]
 pub struct DatabaseConnectorPgSQL {

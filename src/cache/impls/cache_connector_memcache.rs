@@ -1,11 +1,21 @@
-use crate::cache::errors::CacheError;
+use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector_memcache::CacheConnectorMemcache;
 use crate::cache::traits::cache_backend::CacheBackend;
 use crate::tracker::structs::info_hash::InfoHash;
 use async_trait::async_trait;
 use log::debug;
 use parking_lot::Mutex;
+use std::fmt;
 use std::sync::Arc;
+
+impl fmt::Debug for CacheConnectorMemcache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CacheConnectorMemcache")
+            .field("client", &"<memcache::Client>")
+            .field("prefix", &self.prefix)
+            .finish()
+    }
+}
 
 impl CacheConnectorMemcache {
     pub fn connect(url: &str, prefix: &str) -> Result<Self, CacheError> {

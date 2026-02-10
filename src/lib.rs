@@ -9,4 +9,5 @@ pub mod stats;
 pub mod structs;
 pub mod tracker;
 pub mod udp;
+pub mod webtorrent;
 pub mod websocket;

@@ -1,6 +1,6 @@
 use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_entry::AHashMap;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
+use crate::tracker::types::ahash_map::AHashMap;
 use serde::Serialize;
 
 #[derive(Serialize, Debug)]

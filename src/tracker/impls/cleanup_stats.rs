@@ -1,13 +1,11 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::structs::cleanup_stats::CleanupStats;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-
-pub struct CleanupStats {
-    pub torrents: AtomicU64,
-    pub seeds: AtomicU64,
-    pub peers: AtomicU64,
-}
+use std::sync::atomic::{
+    AtomicU64,
+    Ordering
+};
+use std::sync::Arc;
 
 impl CleanupStats {
     pub(crate) fn new() -> Self {

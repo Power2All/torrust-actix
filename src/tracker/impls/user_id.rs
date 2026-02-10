@@ -1,4 +1,5 @@
 use crate::common::common::bin2hex;
+use crate::common::common::hex_to_nibble;
 use crate::tracker::structs::user_id::UserId;
 use std::fmt;
 use std::fmt::Formatter;
@@ -97,15 +98,5 @@ impl<'de> serde::de::Deserialize<'de> for UserId {
             }
         }
         des.deserialize_str(UserIdVisitor)
-    }
-}
-
-#[inline(always)]
-fn hex_to_nibble(c: u8) -> u8 {
-    match c {
-        b'0'..=b'9' => c - b'0',
-        b'a'..=b'f' => c - b'a' + 10,
-        b'A'..=b'F' => c - b'A' + 10,
-        _ => 0xFF,
     }
 }

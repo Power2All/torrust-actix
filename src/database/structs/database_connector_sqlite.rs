@@ -1,4 +1,7 @@
-use sqlx::{Pool, Sqlite};
+use sqlx::{
+    Pool,
+    Sqlite
+};
 
 #[derive(Debug, Clone)]
 pub struct DatabaseConnectorSQLite {

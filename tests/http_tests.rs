@@ -1,8 +1,14 @@
 mod common;
 
-use actix_web::{test, App};
+use actix_web::{
+    test,
+    App
+};
 use std::net::IpAddr;
-use torrust_actix::http::http::{http_service_cors, http_service_routes};
+use torrust_actix::http::http::{
+    http_service_cors,
+    http_service_routes
+};
 use torrust_actix::http::structs::http_service_data::HttpServiceData;
 
 #[actix_web::test]

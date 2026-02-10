@@ -13,9 +13,17 @@ use crate::udp::structs::port::Port;
 use crate::udp::structs::scrape_request::ScrapeRequest;
 use crate::udp::structs::transaction_id::TransactionId;
 use crate::udp::udp::PROTOCOL_IDENTIFIER;
-use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{
+    NetworkEndian,
+    ReadBytesExt,
+    WriteBytesExt
+};
 use std::io;
-use std::io::{Cursor, Read, Write};
+use std::io::{
+    Cursor,
+    Read,
+    Write
+};
 use std::net::Ipv4Addr;
 
 impl From<ConnectRequest> for Request {
@@ -49,18 +57,13 @@ impl Request {
                 bytes.write_i64::<NetworkEndian>(r.connection_id.0)?;
                 bytes.write_i32::<NetworkEndian>(1)?;
                 bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
-
                 bytes.write_all(&r.info_hash.0)?;
                 bytes.write_all(&r.peer_id.0)?;
-
                 bytes.write_i64::<NetworkEndian>(r.bytes_downloaded.0)?;
                 bytes.write_i64::<NetworkEndian>(r.bytes_left.0)?;
                 bytes.write_i64::<NetworkEndian>(r.bytes_uploaded.0)?;
-
                 bytes.write_i32::<NetworkEndian>(r.event.to_i32())?;
-
                 bytes.write_all(&r.ip_address.map_or([0; 4], |ip| ip.octets()))?;
-
                 bytes.write_u32::<NetworkEndian>(r.key.0)?;
                 bytes.write_i32::<NetworkEndian>(r.peers_wanted.0)?;
                 bytes.write_u16::<NetworkEndian>(r.port.0)?;
@@ -69,7 +72,6 @@ impl Request {
                 bytes.write_i64::<NetworkEndian>(r.connection_id.0)?;
                 bytes.write_i32::<NetworkEndian>(2)?;
                 bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
-
                 for info_hash in r.info_hashes {
                     bytes.write_all(&info_hash.0)?;
                 }

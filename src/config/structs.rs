@@ -4,6 +4,7 @@ pub mod configuration;
 pub mod database_structure_config;
 pub mod http_trackers_config;
 pub mod udp_trackers_config;
+pub mod webtorrent_trackers_config;
 pub mod database_structure_config_blacklist;
 pub mod database_structure_config_keys;
 pub mod database_structure_config_torrents;

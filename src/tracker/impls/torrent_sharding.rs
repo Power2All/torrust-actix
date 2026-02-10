@@ -1,5 +1,5 @@
 use crate::common::common::shutdown_waiting;
-use crate::tracker::impls::cleanup_stats::CleanupStats;
+use crate::tracker::structs::cleanup_stats::CleanupStats;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;

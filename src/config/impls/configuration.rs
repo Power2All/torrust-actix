@@ -17,6 +17,7 @@ use crate::config::structs::http_trackers_config::HttpTrackersConfig;
 use crate::config::structs::sentry_config::SentryConfig;
 use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
+use crate::config::structs::webtorrent_trackers_config::WebTorrentTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use regex::Regex;
 use std::env;
@@ -165,6 +166,21 @@ impl Configuration {
                     ssl_key: String::from(""),
                     ssl_cert: String::from(""),
                     tls_connection_rate: 256
+                }
+            ),
+            webtorrent_server: vec!(
+                WebTorrentTrackersConfig {
+                    enabled: false,
+                    bind_address: String::from("0.0.0.0:12100"),
+                    keep_alive: 60,
+                    request_timeout: 10,
+                    disconnect_timeout: 10,
+                    max_connections: 100,
+                    threads: 4,
+                    ssl: false,
+                    ssl_key: String::from(""),
+                    ssl_cert: String::from(""),
+                    tls_connection_rate: 100
                 }
             )
         }
@@ -586,6 +602,50 @@ impl Configuration {
             }
             udp_iteration += 1;
         }
+        let mut webtorrent_iteration = 0;
+        loop {
+            match config.webtorrent_server.get_mut(webtorrent_iteration) {
+                None => {
+                    break;
+                }
+                Some(block) => {
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_ENABLED")) {
+                        block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_SSL")) {
+                        block.ssl = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_BIND_ADDRESS")) {
+                        block.bind_address = value;
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_SSL_KEY")) {
+                        block.ssl_key = value;
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_SSL_CERT")) {
+                        block.ssl_cert = value;
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_KEEP_ALIVE")) {
+                        block.keep_alive = value.parse::<u64>().unwrap_or(60);
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_REQUEST_TIMEOUT")) {
+                        block.request_timeout = value.parse::<u64>().unwrap_or(10);
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_DISCONNECT_TIMEOUT")) {
+                        block.disconnect_timeout = value.parse::<u64>().unwrap_or(10);
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_MAX_CONNECTIONS")) {
+                        block.max_connections = value.parse::<u64>().unwrap_or(100);
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_THREADS")) {
+                        block.threads = value.parse::<u64>().unwrap_or(4);
+                    }
+                    if let Ok(value) = env::var(format!("WEBTORRENT_{webtorrent_iteration}_TLS_CONNECTION_RATE")) {
+                        block.tls_connection_rate = value.parse::<u64>().unwrap_or(100);
+                    }
+                }
+            }
+            webtorrent_iteration += 1;
+        }
         config
     }
 
@@ -717,6 +777,14 @@ impl Configuration {
                 Self::validate_socket_address(
                     &format!("udp_server[{}].bind_address", index),
                     &udp_server.bind_address,
+                );
+            }
+        }
+        for (index, webtorrent_server) in config.webtorrent_server.iter().enumerate() {
+            if webtorrent_server.enabled {
+                Self::validate_socket_address(
+                    &format!("webtorrent_server[{}].bind_address", index),
+                    &webtorrent_server.bind_address,
                 );
             }
         }

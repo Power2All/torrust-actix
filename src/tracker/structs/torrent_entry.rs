@@ -1,11 +1,8 @@
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
-use ahash::AHasher;
 use serde::Serialize;
-use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
-
-pub type AHashMap<K, V> = HashMap<K, V, BuildHasherDefault<AHasher>>;
+use std::time::Instant;
+use crate::tracker::types::ahash_map::AHashMap;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct TorrentEntry {
@@ -15,5 +12,5 @@ pub struct TorrentEntry {
     pub peers: AHashMap<PeerId, TorrentPeer>,
     pub completed: u64,
     #[serde(with = "serde_millis")]
-    pub updated: std::time::Instant
+    pub updated: Instant
 }

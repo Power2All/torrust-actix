@@ -1,28 +1,48 @@
 use crate::config::structs::configuration::Configuration;
-use crate::database::enums::database_drivers::DatabaseDrivers;
-use crate::database::helpers::{
-    build_delete_hash_query, build_insert_ignore_hash_query, build_select_hash_query,
-    build_update_ignore_torrent_query, build_upsert_torrent_query,
-    limit_offset, upsert_conflict_clause,
+use crate::database::database::{
+    build_delete_hash_query,
+    build_insert_ignore_hash_query,
+    build_select_hash_query,
+    build_update_ignore_torrent_query,
+    build_upsert_torrent_query,
+    limit_offset,
+    upsert_conflict_clause
 };
+use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_pgsql::DatabaseConnectorPgSQL;
 use crate::database::traits::database_backend::DatabaseBackend;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
-use crate::tracker::structs::torrent_entry::AHashMap;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use crate::tracker::types::ahash_map::AHashMap;
 use async_std::task;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
-use log::{error, info};
-use sha1::{Digest, Sha1};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{ConnectOptions, Error, Pool, Postgres, Row, Transaction};
+use log::{
+    error,
+    info
+};
+use sha1::{
+    Digest,
+    Sha1
+};
+use sqlx::postgres::{
+    PgConnectOptions,
+    PgPoolOptions
+};
+use sqlx::{
+    ConnectOptions,
+    Error,
+    Pool,
+    Postgres,
+    Row,
+    Transaction
+};
 use std::collections::BTreeMap;
 use std::process::exit;
 use std::str::FromStr;

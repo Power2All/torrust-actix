@@ -1,6 +1,6 @@
 [package]
 name = "torrust-actix"
-version = "4.1.1"
+version = "4.2.0"
 edition = "2024"
 license = "AGPL-3.0"
 authors = [
@@ -73,7 +73,7 @@ ahash = "^0.8"
 
 [dev-dependencies]
 tempfile = "^3.14"
-rand = "^0.9"
+rand = "^0.10"
 criterion = { version = "^0.8", features = ["async_tokio"] }
 mockall = "^0.14"
 proptest = "^1.9"

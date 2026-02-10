@@ -2,7 +2,10 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;

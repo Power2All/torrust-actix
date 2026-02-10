@@ -27,9 +27,21 @@ use crate::udp::structs::transaction_id::TransactionId;
 use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
 use crate::udp::udp::MAX_SCRAPE_TORRENTS;
-use log::{debug, info};
-use socket2::{Domain, Protocol, Socket, Type};
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use log::{
+    debug,
+    info
+};
+use socket2::{
+    Domain,
+    Protocol,
+    Socket,
+    Type
+};
+use std::net::{
+    Ipv4Addr,
+    Ipv6Addr,
+    SocketAddr
+};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;

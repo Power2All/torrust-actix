@@ -1,7 +1,10 @@
-use std::collections::BTreeMap;
-use serde::{Deserialize, Serialize};
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::user_id::UserId;
+use serde::{
+    Deserialize,
+    Serialize
+};
+use std::collections::BTreeMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserEntryItem {

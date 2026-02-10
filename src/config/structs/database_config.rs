@@ -1,5 +1,8 @@
-use serde::{Deserialize, Serialize};
 use crate::database::enums::database_drivers::DatabaseDrivers;
+use serde::{
+    Deserialize,
+    Serialize
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DatabaseConfig {

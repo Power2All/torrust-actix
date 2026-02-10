@@ -1,5 +1,5 @@
 use crate::cache::enums::cache_engine::CacheEngine;
-use crate::cache::errors::CacheError;
+use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::cache::structs::cache_connector_memcache::CacheConnectorMemcache;
 use crate::cache::structs::cache_connector_redis::CacheConnectorRedis;
