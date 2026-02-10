@@ -7,6 +7,7 @@ use crate::http::types::{
     HttpServiceQueryHashingMapErr,
     HttpServiceQueryHashingMapOk
 };
+use crate::security::security::validate_remote_ip;
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use crate::stats::enums::stats_event::StatsEvent;
@@ -730,10 +731,16 @@ pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, Htt
 pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<HttpTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
+    if !data.trusted_proxies {
+        return Ok(origin_ip);
+    }
     request.headers()
         .get(&data.real_ip)
         .and_then(|header| header.to_str().ok())
-        .and_then(|ip_str| IpAddr::from_str(ip_str).ok())
+        .and_then(|ip_str| {
+            validate_remote_ip(ip_str, data.trusted_proxies).ok()?;
+            IpAddr::from_str(ip_str).ok()
+        })
         .map(Ok)
         .unwrap_or(Ok(origin_ip))
 }

@@ -1,6 +1,7 @@
 use crate::common::structs::custom_error::CustomError;
 use crate::common::types::QueryValues;
 use crate::config::structs::configuration::Configuration;
+use crate::security::security::MAX_PERCENT_DECODED_SIZE;
 use async_std::future;
 use fern::colors::{
     Color,
@@ -40,6 +41,12 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>
                     continue;
                 }
                 let value_data = percent_encoding::percent_decode_str(value_data_raw).collect::<Vec<u8>>();
+                if value_data.len() > MAX_PERCENT_DECODED_SIZE {
+                    return Err(CustomError::new(&format!(
+                        "Percent-decoded value exceeds maximum size of {} bytes",
+                        MAX_PERCENT_DECODED_SIZE
+                    )));
+                }
                 queries
                     .entry(key_name)
                     .or_default()

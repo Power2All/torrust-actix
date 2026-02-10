@@ -202,6 +202,11 @@ UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 
 ### ChangeLog
 
+#### v4.2.0
+* Adding WebTorrent (experimental) support
+* Refactoring the whole project structure
+* Adding security and anti-malicious validation and checks
+
 #### v4.1.1
 * Added hot reloading of SSL certificates for renewal
 * API has an extra endpoint to run the hot reloading

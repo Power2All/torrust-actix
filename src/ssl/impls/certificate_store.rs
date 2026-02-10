@@ -1,3 +1,5 @@
+use crate::common::structs::custom_error::CustomError;
+use crate::security::security::validate_file_path;
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::ssl::structs::certificate_bundle::CertificateBundle;
 use crate::ssl::structs::certificate_paths::CertificatePaths;
@@ -132,6 +134,10 @@ impl CertificateStore {
         cert_path: &str,
         key_path: &str,
     ) -> Result<CertificateBundle, crate::ssl::enums::certificate_error::CertificateError> {
+        validate_file_path(cert_path)
+            .map_err(|e: CustomError| crate::ssl::enums::certificate_error::CertificateError::CertFileNotFound(e.to_string()))?;
+        validate_file_path(key_path)
+            .map_err(|e: CustomError| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(e.to_string()))?;
         let key_file = File::open(key_path)
             .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{}: {}", key_path, e)))?;
         let mut key_reader = BufReader::new(key_file);

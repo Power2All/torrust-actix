@@ -14,4 +14,6 @@ pub enum RequestType {
     UdpPacket,
     WtAnnounce,
     WtScrape,
+    WtOffer,
+    WtAnswer,
 }

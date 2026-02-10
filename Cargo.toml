@@ -62,6 +62,8 @@ redis = { version = "^1.0", features = ["tokio-comp", "connection-manager"] }
 memcache = { version = "^0.19", default-features = false }
 thiserror = "^2.0"
 tokio = { version = "^1.49", features = ["full"] }
+rand = "^0.10"
+base64 = "^0.22"
 tokio-shutdown = "^0.1"
 toml = "^0.9"
 tracing = "^0.1"
@@ -72,11 +74,10 @@ smallvec = { version = "^1.13", features = ["union", "const_generics"] }
 ahash = "^0.8"
 
 [dev-dependencies]
-tempfile = "^3.14"
-rand = "^0.10"
+tempfile = "^3.25"
 criterion = { version = "^0.8", features = ["async_tokio"] }
 mockall = "^0.14"
-proptest = "^1.9"
+proptest = "^1.10"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"

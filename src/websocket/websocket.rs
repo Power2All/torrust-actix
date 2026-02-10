@@ -15,11 +15,17 @@ use crate::websocket::structs::websocket_service_data::WebSocketServiceData;
 use crate::websocket::types::SlaveSenderChannel;
 use crate::webtorrent::structs::wt_announce::WtAnnounce;
 use crate::webtorrent::structs::wt_announce_response::WtAnnounceResponse;
+use crate::webtorrent::structs::wt_offer::WtOffer;
+use crate::webtorrent::structs::wt_offer_response::WtOfferResponse;
+use crate::webtorrent::structs::wt_answer::WtAnswer;
+use crate::webtorrent::structs::wt_answer_response::WtAnswerResponse;
 use crate::webtorrent::structs::wt_scrape::WtScrape;
 use crate::webtorrent::structs::wt_scrape_response::WtScrapeResponse;
 use crate::webtorrent::webtorrent::{
     handle_webtorrent_announce,
-    handle_webtorrent_scrape
+    handle_webtorrent_scrape,
+    handle_webtorrent_offer,
+    handle_webtorrent_answer
 };
 use bip_bencode::{
     ben_bytes,
@@ -119,6 +125,12 @@ pub async fn process_cluster_request(
         }
         RequestType::WtScrape => {
             process_webtorrent_scrape(&tracker, &request).await
+        }
+        RequestType::WtOffer => {
+            process_webtorrent_offer(&tracker, &request).await
+        }
+        RequestType::WtAnswer => {
+            process_webtorrent_answer(&tracker, &request).await
         }
     }
 }
@@ -554,6 +566,90 @@ pub async fn process_webtorrent_scrape(tracker: &Arc<TorrentTracker>, request: &
             ClusterResponse::success(
                 request.request_id,
                 serde_json::to_vec(&WtScrapeResponse { files: std::collections::HashMap::new() }).unwrap_or_default()
+            )
+        }
+    }
+}
+
+pub async fn process_webtorrent_offer(tracker: &Arc<TorrentTracker>, request: &ClusterRequest) -> ClusterResponse {
+    let wt_offer: WtOffer = match serde_json::from_slice(&request.payload) {
+        Ok(offer) => offer,
+        Err(e) => {
+            error!("[WEBSOCKET MASTER] Failed to parse WebTorrent offer: {}", e);
+            let error_response = WtOfferResponse {
+                info_hash: String::new(),
+                peer_id: String::new(),
+                offer_id: String::new(),
+                error: Some(format!("Invalid offer: {}", e)),
+            };
+            return ClusterResponse::success(
+                request.request_id,
+                serde_json::to_vec(&error_response).unwrap_or_default()
+            );
+        }
+    };
+
+    match handle_webtorrent_offer(tracker, wt_offer, request.client_ip).await {
+        Ok(response) => {
+            ClusterResponse::success(
+                request.request_id,
+                serde_json::to_vec(&response).unwrap_or_default()
+            )
+        }
+        Err(e) => {
+            error!("[WEBSOCKET MASTER] WebTorrent offer failed: {}", e);
+            let error_response = WtOfferResponse {
+                info_hash: String::new(),
+                peer_id: String::new(),
+                offer_id: String::new(),
+                error: Some(format!("{}", e)),
+            };
+            ClusterResponse::success(
+                request.request_id,
+                serde_json::to_vec(&error_response).unwrap_or_default()
+            )
+        }
+    }
+}
+
+pub async fn process_webtorrent_answer(tracker: &Arc<TorrentTracker>, request: &ClusterRequest) -> ClusterResponse {
+    let wt_answer: WtAnswer = match serde_json::from_slice(&request.payload) {
+        Ok(answer) => answer,
+        Err(e) => {
+            error!("[WEBSOCKET MASTER] Failed to parse WebTorrent answer: {}", e);
+            let error_response = WtAnswerResponse {
+                info_hash: String::new(),
+                peer_id: String::new(),
+                to_peer_id: String::new(),
+                offer_id: String::new(),
+                error: Some(format!("Invalid answer: {}", e)),
+            };
+            return ClusterResponse::success(
+                request.request_id,
+                serde_json::to_vec(&error_response).unwrap_or_default()
+            );
+        }
+    };
+
+    match handle_webtorrent_answer(tracker, wt_answer, request.client_ip).await {
+        Ok(response) => {
+            ClusterResponse::success(
+                request.request_id,
+                serde_json::to_vec(&response).unwrap_or_default()
+            )
+        }
+        Err(e) => {
+            error!("[WEBSOCKET MASTER] WebTorrent answer failed: {}", e);
+            let error_response = WtAnswerResponse {
+                info_hash: String::new(),
+                peer_id: String::new(),
+                to_peer_id: String::new(),
+                offer_id: String::new(),
+                error: Some(format!("{}", e)),
+            };
+            ClusterResponse::success(
+                request.request_id,
+                serde_json::to_vec(&error_response).unwrap_or_default()
             )
         }
     }

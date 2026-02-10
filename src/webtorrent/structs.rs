@@ -1,7 +1,9 @@
 pub mod wt_announce;
 pub mod wt_announce_response;
 pub mod wt_answer;
+pub mod wt_answer_response;
 pub mod wt_offer;
+pub mod wt_offer_response;
 pub mod wt_peer_info;
 pub mod wt_scrape;
 pub mod wt_scrape_info;

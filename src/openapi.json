@@ -55,6 +55,14 @@
     {
       "name": "Users",
       "description": "Requests about the Users"
+    },
+    {
+      "name": "Statistics",
+      "description": "Requests about the Tracker Statistics"
+    },
+    {
+      "name": "Certificate",
+      "description": "Requests about the SSL Certificates"
     }
   ],
   "paths": {
@@ -83,7 +91,379 @@
         ]
       }
     },
-    "/api/torrent/{infohash}": {
+    "/stats": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Get tracker statistics",
+        "description": "Returns comprehensive tracker statistics including torrents, users, peers, and connection metrics",
+        "operationId": "getStats",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "started": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1234567890
+                    },
+                    "timestamp_run_save": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1234567890
+                    },
+                    "timestamp_run_timeout": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1234567890
+                    },
+                    "timestamp_run_console": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1234567890
+                    },
+                    "timestamp_run_keys_timeout": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1234567890
+                    },
+                    "torrents": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 100
+                    },
+                    "torrents_updates": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 5000
+                    },
+                    "users": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 50
+                    },
+                    "users_updates": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1000
+                    },
+                    "seeds": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 200
+                    },
+                    "peers": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 500
+                    },
+                    "completed": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1000
+                    },
+                    "whitelist_enabled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "whitelist": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 25
+                    },
+                    "whitelist_updates": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 100
+                    },
+                    "blacklist_enabled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "blacklist": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 5
+                    },
+                    "blacklist_updates": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 50
+                    },
+                    "keys_enabled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "keys": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 10
+                    },
+                    "keys_updates": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 25
+                    },
+                    "tcp4_not_found": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "tcp4_failure": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "tcp4_connections_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1000
+                    },
+                    "tcp4_api_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 500
+                    },
+                    "tcp4_announces_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 10000
+                    },
+                    "tcp4_scrapes_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 2000
+                    },
+                    "tcp6_not_found": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "tcp6_failure": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "tcp6_connections_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 100
+                    },
+                    "tcp6_api_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 50
+                    },
+                    "tcp6_announces_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1000
+                    },
+                    "tcp6_scrapes_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 200
+                    },
+                    "udp4_bad_request": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "udp4_invalid_request": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "udp4_connections_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 2000
+                    },
+                    "udp4_announces_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 20000
+                    },
+                    "udp4_scrapes_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 4000
+                    },
+                    "udp6_bad_request": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "udp6_invalid_request": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "udp6_connections_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 200
+                    },
+                    "udp6_announces_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 2000
+                    },
+                    "udp6_scrapes_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 400
+                    },
+                    "udp_queue_len": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_connections_active": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_requests_sent": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_requests_received": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_responses_sent": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_responses_received": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_timeouts": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_reconnects": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_auth_success": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "ws_auth_failed": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt4_connections_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt4_announces_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt4_offers_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt4_answers_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt4_scrapes_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt4_failure": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt6_connections_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt6_announces_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt6_offers_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt6_answers_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt6_scrapes_handled": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    },
+                    "wt6_failure": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 0
+                    }
+                  }
+                },
+                "example": {
+                  "started": 1234567890,
+                  "torrents": 100,
+                  "torrents_updates": 5000,
+                  "users": 50,
+                  "users_updates": 1000,
+                  "seeds": 200,
+                  "peers": 500,
+                  "completed": 1000,
+                  "whitelist_enabled": true,
+                  "whitelist": 25,
+                  "whitelist_updates": 100,
+                  "blacklist_enabled": true,
+                  "blacklist": 5,
+                  "blacklist_updates": 50,
+                  "keys_enabled": true,
+                  "keys": 10,
+                  "keys_updates": 25
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token_auth": [
+              "read:apiKey"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/torrent/{info_hash}": {
       "get": {
         "tags": [
           "Torrent"
@@ -92,7 +472,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -281,7 +661,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -362,7 +742,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -421,6 +801,129 @@
             }
           }
         }
+      }
+    },
+    "/api/torrent/{info_hash}/{completed}": {
+      "post": {
+        "tags": [
+          "Torrent"
+        ],
+        "summary": "Update torrent completion count",
+        "description": "Increments the completion count for a specific torrent by a specified amount",
+        "operationId": "updateTorrentCompletion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "info_hash",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{40}$"
+            },
+            "required": true,
+            "description": "40-character hexadecimal info_hash of the torrent",
+            "example": "1234567890123456789012345678901234567890"
+          },
+          {
+            "in": "path",
+            "name": "completed",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "required": true,
+            "description": "Number of completions to add",
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Torrent completion count updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Torrent completion count updated (conditional response)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "info_hash updated 1234567890123456789012345678901234567890"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid info_hash format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "example": "invalid info_hash 1234567890123456789012345678901234567890"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "example": "bad info_hash"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Torrent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "unknown info_hash 1234567890123456789012345678901234567890"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token_auth": [
+              "write:apiKey"
+            ]
+          }
+        ]
       }
     },
     "/api/torrents": {
@@ -873,7 +1376,7 @@
         }
       }
     },
-    "/api/whitelist/{infohash}": {
+    "/api/whitelist/{info_hash}": {
       "get": {
         "tags": [
           "Whitelist"
@@ -883,7 +1386,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -964,7 +1467,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -1045,7 +1548,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -1465,7 +1968,7 @@
         }
       }
     },
-    "/api/blacklist/{infohash}": {
+    "/api/blacklist/{info_hash}": {
       "get": {
         "tags": [
           "Blacklist"
@@ -1475,7 +1978,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -1556,7 +2059,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -1637,7 +2140,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "infohash",
+            "name": "info_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -2057,7 +2560,7 @@
         }
       }
     },
-    "/api/key/{keyhash}": {
+    "/api/key/{key_hash}": {
       "get": {
         "tags": [
           "Key"
@@ -2066,7 +2569,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "keyhash",
+            "name": "key_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -2160,7 +2663,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "keyhash",
+            "name": "key_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -2221,7 +2724,7 @@
         }
       }
     },
-    "/api/key/{keyhash}/{timeout}": {
+    "/api/key/{key_hash}/{timeout}": {
       "post": {
         "tags": [
           "Key"
@@ -2230,7 +2733,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "keyhash",
+            "name": "key_hash",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -2663,7 +3166,7 @@
         }
       }
     },
-    "/api/user/{userhash}": {
+    "/api/user/{id}": {
       "get": {
         "tags": [
           "User"
@@ -2672,7 +3175,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "userhash",
+            "name": "id",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -2803,7 +3306,7 @@
         "parameters": [
           {
             "in": "path",
-            "name": "userhash",
+            "name": "id",
             "schema": {
               "type": "string",
               "pattern": "^[a-fA-F0-9]{40}$"
@@ -3481,6 +3984,209 @@
             }
           }
         }
+      }
+    },
+    "/api/certificate/reload": {
+      "post": {
+        "tags": [
+          "Certificate"
+        ],
+        "summary": "Reload SSL certificates",
+        "description": "Reloads SSL/TLS certificates for the tracker. Optionally filters by server type and/or bind address.",
+        "operationId": "reloadCertificate",
+        "requestBody": {
+          "description": "Optional filters to specify which certificates to reload",
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "server_type": {
+                    "type": "string",
+                    "description": "Server type to filter (e.g., 'http', 'api')",
+                    "example": "http"
+                  },
+                  "bind_address": {
+                    "type": "string",
+                    "description": "Bind address to filter (e.g., '0.0.0.0:6881')",
+                    "example": "0.0.0.0:6881"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Certificate reload completed (may be partial or full success)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["ok", "partial", "failed", "no_certificates"],
+                      "description": "Status of the reload operation",
+                      "example": "ok"
+                    },
+                    "reloaded": {
+                      "type": "array",
+                      "description": "List of successfully reloaded certificates",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "server_type": {
+                            "type": "string",
+                            "example": "http"
+                          },
+                          "bind_address": {
+                            "type": "string",
+                            "example": "0.0.0.0:6881"
+                          },
+                          "loaded_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "RFC3339 timestamp when certificate was loaded",
+                            "example": "2024-01-15T10:30:00Z"
+                          }
+                        }
+                      }
+                    },
+                    "errors": {
+                      "type": "array",
+                      "description": "List of certificates that failed to reload",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "server_type": {
+                            "type": "string",
+                            "example": "api"
+                          },
+                          "bind_address": {
+                            "type": "string",
+                            "example": "0.0.0.0:9696"
+                          },
+                          "error": {
+                            "type": "string",
+                            "example": "Failed to read certificate file"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "example": {
+                    "status": "ok",
+                    "reloaded": [
+                      {
+                        "server_type": "http",
+                        "bind_address": "0.0.0.0:6881",
+                        "loaded_at": "2024-01-15T10:30:00Z"
+                      }
+                    ],
+                    "errors": []
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token_auth": [
+              "write:apiKey"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/certificate/status": {
+      "get": {
+        "tags": [
+          "Certificate"
+        ],
+        "summary": "Get SSL certificate status",
+        "description": "Returns the current status of all loaded SSL/TLS certificates",
+        "operationId": "getCertificateStatus",
+        "responses": {
+          "200": {
+            "description": "Certificate status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "certificates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "server_type": {
+                            "type": "string",
+                            "description": "Type of server (http, api, etc.)",
+                            "example": "http"
+                          },
+                          "bind_address": {
+                            "type": "string",
+                            "description": "Address and port the server is bound to",
+                            "example": "0.0.0.0:6881"
+                          },
+                          "cert_path": {
+                            "type": "string",
+                            "description": "Path to the certificate file",
+                            "example": "/etc/ssl/certs/torrust.crt"
+                          },
+                          "key_path": {
+                            "type": "string",
+                            "description": "Path to the private key file",
+                            "example": "/etc/ssl/private/torrust.key"
+                          },
+                          "loaded_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "RFC3339 timestamp when certificate was loaded",
+                            "example": "2024-01-15T10:30:00Z"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "example": {
+                    "status": "ok",
+                    "certificates": [
+                      {
+                        "server_type": "http",
+                        "bind_address": "0.0.0.0:6881",
+                        "cert_path": "/etc/ssl/certs/torrust.crt",
+                        "key_path": "/etc/ssl/private/torrust.key",
+                        "loaded_at": "2024-01-15T10:30:00Z"
+                      },
+                      {
+                        "server_type": "api",
+                        "bind_address": "0.0.0.0:9696",
+                        "cert_path": "/etc/ssl/certs/torrust.crt",
+                        "key_path": "/etc/ssl/private/torrust.key",
+                        "loaded_at": "2024-01-15T10:30:00Z"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token_auth": [
+              "read:apiKey"
+            ]
+          }
+        ]
       }
     }
   },

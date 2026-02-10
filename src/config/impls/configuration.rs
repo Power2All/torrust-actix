@@ -19,6 +19,10 @@ use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::config::structs::webtorrent_trackers_config::WebTorrentTrackersConfig;
 use crate::database::enums::database_drivers::DatabaseDrivers;
+use crate::security::security::{
+    generate_secure_api_key,
+    validate_api_key_strength
+};
 use regex::Regex;
 use std::env;
 use std::fs::File;
@@ -33,7 +37,7 @@ impl Configuration {
             log_level: String::from("info"),
             log_console_interval: 60,
             tracker_config: TrackerConfig {
-                api_key: String::from("MyApiKey"),
+                api_key: generate_secure_api_key(),
                 whitelist_enabled: false,
                 blacklist_enabled: false,
                 keys_enabled: false,
@@ -128,6 +132,7 @@ impl Configuration {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:6969"),
                     real_ip: String::from("X-Real-IP"),
+                    trusted_proxies: false,
                     keep_alive: 60,
                     request_timeout: 15,
                     disconnect_timeout: 15,
@@ -157,6 +162,7 @@ impl Configuration {
                     enabled: true,
                     bind_address: String::from("0.0.0.0:8080"),
                     real_ip: String::from("X-Real-IP"),
+                    trusted_proxies: false,
                     keep_alive: 60,
                     request_timeout: 30,
                     disconnect_timeout: 30,
@@ -728,7 +734,12 @@ impl Configuration {
 
     #[tracing::instrument(level = "debug")]
     pub fn validate(config: Configuration) {
-        
+        if !validate_api_key_strength(&config.tracker_config.api_key) {
+            eprintln!("[SECURITY WARNING] API key is weak! Please use a stronger API key.");
+            eprintln!("[SECURITY WARNING] Generate a secure key with: 'head -c 32 /dev/urandom | base64'");
+        } else {
+            println!("[VALIDATE] API key strength: OK");
+        }
         let check_map = vec![
             ("[TRACKER_CONFIG] prometheus_id", config.tracker_config.clone().prometheus_id, r"^[a-zA-Z0-9_]+$".to_string()),
             ("[DB: torrents]", config.database_structure.clone().torrents.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),

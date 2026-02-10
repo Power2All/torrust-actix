@@ -50,8 +50,12 @@ use crate::api::structs::api_service_data::ApiServiceData;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
-use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
+use crate::security::security::{
+    constant_time_eq,
+    validate_remote_ip
+};
 use crate::ssl::enums::server_identifier::ServerIdentifier;
+use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use actix_cors::Cors;
@@ -271,7 +275,7 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
             })));
         }
     };
-    if token_code != config.tracker_config.api_key {
+    if !constant_time_eq(&token_code, &config.tracker_config.api_key) {
         return Some(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
             "status": "invalid token"
         })));
@@ -283,10 +287,16 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
 pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
+    if !data.trusted_proxies {
+        return Ok(origin_ip);
+    }
     request.headers()
         .get(&data.real_ip)
         .and_then(|header| header.to_str().ok())
-        .and_then(|ip_str| IpAddr::from_str(ip_str).ok())
+        .and_then(|ip_str| {
+            validate_remote_ip(ip_str, data.trusted_proxies).ok()?;
+            IpAddr::from_str(ip_str).ok()
+        })
         .map(Ok)
         .unwrap_or(Ok(origin_ip))
 }

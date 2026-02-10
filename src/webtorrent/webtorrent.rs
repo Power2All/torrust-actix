@@ -1,6 +1,12 @@
 use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::config::enums::cluster_mode::ClusterMode;
+use crate::security::security::{
+    validate_info_hash_hex,
+    validate_peer_id_hex,
+    validate_webrtc_sdp,
+    MAX_OFFER_ID_LENGTH
+};
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use crate::tracker::enums::announce_event::AnnounceEvent;
@@ -20,6 +26,10 @@ use crate::webtorrent::structs::webtorrent_server::WebTorrentConnection;
 use crate::webtorrent::structs::webtorrent_service_data::WebTorrentServiceData;
 use crate::webtorrent::structs::wt_announce::WtAnnounce;
 use crate::webtorrent::structs::wt_announce_response::WtAnnounceResponse;
+use crate::webtorrent::structs::wt_answer::WtAnswer;
+use crate::webtorrent::structs::wt_answer_response::WtAnswerResponse;
+use crate::webtorrent::structs::wt_offer::WtOffer;
+use crate::webtorrent::structs::wt_offer_response::WtOfferResponse;
 use crate::webtorrent::structs::wt_peer_info::WtPeerInfo;
 use crate::webtorrent::structs::wt_scrape::WtScrape;
 use crate::webtorrent::structs::wt_scrape_info::WtScrapeInfo;
@@ -62,6 +72,14 @@ pub async fn handle_webtorrent_announce(
     ip: IpAddr,
 ) -> Result<WtAnnounceResponse, CustomError> {
     debug!("[WEBTORRENT] Handling announce for info_hash: {} (length: {})", announce.info_hash, announce.info_hash.len());
+    validate_info_hash_hex(&announce.info_hash)?;
+    validate_peer_id_hex(&announce.peer_id)?;
+    if let Some(ref offer) = announce.offer {
+        validate_webrtc_sdp(offer)?;
+    }
+    if let Some(ref offer_id) = announce.offer_id && offer_id.len() > MAX_OFFER_ID_LENGTH {
+        return Err(CustomError::new("offer_id exceeds maximum length"));
+    }
     if tracker.config.tracker_config.cluster == ClusterMode::slave {
         return handle_webtorrent_announce_cluster_forward(tracker, announce, ip).await;
     }
@@ -308,6 +326,268 @@ async fn handle_webtorrent_scrape_cluster_forward(
         }
         Err(_e) => {
             Ok(WtScrapeResponse { files: std::collections::HashMap::new() })
+        }
+    }
+}
+
+pub async fn handle_webtorrent_offer(
+    tracker: &TorrentTracker,
+    offer: WtOffer,
+    ip: IpAddr,
+) -> Result<WtOfferResponse, CustomError> {
+    info!("[WEBTORRENT] Handling offer for info_hash: {}, peer_id: {}, offer_id: {}", offer.info_hash, offer.peer_id, offer.offer_id);
+    validate_info_hash_hex(&offer.info_hash)?;
+    validate_peer_id_hex(&offer.peer_id)?;
+    validate_webrtc_sdp(&offer.offer)?;
+    if offer.offer_id.len() > MAX_OFFER_ID_LENGTH {
+        return Err(CustomError::new("offer_id exceeds maximum length"));
+    }
+    if tracker.config.tracker_config.cluster == ClusterMode::slave {
+        return handle_webtorrent_offer_cluster_forward(tracker, offer, ip).await;
+    }
+    let info_hash_bytes = if offer.info_hash.len() == 40 {
+        hex::decode(&offer.info_hash)
+            .map_err(|_| CustomError::new("Invalid info_hash: not hex"))?
+    } else {
+        let bytes: Vec<u8> = offer.info_hash.bytes().collect();
+        if bytes.len() >= 20 {
+            bytes[..20].to_vec()
+        } else {
+            return Err(CustomError::new(&format!("Invalid info_hash: too short ({} bytes)", bytes.len())));
+        }
+    };
+    if info_hash_bytes.len() != 20 {
+        return Err(CustomError::new("Invalid info_hash: wrong length"));
+    }
+    let mut info_hash_array = [0u8; 20];
+    info_hash_array.copy_from_slice(&info_hash_bytes);
+    let info_hash = InfoHash(info_hash_array);
+    let peer_id_bytes = if offer.peer_id.len() == 40 {
+        hex::decode(&offer.peer_id)
+            .map_err(|_| CustomError::new("Invalid peer_id: not hex"))?
+    } else {
+        let bytes: Vec<u8> = offer.peer_id.bytes().collect();
+        if bytes.len() >= 20 {
+            bytes[..20].to_vec()
+        } else {
+            return Err(CustomError::new(&format!("Invalid peer_id: too short ({} bytes)", bytes.len())));
+        }
+    };
+    if peer_id_bytes.len() != 20 {
+        return Err(CustomError::new("Invalid peer_id: wrong length"));
+    }
+    let mut peer_id_array = [0u8; 20];
+    peer_id_array.copy_from_slice(&peer_id_bytes);
+    let peer_id = PeerId(peer_id_array);
+    if tracker.config.tracker_config.whitelist_enabled
+        && !tracker.check_whitelist(info_hash) {
+        return Ok(WtOfferResponse {
+            info_hash: offer.info_hash.clone(),
+            peer_id: offer.peer_id.clone(),
+            offer_id: offer.offer_id.clone(),
+            error: Some("Torrent not in whitelist".to_string()),
+        });
+    }
+    if tracker.config.tracker_config.blacklist_enabled
+        && tracker.check_blacklist(info_hash) {
+        return Ok(WtOfferResponse {
+            info_hash: offer.info_hash.clone(),
+            peer_id: offer.peer_id.clone(),
+            offer_id: offer.offer_id.clone(),
+            error: Some("Torrent is blacklisted".to_string()),
+        });
+    }
+    let updated_peer = TorrentPeer {
+        peer_id,
+        peer_addr: SocketAddr::new(ip, 0),
+        updated: std::time::Instant::now(),
+        uploaded: NumberOfBytes(0),
+        downloaded: NumberOfBytes(0),
+        left: NumberOfBytes(0),
+        event: AnnounceEvent::None,
+        webrtc_offer: Some(offer.offer.clone()),
+        webrtc_offer_id: Some(offer.offer_id.clone()),
+        is_webtorrent: true,
+    };
+    tracker.add_torrent_peer(info_hash, peer_id, updated_peer, false);
+    info!(
+        "[WEBTORRENT] Stored WebRTC offer {} for peer {} on torrent {}",
+        offer.offer_id, offer.peer_id, offer.info_hash
+    );
+    Ok(WtOfferResponse {
+        info_hash: offer.info_hash,
+        peer_id: offer.peer_id,
+        offer_id: offer.offer_id,
+        error: None,
+    })
+}
+
+async fn handle_webtorrent_offer_cluster_forward(
+    tracker: &TorrentTracker,
+    offer: WtOffer,
+    ip: IpAddr,
+) -> Result<WtOfferResponse, CustomError> {
+    let protocol = ProtocolType::WebTorrentHttp;
+    let client_port = 0;
+    let payload = serde_json::to_vec(&offer)
+        .map_err(|e| CustomError::new(&format!("Failed to serialize offer: {}", e)))?;
+    let tracker_ref = unsafe {
+        Arc::from_raw(tracker as *const TorrentTracker)
+    };
+    let result = forward_request(
+        &tracker_ref,
+        protocol,
+        RequestType::WtOffer,
+        ip,
+        client_port,
+        payload,
+    ).await;
+    std::mem::forget(tracker_ref);
+    match result {
+        Ok(response) => {
+            serde_json::from_slice(&response.payload)
+                .map_err(|e| CustomError::new(&format!("Failed to parse master response: {}", e)))
+        }
+        Err(e) => {
+            Ok(WtOfferResponse {
+                info_hash: offer.info_hash.clone(),
+                peer_id: offer.peer_id.clone(),
+                offer_id: offer.offer_id.clone(),
+                error: Some(create_cluster_error_response_json(&e)),
+            })
+        }
+    }
+}
+
+pub async fn handle_webtorrent_answer(
+    tracker: &TorrentTracker,
+    answer: WtAnswer,
+    ip: IpAddr,
+) -> Result<WtAnswerResponse, CustomError> {
+    info!(
+        "[WEBTORRENT] Handling answer for info_hash: {}, from_peer_id: {}, to_peer_id: {}, offer_id: {}",
+        answer.info_hash, answer.peer_id, answer.to_peer_id, answer.offer_id
+    );
+    if tracker.config.tracker_config.cluster == ClusterMode::slave {
+        return handle_webtorrent_answer_cluster_forward(tracker, answer, ip).await;
+    }
+    let info_hash_bytes = if answer.info_hash.len() == 40 {
+        hex::decode(&answer.info_hash)
+            .map_err(|_| CustomError::new("Invalid info_hash: not hex"))?
+    } else {
+        let bytes: Vec<u8> = answer.info_hash.bytes().collect();
+        if bytes.len() >= 20 {
+            bytes[..20].to_vec()
+        } else {
+            return Err(CustomError::new(&format!("Invalid info_hash: too short ({} bytes)", bytes.len())));
+        }
+    };
+    if info_hash_bytes.len() != 20 {
+        return Err(CustomError::new("Invalid info_hash: wrong length"));
+    }
+    let mut info_hash_array = [0u8; 20];
+    info_hash_array.copy_from_slice(&info_hash_bytes);
+    let info_hash = InfoHash(info_hash_array);
+    let to_peer_id_bytes = if answer.to_peer_id.len() == 40 {
+        hex::decode(&answer.to_peer_id)
+            .map_err(|_| CustomError::new("Invalid to_peer_id: not hex"))?
+    } else {
+        let bytes: Vec<u8> = answer.to_peer_id.bytes().collect();
+        if bytes.len() >= 20 {
+            bytes[..20].to_vec()
+        } else {
+            return Err(CustomError::new(&format!("Invalid to_peer_id: too short ({} bytes)", bytes.len())));
+        }
+    };
+    if to_peer_id_bytes.len() != 20 {
+        return Err(CustomError::new("Invalid to_peer_id: wrong length"));
+    }
+    let mut to_peer_id_array = [0u8; 20];
+    to_peer_id_array.copy_from_slice(&to_peer_id_bytes);
+    let to_peer_id = PeerId(to_peer_id_array);
+    if tracker.config.tracker_config.whitelist_enabled
+        && !tracker.check_whitelist(info_hash) {
+        return Ok(WtAnswerResponse {
+            info_hash: answer.info_hash.clone(),
+            peer_id: answer.peer_id.clone(),
+            to_peer_id: answer.to_peer_id.clone(),
+            offer_id: answer.offer_id.clone(),
+            error: Some("Torrent not in whitelist".to_string()),
+        });
+    }
+    if tracker.config.tracker_config.blacklist_enabled
+        && tracker.check_blacklist(info_hash) {
+        return Ok(WtAnswerResponse {
+            info_hash: answer.info_hash.clone(),
+            peer_id: answer.peer_id.clone(),
+            to_peer_id: answer.to_peer_id.clone(),
+            offer_id: answer.offer_id.clone(),
+            error: Some("Torrent is blacklisted".to_string()),
+        });
+    }
+    if let Some(torrent_entry) = tracker.get_torrent(info_hash) {
+        let peer_exists = torrent_entry.peers.contains_key(&to_peer_id) ||
+                         torrent_entry.seeds.contains_key(&to_peer_id);
+        if peer_exists {
+            info!(
+                "[WEBTORRENT] Answer for offer_id {} destined for peer {} (peer exists in swarm)",
+                answer.offer_id, answer.to_peer_id
+            );
+        } else {
+            info!(
+                "[WEBTORRENT] Answer for offer_id {} destined for peer {} but peer not found in swarm",
+                answer.offer_id, answer.to_peer_id
+            );
+        }
+    } else {
+        info!(
+            "[WEBTORRENT] Answer for offer_id {} but torrent {} not found",
+            answer.offer_id, answer.info_hash
+        );
+    }
+    Ok(WtAnswerResponse {
+        info_hash: answer.info_hash,
+        peer_id: answer.peer_id,
+        to_peer_id: answer.to_peer_id,
+        offer_id: answer.offer_id,
+        error: None,
+    })
+}
+
+async fn handle_webtorrent_answer_cluster_forward(
+    tracker: &TorrentTracker,
+    answer: WtAnswer,
+    ip: IpAddr,
+) -> Result<WtAnswerResponse, CustomError> {
+    let protocol = ProtocolType::WebTorrentHttp;
+    let client_port = 0;
+    let payload = serde_json::to_vec(&answer)
+        .map_err(|e| CustomError::new(&format!("Failed to serialize answer: {}", e)))?;
+    let tracker_ref = unsafe {
+        Arc::from_raw(tracker as *const TorrentTracker)
+    };
+    let result = forward_request(
+        &tracker_ref,
+        protocol,
+        RequestType::WtAnswer,
+        ip,
+        client_port,
+        payload,
+    ).await;
+    std::mem::forget(tracker_ref);
+    match result {
+        Ok(response) => {
+            serde_json::from_slice(&response.payload)
+                .map_err(|e| CustomError::new(&format!("Failed to parse master response: {}", e)))
+        }
+        Err(e) => {
+            Ok(WtAnswerResponse {
+                info_hash: answer.info_hash.clone(),
+                peer_id: answer.peer_id.clone(),
+                to_peer_id: answer.to_peer_id.clone(),
+                offer_id: answer.offer_id.clone(),
+                error: Some(create_cluster_error_response_json(&e)),
+            })
         }
     }
 }

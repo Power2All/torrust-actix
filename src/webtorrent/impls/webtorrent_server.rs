@@ -5,9 +5,13 @@ use crate::webtorrent::enums::wt_message_type::WtMessageType;
 use crate::webtorrent::structs::webtorrent_server::WebTorrentConnection;
 use crate::webtorrent::structs::wt_announce::WtAnnounce;
 use crate::webtorrent::structs::wt_scrape::WtScrape;
+use crate::webtorrent::structs::wt_offer::WtOffer;
+use crate::webtorrent::structs::wt_answer::WtAnswer;
 use crate::webtorrent::webtorrent::{
     handle_webtorrent_announce,
-    handle_webtorrent_scrape
+    handle_webtorrent_scrape,
+    handle_webtorrent_offer,
+    handle_webtorrent_answer
 };
 use actix::prelude::*;
 use actix_web_actors::ws;
@@ -124,22 +128,22 @@ impl WebTorrentConnection {
                     if ip.is_ipv4() { StatsEvent::Wt4OffersHandled } else { StatsEvent::Wt6OffersHandled },
                     1
                 );
-                // TODO: Implement offer handling for WebRTC signaling
-                ctx.text(serde_json::json!({
-                    "action": "error",
-                    "error": "Offer handling not yet implemented"
-                }).to_string());
+                if let WtMessage::Offer(offer) = message {
+                    self.handle_offer(ctx, tracker, offer, ip);
+                } else {
+                    ctx.text(serde_json::json!({"error": "Message type mismatch"}).to_string());
+                }
             }
             WtMessageType::Answer => {
                 tracker.update_stats(
                     if ip.is_ipv4() { StatsEvent::Wt4AnswersHandled } else { StatsEvent::Wt6AnswersHandled },
                     1
                 );
-                // TODO: Implement answer handling for WebRTC signaling
-                ctx.text(serde_json::json!({
-                    "action": "error",
-                    "error": "Answer handling not yet implemented"
-                }).to_string());
+                if let WtMessage::Answer(answer) = message {
+                    self.handle_answer(ctx, tracker, answer, ip);
+                } else {
+                    ctx.text(serde_json::json!({"error": "Message type mismatch"}).to_string());
+                }
             }
             WtMessageType::Unknown => {
                 ctx.text(serde_json::json!({
@@ -213,6 +217,76 @@ impl WebTorrentConnection {
             ctx.text(response_str);
         });
 
+        ctx.spawn(fut);
+    }
+
+    pub fn handle_offer(&mut self, ctx: &mut ws::WebsocketContext<Self>, tracker: std::sync::Arc<crate::tracker::structs::torrent_tracker::TorrentTracker>, offer: WtOffer, ip: IpAddr) {
+        let tracker_clone1 = tracker.clone();
+        let tracker_clone2 = tracker.clone();
+        let offer_clone = offer.clone();
+        let ip_clone = ip;
+        let fut = async move {
+            handle_webtorrent_offer(&tracker_clone1, offer_clone, ip_clone).await
+        }.into_actor(self)
+        .map(move |result, _actor, ctx| {
+            let response = match result {
+                Ok(resp) => {
+                    let mut json_resp = serde_json::to_value(&resp).unwrap_or_else(|_| serde_json::json!({"error": "Failed to serialize response"}));
+                    if let Some(obj) = json_resp.as_object_mut() {
+                        obj.insert("action".to_string(), serde_json::Value::String("offer".to_string()));
+                    }
+                    json_resp
+                },
+                Err(e) => {
+                    tracker_clone2.update_stats(
+                        if ip_clone.is_ipv4() { StatsEvent::Wt4Failure } else { StatsEvent::Wt6Failure },
+                        1
+                    );
+                    serde_json::json!({
+                        "action": "offer",
+                        "error": format!("{}", e)
+                    })
+                }
+            };
+            let response_str = serde_json::to_string(&response).unwrap_or_default();
+            info!("[WEBTORRENT] Sending offer response: {}", response_str);
+            ctx.text(response_str);
+        });
+        ctx.spawn(fut);
+    }
+
+    pub fn handle_answer(&mut self, ctx: &mut ws::WebsocketContext<Self>, tracker: std::sync::Arc<crate::tracker::structs::torrent_tracker::TorrentTracker>, answer: WtAnswer, ip: IpAddr) {
+        let tracker_clone1 = tracker.clone();
+        let tracker_clone2 = tracker.clone();
+        let answer_clone = answer.clone();
+        let ip_clone = ip;
+        let fut = async move {
+            handle_webtorrent_answer(&tracker_clone1, answer_clone, ip_clone).await
+        }.into_actor(self)
+        .map(move |result, _actor, ctx| {
+            let response = match result {
+                Ok(resp) => {
+                    let mut json_resp = serde_json::to_value(&resp).unwrap_or_else(|_| serde_json::json!({"error": "Failed to serialize response"}));
+                    if let Some(obj) = json_resp.as_object_mut() {
+                        obj.insert("action".to_string(), serde_json::Value::String("answer".to_string()));
+                    }
+                    json_resp
+                },
+                Err(e) => {
+                    tracker_clone2.update_stats(
+                        if ip_clone.is_ipv4() { StatsEvent::Wt4Failure } else { StatsEvent::Wt6Failure },
+                        1
+                    );
+                    serde_json::json!({
+                        "action": "answer",
+                        "error": format!("{}", e)
+                    })
+                }
+            };
+            let response_str = serde_json::to_string(&response).unwrap_or_default();
+            info!("[WEBTORRENT] Sending answer response: {}", response_str);
+            ctx.text(response_str);
+        });
         ctx.spawn(fut);
     }
 }

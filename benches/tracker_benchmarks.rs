@@ -4,6 +4,7 @@ use criterion::{
     BenchmarkId,
     Criterion
 };
+use rand::RngExt;
 use std::net::{
     IpAddr,
     Ipv4Addr
@@ -19,14 +20,14 @@ use torrust_actix::tracker::structs::torrent_peer::TorrentPeer;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 
 fn random_info_hash() -> InfoHash {
-    let mut bytes = [0u8; 20];
-    rand::fill(&mut bytes);
+    let mut rng = rand::rng();
+    let bytes: [u8; 20] = rng.random();
     InfoHash(bytes)
 }
 
 fn random_peer_id() -> PeerId {
-    let mut bytes = [0u8; 20];
-    rand::fill(&mut bytes);
+    let mut rng = rand::rng();
+    let bytes: [u8; 20] = rng.random();
     PeerId(bytes)
 }
 
