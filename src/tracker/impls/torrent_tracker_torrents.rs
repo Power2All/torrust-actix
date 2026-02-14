@@ -12,7 +12,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker).await {
@@ -20,7 +19,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), ()>
     {
         let torrents_count = torrents.len();
@@ -36,7 +34,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> bool
     {
         match self.sqlx.reset_seeds_peers(tracker).await {
@@ -51,7 +48,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
@@ -89,7 +85,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn add_torrents(&self, hashes: BTreeMap<InfoHash, TorrentEntry>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
     {
         hashes.into_iter()
@@ -100,7 +95,6 @@ impl TorrentTracker {
             .collect()
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
@@ -109,7 +103,6 @@ impl TorrentTracker {
         lock.get(&info_hash).cloned()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         hashes.into_iter()
@@ -120,7 +113,6 @@ impl TorrentTracker {
             .collect()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         if !self.torrents_sharding.contains_torrent(info_hash) {
@@ -138,7 +130,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         hashes.into_iter()

@@ -19,7 +19,6 @@ use std::time::{
 };
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(keys) = self.sqlx.load_keys(tracker).await {
@@ -27,7 +26,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<(), ()>
     {
         match self.sqlx.save_keys(tracker, keys).await {
@@ -42,7 +40,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn add_key(&self, hash: InfoHash, timeout: i64) -> bool
     {
         let mut lock = self.keys.write();
@@ -61,21 +58,18 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_key(&self, hash: InfoHash) -> Option<(InfoHash, i64)>
     {
         let lock = self.keys.read_recursive();
         lock.get(&hash).map(|&data| (hash, data))
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_keys(&self) -> BTreeMap<InfoHash, i64>
     {
         let lock = self.keys.read_recursive();
         lock.clone()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_key(&self, hash: InfoHash) -> bool
     {
         let mut lock = self.keys.write();
@@ -87,7 +81,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn check_key(&self, hash: InfoHash) -> bool
     {
         let lock = self.keys.read_recursive();
@@ -100,7 +93,6 @@ impl TorrentTracker {
         })
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn clear_keys(&self)
     {
         let mut lock = self.keys.write();
@@ -108,7 +100,6 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::Key, 0);
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn clean_keys(&self)
     {
         let now = SystemTime::now();

@@ -16,7 +16,6 @@ use std::process::exit;
 use std::sync::Arc;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn import(&self, args: &Cli, tracker: Arc<TorrentTracker>)
     {
         info!("[IMPORT] Requesting to import data");

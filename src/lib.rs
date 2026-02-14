@@ -10,4 +10,5 @@ pub mod stats;
 pub mod structs;
 pub mod tracker;
 pub mod udp;
+pub mod utils;
 pub mod websocket;

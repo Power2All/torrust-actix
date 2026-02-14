@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub fn add_key_update(&self, info_hash: InfoHash, timeout: i64, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.keys_updates.write();
@@ -28,14 +27,12 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_key_updates(&self) -> HashMap<u128, (InfoHash, i64, UpdatesAction)>
     {
         let lock = self.keys_updates.read_recursive();
         lock.clone()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_key_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.keys_updates.write();
@@ -47,7 +44,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn clear_key_updates(&self)
     {
         let mut lock = self.keys_updates.write();
@@ -55,7 +51,6 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::KeyUpdates, 0);
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_key_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = self.get_key_updates();

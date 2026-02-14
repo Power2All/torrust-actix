@@ -11,8 +11,9 @@ use log::info;
 
 impl CacheConnector {
     pub async fn new(config: &CacheConfig) -> Result<CacheConnector, CacheError> {
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("cache_init", "cache");
         let connection_url = format!("{}{}", config.engine.url_scheme(), config.address);
-        match config.engine {
+        let result: Result<CacheConnector, CacheError> = match config.engine {
             CacheEngine::redis => {
                 let redis_connector = CacheConnectorRedis::connect(&connection_url, &config.prefix).await?;
                 info!("[Cache] Connected to Redis at {}", config.address);
@@ -31,7 +32,17 @@ impl CacheConnector {
                     engine: Some(CacheEngine::memcache),
                 })
             }
+        };
+        if let Some(txn) = transaction {
+            match &result {
+                Ok(_) => txn.set_tag("result", "success"),
+                Err(e) => txn.set_tag("result", format!("error: {:?}", e)),
+            }
+            txn.set_tag("engine", format!("{:?}", config.engine));
+            txn.set_tag("address", config.address.clone());
+            txn.finish();
         }
+        result
     }
 
     pub fn backend(&self) -> Option<&dyn CacheBackend> {
@@ -45,7 +56,8 @@ impl CacheConnector {
 #[async_trait]
 impl CacheBackend for CacheConnector {
     async fn ping(&self) -> Result<(), CacheError> {
-        match self.engine.as_ref() {
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("cache_ping", "cache");
+        let result: Result<(), CacheError> = match self.engine.as_ref() {
             Some(CacheEngine::redis) => {
                 if let Some(ref redis) = self.redis {
                     redis.ping().await
@@ -61,7 +73,18 @@ impl CacheBackend for CacheConnector {
                 }
             }
             None => Err(CacheError::ConnectionError("No cache engine configured".to_string())),
+        };
+        if let Some(txn) = transaction {
+            match &result {
+                Ok(_) => txn.set_tag("result", "success"),
+                Err(e) => txn.set_tag("result", format!("error: {:?}", e)),
+            }
+            if let Some(engine) = &self.engine {
+                txn.set_tag("engine", format!("{:?}", engine));
+            }
+            txn.finish();
         }
+        result
     }
 
     async fn set_torrent_peers(

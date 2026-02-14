@@ -21,7 +21,6 @@ use actix_web::{
 use serde_json::json;
 use std::sync::Arc;
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_certificate_reload(
     request: HttpRequest,
     data: Data<Arc<ApiServiceData>>,
@@ -103,7 +102,6 @@ pub async fn api_service_certificate_reload(
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_certificate_status(
     request: HttpRequest,
     data: Data<Arc<ApiServiceData>>,

@@ -74,7 +74,6 @@ lazy_static! {
     static ref ERR_UNKNOWN_USER_KEY: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("unknown user key") }.encode();
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn http_service_cors() -> Cors
 {
     Cors::default()
@@ -86,7 +85,6 @@ pub fn http_service_cors() -> Cors
         .max_age(1)
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn http_service_routes(data: Arc<HttpServiceData>) -> Box<dyn Fn(&mut ServiceConfig)>
 {
     Box::new(move |cfg: &mut ServiceConfig| {
@@ -110,7 +108,6 @@ pub fn http_service_routes(data: Arc<HttpServiceData>) -> Box<dyn Fn(&mut Servic
     })
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service(
     addr: SocketAddr,
     data: Arc<TorrentTracker>,
@@ -221,7 +218,6 @@ pub async fn http_service(
     (server.handle(), server)
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
@@ -250,7 +246,6 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
     http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None).await
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path<(String, String)>, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
@@ -279,7 +274,6 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
     http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None).await
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
@@ -298,7 +292,6 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<HttpServ
     http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None).await
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>, user_key: Option<UserId>) -> HttpResponse
 {
     if data.config.tracker_config.cluster == ClusterMode::slave {
@@ -552,7 +545,6 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     }
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<String>, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
@@ -577,7 +569,6 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
     http_service_scrape_handler(request, ip, data.torrent_tracker.clone()).await
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
 {
     if data.config.tracker_config.cluster == ClusterMode::slave {
@@ -654,7 +645,6 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
     }
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
@@ -674,7 +664,6 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<HttpServic
     http_service_scrape_handler(request, ip, data.torrent_tracker.clone()).await
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_not_found(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
@@ -694,7 +683,6 @@ pub async fn http_service_not_found(request: HttpRequest, data: Data<Arc<HttpSer
     HttpResponse::NotFound().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_REQUEST.clone())
 }
 
-#[tracing::instrument(level = "debug")]
 #[inline]
 pub fn http_service_stats_log(ip: IpAddr, tracker: &TorrentTracker)
 {
@@ -705,7 +693,6 @@ pub fn http_service_stats_log(ip: IpAddr, tracker: &TorrentTracker)
     }
 }
 
-#[tracing::instrument(level = "debug")]
 #[inline]
 pub async fn http_service_decode_hex_hash(hash: String) -> Result<InfoHash, HttpResponse>
 {
@@ -716,7 +703,6 @@ pub async fn http_service_decode_hex_hash(hash: String) -> Result<InfoHash, Http
         .ok_or_else(|| HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
 }
 
-#[tracing::instrument(level = "debug")]
 #[inline]
 pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, HttpResponse>
 {
@@ -727,7 +713,6 @@ pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, Htt
         .ok_or_else(|| HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<HttpTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
@@ -745,7 +730,6 @@ pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<Htt
         .unwrap_or(Ok(origin_ip))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_validate_ip(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> Result<IpAddr, HttpResponse>
 {
     match http_service_retrieve_remote_ip(request.clone(), data.http_trackers_config.clone()).await {
@@ -759,7 +743,6 @@ pub async fn http_validate_ip(request: HttpRequest, data: Data<Arc<HttpServiceDa
     }
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn http_service_query_hashing(query_map_result: Result<HttpServiceQueryHashingMapOk, CustomError>) -> Result<HttpServiceQueryHashingMapOk, HttpServiceQueryHashingMapErr>
 {
     match query_map_result {
@@ -772,7 +755,6 @@ pub fn http_service_query_hashing(query_map_result: Result<HttpServiceQueryHashi
     }
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: String) -> Option<HttpResponse>
 {
     if key.len() != 40 {
@@ -788,7 +770,6 @@ pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: S
     None
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, user_key: String) -> Option<HttpResponse>
 {
     if user_key.len() != 40 {
@@ -804,7 +785,6 @@ pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, u
     None
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn http_check_host_and_port_used(bind_address: String) {
     if cfg!(target_os = "windows") {
         match std::net::TcpListener::bind(&bind_address) {
@@ -814,7 +794,6 @@ pub fn http_check_host_and_port_used(bind_address: String) {
     }
 }
 
-#[tracing::instrument(level = "debug")]
 #[inline]
 pub fn http_stat_update(ip: IpAddr, data: &TorrentTracker, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
 {

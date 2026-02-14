@@ -53,7 +53,6 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::pgsql;
 const LOG_PREFIX: &str = "[PgSQL]";
 
 impl DatabaseConnectorPgSQL {
-    #[tracing::instrument(level = "debug")]
     pub async fn create(dsl: &str) -> Result<Pool<Postgres>, Error> {
         let options = PgConnectOptions::from_str(dsl)?
             .log_statements(log::LevelFilter::Debug)
@@ -61,7 +60,6 @@ impl DatabaseConnectorPgSQL {
         PgPoolOptions::new().connect_with(options).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn database_connector(
         config: Arc<Configuration>,
         create_database: bool,
@@ -156,7 +154,6 @@ impl DatabaseConnectorPgSQL {
         structure
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -207,7 +204,6 @@ impl DatabaseConnectorPgSQL {
         Ok((torrents, completed))
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -315,7 +311,6 @@ impl DatabaseConnectorPgSQL {
         self.commit(transaction).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -351,7 +346,6 @@ impl DatabaseConnectorPgSQL {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -403,7 +397,6 @@ impl DatabaseConnectorPgSQL {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -439,7 +432,6 @@ impl DatabaseConnectorPgSQL {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_blacklist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -491,7 +483,6 @@ impl DatabaseConnectorPgSQL {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -527,7 +518,6 @@ impl DatabaseConnectorPgSQL {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_keys(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -581,7 +571,6 @@ impl DatabaseConnectorPgSQL {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -657,7 +646,6 @@ impl DatabaseConnectorPgSQL {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_users(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -789,7 +777,6 @@ impl DatabaseConnectorPgSQL {
         self.commit(transaction).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
         let structure = &tracker.config.database_structure.torrents;

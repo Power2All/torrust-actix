@@ -35,7 +35,6 @@ lazy_static::lazy_static! {
     static ref UUID_REGEX: Regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -49,7 +48,6 @@ pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>,
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -76,7 +74,6 @@ pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, 
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String, String, u64, u64, u64, u64, u8)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -125,7 +122,6 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -188,7 +184,6 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -222,7 +217,6 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -270,7 +264,6 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>) -> (StatusCode, Value)
 {
     let id_hash = hash_id(&id);

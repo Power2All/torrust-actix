@@ -29,7 +29,6 @@ use std::time::{
     UNIX_EPOCH
 };
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -49,7 +48,6 @@ pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<Strin
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -85,7 +83,6 @@ pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payloa
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(String, u64)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -114,7 +111,6 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -161,7 +157,6 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -184,7 +179,6 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -225,7 +219,6 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn api_service_torrents_return_torrent_json(torrent: TorrentEntry) -> Value
 {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();

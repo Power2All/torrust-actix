@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_entry: TorrentEntry, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.torrents_updates.write();
@@ -32,7 +31,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn add_torrent_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentEntry, UpdatesAction)>) -> BTreeMap<InfoHash, bool>
     {
         let mut lock = self.torrents_updates.write();
@@ -59,14 +57,12 @@ impl TorrentTracker {
         returned_data
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_torrent_updates(&self) -> HashMap<u128, (InfoHash, TorrentEntry, UpdatesAction)>
     {
         let lock = self.torrents_updates.read_recursive();
         lock.clone()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_torrent_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.torrents_updates.write();
@@ -78,7 +74,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn clear_torrent_updates(&self)
     {
         let mut lock = self.torrents_updates.write();
@@ -86,7 +81,6 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsUpdates, 0);
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_torrent_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = {

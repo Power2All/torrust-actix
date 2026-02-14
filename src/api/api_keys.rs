@@ -19,7 +19,6 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_key_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -42,7 +41,6 @@ pub async fn api_service_key_get(request: HttpRequest, path: web::Path<String>, 
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -79,7 +77,6 @@ pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, d
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String, u64)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -102,7 +99,6 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -143,7 +139,6 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -166,7 +161,6 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }

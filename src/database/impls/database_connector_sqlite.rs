@@ -53,7 +53,6 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::sqlite3;
 const LOG_PREFIX: &str = "[SQLite]";
 
 impl DatabaseConnectorSQLite {
-    #[tracing::instrument(level = "debug")]
     pub async fn create(dsl: &str) -> Result<Pool<Sqlite>, Error> {
         let options = SqliteConnectOptions::from_str(dsl)?
             .log_statements(log::LevelFilter::Debug)
@@ -63,7 +62,6 @@ impl DatabaseConnectorSQLite {
             .await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn database_connector(
         config: Arc<Configuration>,
         create_database: bool,
@@ -173,8 +171,9 @@ impl DatabaseConnectorSQLite {
         structure
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error> {
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("load_torrents", "database");
+
         let mut start = 0u64;
         let length = 100000u64;
         let mut torrents = 0u64;
@@ -221,16 +220,22 @@ impl DatabaseConnectorSQLite {
             "{} Loaded {} torrents with {} completed",
             LOG_PREFIX, torrents, completed
         );
+        if let Some(txn) = transaction {
+            txn.set_extra("torrents_loaded", (torrents as i64).into());
+            txn.set_extra("completed_count", (completed as i64).into());
+            txn.set_tag("database_type", "sqlite");
+            txn.finish();
+        }
         Ok((torrents, completed))
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
         torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>,
     ) -> Result<(), Error> {
-        let mut transaction = self.pool.begin().await?;
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("save_torrents", "database");
+        let mut transaction_db = self.pool.begin().await?;
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.torrents;
         let db_config = &tracker.config.database;
@@ -248,7 +253,7 @@ impl DatabaseConnectorSQLite {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
                             error!("{} Error: {}", LOG_PREFIX, e);
                             return Err(e);
                         }
@@ -269,7 +274,7 @@ impl DatabaseConnectorSQLite {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
                                 error!("{} Error: {}", LOG_PREFIX, e);
                                 return Err(e);
                             }
@@ -284,7 +289,7 @@ impl DatabaseConnectorSQLite {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
                                 error!("{} Error: {}", LOG_PREFIX, e);
                                 return Err(e);
                             }
@@ -302,7 +307,7 @@ impl DatabaseConnectorSQLite {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
                                 error!("{} Error: {}", LOG_PREFIX, e);
                                 return Err(e);
                             }
@@ -316,7 +321,7 @@ impl DatabaseConnectorSQLite {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
                                 error!("{} Error: {}", LOG_PREFIX, e);
                                 return Err(e);
                             }
@@ -329,10 +334,14 @@ impl DatabaseConnectorSQLite {
             }
         }
         info!("{} Handled {} torrents", LOG_PREFIX, handled);
-        self.commit(transaction).await
+        if let Some(txn) = transaction {
+            txn.set_extra("torrents_saved", (handled as i64).into());
+            txn.set_tag("database_type", "sqlite");
+            txn.finish();
+        }
+        self.commit(transaction_db).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -368,7 +377,6 @@ impl DatabaseConnectorSQLite {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -420,7 +428,6 @@ impl DatabaseConnectorSQLite {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -456,7 +463,6 @@ impl DatabaseConnectorSQLite {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_blacklist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -508,7 +514,6 @@ impl DatabaseConnectorSQLite {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -544,7 +549,6 @@ impl DatabaseConnectorSQLite {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_keys(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -598,7 +602,6 @@ impl DatabaseConnectorSQLite {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -674,7 +677,6 @@ impl DatabaseConnectorSQLite {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_users(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -807,7 +809,6 @@ impl DatabaseConnectorSQLite {
         self.commit(transaction).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
         let structure = &tracker.config.database_structure.torrents;
@@ -823,7 +824,6 @@ impl DatabaseConnectorSQLite {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn commit(&self, transaction: Transaction<'_, Sqlite>) -> Result<(), Error> {
         match transaction.commit().await {
             Ok(_) => Ok(()),

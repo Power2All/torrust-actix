@@ -24,9 +24,10 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn validate_announce(&self, remote_addr: IpAddr, query: HashMap<String, QueryValues>) -> Result<AnnounceQueryRequest, CustomError>
     {
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("validate_announce", "tracker");
+
         let now = std::time::Instant::now();
 
         #[inline]
@@ -82,6 +83,13 @@ impl TorrentTracker {
             .unwrap_or(72);
         let elapsed = now.elapsed();
         debug!("[PERF] Announce validation took: {:?}", elapsed);
+
+        if let Some(txn) = transaction {
+            txn.set_tag("remote_addr", remote_addr.to_string());
+            txn.set_tag("info_hash_length", query.get("info_hash").map(|v| v.len()).unwrap_or(0).to_string());
+            txn.finish();
+        }
+
         Ok(AnnounceQueryRequest {
             info_hash,
             peer_id,
@@ -97,9 +105,10 @@ impl TorrentTracker {
         })
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn handle_announce(&self, data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
     {
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("handle_announce", "tracker");
+
         let now = std::time::Instant::now();
         let mut torrent_peer = TorrentPeer {
             peer_id: announce_query.peer_id,
@@ -112,7 +121,7 @@ impl TorrentTracker {
         };
         let is_persistent = data.config.database.persistent;
         let users_enabled = data.config.tracker_config.users_enabled;
-        match announce_query.event {
+        let result = match announce_query.event {
             AnnounceEvent::Started | AnnounceEvent::None => {
                 torrent_peer.event = AnnounceEvent::Started;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
@@ -210,10 +219,18 @@ impl TorrentTracker {
                 debug!("[PERF] Announce Completed handling took: {elapsed:?}");
                 Ok((torrent_peer, torrent_entry.1))
             }
+        };
+
+        if let Some(txn) = transaction {
+            txn.set_tag("event_type", format!("{:?}", announce_query.event));
+            txn.set_tag("info_hash", hex::encode(announce_query.info_hash.0));
+            txn.set_tag("has_user_key", user_key.is_some().to_string());
+            txn.finish();
         }
+
+        result
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn validate_scrape(&self, query: HashMap<String, QueryValues>) -> Result<ScrapeQueryRequest, CustomError>
     {
         let now = std::time::Instant::now();
@@ -237,9 +254,10 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, TorrentEntry>
     {
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("handle_scrape", "tracker");
+
         let now = std::time::Instant::now();
         let result = scrape_query.info_hash.iter()
             .map(|&info_hash| {
@@ -249,6 +267,12 @@ impl TorrentTracker {
             .collect();
         let elapsed = now.elapsed();
         debug!("[PERF] Scrape handling took: {:?}", elapsed);
+
+        if let Some(txn) = transaction {
+            txn.set_tag("num_info_hashes", scrape_query.info_hash.len().to_string());
+            txn.finish();
+        }
+
         result
     }
 }

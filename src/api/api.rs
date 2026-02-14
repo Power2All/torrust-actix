@@ -94,7 +94,6 @@ use utoipa_swagger_ui::{
     SwaggerUi
 };
 
-#[tracing::instrument(level = "debug")]
 pub fn api_service_cors() -> Cors
 {
     Cors::default()
@@ -105,7 +104,6 @@ pub fn api_service_cors() -> Cors
         .max_age(1)
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceConfig) + Send + Sync>
 {
     Box::new(move |cfg: &mut ServiceConfig| {
@@ -182,7 +180,6 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
     })
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service(
     addr: SocketAddr,
     data: Arc<TorrentTracker>,
@@ -253,7 +250,6 @@ pub async fn api_service(
     (server.handle(), server)
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
 {
     let event = if ip.is_ipv4() {
@@ -264,7 +260,6 @@ pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     tracker.update_stats(event, 1);
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>) -> Option<HttpResponse>
 {
     let token_code = match token {
@@ -283,7 +278,6 @@ pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>
     None
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
@@ -301,7 +295,6 @@ pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<Api
         .unwrap_or(Ok(origin_ip))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceData>>) -> Result<IpAddr, HttpResponse>
 {
     match api_service_retrieve_remote_ip(request, Arc::clone(&data.api_trackers_config)).await {
@@ -317,7 +310,6 @@ pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceDat
     }
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await {
@@ -328,7 +320,6 @@ pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServi
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
 {
     let event = if ip.is_ipv4() {
@@ -339,7 +330,6 @@ pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsE
     data.update_stats(event, count);
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceData>>) -> Option<HttpResponse>
 {
     match api_validate_ip(request, data.clone()).await {
@@ -357,14 +347,12 @@ pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceDat
     }
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_openapi_json() -> HttpResponse
 {
     let openapi_file = include_str!("../openapi.json");
     HttpResponse::Ok().content_type(ContentType::json()).body(openapi_file)
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, CustomError>
 {
     let mut body = BytesMut::new();

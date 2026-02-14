@@ -4,7 +4,6 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use std::sync::atomic::Ordering;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub fn get_stats(&self) -> Stats
     {
         Stats {
@@ -64,7 +63,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
@@ -227,7 +225,6 @@ impl TorrentTracker {
         self.get_stats()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
     {
         match event {

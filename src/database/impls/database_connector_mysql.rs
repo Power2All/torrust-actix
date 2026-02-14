@@ -53,7 +53,6 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::mysql;
 const LOG_PREFIX: &str = "[MySQL]";
 
 impl DatabaseConnectorMySQL {
-    #[tracing::instrument(level = "debug")]
     pub async fn create(dsl: &str) -> Result<Pool<MySql>, Error> {
         MySqlPoolOptions::new()
             .connect_with(
@@ -64,7 +63,6 @@ impl DatabaseConnectorMySQL {
             .await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn database_connector(
         config: Arc<Configuration>,
         create_database: bool,
@@ -161,7 +159,6 @@ impl DatabaseConnectorMySQL {
         structure
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -212,7 +209,6 @@ impl DatabaseConnectorMySQL {
         Ok((torrents, completed))
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -320,7 +316,6 @@ impl DatabaseConnectorMySQL {
         self.commit(transaction).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -356,7 +351,6 @@ impl DatabaseConnectorMySQL {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -408,7 +402,6 @@ impl DatabaseConnectorMySQL {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -444,7 +437,6 @@ impl DatabaseConnectorMySQL {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_blacklist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -496,7 +488,6 @@ impl DatabaseConnectorMySQL {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -532,7 +523,6 @@ impl DatabaseConnectorMySQL {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_keys(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -586,7 +576,6 @@ impl DatabaseConnectorMySQL {
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100000u64;
@@ -662,7 +651,6 @@ impl DatabaseConnectorMySQL {
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_users(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -794,7 +782,6 @@ impl DatabaseConnectorMySQL {
         self.commit(transaction).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
         let structure = &tracker.config.database_structure.torrents;

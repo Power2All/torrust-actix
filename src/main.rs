@@ -35,7 +35,6 @@ use torrust_actix::websocket::websocket::{
     websocket_master_service
 };
 
-#[tracing::instrument(level = "debug")]
 fn main() -> std::io::Result<()>
 {
     let args = Cli::parse();

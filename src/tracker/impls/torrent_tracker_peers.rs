@@ -16,7 +16,6 @@ use std::net::{
 };
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub fn get_torrent_peers(&self, info_hash: InfoHash, amount: usize, ip_type: TorrentPeersType, self_ip: Option<IpAddr>) -> Option<TorrentPeers>
     {
         self.get_torrent(info_hash).map(|data| {
@@ -46,7 +45,6 @@ impl TorrentTracker {
         })
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn get_peers(&self, peers: &AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_ip: Option<IpAddr>, amount: usize) -> AHashMap<PeerId, TorrentPeer>
     {
@@ -71,7 +69,6 @@ impl TorrentTracker {
         result
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> (Option<TorrentEntry>, TorrentEntry)
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
@@ -128,7 +125,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
     {
         if !self.torrents_sharding.contains_peer(info_hash, peer_id) {

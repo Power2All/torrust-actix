@@ -23,7 +23,6 @@ impl Default for TorrentSharding {
 
 #[allow(dead_code)]
 impl TorrentSharding {
-    #[tracing::instrument(level = "debug")]
     pub fn new() -> TorrentSharding {
         TorrentSharding {
             shards: std::array::from_fn(|_| Arc::new(RwLock::new(BTreeMap::new()))),
@@ -188,7 +187,6 @@ impl TorrentSharding {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn contains_torrent(&self, info_hash: InfoHash) -> bool {
         let shard_index = info_hash.0[0] as usize;
@@ -197,7 +195,6 @@ impl TorrentSharding {
             .unwrap_or(false)
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn contains_peer(&self, info_hash: InfoHash, peer_id: PeerId) -> bool {
         let shard_index = info_hash.0[0] as usize;
@@ -211,20 +208,17 @@ impl TorrentSharding {
             .unwrap_or(false)
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn get_shard(&self, shard: u8) -> Option<Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>> {
         self.shards.get(shard as usize).cloned()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry> {
         self.shards.get(shard as usize)
             .map(|s| s.read().clone())
             .unwrap_or_default()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry> {
         let mut torrents_return = BTreeMap::new();
         for shard in &self.shards {
@@ -236,7 +230,6 @@ impl TorrentSharding {
         torrents_return
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_torrents_amount(&self) -> u64 {
         self.shards.iter()
             .map(|shard| shard.read().len() as u64)

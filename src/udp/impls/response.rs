@@ -122,7 +122,6 @@ impl Response {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn from_bytes(bytes: &[u8], ipv4: bool) -> Result<Self, io::Error> {
         let mut cursor = Cursor::new(bytes);

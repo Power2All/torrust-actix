@@ -13,7 +13,6 @@ use actix_web::{
 };
 use std::sync::Arc;
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -22,7 +21,6 @@ pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServi
     HttpResponse::Ok().content_type(ContentType::json()).json(data.torrent_tracker.get_stats())
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }

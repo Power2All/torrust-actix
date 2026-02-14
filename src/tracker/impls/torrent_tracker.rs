@@ -22,7 +22,6 @@ use std::sync::atomic::{
 use std::sync::Arc;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
         let tracker_config = &config.tracker_config;

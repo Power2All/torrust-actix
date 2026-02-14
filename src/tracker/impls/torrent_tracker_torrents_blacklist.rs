@@ -9,7 +9,6 @@ use log::{
 use std::sync::Arc;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(blacklist) = self.sqlx.load_blacklist(tracker).await {
@@ -17,7 +16,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
     {
         let hashes_len = hashes.len();
@@ -33,7 +31,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn add_blacklist(&self, info_hash: InfoHash) -> bool
     {
@@ -45,14 +42,12 @@ impl TorrentTracker {
         false
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_blacklist(&self) -> Vec<InfoHash>
     {
         let lock = self.torrents_blacklist.read();
         lock.iter().copied().collect()
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn check_blacklist(&self, info_hash: InfoHash) -> bool
     {
@@ -60,7 +55,6 @@ impl TorrentTracker {
         lock.contains(&info_hash)
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn remove_blacklist(&self, info_hash: InfoHash) -> bool
     {
@@ -73,7 +67,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn clear_blacklist(&self)
     {
         let mut lock = self.torrents_blacklist.write();
