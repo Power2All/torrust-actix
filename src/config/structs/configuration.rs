@@ -6,7 +6,6 @@ use crate::config::structs::http_trackers_config::HttpTrackersConfig;
 use crate::config::structs::sentry_config::SentryConfig;
 use crate::config::structs::tracker_config::TrackerConfig;
 use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
-use crate::config::structs::webtorrent_trackers_config::WebTorrentTrackersConfig;
 use serde::{
     Deserialize,
     Serialize
@@ -25,6 +24,4 @@ pub struct Configuration {
     pub http_server: Vec<HttpTrackersConfig>,
     pub udp_server: Vec<UdpTrackersConfig>,
     pub api_server: Vec<ApiTrackersConfig>,
-    #[serde(default)]
-    pub webtorrent_server: Vec<WebTorrentTrackersConfig>
 }

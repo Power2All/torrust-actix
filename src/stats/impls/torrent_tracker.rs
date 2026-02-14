@@ -61,18 +61,6 @@ impl TorrentTracker {
             ws_reconnects: self.stats.ws_reconnects.load(Ordering::Relaxed),
             ws_auth_success: self.stats.ws_auth_success.load(Ordering::Relaxed),
             ws_auth_failed: self.stats.ws_auth_failed.load(Ordering::Relaxed),
-            wt4_connections_handled: self.stats.wt4_connections_handled.load(Ordering::Relaxed),
-            wt4_announces_handled: self.stats.wt4_announces_handled.load(Ordering::Relaxed),
-            wt4_offers_handled: self.stats.wt4_offers_handled.load(Ordering::Relaxed),
-            wt4_answers_handled: self.stats.wt4_answers_handled.load(Ordering::Relaxed),
-            wt4_scrapes_handled: self.stats.wt4_scrapes_handled.load(Ordering::Relaxed),
-            wt4_failure: self.stats.wt4_failure.load(Ordering::Relaxed),
-            wt6_connections_handled: self.stats.wt6_connections_handled.load(Ordering::Relaxed),
-            wt6_announces_handled: self.stats.wt6_announces_handled.load(Ordering::Relaxed),
-            wt6_offers_handled: self.stats.wt6_offers_handled.load(Ordering::Relaxed),
-            wt6_answers_handled: self.stats.wt6_answers_handled.load(Ordering::Relaxed),
-            wt6_scrapes_handled: self.stats.wt6_scrapes_handled.load(Ordering::Relaxed),
-            wt6_failure: self.stats.wt6_failure.load(Ordering::Relaxed),
         }
     }
 
@@ -235,42 +223,6 @@ impl TorrentTracker {
             StatsEvent::WsAuthFailed => {
                 self.update_counter(&self.stats.ws_auth_failed, value);
             }
-            StatsEvent::Wt4ConnectionsHandled => {
-                self.update_counter(&self.stats.wt4_connections_handled, value);
-            }
-            StatsEvent::Wt4AnnouncesHandled => {
-                self.update_counter(&self.stats.wt4_announces_handled, value);
-            }
-            StatsEvent::Wt4OffersHandled => {
-                self.update_counter(&self.stats.wt4_offers_handled, value);
-            }
-            StatsEvent::Wt4AnswersHandled => {
-                self.update_counter(&self.stats.wt4_answers_handled, value);
-            }
-            StatsEvent::Wt4ScrapesHandled => {
-                self.update_counter(&self.stats.wt4_scrapes_handled, value);
-            }
-            StatsEvent::Wt4Failure => {
-                self.update_counter(&self.stats.wt4_failure, value);
-            }
-            StatsEvent::Wt6ConnectionsHandled => {
-                self.update_counter(&self.stats.wt6_connections_handled, value);
-            }
-            StatsEvent::Wt6AnnouncesHandled => {
-                self.update_counter(&self.stats.wt6_announces_handled, value);
-            }
-            StatsEvent::Wt6OffersHandled => {
-                self.update_counter(&self.stats.wt6_offers_handled, value);
-            }
-            StatsEvent::Wt6AnswersHandled => {
-                self.update_counter(&self.stats.wt6_answers_handled, value);
-            }
-            StatsEvent::Wt6ScrapesHandled => {
-                self.update_counter(&self.stats.wt6_scrapes_handled, value);
-            }
-            StatsEvent::Wt6Failure => {
-                self.update_counter(&self.stats.wt6_failure, value);
-            }
         };
         self.get_stats()
     }
@@ -431,42 +383,6 @@ impl TorrentTracker {
             }
             StatsEvent::WsAuthFailed => {
                 self.stats.ws_auth_failed.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt4ConnectionsHandled => {
-                self.stats.wt4_connections_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt4AnnouncesHandled => {
-                self.stats.wt4_announces_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt4OffersHandled => {
-                self.stats.wt4_offers_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt4AnswersHandled => {
-                self.stats.wt4_answers_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt4ScrapesHandled => {
-                self.stats.wt4_scrapes_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt4Failure => {
-                self.stats.wt4_failure.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt6ConnectionsHandled => {
-                self.stats.wt6_connections_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt6AnnouncesHandled => {
-                self.stats.wt6_announces_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt6OffersHandled => {
-                self.stats.wt6_offers_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt6AnswersHandled => {
-                self.stats.wt6_answers_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt6ScrapesHandled => {
-                self.stats.wt6_scrapes_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Wt6Failure => {
-                self.stats.wt6_failure.store(value, Ordering::Release);
             }
         };
         self.get_stats()

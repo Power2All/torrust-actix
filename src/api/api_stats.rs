@@ -66,18 +66,15 @@ pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServic
     string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "udp6_connections_handled", stats.udp6_connections_handled, false, None));
     string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "udp6_announces_handled", stats.udp6_announces_handled, false, None));
     string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "udp6_scrapes_handled", stats.udp6_scrapes_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_connections_handled", stats.wt4_connections_handled, true, Some(&format!("{prometheus_id} WebTorrent counter metrics"))));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_announces_handled", stats.wt4_announces_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_offers_handled", stats.wt4_offers_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_answers_handled", stats.wt4_answers_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_scrapes_handled", stats.wt4_scrapes_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt4_failure", stats.wt4_failure, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_connections_handled", stats.wt6_connections_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_announces_handled", stats.wt6_announces_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_offers_handled", stats.wt6_offers_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_answers_handled", stats.wt6_answers_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_scrapes_handled", stats.wt6_scrapes_handled, false, None));
-    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "wt6_failure", stats.wt6_failure, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_connections_active", stats.ws_connections_active, true, Some(&format!("{prometheus_id} WebSocket counter metrics"))));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_requests_sent", stats.ws_requests_sent, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_requests_received", stats.ws_requests_received, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_responses_sent", stats.ws_responses_sent, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_responses_received", stats.ws_responses_received, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_timeouts", stats.ws_timeouts, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_reconnects", stats.ws_reconnects, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_auth_success", stats.ws_auth_success, false, None));
+    string_output.push_str(&api_service_prom_generate_line(prometheus_id, "counter", "ws_auth_failed", stats.ws_auth_failed, false, None));
     HttpResponse::Ok().content_type(ContentType::plaintext()).body(string_output)
 }
 

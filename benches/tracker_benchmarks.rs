@@ -40,9 +40,6 @@ fn create_test_peer(ip: IpAddr, port: u16, peer_id: PeerId) -> TorrentPeer {
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(1000),
         event: AnnounceEvent::Started,
-        webrtc_offer: None,
-        webrtc_offer_id: None,
-        is_webtorrent: false,
     }
 }
 

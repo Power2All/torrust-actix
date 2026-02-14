@@ -2,7 +2,7 @@ use crate::common::structs::custom_error::CustomError;
 use rand::RngExt;
 
 pub const MAX_PERCENT_DECODED_SIZE: usize = 1_048_576;
-pub const MAX_WEBRTC_SDP_SIZE: usize = 262_144;
+pub const MAX_PEER_MESSAGE_SIZE: usize = 262_144;
 pub const MIN_API_KEY_LENGTH: usize = 32;
 pub const DEFAULT_API_KEY_ENTROPY_BYTES: usize = 32;
 pub const MAX_INFO_HASH_HEX_LENGTH: usize = 40;
@@ -59,44 +59,42 @@ pub fn validate_file_path(path: &str) -> Result<(), CustomError> {
     Ok(())
 }
 
-pub fn validate_webrtc_sdp(sdp: &str) -> Result<(), CustomError> {
-    if sdp.len() > MAX_WEBRTC_SDP_SIZE {
+pub fn validate_peer_message(message: &str) -> Result<(), CustomError> {
+    if message.len() > MAX_PEER_MESSAGE_SIZE {
         return Err(CustomError::new(&format!(
-            "WebRTC SDP exceeds maximum size of {} bytes",
-            MAX_WEBRTC_SDP_SIZE
+            "Peer message exceeds maximum size of {} bytes",
+            MAX_PEER_MESSAGE_SIZE
         )));
     }
-    if !sdp.starts_with("v=") && !sdp.starts_with('{') && !sdp.starts_with('"') {
-        return Err(CustomError::new("Invalid WebRTC SDP format: must start with v= or be JSON"));
-    }
     let suspicious_patterns = ["<script", "javascript:", "data:", "vbscript:"];
-    let sdp_lower = sdp.to_lowercase();
+    let message_lower = message.to_lowercase();
     for pattern in suspicious_patterns {
-        if sdp_lower.contains(pattern) {
-            return Err(CustomError::new("Suspicious content detected in WebRTC SDP"));
+        if message_lower.contains(pattern) {
+            return Err(CustomError::new("Suspicious content detected in peer message"));
         }
     }
     Ok(())
 }
 
 pub fn validate_info_hash_hex(info_hash: &str) -> Result<(), CustomError> {
-    if info_hash.len() > MAX_INFO_HASH_HEX_LENGTH {
-        return Err(CustomError::new("info_hash exceeds maximum length"));
+    if info_hash.len() == 40 && info_hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Ok(());
     }
-    if !info_hash.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(CustomError::new("info_hash contains invalid hex characters"));
+    if info_hash.len() >= 15 && info_hash.len() <= 60 {
+        return Ok(());
     }
-    Ok(())
+
+    Err(CustomError::new("info_hash has invalid format"))
 }
 
 pub fn validate_peer_id_hex(peer_id: &str) -> Result<(), CustomError> {
-    if peer_id.len() > MAX_PEER_ID_HEX_LENGTH {
-        return Err(CustomError::new("peer_id exceeds maximum length"));
+    if peer_id.len() == 40 && peer_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Ok(());
     }
-    if !peer_id.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(CustomError::new("peer_id contains invalid hex characters"));
+    if peer_id.len() >= 15 && peer_id.len() <= 60 {
+        return Ok(());
     }
-    Ok(())
+    Err(CustomError::new("peer_id has invalid format"))
 }
 
 pub fn validate_query_string_length(query: &str) -> Result<(), CustomError> {

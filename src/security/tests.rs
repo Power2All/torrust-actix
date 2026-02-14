@@ -57,15 +57,21 @@ mod security_tests {
     }
 
     #[test]
-    fn test_validate_webrtc_sdp_size() {
-        let large_sdp = "v=0\n".repeat(100000);
-        assert!(validate_webrtc_sdp(&large_sdp).is_err());
+    fn test_validate_peer_message_size() {
+        let large_message = "A".repeat(300000); // Exceeds MAX_PEER_MESSAGE_SIZE
+        assert!(validate_peer_message(&large_message).is_err());
     }
 
     #[test]
-    fn test_validate_webrtc_sdp_format() {
-        assert!(validate_webrtc_sdp("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\n").is_ok());
-        assert!(validate_webrtc_sdp("{\"type\":\"offer\"}").is_ok());
+    fn test_validate_peer_message_content() {
+        assert!(validate_peer_message("normal message").is_ok());
+        assert!(validate_peer_message("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\n").is_ok());
+    }
+
+    #[test]
+    fn test_validate_peer_message_suspicious() {
+        assert!(validate_peer_message("<script>alert('xss')</script>").is_err());
+        assert!(validate_peer_message("javascript:alert(1)").is_err());
     }
 
     #[test]

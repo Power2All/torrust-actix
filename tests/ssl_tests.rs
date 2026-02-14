@@ -32,14 +32,6 @@ async fn test_server_identifier_websocket_master() {
 }
 
 #[tokio::test]
-async fn test_server_identifier_webtorrent_tracker() {
-    let id = ServerIdentifier::WebTorrentTracker("0.0.0.0:12100".to_string());
-    assert_eq!(id.bind_address(), "0.0.0.0:12100");
-    assert_eq!(id.server_type(), "webtorrent");
-    assert_eq!(format!("{}", id), "WebTorrentTracker(0.0.0.0:12100)");
-}
-
-#[tokio::test]
 async fn test_certificate_store_new() {
     let store = CertificateStore::new();
     assert!(store.all_servers().is_empty());

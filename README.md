@@ -11,7 +11,7 @@ Currently, it's being actively used at https://www.gbitt.info/.
 This project originated from Torrust-Tracker code originally developed by Mick van Dijke, further developed by Power2All as alternative for OpenTracker and other tracker code available on GitHub.
 
 ## Features
-* [X] Block array for TCP tracking (HTTP/HTTPS), UDP tracking, WebTorrent (WebSocket) and API (HTTP/HTTPS)
+* [X] Block array for TCP tracking (HTTP/HTTPS), UDP tracking and API (HTTP/HTTPS)
 * [X] Full IPv4 and IPv6 support
 * [X] Persistence saving supported using SQLite3, MySQL or PostgresSQL database
 * [X] Customize table and database structure in the configuration
@@ -198,24 +198,11 @@ UDP_0_RECEIVE_BUFFER_SIZE <UINT64>
 UDP_0_SEND_BUFFER_SIZE <UINT64>
 UDP_0_REUSE_ADDRESS <true | false>
 UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
-
-WEBTORRENT_0_ENABLED <true | false>
-WEBTORRENT_0_SSL <true | false>
-WEBTORRENT_0_BIND_ADDRESS <STRING>
-WEBTORRENT_0_SSL_KEY <STRING>
-WEBTORRENT_0_SSL_CERT <STRING>
-WEBTORRENT_0_KEEP_ALIVE <UINT64>
-WEBTORRENT_0_REQUEST_TIMEOUT <UINT64>
-WEBTORRENT_0_DISCONNECT_TIMEOUT <UINT64>
-WEBTORRENT_0_MAX_CONNECTIONS <UINT64>
-WEBTORRENT_0_THREADS <UINT64>
-WEBTORRENT_0_TLS_CONNECTION_RATE <UINT64>
 ```
 
 ### ChangeLog
 
 #### v4.2.0
-* Adding WebTorrent (experimental) support
 * Refactoring the whole project structure
 * Adding security and anti-malicious validation and checks
 

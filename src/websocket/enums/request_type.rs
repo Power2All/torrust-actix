@@ -12,8 +12,4 @@ pub enum RequestType {
         method: String,
     },
     UdpPacket,
-    WtAnnounce,
-    WtScrape,
-    WtOffer,
-    WtAnswer,
 }

@@ -34,7 +34,6 @@ use torrust_actix::websocket::websocket::{
     start_slave_client,
     websocket_master_service
 };
-use torrust_actix::webtorrent::webtorrent::webtorrent_service;
 
 #[tracing::instrument(level = "debug")]
 fn main() -> std::io::Result<()>
@@ -241,44 +240,6 @@ fn main() -> std::io::Result<()>
                 }
             }
 
-            let mut webtorrent_futures = Vec::new();
-            let mut webtorrents_futures = Vec::new();
-
-            for webtorrent_server_object in &config.webtorrent_server {
-                if webtorrent_server_object.enabled {
-                    http_check_host_and_port_used(webtorrent_server_object.bind_address.clone());
-                    let address: SocketAddr = webtorrent_server_object.bind_address.parse().unwrap();
-
-                    let (handle, future) = webtorrent_service(
-                        address,
-                        tracker.clone(),
-                        webtorrent_server_object.clone()
-                    ).await;
-
-                    if webtorrent_server_object.ssl {
-                        webtorrents_futures.push((handle, future));
-                    } else {
-                        webtorrent_futures.push((handle, future));
-                    }
-                }
-            }
-
-            if !webtorrent_futures.is_empty() {
-                let (handles, futures): (Vec<_>, Vec<_>) = webtorrent_futures.into_iter().unzip();
-                tokio_core.spawn(async move {
-                    let _ = try_join_all(futures).await;
-                    drop(handles);
-                });
-            }
-            if !webtorrents_futures.is_empty() {
-                let (handles, futures): (Vec<_>, Vec<_>) = webtorrents_futures.into_iter().unzip();
-                tokio_core.spawn(async move {
-                    let _ = try_join_all(futures).await;
-                    drop(handles);
-                });
-            }
-
-
             let cluster_mode = tracker_config.cluster.clone();
             let mut ws_futures = Vec::new();
 
@@ -395,16 +356,6 @@ fn main() -> std::io::Result<()>
                                 stats.udp6_connections_handled, udp_c6_ps, stats.udp6_announces_handled, udp_a6_ps, stats.udp6_scrapes_handled, udp_s6_ps,
                                 stats.udp6_invalid_request, stats.udp6_bad_request,
                                 stats.udp_queue_len
-                            );
-
-                            info!(
-                                "[STATS WT] IPv4: Conn:{} A:{} O:{} Ans:{} S:{} F:{} | IPv6: Conn:{} A:{} O:{} Ans:{} S:{} F:{}",
-                                stats.wt4_connections_handled, stats.wt4_announces_handled,
-                                stats.wt4_offers_handled, stats.wt4_answers_handled,
-                                stats.wt4_scrapes_handled, stats.wt4_failure,
-                                stats.wt6_connections_handled, stats.wt6_announces_handled,
-                                stats.wt6_offers_handled, stats.wt6_answers_handled,
-                                stats.wt6_scrapes_handled, stats.wt6_failure
                             );
 
                             if tracker_spawn_stats.config.tracker_config.cluster != ClusterMode::standalone {

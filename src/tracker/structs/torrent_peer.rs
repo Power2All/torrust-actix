@@ -23,9 +23,4 @@ pub struct TorrentPeer {
     pub left: NumberOfBytes,
     #[serde(with = "AnnounceEventDef")]
     pub event: AnnounceEvent,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub webrtc_offer: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub webrtc_offer_id: Option<String>,
-    pub is_webtorrent: bool,
 }

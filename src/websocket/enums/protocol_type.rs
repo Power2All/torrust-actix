@@ -9,6 +9,4 @@ pub enum ProtocolType {
     Https,
     Udp,
     Api,
-    WebTorrentHttp,
-    WebTorrentHttps,
 }

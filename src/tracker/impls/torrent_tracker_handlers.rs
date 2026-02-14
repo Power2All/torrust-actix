@@ -109,9 +109,6 @@ impl TorrentTracker {
             downloaded: NumberOfBytes(announce_query.downloaded as i64),
             left: NumberOfBytes(announce_query.left as i64),
             event: AnnounceEvent::None,
-            webrtc_offer: None,
-            webrtc_offer_id: None,
-            is_webtorrent: false,
         };
         let is_persistent = data.config.database.persistent;
         let users_enabled = data.config.tracker_config.users_enabled;

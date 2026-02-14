@@ -77,7 +77,6 @@ impl PeerId {
                 b"VG" => "Vagaa",
                 b"WD" => "WebTorrent Desktop",
                 b"WT" => "BitLet",
-                b"WW" => "WebTorrent",
                 b"WY" => "FireTorrent",
                 b"XL" => "Xunlei",
                 b"XT" => "XanTorrent",

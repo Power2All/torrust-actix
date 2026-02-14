@@ -3,5 +3,4 @@ pub enum ServerIdentifier {
     HttpTracker(String),
     ApiServer(String),
     WebSocketMaster(String),
-    WebTorrentTracker(String),
 }

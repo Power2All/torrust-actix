@@ -6,7 +6,6 @@ impl ServerIdentifier {
             ServerIdentifier::HttpTracker(addr) => addr,
             ServerIdentifier::ApiServer(addr) => addr,
             ServerIdentifier::WebSocketMaster(addr) => addr,
-            ServerIdentifier::WebTorrentTracker(addr) => addr,
         }
     }
 
@@ -15,7 +14,6 @@ impl ServerIdentifier {
             ServerIdentifier::HttpTracker(_) => "http",
             ServerIdentifier::ApiServer(_) => "api",
             ServerIdentifier::WebSocketMaster(_) => "websocket",
-            ServerIdentifier::WebTorrentTracker(_) => "webtorrent",
         }
     }
 }
@@ -31,9 +29,6 @@ impl std::fmt::Display for ServerIdentifier {
             }
             ServerIdentifier::WebSocketMaster(addr) => {
                 write!(f, "WebSocketMaster({})", addr)
-            }
-            ServerIdentifier::WebTorrentTracker(addr) => {
-                write!(f, "WebTorrentTracker({})", addr)
             }
         }
     }
