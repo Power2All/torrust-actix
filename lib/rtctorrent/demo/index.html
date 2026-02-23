@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RtcTorrent</title>
+  <link href="https://vjs.zencdn.net/8.23.4/video-js.css" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -111,9 +112,8 @@
     .vf-actual.err  { color: #f85149; }
 
     /* ── Media player ── */
-    video, audio { width: 100%; border-radius: 6px; display: block; }
-    video { background: #000; max-height: 60vh; }
-    audio { margin-top: 4px; }
+    .video-js { border-radius: 6px; max-height: 60vh; }
+    audio { width: 100%; border-radius: 6px; display: block; margin-top: 4px; }
     .now-playing { font-size: 0.8rem; color: #888; margin-bottom: 8px; }
   </style>
 </head>
@@ -206,22 +206,34 @@
   <!-- Media player -->
   <div id="media-section" class="card" style="display:none">
     <div id="now-playing" class="now-playing"></div>
-    <video  id="player"       controls style="display:none"></video>
-    <audio  id="audio-player" controls style="display:none"></audio>
+    <div id="vjs-wrap" style="display:none">
+      <video id="player" class="video-js vjs-default-skin vjs-big-play-centered"
+             preload="none" playsinline></video>
+    </div>
+    <audio id="audio-player" controls style="display:none; width:100%; margin-top:4px"></audio>
   </div>
 
 </div>
 
 <!-- Browser bundle -->
+<script src="https://vjs.zencdn.net/8.23.4/video.min.js"></script>
 <script src="../dist/rtctorrent.browser.js?v=16"></script>
 <script>
 'use strict';
+
+// Register Service Worker for seamless video streaming (no reload on append)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+        console.log('[SW] Registered, scope:', reg.scope);
+    }).catch(e => console.warn('[SW] Registration failed (blob fallback will be used):', e.message));
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let client        = null;
 let torrentInst   = null;
 let progressInterval = null;
 
+let vjsPlayer          = null;
 let seedClient         = null;
 let seedTorrentInst    = null;
 let selectedFiles      = [];
@@ -474,32 +486,55 @@ async function playFile(fileIndex) {
   $('media-section').style.display = 'block';
 
   const audio = isAudioFile(file.name);
-  const videoEl = $('player');
-  const audioEl = $('audio-player');
-  videoEl.style.display = audio ? 'none' : 'block';
-  audioEl.style.display = audio ? 'block' : 'none';
-  const mediaEl = audio ? audioEl : videoEl;
+  $('vjs-wrap').style.display     = audio ? 'none' : 'block';
+  $('audio-player').style.display = audio ? 'block' : 'none';
 
-  mediaEl.src = '';
   $('now-playing').textContent = `Now playing: ${file.name.split('/').pop()}`;
   log(`Playing: ${file.name}`);
 
-  mediaEl.addEventListener('canplay', () => {
-    log(`Ready — press ▶ if playback hasn't started automatically.`);
-  }, { once: true });
+  const onProgress = pct => {
+    if (!torrentInst?._downloadCompleted) {
+      $('progress-bar').style.width = pct + '%';
+      $('progress-label').textContent = `Buffering ${file.name.split('/').pop()}… ${pct}%`;
+      $('progress-bar').classList.add('streaming');
+    }
+  };
 
-  try {
-    await torrentInst.streamVideo(fileIndex, mediaEl, {
-      onProgress: pct => {
-        if (!torrentInst?._downloadCompleted) {
-          $('progress-bar').style.width = pct + '%';
-          $('progress-label').textContent = `Buffering ${file.name.split('/').pop()}… ${pct}%`;
-          $('progress-bar').classList.add('streaming');
-        }
-      }
-    });
-  } catch (e) {
-    log('streamVideo error:', e.message);
+  if (audio) {
+    const audioEl = $('audio-player');
+    audioEl.src = '';
+    audioEl.addEventListener('canplay', () => {
+      log(`Ready — press ▶ if playback hasn't started automatically.`);
+    }, { once: true });
+    try {
+      await torrentInst.streamVideo(fileIndex, audioEl, { onProgress });
+    } catch (e) {
+      log('streamVideo error:', e.message);
+    }
+  } else {
+    // Lazy-init video.js on first video play
+    if (!vjsPlayer) {
+      vjsPlayer = videojs('player', {
+        fluid:          true,
+        controls:       true,
+        preload:        'none',
+        bigPlayButton:  true,
+        loadingSpinner: true,
+        errorDisplay:   false,
+      });
+    }
+    await new Promise(resolve => vjsPlayer.ready(resolve));
+
+    // Get the underlying native <video> element that video.js wraps
+    const videoEl = vjsPlayer.el().querySelector('video');
+    videoEl.addEventListener('canplay', () => {
+      log(`Ready — press ▶ if playback hasn't started automatically.`);
+    }, { once: true });
+    try {
+      await torrentInst.streamVideo(fileIndex, videoEl, { onProgress });
+    } catch (e) {
+      log('streamVideo error:', e.message);
+    }
   }
 }
 
