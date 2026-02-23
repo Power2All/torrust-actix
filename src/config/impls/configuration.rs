@@ -64,6 +64,7 @@ impl Configuration {
                 cluster_ssl_key: String::from(""),
                 cluster_ssl_cert: String::from(""),
                 cluster_tls_connection_rate: 256,
+                rtc_interval: 30,
             },
             sentry_config: SentryConfig {
                 enabled: false,
@@ -139,7 +140,8 @@ impl Configuration {
                     ssl: false,
                     ssl_key: String::from(""),
                     ssl_cert: String::from(""),
-                    tls_connection_rate: 256
+                    tls_connection_rate: 256,
+                    rtctorrent: false
                 }
             ),
             udp_server: vec!(
@@ -271,6 +273,9 @@ impl Configuration {
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_TLS_CONNECTION_RATE") {
             config.tracker_config.cluster_tls_connection_rate = value.parse::<u64>().unwrap_or(256u64);
+        }
+        if let Ok(value) = env::var("TRACKER__RTC_INTERVAL") {
+            config.tracker_config.rtc_interval = value.parse::<u64>().unwrap_or(10u64);
         }
         if let Ok(value) = env::var("SENTRY__ENABLED") {
             config.sentry_config.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
@@ -551,6 +556,9 @@ impl Configuration {
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_TLS_CONNECTION_RATE")) {
                         block.tls_connection_rate = value.parse::<u64>().unwrap_or(256);
                     }
+                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_RTCTORRENT")) {
+                        block.rtctorrent = match value.as_str() { "true" => true, "false" => false, _ => false };
+                    }
                 }
             }
             http_iteration += 1;
@@ -712,6 +720,11 @@ impl Configuration {
                 Self::validate_socket_address(
                     &format!("http_server[{}].bind_address", index),
                     &http_server.bind_address,
+                );
+                println!(
+                    "[VALIDATE] http_server[{}] rtctorrent: {}",
+                    index,
+                    if http_server.rtctorrent { "enabled" } else { "disabled" }
                 );
             }
         }

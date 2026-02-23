@@ -202,6 +202,8 @@ impl DatabaseConnectorSQLite {
                     TorrentEntry {
                         seeds: AHashMap::default(),
                         peers: AHashMap::default(),
+                        rtc_seeds: AHashMap::default(),
+                        rtc_peers: AHashMap::default(),
                         completed: completed_count as u64,
                         updated: std::time::Instant::now(),
                     },

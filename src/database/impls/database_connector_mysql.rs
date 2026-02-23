@@ -188,6 +188,8 @@ impl DatabaseConnectorMySQL {
                     TorrentEntry {
                         seeds: AHashMap::default(),
                         peers: AHashMap::default(),
+                        rtc_seeds: AHashMap::default(),
+                        rtc_peers: AHashMap::default(),
                         completed: completed_count,
                         updated: std::time::Instant::now(),
                     },

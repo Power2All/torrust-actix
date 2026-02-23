@@ -1,0 +1,10 @@
+node_modules/
+
+# Large test media files (not needed in git — obtain separately for manual tests)
+test/*.mp4
+test/*.mkv
+test/*.avi
+
+# Stray tracker files
+*.db
+config.toml

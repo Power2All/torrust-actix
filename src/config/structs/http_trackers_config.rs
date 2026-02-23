@@ -18,5 +18,7 @@ pub struct HttpTrackersConfig {
     pub ssl: bool,
     pub ssl_key: String,
     pub ssl_cert: String,
-    pub tls_connection_rate: u64
+    pub tls_connection_rate: u64,
+    #[serde(default)]
+    pub rtctorrent: bool
 }

@@ -36,4 +36,5 @@ pub struct TrackerConfig {
     pub cluster_ssl_key: String,
     pub cluster_ssl_cert: String,
     pub cluster_tls_connection_rate: u64,
+    pub rtc_interval: u64,
 }

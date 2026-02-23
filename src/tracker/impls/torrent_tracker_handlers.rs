@@ -81,6 +81,28 @@ impl TorrentTracker {
             .and_then(|s| s.parse::<u64>().ok())
             .map(|v| if v == 0 || v > 72 { 72 } else { v })
             .unwrap_or(72);
+        let rtctorrent_bool = query.get("rtctorrent")
+            .and_then(|v| v.first())
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .and_then(|s| s.parse::<u8>().ok())
+            .map(|v| v == 1);
+        let rtcoffer_string = query.get("rtcoffer")
+            .and_then(|v| v.first())
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .map(|s| s.to_string());
+        let rtcrequest_bool = query.get("rtcrequest")
+            .and_then(|v| v.first())
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .and_then(|s| s.parse::<u8>().ok())
+            .map(|v| v == 1);
+        let rtcanswer_string = query.get("rtcanswer")
+            .and_then(|v| v.first())
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .map(|s| s.to_string());
+        let rtcanswerfor_string = query.get("rtcanswerfor")
+            .and_then(|v| v.first())
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .map(|s| s.to_string());
         let elapsed = now.elapsed();
         debug!("[PERF] Announce validation took: {:?}", elapsed);
 
@@ -102,6 +124,11 @@ impl TorrentTracker {
             event: event_integer,
             remote_addr,
             numwant: numwant_integer,
+            rtctorrent: rtctorrent_bool,
+            rtcoffer: rtcoffer_string,
+            rtcrequest: rtcrequest_bool,
+            rtcanswer: rtcanswer_string,
+            rtcanswerfor: rtcanswerfor_string,
         })
     }
 
@@ -118,7 +145,32 @@ impl TorrentTracker {
             downloaded: NumberOfBytes(announce_query.downloaded as i64),
             left: NumberOfBytes(announce_query.left as i64),
             event: AnnounceEvent::None,
+            is_rtctorrent: announce_query.rtctorrent.unwrap_or(false),
+            rtc_sdp_offer: announce_query.rtcoffer.clone(),
+            rtc_sdp_answer: None,
+            rtc_connection_status: "pending".to_string(),
+            rtc_pending_answers: Vec::new(),
         };
+        if let Some(ref sdp_answer) = announce_query.rtcanswer
+            && let Some(ref target_hex) = announce_query.rtcanswerfor
+            && let Ok(bytes) = hex::decode(target_hex)
+            && let Some(arr) = bytes.get(..20).and_then(|s| <[u8; 20]>::try_from(s).ok()) {
+            let seeder_peer_id = PeerId(arr);
+            data.store_rtc_answer(
+                announce_query.info_hash,
+                seeder_peer_id,
+                announce_query.peer_id,
+                sdp_answer.clone()
+            );
+        }
+        if let Some(ref sdp_offer) = announce_query.rtcoffer
+            && announce_query.rtctorrent.unwrap_or(false) {
+            data.update_rtc_sdp_offer(
+                announce_query.info_hash,
+                announce_query.peer_id,
+                sdp_offer.clone()
+            );
+        }
         let is_persistent = data.config.database.persistent;
         let users_enabled = data.config.tracker_config.users_enabled;
         let result = match announce_query.event {
@@ -131,30 +183,59 @@ impl TorrentTracker {
                     torrent_peer.clone(),
                     false
                 );
-                if is_persistent {
-                    let _ = data.add_torrent_update(
+                if announce_query.rtctorrent.unwrap_or(false) {
+                    let rtc_entry = data.get_rtctorrent_peers(
                         announce_query.info_hash,
-                        torrent_entry.1.clone(),
-                        UpdatesAction::Add
+                        announce_query.left == 0,
+                        announce_query.peer_id
                     );
-                }
-                if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
-                    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                    user.updated = now;
-                    user.torrents_active.insert(announce_query.info_hash, now);
-                    data.add_user(user_id, user.clone());
                     if is_persistent {
-                        data.add_user_update(user_id, user, UpdatesAction::Add);
+                        let _ = data.add_torrent_update(
+                            announce_query.info_hash,
+                            rtc_entry.clone(),
+                            UpdatesAction::Add
+                        );
                     }
+                    if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
+                        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                        user.updated = now;
+                        user.torrents_active.insert(announce_query.info_hash, now);
+                        data.add_user(user_id, user.clone());
+                        if is_persistent {
+                            data.add_user_update(user_id, user, UpdatesAction::Add);
+                        }
+                    }
+                    let elapsed = now.elapsed();
+                    debug!("[PERF] Announce Started handling took: {elapsed:?}");
+                    Ok((torrent_peer, rtc_entry))
+                } else {
+                    if is_persistent {
+                        let _ = data.add_torrent_update(
+                            announce_query.info_hash,
+                            torrent_entry.1.clone(),
+                            UpdatesAction::Add
+                        );
+                    }
+                    if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
+                        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                        user.updated = now;
+                        user.torrents_active.insert(announce_query.info_hash, now);
+                        data.add_user(user_id, user.clone());
+                        if is_persistent {
+                            data.add_user_update(user_id, user, UpdatesAction::Add);
+                        }
+                    }
+                    let elapsed = now.elapsed();
+                    debug!("[PERF] Announce Started handling took: {elapsed:?}");
+                    Ok((torrent_peer, TorrentEntry {
+                        seeds: torrent_entry.1.seeds,
+                        peers: torrent_entry.1.peers,
+                        rtc_seeds: torrent_entry.1.rtc_seeds,
+                        rtc_peers: torrent_entry.1.rtc_peers,
+                        completed: torrent_entry.1.completed,
+                        updated: torrent_entry.1.updated
+                    }))
                 }
-                let elapsed = now.elapsed();
-                debug!("[PERF] Announce Started handling took: {elapsed:?}");
-                Ok((torrent_peer, TorrentEntry {
-                    seeds: torrent_entry.1.seeds,
-                    peers: torrent_entry.1.peers,
-                    completed: torrent_entry.1.completed,
-                    updated: torrent_entry.1.updated
-                }))
             }
             AnnounceEvent::Stopped => {
                 torrent_peer.event = AnnounceEvent::Stopped;
@@ -200,24 +281,50 @@ impl TorrentTracker {
                     torrent_peer.clone(),
                     true
                 );
-                if is_persistent {
-                    let _ = data.add_torrent_update(
+                if announce_query.rtctorrent.unwrap_or(false) {
+                    let rtc_entry = data.get_rtctorrent_peers(
                         announce_query.info_hash,
-                        torrent_entry.1.clone(),
-                        UpdatesAction::Add
+                        true,
+                        announce_query.peer_id
                     );
-                }
-                if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
-                    user.completed += 1;
-                    user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                    data.add_user(user_id, user.clone());
                     if is_persistent {
-                        data.add_user_update(user_id, user, UpdatesAction::Add);
+                        let _ = data.add_torrent_update(
+                            announce_query.info_hash,
+                            rtc_entry.clone(),
+                            UpdatesAction::Add
+                        );
                     }
+                    if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
+                        user.completed += 1;
+                        user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                        data.add_user(user_id, user.clone());
+                        if is_persistent {
+                            data.add_user_update(user_id, user, UpdatesAction::Add);
+                        }
+                    }
+                    let elapsed = now.elapsed();
+                    debug!("[PERF] Announce Completed handling took: {elapsed:?}");
+                    Ok((torrent_peer, rtc_entry))
+                } else {
+                    if is_persistent {
+                        let _ = data.add_torrent_update(
+                            announce_query.info_hash,
+                            torrent_entry.1.clone(),
+                            UpdatesAction::Add
+                        );
+                    }
+                    if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
+                        user.completed += 1;
+                        user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                        data.add_user(user_id, user.clone());
+                        if is_persistent {
+                            data.add_user_update(user_id, user, UpdatesAction::Add);
+                        }
+                    }
+                    let elapsed = now.elapsed();
+                    debug!("[PERF] Announce Completed handling took: {elapsed:?}");
+                    Ok((torrent_peer, torrent_entry.1))
                 }
-                let elapsed = now.elapsed();
-                debug!("[PERF] Announce Completed handling took: {elapsed:?}");
-                Ok((torrent_peer, torrent_entry.1))
             }
         };
 
@@ -225,6 +332,7 @@ impl TorrentTracker {
             txn.set_tag("event_type", format!("{:?}", announce_query.event));
             txn.set_tag("info_hash", hex::encode(announce_query.info_hash.0));
             txn.set_tag("has_user_key", user_key.is_some().to_string());
+            txn.set_tag("is_rtctorrent", announce_query.rtctorrent.unwrap_or(false).to_string());
             txn.finish();
         }
 

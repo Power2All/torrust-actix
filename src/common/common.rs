@@ -128,15 +128,12 @@ pub fn setup_logging(config: &Configuration) {
             panic!("Unknown log level encountered: '{}'", config.log_level.as_str());
         }
     };
-    if level == log::LevelFilter::Trace {}
-
     let colors = ColoredLevelConfig::new()
         .trace(Color::Cyan)
         .debug(Color::Magenta)
         .info(Color::Green)
         .warn(Color::Yellow)
         .error(Color::Red);
-
     fern::Dispatch::new()
         .format(move |out, message, record| {
             out.finish(format_args!(

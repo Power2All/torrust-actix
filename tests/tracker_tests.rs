@@ -163,3 +163,158 @@ async fn test_blacklist_filtering() {
     let is_blacklisted = tracker.check_blacklist(info_hash);
     assert!(is_blacklisted, "InfoHash should be blacklisted");
 }
+
+#[tokio::test]
+async fn test_rtc_store_and_take_pending_answers() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let seeder_id = common::random_peer_id();
+    let leecher_id = common::random_peer_id();
+    let sdp_answer = "v=0\r\no=- 2 2 IN IP4 127.0.0.1\r\ns=answer\r\n".to_string();
+    let answers = tracker.take_rtc_pending_answers(info_hash, seeder_id);
+    assert!(answers.is_empty(), "Should start with no pending answers");
+    let seeder_peer = common::create_rtc_peer(
+        seeder_id,
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        6881,
+        Some("v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=offer\r\n".to_string()),
+        0,
+    );
+    tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
+    let stored = tracker.store_rtc_answer(info_hash, seeder_id, leecher_id, sdp_answer.clone());
+    assert!(stored, "store_rtc_answer should succeed when seeder exists");
+    let answers = tracker.take_rtc_pending_answers(info_hash, seeder_id);
+    assert_eq!(answers.len(), 1, "Should have exactly 1 pending answer");
+    assert_eq!(answers[0].0, leecher_id, "Answer should be from the leecher");
+    assert_eq!(answers[0].1, sdp_answer, "Answer SDP should match");
+    let answers_again = tracker.take_rtc_pending_answers(info_hash, seeder_id);
+    assert!(answers_again.is_empty(), "Answers should be consumed after take");
+}
+
+#[tokio::test]
+async fn test_rtc_multiple_answers_queued() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let seeder_id = common::random_peer_id();
+    let seeder_peer = common::create_rtc_peer(
+        seeder_id,
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        6881,
+        Some("v=0\r\ns=offer\r\n".to_string()),
+        0,
+    );
+    tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
+    for i in 0..3u8 {
+        let leecher_id = common::random_peer_id();
+        tracker.store_rtc_answer(
+            info_hash,
+            seeder_id,
+            leecher_id,
+            format!("v=0\r\ns=answer{}\r\n", i),
+        );
+    }
+    let answers = tracker.take_rtc_pending_answers(info_hash, seeder_id);
+    assert_eq!(answers.len(), 3, "Should have 3 queued answers");
+}
+
+#[tokio::test]
+async fn test_rtc_pending_answers_survive_re_announce() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let seeder_id = common::random_peer_id();
+    let leecher_id = common::random_peer_id();
+    let sdp_answer = "v=0\r\ns=answer\r\n".to_string();
+    let seeder_peer = common::create_rtc_peer(
+        seeder_id,
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        6881,
+        Some("v=0\r\ns=offer\r\n".to_string()),
+        0,
+    );
+    tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer.clone(), false);
+    tracker.store_rtc_answer(info_hash, seeder_id, leecher_id, sdp_answer.clone());
+    tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
+    let answers = tracker.take_rtc_pending_answers(info_hash, seeder_id);
+    assert_eq!(answers.len(), 1, "Pending answer should survive seeder re-announce");
+    assert_eq!(answers[0].1, sdp_answer);
+}
+
+#[tokio::test]
+async fn test_rtc_update_sdp_offer() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    let offer = "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=offer\r\n".to_string();
+    let peer = common::create_rtc_peer(
+        peer_id,
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        6881,
+        None,
+        0,
+    );
+    tracker.add_torrent_peer(info_hash, peer_id, peer, false);
+    let updated = tracker.update_rtc_sdp_offer(info_hash, peer_id, offer.clone());
+    assert!(updated, "update_rtc_sdp_offer should succeed when peer exists");
+    let entry = tracker.get_torrent(info_hash).expect("Torrent should exist");
+    let stored_peer = entry.rtc_seeds.get(&peer_id).expect("Seeder should be in rtc_seeds");
+    assert_eq!(
+        stored_peer.rtc_sdp_offer.as_deref(),
+        Some(offer.as_str()),
+        "Stored SDP offer should match"
+    );
+}
+
+#[tokio::test]
+async fn test_rtc_get_peers_leecher_sees_seeders() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let seeder_id = common::random_peer_id();
+    let leecher_id = common::random_peer_id();
+    let offer = "v=0\r\ns=offer\r\n".to_string();
+    let seeder_peer = common::create_rtc_peer(
+        seeder_id,
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        6881,
+        Some(offer.clone()),
+        0,
+    );
+    tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
+    tracker.update_rtc_sdp_offer(info_hash, seeder_id, offer.clone());
+    let entry = tracker.get_rtctorrent_peers(info_hash, false, leecher_id);
+    assert!(!entry.rtc_seeds.is_empty(), "Leecher should see at least one seeder");
+    let peer = entry.rtc_seeds.get(&seeder_id).expect("Seeder should appear in rtc_seeds");
+    assert_eq!(peer.rtc_sdp_offer.as_deref(), Some(offer.as_str()));
+}
+
+#[tokio::test]
+async fn test_rtc_get_peers_seeder_excluded_from_own_list() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let seeder_id = common::random_peer_id();
+    let seeder_peer = common::create_rtc_peer(
+        seeder_id,
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        6881,
+        Some("v=0\r\ns=offer\r\n".to_string()),
+        0,
+    );
+    tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
+    tracker.update_rtc_sdp_offer(info_hash, seeder_id, "v=0\r\ns=offer\r\n".to_string());
+    let entry = tracker.get_rtctorrent_peers(info_hash, true, seeder_id);
+    assert!(entry.rtc_peers.is_empty(), "No leechers should be present");
+}
+
+#[tokio::test]
+async fn test_rtc_store_answer_for_nonexistent_peer_returns_false() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let seeder_id = common::random_peer_id();
+    let leecher_id = common::random_peer_id();
+    let stored = tracker.store_rtc_answer(
+        info_hash,
+        seeder_id,
+        leecher_id,
+        "v=0\r\ns=answer\r\n".to_string(),
+    );
+    assert!(!stored, "store_rtc_answer should fail when seeder does not exist");
+}

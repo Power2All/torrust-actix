@@ -41,6 +41,8 @@ impl TorrentTracker {
             tracker.add_torrent_update(info_hash, TorrentEntry {
                 seeds: Default::default(),
                 peers: Default::default(),
+                rtc_seeds: Default::default(),
+                rtc_peers: Default::default(),
                 completed,
                 updated: std::time::Instant::now(),
             }, UpdatesAction::Add);

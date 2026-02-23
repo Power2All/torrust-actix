@@ -24,6 +24,7 @@ This project originated from Torrust-Tracker code originally developed by Mick v
 * [X] Full Stand-Alone/Master/Slave cluster mode
 * [X] Optional Redis/Memcache Caching for peers data (can be used to show on a website for instance, to less burden SQL)
 * [X] Cloudflare's "Simple Proxy Protocol" support added (https://developers.cloudflare.com/spectrum/how-to/enable-proxy-protocol/#enable-simple-proxy-protocol-for-udp)
+* [X] RtcTorrent implementation (as alternative/replacement for WebTorrent)
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -91,6 +92,7 @@ TRACKER__PEERS_TIMEOUT <UINT64>
 TRACKER__PEERS_CLEANUP_INTERVAL <UINT64>
 TRACKER__PEERS_CLEANUP_THREADS <UINT64>
 TRACKER__PROMETHEUS_ID <STRING>
+TRACKER__RTC_INTERVAL <UINT64>
 
 TRACKER__CLUSTER <standalone | master | slave>
 TRACKER__CLUSTER_ENCODING <binary | json | msgpack>
@@ -189,6 +191,7 @@ HTTP_0_DISCONNECT_TIMEOUT <UINT64>
 HTTP_0_MAX_CONNECTIONS <UINT64>
 HTTP_0_THREADS <UINT64>
 HTTP_0_TLS_CONNECTION_RATE <UINT64>
+HTTP_0_RTCTORRENT = <true | false>
 
 UDP_0_ENABLED <true | false>
 UDP_0_BIND_ADDRESS <STRING>
@@ -205,6 +208,7 @@ UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 #### v4.2.0
 * Refactoring the whole project structure
 * Adding security and anti-malicious validation and checks
+* Adding RtcTorrent library and support to the tracker, for web streaming and downloading of BitTorrent. This is a major change from v4.1.0. It uses the default HTTP BitTorrent announce endpoint, with additional parameters
 
 #### v4.1.1
 * Added hot reloading of SSL certificates for renewal

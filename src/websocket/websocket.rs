@@ -159,6 +159,49 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
             return ClusterResponse::success(request.request_id, error_response);
         }
     };
+    if announce.rtctorrent.unwrap_or(false) {
+        let rtc_interval = tracker_config.rtc_interval as i64;
+        let seeds_count  = torrent_entry.rtc_seeds.len() as i64;
+        let peers_count  = torrent_entry.rtc_peers.len() as i64;
+        let completed_count = torrent_entry.completed as i64;
+        let mut rtc_peers_list = ben_list!();
+        {
+            let rtc_peers_list_mut = rtc_peers_list.list_mut().unwrap();
+            for (peer_id, peer) in torrent_entry.rtc_seeds.iter() {
+                if *peer_id == announce.peer_id { continue; }
+                if let Some(ref offer) = peer.rtc_sdp_offer
+                    && !offer.is_empty() {
+                    rtc_peers_list_mut.push(ben_map! {
+                        "peer_id"   => ben_bytes!(peer_id.0.to_vec()),
+                        "sdp_offer" => ben_bytes!(offer.as_bytes().to_vec())
+                    });
+                }
+            }
+        }
+        let pending_answers = tracker.take_rtc_pending_answers(announce.info_hash, announce.peer_id);
+        let mut rtc_answers_list = ben_list!();
+        {
+            let rtc_answers_list_mut = rtc_answers_list.list_mut().unwrap();
+            for (answerer_peer_id, sdp_answer) in pending_answers.iter() {
+                rtc_answers_list_mut.push(ben_map! {
+                    "peer_id"    => ben_bytes!(answerer_peer_id.0.to_vec()),
+                    "sdp_answer" => ben_bytes!(sdp_answer.as_bytes().to_vec())
+                });
+            }
+        }
+        let response_bytes = ben_map! {
+            "interval"     => ben_int!(tracker_config.request_interval as i64),
+            "min interval" => ben_int!(tracker_config.request_interval_minimum as i64),
+            "rtc interval" => ben_int!(rtc_interval),
+            "complete"     => ben_int!(seeds_count),
+            "incomplete"   => ben_int!(peers_count),
+            "downloaded"   => ben_int!(completed_count),
+            "peers"        => ben_bytes!(b"" as &[u8]),
+            "rtc_peers"    => rtc_peers_list,
+            "rtc_answers"  => rtc_answers_list
+        }.encode();
+        return ClusterResponse::success(request.request_id, response_bytes);
+    }
     let stats = AnnounceResponseStats {
         interval: tracker_config.request_interval as i64,
         min_interval: tracker_config.request_interval_minimum as i64,

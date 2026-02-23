@@ -23,4 +23,10 @@ pub struct TorrentPeer {
     pub left: NumberOfBytes,
     #[serde(with = "AnnounceEventDef")]
     pub event: AnnounceEvent,
+    pub is_rtctorrent: bool,
+    pub rtc_sdp_offer: Option<String>,
+    pub rtc_sdp_answer: Option<String>,
+    pub rtc_connection_status: String,
+    #[serde(default)]
+    pub rtc_pending_answers: Vec<(PeerId, String)>, // (answerer_peer_id, sdp_answer)
 }

@@ -354,6 +354,11 @@ impl UdpServer {
             event: request.event,
             remote_addr: effective_remote_addr.ip(),
             numwant: request.peers_wanted.0 as u64,
+            rtctorrent: None,
+            rtcoffer: None,
+            rtcrequest: None,
+            rtcanswer: None,
+            rtcanswerfor: None,
         }, user_key).await {
             Ok(result) => result.1,
             Err(error) => {
