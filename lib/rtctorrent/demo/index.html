@@ -112,7 +112,8 @@
     .vf-actual.err  { color: #f85149; }
 
     /* ── Media player ── */
-    .video-js { border-radius: 6px; max-height: 60vh; }
+    #vjs-wrap { width: 100%; aspect-ratio: 16/9; max-height: 60vh; border-radius: 6px; overflow: hidden; }
+    .video-js  { border-radius: 6px; }
     audio { width: 100%; border-radius: 6px; display: block; margin-top: 4px; }
     .now-playing { font-size: 0.8rem; color: #888; margin-bottom: 8px; }
   </style>
@@ -515,7 +516,7 @@ async function playFile(fileIndex) {
     // Lazy-init video.js on first video play
     if (!vjsPlayer) {
       vjsPlayer = videojs('player', {
-        fluid:          true,
+        fill:           true,
         controls:       true,
         preload:        'none',
         bigPlayButton:  true,
