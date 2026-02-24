@@ -110,7 +110,7 @@ Seeding… (Ctrl+C to stop)
 
 ## Browser Demo (`demo/index.html`)
 
-A full browser UI to seed and download torrents.
+A full browser UI to seed and download torrents. Uses **[Video.js 8.23.4](https://videojs.com/)** for video playback (loaded from CDN — no extra install needed).
 
 ### Start the demo server
 
@@ -137,7 +137,7 @@ Open **http://localhost:8080/demo/** in your browser.
 
 1. Paste a magnet URI **or** drop/click to load a `.torrent` file
 2. Click **Download**
-3. Playback begins automatically for the first playable file found:
+3. Playback begins automatically for the first playable file found using the Video.js player:
    - **Service Worker active:** fully seamless streaming — video plays as pieces arrive, no reloads
    - **SW not available:** progressive blob streaming or MSE depending on format
 4. Use **▶ Play** on any file in the list to switch, or **↓ Save** to download to disk
@@ -146,7 +146,7 @@ Open **http://localhost:8080/demo/** in your browser.
 
 ## Embeddable Player (`demo/player.html`)
 
-A standalone full-page player you can link to directly:
+A standalone full-page player powered by **Video.js 8.23.4** (loaded from CDN). Link to it directly:
 
 ```
 http://localhost:8080/demo/player.html?torrent=https://cdn.example.com/file.torrent&tracker=http://tracker:6969/announce
@@ -166,7 +166,7 @@ Query parameters:
 
 ## Embeddable Widget (`demo/embed.js`)
 
-Drop a self-contained video player into any page with two script tags and a single JS call.
+Drop a self-contained video player into any page with two script tags and a single JS call. Video.js 8.23.4 is loaded automatically from CDN — no extra dependencies to install.
 
 ### Usage
 
