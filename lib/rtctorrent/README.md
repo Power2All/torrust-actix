@@ -1,6 +1,8 @@
 # RtcTorrent
 
-A WebRTC-enabled BitTorrent client library. Seeders and leechers communicate over WebRTC data channels, using a standard HTTP BitTorrent tracker for signaling (SDP offer/answer exchange). Works in both Node.js and the browser.
+A WebRTC-enabled BitTorrent client library. Seeders and leechers communicate over WebRTC data channels, using a standard HTTP BitTorrent tracker for signaling (SDP offer/answer exchange). Works in both **Node.js** and the **browser**.
+
+---
 
 ## Prerequisites
 
@@ -20,60 +22,45 @@ npm run build       # produces dist/rtctorrent.browser.js and dist/rtctorrent.no
 
 ---
 
-## Node-to-Node Test
+## Tests
 
 Two automated tests verify the full stack without a browser.
 
-### 1. Signaling flow test (no file transfer)
+### 1. Signaling flow test
 
-Validates the tracker's offer/answer signaling without requiring WebRTC hardware:
+Validates the tracker's offer/answer signaling (no WebRTC hardware required):
 
 ```bash
 node test/test_signaling_flow.js
 # Expected: 13 passed, 0 failed
 ```
 
-### 2. End-to-end transfer test
+### 2. End-to-end WebRTC transfer test
 
-Creates a small test file, seeds it from one Node process and downloads it in another, all in a single script using `@roamhq/wrtc` for real WebRTC connections:
+Creates a real temp file, seeds it from one Node process, downloads it in another, and byte-checks the result:
 
 ```bash
-# Make sure the tracker is running first
+# Tracker must be running first
 node test/test_webrtc_transfer.js
+# or: npm run test:transfer
 ```
 
 Expected output:
 ```
 === WebRTC Transfer Test ===
-
 Test file: /tmp/rtctest_<timestamp>.bin  (5600 bytes)
-
---- Creating torrent ---
-Info hash: ...
-
---- Starting seeder ---
 [Seeder] SDP offer created (... bytes)
-
---- Starting leecher ---
 [Leecher] Data channel opened
 [Leecher] Piece 0 OK (5600 B) — 1/1 pieces
 [LEECHER] Download complete!
-
-=== Verification ===
 Data match: PASS ✓
-```
-
-Or use the npm shortcut:
-
-```bash
-npm run test:transfer
 ```
 
 ---
 
-## Manual Node Seed / Leech
+## Node.js CLI Seeder
 
-### Seed files from the command line
+Seed files directly from the command line:
 
 ```bash
 node bin/seed.js [--tracker <url>] [--name <name>] [--out <file.torrent>] <file1> [<file2> ...]
@@ -82,97 +69,201 @@ node bin/seed.js [--tracker <url>] [--name <name>] [--out <file.torrent>] <file1
 **Examples:**
 
 ```bash
-# Seed a single file using the default tracker (http://127.0.0.1:6969/announce)
+# Seed a single file using the default tracker
 node bin/seed.js /path/to/movie.mp4
 
-# Seed with a custom tracker and output name
+# Custom tracker, custom output name
 node bin/seed.js --tracker http://mytracker:6969/announce --name "My Movie" /path/to/movie.mp4
+
+# Multi-file torrent
+node bin/seed.js --name "My Album" /music/track1.mp3 /music/track2.mp3
 ```
 
 The seeder will:
-1. Hash the file and create a `.torrent` file
-2. Print the magnet URI
-3. Start seeding (pieces are read on-demand — no full file loaded into RAM)
+1. Hash the file(s) and save a `.torrent` file next to the script
+2. Print the magnet URI to share with leechers
+3. Start seeding — pieces are read from disk on demand (no full file in RAM)
 
-Share the printed magnet URI or the `.torrent` file with leechers.
+```
+=== RtcTorrent Seeder ===
+Tracker : http://127.0.0.1:6969/announce
+Files   : /path/to/movie.mp4
+
+Creating torrent (hashing pieces)… done.
+
+Saved : movie.torrent
+Hash  : 35a3e807d020...
+
+Magnet URI:
+magnet:?xt=urn:btih:35a3e807d020...&dn=movie&tr=http%3A%2F%2F127.0.0.1%3A6969%2Fannounce
+
+Seeding… (Ctrl+C to stop)
+```
 
 ---
 
-## Browser Demo
+## Browser Demo (`demo/index.html`)
 
-The demo page lets you seed and download torrents entirely in the browser.
+A full browser UI to seed and download torrents.
 
-### 1. Build the browser bundle
-
-```bash
-npm run build
-```
-
-### 2. Start the demo server
+### Start the demo server
 
 ```bash
 npm run serve
-# or: node bin/serve.js [port]   (default port: 8080)
+# or: node bin/serve.js [port]   (default: 8080)
 ```
 
-Then open **http://localhost:8080/demo/** in your browser.
+Open **http://localhost:8080/demo/** in your browser.
 
-> No Python required. The server is a dependency-free Node.js script that serves static files.
+### Seed tab
 
-### 3. Seed tab — browser seeder
+**Option A — Seed an existing `.torrent`**
+1. Drop or click to load a `.torrent` file
+2. Select the matching data file(s) — the page validates names and sizes
+3. Click **Create & Seed** — seeding starts immediately
 
-**Option A — Seed an existing torrent**
-1. Click **Load .torrent file** and select a `.torrent` file
-2. Click **Select Files / Folder** and pick the matching file(s)
-   - The page validates each file against the torrent (name + size must match)
-   - Files with size mismatches are rejected; name-only mismatches show a warning
-3. Click **Start Seeding**
+**Option B — Create a new torrent from scratch**
+1. Click **Select Files / Folder**
+2. Optionally set a torrent name
+3. Click **Create & Seed** — the torrent is created on the fly and the `.torrent` file is auto-downloaded
 
-**Option B — Create a new torrent**
-1. Click **Select Files / Folder** and pick your files
-2. Enter the tracker URL (default: `http://127.0.0.1:6969/announce`)
-3. Optionally set a torrent name
-4. Click **Start Seeding** — the torrent is created and seeding begins immediately
-5. Use the **Download .torrent** or **Copy Magnet** buttons to share with leechers
+### Download tab
 
-### 4. Download tab — browser leecher
-
-1. Enter a magnet URI **or** click **Load .torrent file** to load a `.torrent`
-2. Enter the tracker URL if not already filled
-3. Click **Download**
-4. For MP4 files: playback starts as soon as the first contiguous pieces are received (progressive streaming)
-5. Use **Save File** once the download completes, or let the video play directly
+1. Paste a magnet URI **or** drop/click to load a `.torrent` file
+2. Click **Download**
+3. Playback begins automatically for the first playable file found:
+   - **Service Worker active:** fully seamless streaming — video plays as pieces arrive, no reloads
+   - **SW not available:** progressive blob streaming or MSE depending on format
+4. Use **▶ Play** on any file in the list to switch, or **↓ Save** to download to disk
 
 ---
 
-## Seeder in Node, Leecher in Browser (or vice versa)
+## Embeddable Player (`demo/player.html`)
 
-This is the typical production workflow:
+A standalone full-page player you can link to directly:
 
-1. **Seed from Node:**
-   ```bash
-   node bin/seed.js --tracker http://127.0.0.1:6969/announce /path/to/movie.mp4
+```
+http://localhost:8080/demo/player.html?torrent=https://cdn.example.com/file.torrent&tracker=http://tracker:6969/announce
+http://localhost:8080/demo/player.html?magnet=magnet:?xt=urn:btih:...&tracker=http://tracker:6969/announce&file=0
+```
+
+Query parameters:
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `torrent` | URL to a `.torrent` file | — |
+| `magnet`  | `magnet:` URI | — |
+| `tracker` | Tracker announce URL | `http://127.0.0.1:6969/announce` |
+| `file`    | File index inside the torrent | `0` |
+
+---
+
+## Embeddable Widget (`demo/embed.js`)
+
+Drop a self-contained video player into any page with two script tags and a single JS call.
+
+### Usage
+
+```html
+<!-- 1. A container with an explicit size -->
+<div id="player" style="width:100%; aspect-ratio:16/9"></div>
+
+<!-- 2. Library + embed script -->
+<script src="dist/rtctorrent.browser.js"></script>
+<script src="demo/embed.js"></script>
+
+<!-- 3. Create the player -->
+<script>
+  RtcTorrentPlayer('#player', {
+    torrent:  'https://cdn.example.com/file.torrent',
+    tracker:  'https://tracker.example.com/announce',
+    swPath:   '/sw.js',   // copy sw.js to your server root for seamless streaming
+  });
+</script>
+```
+
+### All options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `torrent` | string | — | URL to a `.torrent` file *(required if no `magnet`)* |
+| `magnet` | string | — | `magnet:` URI *(required if no `torrent`)* |
+| `tracker` | string | `http://127.0.0.1:6969/announce` | Announce URL |
+| `file` | number | `0` | File index inside the torrent |
+| `swPath` | string | `null` | Path to `sw.js` on your server — enables seamless SW streaming |
+| `autoplay` | boolean | `true` | Autoplay when buffered |
+| `muted` | boolean | `false` | Start muted (required for autoplay in most browsers) |
+| `initialExtra` | number | `50` | Extra pieces to buffer before playback starts (~3 MB at 64 KB/piece) |
+| `rtcInterval` | number | `5000` | RTC announce poll interval (ms) |
+| `iceServers` | array | Google STUN | WebRTC ICE server list |
+| `statsInterval` | number | `5000` | Console stats log interval (ms) |
+| `onStats` | function | — | Called each stats tick: `({ downloaded, total, percent, pieces, totalPieces, peers, speed })` |
+| `onError` | function | — | Called on fatal error with the message string |
+| `onReady` | function | — | Called when torrent metadata is ready, receives the player instance |
+
+### Instance methods
+
+```js
+const player = RtcTorrentPlayer('#player', { ... });
+
+player.destroy();   // stop streaming and remove the player from the DOM
+```
+
+### Console output
+
+While buffering, stats are printed every `statsInterval` ms:
+
+```
+[RtcTorrentPlayer] ▶ "movie.mp4"  |  263.2 MB  |  4214 pieces × 64 KB  |  hash: 35a3e8…
+[RtcTorrentPlayer] Stats:  12.3 MB / 263.2 MB  (4.7%)  |  196/4214 pieces  |  3 peers  |  ↓ 512.0 KB/s
+[RtcTorrentPlayer] ✓ Complete:  263.2 MB / 263.2 MB  (100.0%)  |  4214/4214 pieces  |  2 peers
+```
+
+---
+
+## Service Worker Setup (Seamless Streaming)
+
+Without a Service Worker the player falls back to blob/MSE streaming, which works but may stall briefly when new data arrives. For truly seamless video playback (no interruptions):
+
+1. Copy `demo/sw.js` to the **root** of your web server (e.g. `/sw.js`)
+2. Set `swPath: '/sw.js'` in the embed options, or register it manually:
+   ```js
+   navigator.serviceWorker.register('/sw.js');
    ```
-   Copy the printed magnet URI.
+3. The SW intercepts `/__rtc_stream__/*` URLs and serves a live `ReadableStream` to the `<video>` element as pieces arrive
 
-2. **Download in browser:**
-   - Open `http://localhost:8080/demo/`
-   - Go to the **Download** tab
-   - Paste the magnet URI and click **Download**
+> The SW must be on the same origin as the page (browser security requirement).
 
-The WebRTC connection is negotiated via the tracker; no direct TCP/UDP connectivity is needed between the Node seeder and browser leecher.
+---
+
+## Node Seed → Browser Leech (typical workflow)
+
+```bash
+# 1. Start the tracker
+./target/debug/torrust-actix
+
+# 2. Serve the demo
+cd lib/rtctorrent && npm run serve
+
+# 3. Seed a file from Node
+node bin/seed.js --tracker http://127.0.0.1:6969/announce /path/to/movie.mp4
+# → copy the printed magnet URI
+
+# 4. Open the demo in your browser
+#    http://localhost:8080/demo/
+#    → Download tab → paste magnet URI → Download
+```
 
 ---
 
 ## Tracker Configuration
 
-The tracker must have RtcTorrent support enabled in `config.toml`:
+Enable RtcTorrent in `config.toml`:
 
 ```toml
 [[http_server]]
 enabled       = true
 bind_address  = "0.0.0.0:6969"
-# ... other fields ...
 rtctorrent    = true   # enable WebRTC signaling (default: false)
 ```
 
@@ -185,7 +276,7 @@ rtctorrent    = true   # enable WebRTC signaling (default: false)
 Standard BitTorrent trackers only exchange IP addresses. RtcTorrent reuses the HTTP announce endpoint to exchange WebRTC SDP offers/answers:
 
 | Step | Who | Announce params | Tracker response |
-|------|-----|-----------------|-----------------|
+|------|-----|-----------------|------------------|
 | 1 | Seeder | `rtctorrent=1` + `rtcoffer=<SDP>` + `left=0` | stored, empty `rtc_peers` |
 | 2 | Leecher | `rtctorrent=1` + `rtcrequest=1` + `left>0` | `rtc_peers` list with seeders' offers |
 | 3 | Leecher | `rtctorrent=1` + `rtcanswer=<SDP>` + `rtcanswerfor=<seeder-peer-id>` | stored |
@@ -199,35 +290,110 @@ After step 4 the WebRTC data channel opens and piece exchange begins directly pe
 
 ### `new RtcTorrent(options)`
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `trackerUrl` | `string` | — | HTTP announce URL (required) |
-| `rtcInterval` | `number` | `10000` | Polling interval in ms for RTC announces |
-| `iceServers` | `array` | Google STUN | ICE server list for WebRTC |
+```js
+const client = new RtcTorrent({
+  trackerUrl:  'http://tracker:6969/announce',  // required
+  rtcInterval: 5000,        // RTC poll interval in ms (default: 10000)
+  iceServers:  [...],       // WebRTC ICE servers (default: Google STUN)
+});
+```
+
+---
 
 ### `client.create(files, options)` → `{ infoHash, encodedTorrent, magnetUri }`
 
-Creates torrent metadata. `files` may be `File` objects (browser) or file paths (Node.js).
+Creates torrent metadata and returns the encoded `.torrent` buffer plus magnet URI.
 
-### `client.seed(torrentData, files)`
+- **`files`** — `File[]` objects (browser) or file path strings (Node.js)
+- **`options.name`** — torrent display name
+- **`options.trackerUrl`** — announce URL to embed in the torrent
 
-Start seeding. `torrentData` is the encoded torrent buffer; `files` are paths (Node.js) or `File` objects (browser).
+---
+
+### `client.seed(torrentData, files)` → `Torrent`
+
+Start seeding.
+
+- **`torrentData`** — encoded torrent `Buffer`/`Uint8Array`
+- **`files`** — `File[]` objects (browser) or file path strings (Node.js)
+
+Returns a `Torrent` instance (see below).
+
+---
 
 ### `client.download(torrentData)` → `Torrent`
 
-Start downloading. `torrentData` is a magnet URI string or encoded torrent buffer.
+Start downloading.
 
-### `client.streamVideo(fileIndex, videoElement, options)`
+- **`torrentData`** — magnet URI string, `.torrent` URL string, or encoded `Uint8Array`
 
-*(Browser only)* Attach a `<video>` element to a downloading torrent for progressive playback. Supports faststart (web-optimized) MP4 files — playback starts after the `moov` atom and a short buffer are received, without waiting for the full download.
+Returns a `Torrent` instance (see below).
 
-### `client.getBlob(fileOrIndex)` → `Blob`
+---
 
-Assemble all received pieces for a file into a `Blob`.
+### `client.parseTorrentFile(bytes)` → parsed info
 
-### Callbacks
+Parse a `.torrent` file without starting a download. Returns the raw decoded torrent object including `infoHash`, `name`, and `info`.
 
-- `client.onPieceReceived = (pieceIndex, data) => {}` — fires when each piece is fully received
+---
+
+### `client.stop()` → `Promise`
+
+Stop all torrents and close all WebRTC connections.
+
+---
+
+### Torrent instance
+
+Returned by both `seed()` and `download()`.
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `totalSize` | number | Total byte size of all files |
+| `downloaded` | number | Bytes received so far |
+| `pieceCount` | number | Total number of pieces |
+| `pieceLength` | number | Bytes per piece |
+| `pieces` | `Map<number, Uint8Array>` | Received pieces |
+| `peers` | `Map<string, Peer>` | Active WebRTC peers |
+| `files` | array | `[{ name, length, offset }]` |
+| `active` | boolean | Set to `false` to stop all activity |
+
+#### Callbacks
+
+```js
+torrent.onDownloadComplete = () => { /* all pieces received */ };
+torrent.onPieceReceived    = (pieceIndex, data) => { /* one piece arrived */ };
+```
+
+#### `torrent.streamVideo(fileIndex, videoElement, options)` *(browser only)*
+
+Attach a `<video>` element for progressive playback. Streaming modes are tried in order:
+
+1. **Service Worker** — seamless, no reloads (requires `sw.js` registered on the page)
+2. **MSE** — Media Source Extensions for fragmented MP4/WebM
+3. **Faststart blob** — progressive blob rebuild for web-optimized MP4
+4. **Full blob** — waits for all pieces, then plays from a blob URL
+
+```js
+await torrent.streamVideo(0, document.getElementById('v'), {
+  onProgress:   pct => console.log(`Buffering ${pct}%`),
+  initialExtra: 50,   // pieces to buffer before playback (default: 50 ≈ 3 MB)
+});
+```
+
+#### `torrent.getBlob(fileOrIndex)` → `Blob` *(browser only)*
+
+Assemble all received pieces for a file into a `Blob` for download or playback.
+
+#### `torrent.saveFile(fileIndex)` *(browser only)*
+
+Trigger a browser download of the completed file.
+
+#### `torrent.stop()`
+
+Stop this torrent and close its peers.
 
 ---
 
