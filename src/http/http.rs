@@ -29,6 +29,7 @@ use actix_web::web::{
     ServiceConfig
 };
 use actix_web::{
+    middleware::Compress,
     web,
     App,
     HttpRequest,
@@ -148,6 +149,7 @@ pub async fn http_service(
         let server = if sentry_enabled {
             HttpServer::new(move || {
                 App::new()
+                    .wrap(Compress::default())
                     .wrap(sentry_actix::Sentry::new())
                     .wrap(http_service_cors())
                     .configure(http_service_routes(service_data.clone()))
@@ -163,6 +165,7 @@ pub async fn http_service(
         } else {
             HttpServer::new(move || {
                 App::new()
+                    .wrap(Compress::default())
                     .wrap(http_service_cors())
                     .configure(http_service_routes(service_data.clone()))
             })
@@ -186,6 +189,7 @@ pub async fn http_service(
     let server = if sentry_enabled {
         HttpServer::new(move || {
             App::new()
+                .wrap(Compress::default())
                 .wrap(sentry_actix::Sentry::new())
                 .wrap(http_service_cors())
                 .configure(http_service_routes(service_data.clone()))
@@ -201,6 +205,7 @@ pub async fn http_service(
     } else {
         HttpServer::new(move || {
             App::new()
+                .wrap(Compress::default())
                 .wrap(http_service_cors())
                 .configure(http_service_routes(service_data.clone()))
         })
@@ -402,13 +407,9 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         }
 
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-            "interval" => ben_int!(request_interval),
-            "min interval" => ben_int!(request_interval_minimum),
             "rtc interval" => ben_int!(rtc_interval),
             "complete" => ben_int!(seeds_count),
             "incomplete" => ben_int!(peers_count),
-            "downloaded" => ben_int!(completed_count),
-            "peers" => ben_bytes!(b"" as &[u8]),
             "rtc_peers" => rtc_peers_list,
             "rtc_answers" => rtc_answers_list
         }.encode());
