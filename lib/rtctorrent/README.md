@@ -63,7 +63,7 @@ Data match: PASS ✓
 Seed files directly from the command line:
 
 ```bash
-node bin/seed.js [--tracker <url>] [--name <name>] [--out <file.torrent>] <file1> [<file2> ...]
+node bin/seed.js [--tracker <url>] [--name <name>] [--out <file.torrent>] [--webseed <url>] <file1> [<file2> ...]
 ```
 
 **Examples:**
@@ -77,6 +77,12 @@ node bin/seed.js --tracker http://mytracker:6969/announce --name "My Movie" /pat
 
 # Multi-file torrent
 node bin/seed.js --name "My Album" /music/track1.mp3 /music/track2.mp3
+
+# Add an HTTP fallback (BEP-19 webseed) so leechers can download even without WebRTC peers
+node bin/seed.js --webseed https://cdn.example.com/movie.mp4 /path/to/movie.mp4
+
+# Multiple webseed URLs
+node bin/seed.js --webseed https://cdn1.example.com/movie.mp4 --webseed https://cdn2.example.com/movie.mp4 /path/to/movie.mp4
 ```
 
 The seeder will:
@@ -307,6 +313,7 @@ Creates torrent metadata and returns the encoded `.torrent` buffer plus magnet U
 - **`files`** — `File[]` objects (browser) or file path strings (Node.js)
 - **`options.name`** — torrent display name
 - **`options.trackerUrl`** — announce URL to embed in the torrent
+- **`options.webseedUrls`** — string or string array of HTTP fallback URLs (BEP-19 `url-list`). For single-file torrents: direct URL to the file. For multi-file torrents: base directory URL (trailing slash optional).
 
 ---
 
@@ -359,6 +366,7 @@ Returned by both `seed()` and `download()`.
 | `peers` | `Map<string, Peer>` | Active WebRTC peers |
 | `files` | array | `[{ name, length, offset }]` |
 | `active` | boolean | Set to `false` to stop all activity |
+| `webseeds` | string[] | HTTP fallback URLs parsed from `url-list` in the torrent file |
 
 #### Callbacks
 
