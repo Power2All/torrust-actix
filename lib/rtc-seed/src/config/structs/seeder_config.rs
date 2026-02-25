@@ -1,0 +1,12 @@
+use std::path::PathBuf;
+
+#[derive(Debug, Clone)]
+pub struct SeederConfig {
+    pub tracker_url: String,
+    pub file_paths: Vec<PathBuf>,
+    pub name: Option<String>,
+    pub out_file: Option<PathBuf>,
+    pub webseed_urls: Vec<String>,
+    pub ice_servers: Vec<String>,
+    pub rtc_interval_ms: u64,
+}

@@ -1,0 +1,25 @@
+[package]
+name = "rtc-seed"
+version = "0.1.0"
+edition = "2021"
+description = "Native Rust WebRTC seeder for torrust-actix — no Node.js required."
+authors = ["Jasper Lingers <info@power2all.com>"]
+
+[[bin]]
+name = "rtc-seed"
+path = "src/main.rs"
+
+[dependencies]
+webrtc = "^0.17"
+sha1 = { version = "^0.10", features = ["std"] }
+bip_bencode = "^0.4"
+hex = "^0.4"
+percent-encoding = "^2.3"
+reqwest = { version = "^0.13", default-features = false, features = ["rustls"] }
+tokio = { version = "^1", features = ["full"] }
+clap = { version = "^4", features = ["derive"] }
+rand = "^0.10"
+log = "^0.4"
+fern = { version = "^0.7", features = ["colored"] }
+chrono = "^0.4"
+bytes = "^1"

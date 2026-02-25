@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "lib/rtc-seed"]
+resolver = "2"
+
 [package]
 name = "torrust-actix"
 version = "4.2.0"
