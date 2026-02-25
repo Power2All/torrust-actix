@@ -60,7 +60,7 @@ Data match: PASS ✓
 
 ## Node.js CLI Seeder
 
-Seed files directly from the command line:
+Seed files directly from the command line (requires Node.js):
 
 ```bash
 node bin/seed.js [--tracker <url>] [--name <name>] [--out <file.torrent>] [--webseed <url>] <file1> [<file2> ...]
@@ -105,6 +105,105 @@ magnet:?xt=urn:btih:35a3e807d020...&dn=movie&tr=http%3A%2F%2F127.0.0.1%3A6969%2F
 
 Seeding… (Ctrl+C to stop)
 ```
+
+---
+
+## Rust Native Seeder (`rtc-seed`)
+
+A pure-Rust alternative to the Node.js seeder — no Node.js required. Located in `lib/rtc-seed/`.
+
+### Build
+
+```bash
+# From the repository root
+cargo build -p rtc-seed --release
+```
+
+### Usage
+
+```bash
+rtc-seed [--tracker <url>] [--name <name>] [--out <file.torrent>] [--webseed <url>] [--ice <url>] <file1> [<file2> ...]
+```
+
+**Examples:**
+
+```bash
+# Seed a single file using the default tracker
+rtc-seed /path/to/movie.mp4
+
+# Custom tracker and output path
+rtc-seed --tracker http://mytracker:6969/announce --out /tmp/movie.torrent /path/to/movie.mp4
+
+# Add a BEP-19 webseed fallback
+rtc-seed --webseed https://cdn.example.com/movie.mp4 /path/to/movie.mp4
+
+# Custom ICE server
+rtc-seed --ice stun:stun.example.com:3478 /path/to/movie.mp4
+
+# Run directly from the workspace without installing
+cargo run -p rtc-seed -- --tracker http://127.0.0.1:6969/announce /path/to/movie.mp4
+```
+
+Expected output:
+
+```
+=== RtcTorrent Seeder (Rust native) ===
+Tracker : http://127.0.0.1:6969/announce
+Files   : /path/to/movie.mp4
+
+Creating torrent (hashing pieces)… done.
+
+Saved : movie.torrent
+Hash  : 35a3e807d020...
+
+Magnet URI:
+magnet:?xt=urn:btih:35a3e807d020...&dn=movie&tr=http%3A%2F%2F127.0.0.1%3A6969%2Fannounce
+
+Share the magnet URI or the .torrent file with leechers.
+
+Creating WebRTC offer (gathering ICE candidates)… done.
+Seeding… (Ctrl+C to stop)
+```
+
+---
+
+## ⚠️ Localhost Testing — WebRTC mDNS Warning
+
+Modern browsers (Chrome, Edge, Firefox) hide local IP addresses in WebRTC ICE candidates by replacing them with `.local` mDNS hostnames (e.g. `abc123.local`). This is a privacy feature that works fine in production (where a TURN/STUN relay resolves the addresses), but **breaks direct WebRTC connections on localhost** because the Rust seeder (`rtc-seed`) cannot resolve mDNS hostnames.
+
+Symptom: the data channel never opens, and you see log messages like:
+```
+discard success message from (172.x.x.x:port), no such remote
+peer connection state changed: failed
+```
+
+### Fix per browser
+
+**Chrome / Edge — command line:**
+```bash
+# Chrome
+chrome --disable-features=WebRtcHideLocalIpsWithMdns
+
+# Edge (Windows)
+msedge --disable-features=WebRtcHideLocalIpsWithMdns
+
+# Edge — full path if needed
+"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --disable-features=WebRtcHideLocalIpsWithMdns
+```
+
+**Chrome / Edge — flags page (no restart of system needed):**
+1. Open `chrome://flags` or `edge://flags`
+2. Search for **"Anonymize local IPs exposed by WebRTC"**
+3. Set to **Disabled**
+4. Click **Restart**
+
+**Firefox:**
+1. Open `about:config`
+2. Search for `media.peerconnection.ice.obfuscate_host_candidates`
+3. Set to **`false`**
+4. Restart Firefox
+
+> **Note:** This only affects local/LAN testing. On a public server with a TURN relay the browser's default behaviour works correctly and no flag change is needed.
 
 ---
 
