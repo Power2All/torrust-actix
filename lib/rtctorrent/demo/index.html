@@ -112,10 +112,26 @@
     .vf-actual.err  { color: #f85149; }
 
     /* ── Media player ── */
-    #vjs-wrap { width: 100%; aspect-ratio: 16/9; max-height: 60vh; border-radius: 6px; overflow: hidden; }
+    #vjs-wrap { position: relative; width: 100%; aspect-ratio: 16/9; max-height: 60vh; border-radius: 6px; overflow: hidden; }
     .video-js  { border-radius: 6px; }
     audio { width: 100%; border-radius: 6px; display: block; margin-top: 4px; }
     .now-playing { font-size: 0.8rem; color: #888; margin-bottom: 8px; }
+
+    /* ── Video loading overlay ── */
+    #vjs-overlay {
+      position: absolute; inset: 0; z-index: 20;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.80); color: #eee; gap: 14px; text-align: center; padding: 20px;
+      border-radius: 6px;
+    }
+    #vjs-overlay.hidden { display: none; }
+    #vjs-overlay-title  { font-size: 1rem; font-weight: 600; color: #fff; max-width: 480px; word-break: break-all; }
+    #vjs-overlay-status { font-size: 0.82rem; color: #aaa; }
+    .vjs-spinner {
+      width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #58a6ff; border-radius: 50%; animation: vjs-spin 0.8s linear infinite;
+    }
+    @keyframes vjs-spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -209,7 +225,12 @@
     <div id="now-playing" class="now-playing"></div>
     <div id="vjs-wrap" style="display:none">
       <video id="player" class="video-js vjs-default-skin vjs-big-play-centered"
-             preload="none" playsinline></video>
+             preload="none" playsinline muted></video>
+      <div id="vjs-overlay" class="hidden">
+        <div class="vjs-spinner"></div>
+        <div id="vjs-overlay-title"></div>
+        <div id="vjs-overlay-status">Connecting to peers…</div>
+      </div>
     </div>
     <audio id="audio-player" controls style="display:none; width:100%; margin-top:4px"></audio>
   </div>
@@ -218,7 +239,7 @@
 
 <!-- Browser bundle -->
 <script src="https://vjs.zencdn.net/8.23.4/video.min.js"></script>
-<script src="../dist/rtctorrent.browser.js?v=16"></script>
+<script src="../dist/rtctorrent.browser.js?v=25"></script>
 <script>
 'use strict';
 
@@ -235,6 +256,8 @@ let torrentInst   = null;
 let progressInterval = null;
 
 let vjsPlayer          = null;
+let vjsUserMuted       = true;   // tracks intended muted state across src changes
+let vjsListenersReady  = false;  // loadstart / volumechange set up once
 let seedClient         = null;
 let seedTorrentInst    = null;
 let selectedFiles      = [];
@@ -428,6 +451,14 @@ async function startDownload() {
       $('progress-bar').classList.remove('streaming');
       $('progress-label').textContent = 'Download complete!';
       log('Download complete!');
+      // If no SW is active (fallback path), enable seekbar immediately.
+      // SW path: onSeekReady enables it after the buffer is stored in the SW.
+      if (!navigator.serviceWorker?.controller) {
+        if (vjsPlayer) vjsPlayer.controlBar.progressControl.enable();
+      }
+    };
+    torrentInst.onSeekReady = () => {
+      if (vjsPlayer) vjsPlayer.controlBar.progressControl.enable();
     };
 
   } catch (e) {
@@ -487,16 +518,19 @@ async function playFile(fileIndex) {
   $('media-section').style.display = 'block';
 
   const audio = isAudioFile(file.name);
-  $('vjs-wrap').style.display     = audio ? 'none' : 'block';
   $('audio-player').style.display = audio ? 'block' : 'none';
+  if (audio) $('vjs-wrap').style.display = 'none';
 
   $('now-playing').textContent = `Now playing: ${file.name.split('/').pop()}`;
   log(`Playing: ${file.name}`);
 
+  const fileName = file.name.split('/').pop();
+
   const onProgress = pct => {
+    $('vjs-overlay-status').textContent = `Buffering… ${pct}%`;
     if (!torrentInst?._downloadCompleted) {
       $('progress-bar').style.width = pct + '%';
-      $('progress-label').textContent = `Buffering ${file.name.split('/').pop()}… ${pct}%`;
+      $('progress-label').textContent = `Buffering ${fileName}… ${pct}%`;
       $('progress-bar').classList.add('streaming');
     }
   };
@@ -513,24 +547,56 @@ async function playFile(fileIndex) {
       log('streamVideo error:', e.message);
     }
   } else {
+    // Show wrap + overlay before anything plays
+    $('vjs-wrap').style.display = 'block';
+    $('vjs-overlay-title').textContent  = fileName;
+    $('vjs-overlay-status').textContent = 'Connecting to peers…';
+    $('vjs-overlay').classList.remove('hidden');
+
     // Lazy-init video.js on first video play
     if (!vjsPlayer) {
       vjsPlayer = videojs('player', {
         fill:           true,
         controls:       true,
         preload:        'none',
-        bigPlayButton:  true,
+        bigPlayButton:  false,   // overlay replaces this
         loadingSpinner: true,
         errorDisplay:   false,
       });
     }
     await new Promise(resolve => vjsPlayer.ready(resolve));
 
-    // Get the underlying native <video> element that video.js wraps
     const videoEl = vjsPlayer.el().querySelector('video');
+
+    // Set up muted-autoplay listeners once (persist across playFile calls)
+    if (!vjsListenersReady) {
+      vjsListenersReady = true;
+      // VJS resets muted to its default on every loadstart — override it
+      videoEl.addEventListener('loadstart', () => {
+        videoEl.muted = vjsUserMuted;
+      });
+      // Keep vjsUserMuted in sync when the user clicks the VJS mute button
+      vjsPlayer.on('volumechange', () => {
+        vjsUserMuted = vjsPlayer.muted();
+      });
+    }
+    videoEl.muted = true;
+
+    // Hide overlay and autoplay as soon as the browser can play
     videoEl.addEventListener('canplay', () => {
-      log(`Ready — press ▶ if playback hasn't started automatically.`);
+      $('vjs-overlay').classList.add('hidden');
+      if (videoEl.paused) videoEl.play().catch(() => {});
     }, { once: true });
+    // Belt-and-suspenders: hide overlay when playback actually starts
+    videoEl.addEventListener('playing', () => {
+      $('vjs-overlay').classList.add('hidden');
+    }, { once: true });
+
+    // Disable seekbar while pieces are still downloading; re-enabled in onDownloadComplete
+    if (!torrentInst._downloadCompleted) {
+      vjsPlayer.controlBar.progressControl.disable();
+    }
+
     try {
       await torrentInst.streamVideo(fileIndex, videoEl, { onProgress });
     } catch (e) {

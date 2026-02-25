@@ -29,7 +29,7 @@ impl TorrentSharding {
         }
     }
 
-    pub async fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, persistent: bool) {
+    pub async fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, rtc_peer_timeout: Duration, persistent: bool) {
         let cleanup_interval = torrent_tracker.config.tracker_config.peers_cleanup_interval;
         let cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
         let cleanup_pool = Builder::new_multi_thread()
@@ -65,6 +65,7 @@ impl TorrentSharding {
                                     tracker_clone.clone(),
                                     shard as u8,
                                     peer_timeout,
+                                    rtc_peer_timeout,
                                     persistent,
                                     stats_clone.clone()
                                 ).await;
@@ -89,14 +90,17 @@ impl TorrentSharding {
         torrent_tracker: Arc<TorrentTracker>,
         shard: u8,
         peer_timeout: Duration,
+        rtc_peer_timeout: Duration,
         persistent: bool,
         stats: Arc<CleanupStats>
     ) {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
         if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
-            let cutoff = std::time::Instant::now() - peer_timeout;
+            let now = std::time::Instant::now();
+            let cutoff = now - peer_timeout;
+            let rtc_cutoff = now - rtc_peer_timeout;
             let mut expired_full: Vec<InfoHash> = Vec::new();
-            let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
+            let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
             {
                 let shard_read = shard_arc.read();
                 for (info_hash, torrent_entry) in shard_read.iter() {
@@ -107,28 +111,40 @@ impl TorrentSharding {
                     let mut has_expired = false;
                     let mut expired_seeds = Vec::new();
                     let mut expired_peers = Vec::new();
-                    expired_seeds.reserve(torrent_entry.seeds.len() / 10);
+                    let mut expired_rtc_seeds = Vec::new();
+                    let mut expired_rtc_peers = Vec::new();
                     for (peer_id, torrent_peer) in &torrent_entry.seeds {
                         if torrent_peer.updated < cutoff {
                             expired_seeds.push(*peer_id);
                             has_expired = true;
                         }
                     }
-                    expired_peers.reserve(torrent_entry.peers.len() / 10);
                     for (peer_id, torrent_peer) in &torrent_entry.peers {
                         if torrent_peer.updated < cutoff {
                             expired_peers.push(*peer_id);
                             has_expired = true;
                         }
                     }
+                    for (peer_id, torrent_peer) in &torrent_entry.rtc_seeds {
+                        if torrent_peer.updated < rtc_cutoff {
+                            expired_rtc_seeds.push(*peer_id);
+                            has_expired = true;
+                        }
+                    }
+                    for (peer_id, torrent_peer) in &torrent_entry.rtc_peers {
+                        if torrent_peer.updated < rtc_cutoff {
+                            expired_rtc_peers.push(*peer_id);
+                            has_expired = true;
+                        }
+                    }
                     if has_expired {
-                        expired_partial.push((*info_hash, expired_seeds, expired_peers));
+                        expired_partial.push((*info_hash, expired_seeds, expired_peers, expired_rtc_seeds, expired_rtc_peers));
                     }
                 }
             }
             if !expired_partial.is_empty() || !expired_full.is_empty() {
                 let mut shard_write = shard_arc.write();
-                for (info_hash, expired_seeds, expired_peers) in expired_partial.iter() {
+                for (info_hash, expired_seeds, expired_peers, expired_rtc_seeds, expired_rtc_peers) in expired_partial.iter() {
                     if let Entry::Occupied(mut entry) = shard_write.entry(*info_hash) {
                         let torrent_entry = entry.get_mut();
                         for peer_id in expired_seeds {
@@ -141,7 +157,22 @@ impl TorrentSharding {
                                 peers_removed += 1;
                             }
                         }
-                        if !persistent && torrent_entry.seeds.is_empty() && torrent_entry.peers.is_empty() {
+                        for peer_id in expired_rtc_seeds {
+                            if torrent_entry.rtc_seeds.remove(peer_id).is_some() {
+                                seeds_removed += 1;
+                            }
+                        }
+                        for peer_id in expired_rtc_peers {
+                            if torrent_entry.rtc_peers.remove(peer_id).is_some() {
+                                peers_removed += 1;
+                            }
+                        }
+                        if !persistent
+                            && torrent_entry.seeds.is_empty()
+                            && torrent_entry.peers.is_empty()
+                            && torrent_entry.rtc_seeds.is_empty()
+                            && torrent_entry.rtc_peers.is_empty()
+                        {
                             entry.remove();
                             torrents_removed += 1;
                         }
@@ -154,11 +185,13 @@ impl TorrentSharding {
                         let torrent_entry = entry.get_mut();
                         let seeds_len = torrent_entry.seeds.len() as u64;
                         let peers_len = torrent_entry.peers.len() as u64;
+                        let rtc_seeds_len = torrent_entry.rtc_seeds.len() as u64;
+                        let rtc_peers_len = torrent_entry.rtc_peers.len() as u64;
                         if !persistent {
                             entry.remove();
                             torrents_removed += 1;
-                            seeds_removed += seeds_len;
-                            peers_removed += peers_len;
+                            seeds_removed += seeds_len + rtc_seeds_len;
+                            peers_removed += peers_len + rtc_peers_len;
                         } else {
                             if seeds_len > 0 {
                                 torrent_entry.seeds.clear();
@@ -167,6 +200,14 @@ impl TorrentSharding {
                             if peers_len > 0 {
                                 torrent_entry.peers.clear();
                                 peers_removed += peers_len;
+                            }
+                            if rtc_seeds_len > 0 {
+                                torrent_entry.rtc_seeds.clear();
+                                seeds_removed += rtc_seeds_len;
+                            }
+                            if rtc_peers_len > 0 {
+                                torrent_entry.rtc_peers.clear();
+                                peers_removed += rtc_peers_len;
                             }
                         }
                     }

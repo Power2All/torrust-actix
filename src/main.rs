@@ -382,6 +382,7 @@ fn main() -> std::io::Result<()>
             info!("[BOOT] Starting thread for peers cleanup with {cleanup_interval} seconds delay...");
 
             let peers_timeout = tracker_cleanup_clone.config.tracker_config.peers_timeout;
+            let rtc_peers_timeout = tracker_cleanup_clone.config.tracker_config.rtc_peers_timeout;
             let persistent = tracker_cleanup_clone.config.database.persistent;
             let torrents_sharding = tracker_cleanup_clone.torrents_sharding.clone();
 
@@ -390,6 +391,7 @@ fn main() -> std::io::Result<()>
                     tracker_cleanup_clone,
                     cleanup_handler,
                     Duration::from_secs(peers_timeout),
+                    Duration::from_secs(rtc_peers_timeout),
                     persistent
                 ).await;
             });

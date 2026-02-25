@@ -65,6 +65,7 @@ impl Configuration {
                 cluster_ssl_cert: String::from(""),
                 cluster_tls_connection_rate: 256,
                 rtc_interval: 30,
+                rtc_peers_timeout: 120,
             },
             sentry_config: SentryConfig {
                 enabled: false,
@@ -276,6 +277,9 @@ impl Configuration {
         }
         if let Ok(value) = env::var("TRACKER__RTC_INTERVAL") {
             config.tracker_config.rtc_interval = value.parse::<u64>().unwrap_or(10u64);
+        }
+        if let Ok(value) = env::var("TRACKER__RTC_PEERS_TIMEOUT") {
+            config.tracker_config.rtc_peers_timeout = value.parse::<u64>().unwrap_or(120u64);
         }
         if let Ok(value) = env::var("SENTRY__ENABLED") {
             config.sentry_config.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };

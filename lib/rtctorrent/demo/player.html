@@ -46,7 +46,7 @@
 <body>
 <div id="wrap">
   <!-- video.js player — no data-setup so we init manually with full options -->
-  <video id="v" class="video-js vjs-default-skin" preload="none" playsinline></video>
+  <video id="v" class="video-js vjs-default-skin" preload="none" playsinline muted></video>
 
   <div id="dl-bar-wrap"><div id="dl-bar"></div></div>
 
@@ -58,7 +58,7 @@
 </div>
 
 <script src="https://vjs.zencdn.net/8.23.4/video.min.js"></script>
-<script src="../dist/rtctorrent.browser.js"></script>
+<script src="../dist/rtctorrent.browser.js?v=25"></script>
 <script>
 'use strict';
 
@@ -93,14 +93,20 @@ function showError(msg) {
   ovStatus.textContent = msg;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getMimeType(filename) {
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  return { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg' }[ext] || 'video/mp4';
+}
+
 // ── Init video.js ─────────────────────────────────────────────────────────────
 const player = videojs('v', {
-  fill:           true,       // fill the parent #wrap container
+  fill:           true,
   controls:       true,
   preload:        'none',
-  bigPlayButton:  false,      // we use our own overlay instead
-  loadingSpinner: false,      // we use our own overlay instead
-  errorDisplay:   false,      // we handle errors ourselves
+  bigPlayButton:  true,       // shown when autoplay is blocked (no prior user gesture)
+  loadingSpinner: true,       // shown when video stalls after the overlay has hidden
+  errorDisplay:   false,
 });
 
 // ── Main (runs after video.js is ready) ───────────────────────────────────────
@@ -169,19 +175,56 @@ player.ready(async function () {
   torrent.onDownloadComplete = () => {
     clearInterval(progressInterval);
     dlBar.style.width = '100%';
+    // If no SW is active (fallback path), enable seekbar immediately.
+    // SW path: onSeekReady enables it after the buffer is stored.
+    if (!navigator.serviceWorker?.controller) {
+      player.controlBar.progressControl.enable();
+    }
+  };
+  torrent.onSeekReady = () => {
+    player.controlBar.progressControl.enable();
   };
 
   // Get the underlying native <video> element that video.js manages
   const videoEl = player.el().querySelector('video');
 
-  // Hide the overlay once the video has enough data to start playing
-  player.one('canplay', () => overlay.classList.add('hidden'));
+  // Autoplay strategy:
+  //  - Browsers allow muted autoplay without a user gesture, but pause the
+  //    video if you unmute programmatically (without a gesture).
+  //  - We track `userMuted` (starts true) and restore it after every loadstart
+  //    because VJS resets the muted property to defaultMuted_ on each src change.
+  //    Our loadstart listener is registered after VJS's (runs last) so it wins.
+  //  - When the user clicks the VJS mute button that IS a user gesture; we sync
+  //    userMuted from the volumechange event so blob rebuilds preserve their choice.
+  let userMuted = true;
+
+  videoEl.addEventListener('loadstart', () => {
+    videoEl.muted = userMuted; // restore intended state after VJS's reset
+  });
+
+  player.on('volumechange', () => {
+    userMuted = player.muted(); // keep in sync with user's mute-button clicks
+  });
+
+  videoEl.addEventListener('canplay', () => {
+    overlay.classList.add('hidden');
+    if (videoEl.paused) {
+      videoEl.play().catch(() => {});
+    }
+  }, { once: true });
+
+  // Belt-and-suspenders: hide overlay when playback actually starts.
+  videoEl.addEventListener('playing', () => overlay.classList.add('hidden'), { once: true });
+
+  // Disable seekbar while pieces are still downloading; re-enabled when complete.
+  player.controlBar.progressControl.disable();
 
   try {
     await torrent.streamVideo(fileIndex, videoEl, {
       onProgress: pct => {
-        setStatus(`Buffering… ${pct}%`);
-        if (pct >= 100) { setStatus('Playing'); overlay.classList.add('hidden'); }
+        if (!overlay.classList.contains('hidden')) {
+          setStatus(`Buffering… ${pct}%`);
+        }
       }
     });
   } catch (e) {

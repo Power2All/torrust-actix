@@ -138,7 +138,7 @@ Open **http://localhost:8080/demo/** in your browser.
 1. Paste a magnet URI **or** drop/click to load a `.torrent` file
 2. Click **Download**
 3. Playback begins automatically for the first playable file found using the Video.js player:
-   - **Service Worker active:** fully seamless streaming — video plays as pieces arrive, no reloads
+   - **Service Worker active:** progressive streaming — video plays as pieces arrive; once fully downloaded the source switches to a Blob URL (brief pause) to enable seeking
    - **SW not available:** progressive blob streaming or MSE depending on format
 4. Use **▶ Play** on any file in the list to switch, or **↓ Save** to download to disk
 
@@ -373,6 +373,7 @@ Returned by both `seed()` and `download()`.
 ```js
 torrent.onDownloadComplete = () => { /* all pieces received */ };
 torrent.onPieceReceived    = (pieceIndex, data) => { /* one piece arrived */ };
+torrent.onSeekReady        = () => { /* seeking is now available (blob switch complete) */ };
 ```
 
 #### `torrent.streamVideo(fileIndex, videoElement, options)` *(browser only)*
