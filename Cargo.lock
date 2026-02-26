@@ -855,6 +855,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bt-seed"
+version = "4.2.0"
+dependencies = [
+ "bip_bencode",
+ "chrono",
+ "clap",
+ "fern",
+ "hex",
+ "log",
+ "percent-encoding",
+ "rand 0.10.0",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_yaml",
+ "sha1",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

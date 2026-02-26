@@ -1,0 +1,12 @@
+pub const BT_HANDSHAKE_LEN: usize = 68;
+pub const BT_PROTOCOL: &[u8] = b"\x13BitTorrent protocol";
+pub const MSG_CHOKE: u8 = 0;
+pub const MSG_UNCHOKE: u8 = 1;
+pub const MSG_INTERESTED: u8 = 2;
+pub const MSG_NOT_INTERESTED: u8 = 3;
+pub const MSG_HAVE: u8 = 4;
+pub const MSG_BITFIELD: u8 = 5;
+pub const MSG_REQUEST: u8 = 6;
+pub const MSG_PIECE: u8 = 7;
+pub const MSG_CANCEL: u8 = 8;
+pub const MAX_BLOCK_SIZE: u32 = 16 * 1024;
