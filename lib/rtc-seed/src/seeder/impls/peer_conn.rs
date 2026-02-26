@@ -1,5 +1,5 @@
 use crate::config::structs::seeder_config::SeederConfig;
-use crate::seeder::peer_conn::setup_handlers;
+use crate::seeder::seeder::setup_handlers;
 use crate::seeder::structs::peer_conn::PeerConn;
 use crate::torrent::structs::torrent_info::TorrentInfo;
 use std::sync::atomic::AtomicU64;

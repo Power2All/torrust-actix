@@ -1,5 +1,9 @@
+use crate::torrent::enums::torrent_version::TorrentVersion;
 use crate::torrent::structs::file_entry::FileEntry;
-use crate::torrent::types::InfoHash;
+use crate::torrent::types::{
+    InfoHash,
+    V2InfoHash
+};
 
 #[derive(Debug, Clone)]
 pub struct TorrentInfo {
@@ -13,4 +17,7 @@ pub struct TorrentInfo {
     pub info_hash: InfoHash,
     pub torrent_bytes: Vec<u8>,
     pub magnet_uri: String,
+    #[allow(dead_code)]
+    pub version: TorrentVersion,
+    pub v2_info_hash: Option<V2InfoHash>,
 }

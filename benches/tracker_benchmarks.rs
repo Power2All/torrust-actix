@@ -32,7 +32,7 @@ fn random_peer_id() -> PeerId {
 }
 
 fn create_test_peer(ip: IpAddr, port: u16, peer_id: PeerId) -> TorrentPeer {
-    TorrentPeer {
+    ..TorrentPeer {
         peer_id,
         peer_addr: std::net::SocketAddr::new(ip, port),
         updated: std::time::Instant::now(),

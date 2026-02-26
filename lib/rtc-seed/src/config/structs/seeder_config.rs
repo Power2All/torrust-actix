@@ -1,3 +1,4 @@
+use crate::torrent::enums::torrent_version::TorrentVersion;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -9,4 +10,5 @@ pub struct SeederConfig {
     pub webseed_urls: Vec<String>,
     pub ice_servers: Vec<String>,
     pub rtc_interval_ms: u64,
+    pub version: TorrentVersion,
 }

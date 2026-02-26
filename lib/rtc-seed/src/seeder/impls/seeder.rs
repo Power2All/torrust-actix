@@ -39,6 +39,9 @@ impl Seeder {
         std::fs::write(&out_path, &self.torrent_info.torrent_bytes)?;
         println!("Saved : {}", out_path.display());
         println!("Hash  : {}", hex::encode(self.torrent_info.info_hash));
+        if let Some(v2h) = self.torrent_info.v2_info_hash {
+            println!("v2Hash: {}", hex::encode(v2h));
+        }
         println!("\nMagnet URI:\n{}\n", self.torrent_info.magnet_uri);
         println!("Share the magnet URI or the .torrent file with leechers.\n");
         let tracker = TrackerClient::new(

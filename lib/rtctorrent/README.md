@@ -8,7 +8,7 @@ A WebRTC-enabled BitTorrent client library. Seeders and leechers communicate ove
 
 - **torrust-actix tracker** running with `rtctorrent = true` in the `[[http_server]]` config block
 - **Node.js** ≥ 12
-- For Node.js WebRTC: `@roamhq/wrtc` native module (installed automatically via `npm install`)
+- For Node.js WebRTC: `@roamhq/wrtc` native module — installed as an **optional** dependency; `npm install` succeeds on all platforms (Linux, macOS, Windows). If the native binary is unavailable on a given platform a warning is logged at runtime, but the browser bundle is unaffected.
 
 ---
 
@@ -60,10 +60,12 @@ Data match: PASS ✓
 
 ## Node.js CLI Seeder
 
-Seed files directly from the command line (requires Node.js):
+Seed files directly from the command line (requires Node.js).
+
+### Single-torrent mode
 
 ```bash
-node bin/seed.js [--tracker <url>] [--name <name>] [--out <file.torrent>] [--webseed <url>] <file1> [<file2> ...]
+node bin/seed.js [--tracker <url>] [--name <name>] [--out <file.torrent>] [--webseed <url>] [--torrent-version v1|v2|hybrid] <file1> [<file2> ...]
 ```
 
 **Examples:**
@@ -78,33 +80,141 @@ node bin/seed.js --tracker http://mytracker:6969/announce --name "My Movie" /pat
 # Multi-file torrent
 node bin/seed.js --name "My Album" /music/track1.mp3 /music/track2.mp3
 
-# Add an HTTP fallback (BEP-19 webseed) so leechers can download even without WebRTC peers
+# Add an HTTP fallback (BEP-19 webseed)
 node bin/seed.js --webseed https://cdn.example.com/movie.mp4 /path/to/movie.mp4
-
-# Multiple webseed URLs
-node bin/seed.js --webseed https://cdn1.example.com/movie.mp4 --webseed https://cdn2.example.com/movie.mp4 /path/to/movie.mp4
 ```
 
 The seeder will:
-1. Hash the file(s) and save a `.torrent` file next to the script
+1. Hash the file(s) and save a `.torrent` file
 2. Print the magnet URI to share with leechers
 3. Start seeding — pieces are read from disk on demand (no full file in RAM)
 
+### Multi-torrent mode (YAML)
+
+Seed multiple torrents concurrently from a single YAML config file:
+
+```bash
+node bin/seed.js --torrents /path/to/torrents.yaml
 ```
-=== RtcTorrent Seeder ===
-Tracker : http://127.0.0.1:6969/announce
-Files   : /path/to/movie.mp4
 
-Creating torrent (hashing pieces)… done.
+When `--torrents` is used, all other flags (`--tracker`, `--name`, positional files, etc.) are forbidden.
 
-Saved : movie.torrent
-Hash  : 35a3e807d020...
+**YAML format:**
 
-Magnet URI:
-magnet:?xt=urn:btih:35a3e807d020...&dn=movie&tr=http%3A%2F%2F127.0.0.1%3A6969%2Fannounce
+```yaml
+---
+torrents:
+  # Minimal — only required fields
+  - file:
+      - "/data/movies/big_buck_bunny.mp4"
+    trackers:
+      - "http://tracker.example.com:6969/announce"
 
-Seeding… (Ctrl+C to stop)
+  # Full — all optional fields included
+  - out: "/var/torrents/sunflower.torrent"
+    name: "Sunflower 1080p"
+    file:
+      - "/data/movies/sunflower_1080p.mp4"
+    trackers:
+      - "http://tracker.example.com:6969/announce"
+    webseed:
+      - "https://cdn.example.com/movies/sunflower_1080p.mp4"
+    ice:
+      - "stun:stun.l.google.com:19302"
+    rtc_interval: 10000
 ```
+
+| Field | Required | Description |
+|---|---|---|
+| `file` | **yes** | List of local file paths to seed |
+| `trackers` | **yes** | List of tracker announce URLs (first URL is used) |
+| `out` | no | Output path for the `.torrent` file |
+| `name` | no | Torrent display name |
+| `webseed` | no | WebSeed (BEP-19) HTTP fallback URLs |
+| `ice` | no | ICE server URLs (default: Google STUN) |
+| `rtc_interval` | no | Announce poll interval in **milliseconds** (default: `5000`) |
+
+**Reloading the config:**
+
+| Platform | Trigger | How |
+|---|---|---|
+| Linux / macOS | `kill -HUP <pid>` | SIGHUP signal |
+| Windows + all | Save the YAML file | File mtime polled every 2 s |
+
+> **⚠️ Process exit on reload:** When a reload is triggered, the Node.js seeder
+> prints a message and exits with code **0**. It does **not** reload in-process.
+>
+> **Why:** The `RtcTorrent` client has no public `destroy()` API, so there is no
+> reliable way to stop the internal announce loops and peer connections without
+> terminating the process.
+>
+> **What to do:** Use a process manager such as **pm2**, **systemd**, or **forever**
+> so the process is restarted automatically after the clean exit:
+>
+> ```bash
+> # pm2
+> pm2 start bin/seed.js --name rtc-seed -- --torrents /etc/rtc-seed/torrents.yaml
+> pm2 save
+>
+> # systemd — set Restart=on-success in the [Service] section
+> ```
+>
+> If you need true in-process reload without a process manager, use the
+> **Rust seeder** (`rtc-seed`) instead — it fully restarts tasks in-process.
+
+---
+
+## BEP-52 (BitTorrent v2 / Hybrid) Support
+
+Both the CLI seeder (`seed.js`) and the library API (`client.create()`) support BitTorrent v2 (BEP-52) and hybrid torrent generation.
+
+### `--torrent-version` flag (CLI)
+
+```bash
+# v1 — classic SHA-1 pieces (default, widest compatibility)
+node bin/seed.js /path/to/movie.mp4
+
+# v2 — pure BEP-52: SHA-256 Merkle trees, no SHA-1 pieces
+node bin/seed.js --torrent-version v2 /path/to/movie.mp4
+
+# hybrid — both SHA-1 and SHA-256 Merkle; magnet URI has two xt= params
+node bin/seed.js --torrent-version hybrid /path/to/movie.mp4
+```
+
+### `version` field in the YAML config
+
+```yaml
+torrents:
+  - file: ["/data/old_client.mp4"]
+    trackers: ["http://tracker:6969/announce"]
+    version: v1        # default
+
+  - file: ["/data/new_content.mp4"]
+    trackers: ["http://tracker:6969/announce"]
+    version: hybrid    # SHA-1 + SHA-256 Merkle
+
+  - file: ["/data/v2_only.mp4"]
+    trackers: ["http://tracker:6969/announce"]
+    version: v2        # pure BEP-52
+```
+
+### Format comparison
+
+| | `v1` | `v2` | `hybrid` |
+|---|---|---|---|
+| Hash algorithm | SHA-1 (20 B) | SHA-256 Merkle (32 B) | Both |
+| `info` dict | `pieces`, `files`/`length` | `file tree`, `meta version` | All fields |
+| Top-level key | — | `piece layers` | `piece layers` |
+| Magnet URI | `xt=urn:btih:…` | `xt=urn:btmh:1220…` | Both `xt=` params |
+| Tracker announce hash | SHA-1 20 B | SHA-256 first 20 B | SHA-1 20 B |
+| v1 client compat | ✓ | ✗ | ✓ |
+| v2 client compat | ✗ | ✓ | ✓ |
+
+### Leecher / download side
+
+- `parseMagnet()` detects `xt=urn:btmh:1220…` automatically
+- `parseTorrentFile()` detects v2/hybrid by the presence of `file tree` / `meta version: 2`
+- SHA-256 Merkle piece verification is **not yet implemented** (pure v2 pieces are accepted without hash check — future work)
 
 ---
 
@@ -122,7 +232,12 @@ cargo build -p rtc-seed --release
 ### Usage
 
 ```bash
-rtc-seed [--tracker <url>] [--name <name>] [--out <file.torrent>] [--webseed <url>] [--ice <url>] <file1> [<file2> ...]
+# Single-torrent
+rtc-seed [--tracker <url>] [--name <name>] [--out <file.torrent>] \
+         [--webseed <url>] [--ice <url>] <file1> [<file2> ...]
+
+# Multi-torrent (same YAML format as the Node.js seeder above)
+rtc-seed --torrents /path/to/torrents.yaml
 ```
 
 **Examples:**
@@ -134,15 +249,26 @@ rtc-seed /path/to/movie.mp4
 # Custom tracker and output path
 rtc-seed --tracker http://mytracker:6969/announce --out /tmp/movie.torrent /path/to/movie.mp4
 
-# Add a BEP-19 webseed fallback
-rtc-seed --webseed https://cdn.example.com/movie.mp4 /path/to/movie.mp4
-
-# Custom ICE server
-rtc-seed --ice stun:stun.example.com:3478 /path/to/movie.mp4
+# Seed multiple torrents from a YAML file
+rtc-seed --torrents /etc/rtc-seed/torrents.yaml
 
 # Run directly from the workspace without installing
 cargo run -p rtc-seed -- --tracker http://127.0.0.1:6969/announce /path/to/movie.mp4
+cargo run -p rtc-seed -- --torrents /path/to/torrents.yaml
 ```
+
+In multi-torrent mode the Rust seeder performs **true in-process reload** — the process
+stays alive and all seeder tasks are restarted without any process exit:
+
+| Platform | Trigger | Result |
+|---|---|---|
+| Linux / macOS | `kill -HUP <pid>` | Tasks abort, YAML re-read, new tasks start |
+| Windows + all | Save the YAML file | Same — file mtime polled every 2 s |
+| Any | `Ctrl+C` | Clean shutdown |
+
+This is possible because each torrent runs as a `tokio::spawn` task that can be
+`.abort()`ed cleanly. No process manager is required for reload. This is the key
+advantage over the Node.js seeder, which must exit and be restarted by a process manager.
 
 Expected output:
 
@@ -405,14 +531,17 @@ const client = new RtcTorrent({
 
 ---
 
-### `client.create(files, options)` → `{ infoHash, encodedTorrent, magnetUri }`
+### `client.create(files, options)` → `{ infoHash, encodedTorrent, magnetUri, v2InfoHash? }`
 
 Creates torrent metadata and returns the encoded `.torrent` buffer plus magnet URI.
 
 - **`files`** — `File[]` objects (browser) or file path strings (Node.js)
 - **`options.name`** — torrent display name
+- **`options.version`** — torrent format: `'v1'` *(default)*, `'v2'`, or `'hybrid'` (see [BEP-52 section](#bep-52-bittorent-v2--hybrid-support) below)
 - **`options.trackerUrl`** — announce URL to embed in the torrent
 - **`options.webseedUrls`** — string or string array of HTTP fallback URLs (BEP-19 `url-list`). For single-file torrents: direct URL to the file. For multi-file torrents: base directory URL (trailing slash optional).
+
+For v2/hybrid, the returned object also includes `v2InfoHash` (64-character hex SHA-256).
 
 ---
 

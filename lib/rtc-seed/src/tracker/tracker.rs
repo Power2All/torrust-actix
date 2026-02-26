@@ -60,6 +60,5 @@ pub fn parse_announce_response(body: &[u8]) -> AnnounceResponse {
             }
         }
     }
-
     out
 }
