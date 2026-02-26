@@ -1,7 +1,7 @@
 [package]
 name = "bt-seed"
 version = "4.2.0"
-edition = "2021"
+edition = "2024"
 description = "Native Rust BitTorrent seeder for torrust-actix — standard BT wire protocol, no WebRTC required."
 authors = ["Jasper Lingers <info@power2all.com>"]
 

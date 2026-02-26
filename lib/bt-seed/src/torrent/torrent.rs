@@ -254,7 +254,7 @@ fn ft_insert(tree: &mut BTreeMap<String, FtNode>, components: &[String], length:
         tree.insert(key, FtNode::Leaf { length, root });
     } else {
         let child = tree.entry(key).or_insert_with(|| FtNode::Dir(BTreeMap::new()));
-        if let FtNode::Dir(ref mut sub) = child {
+        if let FtNode::Dir(sub) = child {
             ft_insert(sub, &components[1..], length, root);
         }
     }

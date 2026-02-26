@@ -4002,7 +4002,7 @@ dependencies = [
 
 [[package]]
 name = "rtc-seed"
-version = "0.1.0"
+version = "4.2.0"
 dependencies = [
  "bip_bencode",
  "bytes",
