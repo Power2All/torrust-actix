@@ -272,7 +272,7 @@ mod tests {
         let piece_layers = b"de";
         let b = build_v2_torrent_bencode(
             info_bytes,
-            "http://tracker:6969/announce",
+            &["http://tracker:6969/announce".to_string()],
             1_700_000_000,
             &[],
             piece_layers,
@@ -295,7 +295,7 @@ mod tests {
         let piece_layers = b"de";
         let b = build_v2_torrent_bencode(
             info_bytes,
-            "http://tracker/announce",
+            &["http://tracker/announce".to_string()],
             0,
             &["https://cdn.example.com/file.mp4".to_string()],
             piece_layers,
@@ -310,7 +310,7 @@ mod tests {
     #[test]
     fn v2_magnet_uri_format() {
         let hash_hex = "a".repeat(64);
-        let uri = build_v2_magnet_uri(&hash_hex, "My Torrent", "http://tracker:6969/announce");
+        let uri = build_v2_magnet_uri(&hash_hex, "My Torrent", &["http://tracker:6969/announce".to_string()]);
         assert!(
             uri.starts_with("magnet:?xt=urn:btmh:1220"),
             "v2 magnet must use urn:btmh:1220 scheme: {uri}"
@@ -325,7 +325,7 @@ mod tests {
     fn hybrid_magnet_uri_format() {
         let v1 = "b".repeat(40);
         let v2 = "c".repeat(64);
-        let uri = build_hybrid_magnet_uri(&v1, &v2, "Hybrid", "http://tracker/announce");
+        let uri = build_hybrid_magnet_uri(&v1, &v2, "Hybrid", &["http://tracker/announce".to_string()]);
         assert!(uri.contains("urn:btih:"), "hybrid magnet must contain urn:btih:");
         assert!(uri.contains("urn:btmh:1220"), "hybrid magnet must contain urn:btmh:1220");
         assert!(uri.contains(&v1), "hybrid magnet must contain v1 hash");
@@ -344,7 +344,7 @@ mod tests {
 
     fn default_config(path: PathBuf, version: TorrentVersion) -> SeederConfig {
         SeederConfig {
-            tracker_url: "http://127.0.0.1:6969/announce".to_string(),
+            tracker_urls: vec!["http://127.0.0.1:6969/announce".to_string()],
             file_paths: vec![path],
             name: Some("test_torrent".to_string()),
             out_file: None,
@@ -352,6 +352,8 @@ mod tests {
             ice_servers: vec![],
             rtc_interval_ms: 5000,
             version,
+            torrent_file: None,
+            magnet: None,
         }
     }
 

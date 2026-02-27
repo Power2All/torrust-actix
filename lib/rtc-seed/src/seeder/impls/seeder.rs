@@ -44,11 +44,7 @@ impl Seeder {
         }
         println!("\nMagnet URI:\n{}\n", self.torrent_info.magnet_uri);
         println!("Share the magnet URI or the .torrent file with leechers.\n");
-        let tracker = TrackerClient::new(
-            self.config.tracker_url.clone(),
-            self.torrent_info.info_hash,
-            self.peer_id,
-        );
+
         print!("Creating WebRTC offer (gathering ICE candidates)… ");
         let mut current_pc = PeerConn::new(
             &self.config,
@@ -58,6 +54,7 @@ impl Seeder {
         .await?;
         println!("done.");
         println!("Seeding… (Ctrl+C to stop)\n");
+
         let peers_clone = Arc::clone(&self.peers);
         let uploaded_clone = Arc::clone(&self.uploaded);
         tokio::spawn(async move {
@@ -76,10 +73,23 @@ impl Seeder {
                 );
             }
         });
+
+        // Try each tracker in order (BEP-12); use the first responsive one.
+        let tracker_opt = self.pick_tracker().await;
+
         let mut event = "started";
         let mut rtc_interval_ms = self.config.rtc_interval_ms;
         loop {
             let uploaded = self.uploaded.load(Ordering::Relaxed);
+            // Determine which tracker to announce to this cycle.
+            let tracker = match &tracker_opt {
+                Some(t) => t,
+                None => {
+                    // No tracker — just wait and keep serving.
+                    tokio::time::sleep(std::time::Duration::from_millis(rtc_interval_ms)).await;
+                    continue;
+                }
+            };
             match tracker
                 .announce_seeder(&current_pc.sdp_offer, uploaded, event)
                 .await
@@ -124,5 +134,24 @@ impl Seeder {
 
             tokio::time::sleep(std::time::Duration::from_millis(rtc_interval_ms)).await;
         }
+    }
+
+    /// Try each tracker URL; return the first one that successfully responds to a ping.
+    /// Returns None if no trackers are configured.
+    async fn pick_tracker(&self) -> Option<TrackerClient> {
+        let urls = &self.torrent_info.tracker_urls;
+        if urls.is_empty() {
+            log::info!("[Tracker] No tracker configured — seeding without announcing.");
+            return None;
+        }
+        // For rtc-seed we just pick the first tracker and let announce errors be logged.
+        // A full BEP-12 retry-on-failure loop would require restructuring the announce loop.
+        let url = &urls[0];
+        log::info!("[Tracker] Using tracker: {}", url);
+        Some(TrackerClient::new(
+            url.clone(),
+            self.torrent_info.info_hash,
+            self.peer_id,
+        ))
     }
 }

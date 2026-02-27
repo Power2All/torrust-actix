@@ -4,7 +4,7 @@ use crate::torrent::enums::torrent_version::TorrentVersion;
 impl Default for SeederConfig {
     fn default() -> Self {
         Self {
-            tracker_url: "http://127.0.0.1:6969/announce".to_string(),
+            tracker_urls: Vec::new(),
             file_paths: Vec::new(),
             name: None,
             out_file: None,
@@ -12,6 +12,8 @@ impl Default for SeederConfig {
             ice_servers: vec!["stun:stun.l.google.com:19302".to_string()],
             rtc_interval_ms: 5000,
             version: TorrentVersion::V1,
+            torrent_file: None,
+            magnet: None,
         }
     }
 }

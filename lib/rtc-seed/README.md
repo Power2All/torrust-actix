@@ -35,8 +35,10 @@ rtc-seed [OPTIONS] <FILE>...
 
 | Argument / Flag | Default | Description |
 |---|---|---|
-| `<FILE>...` | — | One or more files to seed (required) |
-| `--tracker <URL>` | `http://127.0.0.1:6969/announce` | Tracker announce URL |
+| `<FILE>...` | — | One or more files to seed. Required unless `--torrent-file` is given. |
+| `--tracker <URL>` | *(none)* | Tracker announce URL; repeat for multiple (BEP-12). If omitted, trackers from `--torrent-file` or `--magnet` are used. |
+| `--torrent-file <FILE>` | *(none)* | Seed an existing `.torrent` file — reads tracker URLs and info_hash from it. No re-hashing needed. |
+| `--magnet <URI>` | *(none)* | Seed using a magnet URI — reads tracker URLs from it; files are still hashed from disk. |
 | `--name <NAME>` | First file's filename | Torrent display name |
 | `--out <PATH>` | `<name>.torrent` | Output path for the `.torrent` file |
 | `--webseed <URL>` | *(none)* | WebSeed URL (BEP-19); repeat for multiple |
@@ -57,17 +59,47 @@ When `--torrents` is used, all single-torrent flags are forbidden.
 
 ## Examples
 
-### Seed a single file
+### Seed a single file (no tracker)
 
 ```bash
 ./target/debug/rtc-seed video.mp4
 ```
 
-### Seed to a remote tracker
+### Seed to a tracker
 
 ```bash
 ./target/debug/rtc-seed \
   --tracker https://tracker.example.com/announce \
+  video.mp4
+```
+
+### Seed to multiple trackers (BEP-12)
+
+```bash
+./target/debug/rtc-seed \
+  --tracker http://tracker1.example.com/announce \
+  --tracker http://tracker2.example.com/announce \
+  video.mp4
+```
+
+### Re-seed from an existing .torrent file (no re-hashing)
+
+```bash
+./target/debug/rtc-seed --torrent-file video.torrent
+# Tracker URLs are read from the .torrent file automatically.
+```
+
+### Re-seed from a .torrent file with an explicit file path
+
+```bash
+./target/debug/rtc-seed --torrent-file video.torrent /data/movies/video.mp4
+```
+
+### Seed using a magnet URI (tracker from magnet)
+
+```bash
+./target/debug/rtc-seed \
+  --magnet "magnet:?xt=urn:btih:...&tr=http%3A%2F%2Ftracker.example.com%2Fannounce" \
   video.mp4
 ```
 
@@ -118,13 +150,11 @@ Create a YAML file and pass it with `--torrents`. Each entry in the `torrents` l
 ```yaml
 ---
 torrents:
-  # Minimal entry — only required fields
+  # Minimal entry — seed without announcing to any tracker
   - file:
       - "/data/movies/big_buck_bunny.mp4"
-    trackers:
-      - "http://tracker.example.com:6969/announce"
 
-  # Full entry with all optional fields
+  # BEP-12 multi-tracker (all listed in announce-list)
   - out: "/var/torrents/sunflower.torrent"
     name: "Sunflower 1080p"
     file:
@@ -137,14 +167,30 @@ torrents:
     ice:
       - "stun:stun.l.google.com:19302"
     rtc_interval: 10000
+    version: hybrid
+
+  # Re-seed from an existing .torrent (no re-hashing, trackers read from file)
+  - torrent_file: "/var/torrents/movie.torrent"
+
+  # Re-seed from an existing .torrent with an explicit file path
+  - torrent_file: "/var/torrents/movie.torrent"
+    file:
+      - "/data/movies/movie.mp4"
+
+  # Seed using a magnet URI (trackers parsed from it)
+  - magnet: "magnet:?xt=urn:btih:...&tr=http%3A%2F%2Ftracker.example.com%2Fannounce"
+    file:
+      - "/data/movies/movie.mp4"
 ```
 
 ### Field reference
 
 | Field | Required | Description |
 |---|---|---|
-| `file` | **yes** | List of local file paths to seed |
-| `trackers` | **yes** | List of tracker announce URLs (first URL is used) |
+| `file` | **yes*** | List of local file paths to seed (*required unless `torrent_file` is set) |
+| `trackers` | no | List of tracker announce URLs (all included in `announce-list`; BEP-12). If omitted, trackers are read from `torrent_file` or `magnet`. |
+| `torrent_file` | no | Path to an existing `.torrent` file; tracker URLs and info_hash are read from it. |
+| `magnet` | no | Magnet URI; tracker URLs are parsed from it. Files are still hashed from disk. |
 | `out` | no | Output path for the `.torrent` file |
 | `name` | no | Torrent display name (default: first file's name) |
 | `webseed` | no | WebSeed (BEP-19) HTTP URLs |

@@ -20,4 +20,5 @@ pub struct TorrentInfo {
     #[allow(dead_code)]
     pub version: TorrentVersion,
     pub v2_info_hash: Option<V2InfoHash>,
+    pub tracker_urls: Vec<String>,
 }

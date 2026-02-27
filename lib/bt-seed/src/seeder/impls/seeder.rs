@@ -44,25 +44,11 @@ impl Seeder {
         }
         println!("\nMagnet URI:\n{}\n", self.torrent_info.magnet_uri);
         println!("Share the magnet URI or the .torrent file with leechers.\n");
-        let tracker = TrackerClient::new(
-            self.config.tracker_url.clone(),
-            self.torrent_info.info_hash,
-            self.peer_id,
-            self.config.listen_port,
-        );
-        let mut announce_interval_secs: u64 = 300;
-        match tracker.announce(0, "started").await {
-            Ok(resp) => {
-                announce_interval_secs = resp.interval.max(30);
-                log::info!("[Tracker] Announced: interval={}s", announce_interval_secs);
-            }
-            Err(e) => {
-                log::warn!("[Tracker] Initial announce failed: {}", e);
-            }
-        }
         let listen_addr = format!("0.0.0.0:{}", self.config.listen_port);
         let listener = tokio::net::TcpListener::bind(&listen_addr).await?;
         println!("Seeding… on {} (Ctrl+C to stop)\n", listen_addr);
+        let mut announce_interval_secs: u64 = 300;
+        let tracker_opt: Option<TrackerClient> = self.try_announce_start(&mut announce_interval_secs).await;
         let uploaded_stats = Arc::clone(&self.uploaded);
         let peer_count_stats = Arc::clone(&self.peer_count);
         tokio::spawn(async move {
@@ -77,23 +63,25 @@ impl Seeder {
                 );
             }
         });
-        let tracker_ann = tracker.clone();
-        let uploaded_ann = Arc::clone(&self.uploaded);
-        tokio::spawn(async move {
-            let interval = std::time::Duration::from_secs(announce_interval_secs);
-            loop {
-                tokio::time::sleep(interval).await;
-                let up = uploaded_ann.load(Ordering::Relaxed);
-                match tracker_ann.announce(up, "").await {
-                    Ok(resp) => {
-                        log::info!("[Tracker] Re-announced (interval={}s)", resp.interval);
-                    }
-                    Err(e) => {
-                        log::warn!("[Tracker] Re-announce failed: {}", e);
+        if let Some(tracker) = tracker_opt {
+            let tracker_ann = tracker.clone();
+            let uploaded_ann = Arc::clone(&self.uploaded);
+            tokio::spawn(async move {
+                let interval = std::time::Duration::from_secs(announce_interval_secs);
+                loop {
+                    tokio::time::sleep(interval).await;
+                    let up = uploaded_ann.load(Ordering::Relaxed);
+                    match tracker_ann.announce(up, "").await {
+                        Ok(resp) => {
+                            log::info!("[Tracker] Re-announced (interval={}s)", resp.interval);
+                        }
+                        Err(e) => {
+                            log::warn!("[Tracker] Re-announce failed: {}", e);
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
         let info_hash = self.torrent_info.info_hash;
         let peer_id = self.peer_id;
         loop {
@@ -111,5 +99,33 @@ impl Seeder {
                 }
             }
         }
+    }
+
+    async fn try_announce_start(&self, interval_out: &mut u64) -> Option<TrackerClient> {
+        let urls = &self.torrent_info.tracker_urls;
+        if urls.is_empty() {
+            log::info!("[Tracker] No tracker configured — seeding without announcing.");
+            return None;
+        }
+        for url in urls {
+            let tracker = TrackerClient::new(
+                url.clone(),
+                self.torrent_info.info_hash,
+                self.peer_id,
+                self.config.listen_port,
+            );
+            match tracker.announce(0, "started").await {
+                Ok(resp) => {
+                    *interval_out = resp.interval.max(30);
+                    log::info!("[Tracker] Announced to {}: interval={}s", url, interval_out);
+                    return Some(tracker);
+                }
+                Err(e) => {
+                    log::warn!("[Tracker] {} failed: {} — trying next", url, e);
+                }
+            }
+        }
+        log::warn!("[Tracker] All trackers failed — seeding without announcing.");
+        None
     }
 }

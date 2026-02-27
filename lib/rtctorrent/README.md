@@ -64,20 +64,49 @@ Seed files directly from the command line (requires Node.js).
 
 ### Single-torrent mode
 
-```bash
-node bin/seed.js [--tracker <url>] [--name <name>] [--out <file.torrent>] [--webseed <url>] [--torrent-version v1|v2|hybrid] <file1> [<file2> ...]
 ```
+node bin/seed.js [OPTIONS] <file1> [<file2> ...]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `<FILE>...` | — | One or more files to seed. Required unless `--torrent-file` is given. |
+| `--tracker <URL>` | *(none)* | Tracker announce URL; repeat for multiple (BEP-12). Trackers are optional — omit to seed without announcing. |
+| `--torrent-file <FILE>` | *(none)* | Re-seed from an existing `.torrent` — reads tracker URLs and info_hash from it. No re-hashing needed. |
+| `--magnet <URI>` | *(none)* | Seed using a magnet URI — reads tracker URLs from it; files are still hashed from disk. |
+| `--name <NAME>` | First file's filename | Torrent display name |
+| `--out <PATH>` | `<name>.torrent` | Output path for the `.torrent` file |
+| `--webseed <URL>` | *(none)* | WebSeed URL (BEP-19); repeat for multiple |
+| `--torrent-version` | `v1` | Torrent format: `v1`, `v2`, or `hybrid` (see [BEP-52 section](#bep-52-bittorent-v2--hybrid-support)) |
 
 **Examples:**
 
 ```bash
-# Seed a single file using the default tracker
+# Seed a single file (no tracker)
 node bin/seed.js /path/to/movie.mp4
 
-# Custom tracker, custom output name
-node bin/seed.js --tracker http://mytracker:6969/announce --name "My Movie" /path/to/movie.mp4
+# Seed to a tracker
+node bin/seed.js --tracker http://mytracker:6969/announce /path/to/movie.mp4
 
-# Multi-file torrent
+# Seed to multiple trackers (BEP-12)
+node bin/seed.js \
+  --tracker http://tracker1.example.com/announce \
+  --tracker http://tracker2.example.com/announce \
+  /path/to/movie.mp4
+
+# Re-seed from an existing .torrent (no re-hashing)
+node bin/seed.js --torrent-file movie.torrent
+# Tracker URLs are read from the .torrent file automatically.
+
+# Re-seed from a .torrent with an explicit file path
+node bin/seed.js --torrent-file movie.torrent /data/movies/movie.mp4
+
+# Seed using a magnet URI (tracker from magnet)
+node bin/seed.js \
+  --magnet "magnet:?xt=urn:btih:...&tr=http%3A%2F%2Ftracker.example.com%2Fannounce" \
+  /path/to/movie.mp4
+
+# Multi-file torrent with a custom name
 node bin/seed.js --name "My Album" /music/track1.mp3 /music/track2.mp3
 
 # Add an HTTP fallback (BEP-19 webseed)
@@ -85,7 +114,7 @@ node bin/seed.js --webseed https://cdn.example.com/movie.mp4 /path/to/movie.mp4
 ```
 
 The seeder will:
-1. Hash the file(s) and save a `.torrent` file
+1. Hash the file(s) and save a `.torrent` file (skipped when `--torrent-file` is given)
 2. Print the magnet URI to share with leechers
 3. Start seeding — pieces are read from disk on demand (no full file in RAM)
 
@@ -97,42 +126,57 @@ Seed multiple torrents concurrently from a single YAML config file:
 node bin/seed.js --torrents /path/to/torrents.yaml
 ```
 
-When `--torrents` is used, all other flags (`--tracker`, `--name`, positional files, etc.) are forbidden.
+When `--torrents` is used, all single-torrent flags are forbidden.
 
 **YAML format:**
 
 ```yaml
 ---
 torrents:
-  # Minimal — only required fields
+  # Minimal — seed without announcing to any tracker
   - file:
       - "/data/movies/big_buck_bunny.mp4"
-    trackers:
-      - "http://tracker.example.com:6969/announce"
 
-  # Full — all optional fields included
+  # BEP-12 multi-tracker (all listed in announce-list)
   - out: "/var/torrents/sunflower.torrent"
     name: "Sunflower 1080p"
     file:
       - "/data/movies/sunflower_1080p.mp4"
     trackers:
       - "http://tracker.example.com:6969/announce"
+      - "https://tracker2.example.com/announce"
     webseed:
       - "https://cdn.example.com/movies/sunflower_1080p.mp4"
     ice:
       - "stun:stun.l.google.com:19302"
     rtc_interval: 10000
+
+  # Re-seed from an existing .torrent (no re-hashing, trackers read from file)
+  - torrent_file: "/var/torrents/movie.torrent"
+
+  # Re-seed from an existing .torrent with an explicit file path
+  - torrent_file: "/var/torrents/movie.torrent"
+    file:
+      - "/data/movies/movie.mp4"
+
+  # Seed using a magnet URI (trackers parsed from it)
+  - magnet: "magnet:?xt=urn:btih:...&tr=http%3A%2F%2Ftracker.example.com%2Fannounce"
+    file:
+      - "/data/movies/movie.mp4"
 ```
 
 | Field | Required | Description |
 |---|---|---|
-| `file` | **yes** | List of local file paths to seed |
-| `trackers` | **yes** | List of tracker announce URLs (first URL is used) |
+| `file` | **yes*** | List of local file paths to seed (*required unless `torrent_file` is set) |
+| `trackers` | no | List of tracker announce URLs. If omitted, trackers are read from `torrent_file` or `magnet`. |
+| `torrent_file` | no | Path to an existing `.torrent` file; tracker URLs and info_hash are read from it. |
+| `magnet` | no | Magnet URI; tracker URLs are parsed from it. Files are still hashed from disk. |
 | `out` | no | Output path for the `.torrent` file |
 | `name` | no | Torrent display name |
 | `webseed` | no | WebSeed (BEP-19) HTTP fallback URLs |
 | `ice` | no | ICE server URLs (default: Google STUN) |
 | `rtc_interval` | no | Announce poll interval in **milliseconds** (default: `5000`) |
+| `version` | no | Torrent format: `"v1"` (default), `"v2"`, or `"hybrid"` |
 
 **Reloading the config:**
 
@@ -233,8 +277,9 @@ cargo build -p rtc-seed --release
 
 ```bash
 # Single-torrent
-rtc-seed [--tracker <url>] [--name <name>] [--out <file.torrent>] \
-         [--webseed <url>] [--ice <url>] <file1> [<file2> ...]
+rtc-seed [--tracker <url>] ... [--torrent-file <path>] [--magnet <uri>] \
+         [--name <name>] [--out <file.torrent>] [--webseed <url>] [--ice <url>] \
+         <file1> [<file2> ...]
 
 # Multi-torrent (same YAML format as the Node.js seeder above)
 rtc-seed --torrents /path/to/torrents.yaml
@@ -243,11 +288,23 @@ rtc-seed --torrents /path/to/torrents.yaml
 **Examples:**
 
 ```bash
-# Seed a single file using the default tracker
+# Seed a single file (no tracker)
 rtc-seed /path/to/movie.mp4
 
-# Custom tracker and output path
-rtc-seed --tracker http://mytracker:6969/announce --out /tmp/movie.torrent /path/to/movie.mp4
+# Seed to a tracker
+rtc-seed --tracker http://mytracker:6969/announce /path/to/movie.mp4
+
+# Seed to multiple trackers (BEP-12)
+rtc-seed \
+  --tracker http://tracker1.example.com/announce \
+  --tracker http://tracker2.example.com/announce \
+  /path/to/movie.mp4
+
+# Re-seed from an existing .torrent (no re-hashing)
+rtc-seed --torrent-file movie.torrent
+
+# Seed using a magnet URI (tracker from magnet)
+rtc-seed --magnet "magnet:?xt=urn:btih:...&tr=..." /path/to/movie.mp4
 
 # Seed multiple torrents from a YAML file
 rtc-seed --torrents /etc/rtc-seed/torrents.yaml
@@ -479,6 +536,9 @@ cd lib/rtctorrent && npm run serve
 # 3. Seed a file from Node
 node bin/seed.js --tracker http://127.0.0.1:6969/announce /path/to/movie.mp4
 # → copy the printed magnet URI
+
+# Or re-seed from an existing .torrent (no re-hashing):
+node bin/seed.js --torrent-file movie.torrent
 
 # 4. Open the demo in your browser
 #    http://localhost:8080/demo/

@@ -23,8 +23,8 @@ use torrent::structs::torrent_builder::TorrentBuilder;
 struct Cli {
     #[arg(long, value_name = "FILE")]
     torrents: Option<PathBuf>,
-    #[arg(long, default_value = "http://127.0.0.1:6969/announce")]
-    tracker: String,
+    #[arg(long = "tracker")]
+    trackers: Vec<String>,
     #[arg(long)]
     name: Option<String>,
     #[arg(long)]
@@ -35,6 +35,10 @@ struct Cli {
     port: u16,
     #[arg(long, default_value = "v1")]
     torrent_version: String,
+    #[arg(long, value_name = "FILE")]
+    torrent_file: Option<PathBuf>,
+    #[arg(long, value_name = "MAGNET")]
+    magnet: Option<String>,
     files: Vec<PathBuf>,
 }
 
@@ -53,11 +57,13 @@ async fn main() {
         let single_mode_used = !cli.files.is_empty()
             || cli.name.is_some()
             || cli.out.is_some()
-            || !cli.webseeds.is_empty();
+            || !cli.webseeds.is_empty()
+            || cli.torrent_file.is_some()
+            || cli.magnet.is_some();
         if single_mode_used {
             eprintln!(
                 "Error: --torrents cannot be combined with single-torrent options \
-                 (positional files, --name, --out, --webseed)."
+                 (positional files, --name, --out, --webseed, --torrent-file, --magnet)."
             );
             std::process::exit(1);
         }
@@ -67,8 +73,9 @@ async fn main() {
         }
         run_torrents_mode(yaml_path).await;
     } else {
-        if cli.files.is_empty() {
-            eprintln!("Error: at least one file is required (or use --torrents <yaml>).");
+        let has_input = !cli.files.is_empty() || cli.torrent_file.is_some();
+        if !has_input {
+            eprintln!("Error: provide file(s) to seed, or --torrent-file <path>, or --torrents <yaml>.");
             std::process::exit(1);
         }
         for path in &cli.files {
@@ -77,28 +84,48 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        if let Some(tf) = &cli.torrent_file
+            && !tf.exists()
+        {
+            eprintln!("Torrent file not found: {}", tf.display());
+            std::process::exit(1);
+        }
         let version = match cli.torrent_version.as_str() {
             "v2" => TorrentVersion::V2,
             "hybrid" => TorrentVersion::Hybrid,
             _ => TorrentVersion::V1,
         };
         let config = SeederConfig {
-            tracker_url: cli.tracker,
+            tracker_urls: cli.trackers,
             file_paths: cli.files,
             name: cli.name,
             out_file: cli.out,
             webseed_urls: cli.webseeds,
             listen_port: cli.port,
             version,
+            torrent_file: cli.torrent_file,
+            magnet: cli.magnet,
         };
         println!("=== BtSeed (Rust native) ===");
-        println!("Tracker : {}", config.tracker_url);
+        if config.tracker_urls.is_empty() && config.torrent_file.is_none() && config.magnet.is_none() {
+            println!("Trackers: (none — seeding without announcing)");
+        } else if !config.tracker_urls.is_empty() {
+            println!("Trackers: {}", config.tracker_urls.join(", "));
+        }
+        if let Some(tf) = &config.torrent_file {
+            println!("Torrent : {}", tf.display());
+        }
+        if let Some(mag) = &config.magnet {
+            println!("Magnet  : {}…", &mag[..mag.len().min(60)]);
+        }
         let file_list: Vec<String> = config
             .file_paths
             .iter()
             .map(|p| p.display().to_string())
             .collect();
-        println!("Files   : {}", file_list.join(", "));
+        if !file_list.is_empty() {
+            println!("Files   : {}", file_list.join(", "));
+        }
         println!("Port    : {}", config.listen_port);
         if !config.webseed_urls.is_empty() {
             println!("Webseeds: {}", config.webseed_urls.join(", "));
@@ -134,6 +161,7 @@ fn load_yaml_entries(path: &Path) -> Result<Vec<(String, SeederConfig)>, Box<dyn
                     .name
                     .clone()
                     .or_else(|| cfg.file_paths.first().map(|p| p.display().to_string()))
+                    .or_else(|| cfg.torrent_file.as_ref().map(|p| p.display().to_string()))
                     .unwrap_or_else(|| format!("torrent-{}", i));
                 result.push((label, cfg));
             }
@@ -150,9 +178,18 @@ fn file_mtime(path: &Path) -> Option<SystemTime> {
 }
 
 async fn seed_one(label: String, config: SeederConfig) {
-    println!("[{}] Tracker : {}", label, config.tracker_url);
+    if config.tracker_urls.is_empty() && config.torrent_file.is_none() && config.magnet.is_none() {
+        println!("[{}] Trackers: (none)", label);
+    } else if !config.tracker_urls.is_empty() {
+        println!("[{}] Trackers: {}", label, config.tracker_urls.join(", "));
+    }
+    if let Some(tf) = &config.torrent_file {
+        println!("[{}] Torrent : {}", label, tf.display());
+    }
     let files: Vec<String> = config.file_paths.iter().map(|p| p.display().to_string()).collect();
-    println!("[{}] Files   : {}", label, files.join(", "));
+    if !files.is_empty() {
+        println!("[{}] Files   : {}", label, files.join(", "));
+    }
     println!("[{}] Port    : {}", label, config.listen_port);
     if !config.webseed_urls.is_empty() {
         println!("[{}] Webseeds: {}", label, config.webseed_urls.join(", "));

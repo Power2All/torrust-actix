@@ -1,9 +1,11 @@
-use crate::config::structs::seeder_config::SeederConfig;
 use crate::torrent::enums::torrent_version::TorrentVersion;
 use crate::torrent::structs::file_entry::FileEntry;
 use crate::torrent::structs::torrent_info::TorrentInfo;
 use crate::torrent::types::QUERY_ENCODE;
-use percent_encoding::utf8_percent_encode;
+use percent_encoding::{
+    percent_decode_str,
+    utf8_percent_encode
+};
 use sha1::{
     Digest,
     Sha1
@@ -15,11 +17,294 @@ use std::io::{
     self,
     Read
 };
-use std::path::Path;
+use std::path::{
+    Path,
+    PathBuf
+};
 use std::time::{
     SystemTime,
     UNIX_EPOCH
 };
+
+const CREATED_BY: &str = concat!("Torrust-Actix bt-seed v", env!("CARGO_PKG_VERSION"));
+
+fn bencode_end(data: &[u8], pos: usize) -> Result<usize, String> {
+    if pos >= data.len() {
+        return Err(format!("bencode_end: pos {} out of range (len {})", pos, data.len()));
+    }
+    match data[pos] {
+        b'i' => {
+            let rel = data[pos..].iter().position(|&b| b == b'e').ok_or("unterminated integer")?;
+            Ok(pos + rel + 1)
+        }
+        b'l' => {
+            let mut p = pos + 1;
+            while p < data.len() && data[p] != b'e' {
+                p = bencode_end(data, p)?;
+            }
+            if p >= data.len() { return Err("unterminated list".to_string()); }
+            Ok(p + 1)
+        }
+        b'd' => {
+            let mut p = pos + 1;
+            while p < data.len() && data[p] != b'e' {
+                p = bencode_end(data, p)?;
+                if p >= data.len() || data[p] == b'e' { break; }
+                p = bencode_end(data, p)?;
+            }
+            if p >= data.len() { return Err("unterminated dict".to_string()); }
+            Ok(p + 1)
+        }
+        b'0'..=b'9' => {
+            let colon = data[pos..].iter().position(|&b| b == b':').ok_or("no colon in bstring")?;
+            let len: usize = std::str::from_utf8(&data[pos..pos + colon])
+                .map_err(|e| e.to_string())?
+                .parse()
+                .map_err(|e: std::num::ParseIntError| e.to_string())?;
+            let end = pos + colon + 1 + len;
+            if end > data.len() { return Err("bstring out of bounds".to_string()); }
+            Ok(end)
+        }
+        b => Err(format!("unexpected bencode byte 0x{:02x} at pos {}", b, pos)),
+    }
+}
+
+fn read_bstring(data: &[u8], pos: usize) -> Result<(&[u8], usize), String> {
+    let colon = data[pos..].iter().position(|&b| b == b':').ok_or("no colon")?;
+    let len: usize = std::str::from_utf8(&data[pos..pos + colon])
+        .map_err(|e| e.to_string())?
+        .parse()
+        .map_err(|e: std::num::ParseIntError| e.to_string())?;
+    let start = pos + colon + 1;
+    let end = start + len;
+    if end > data.len() { return Err("bstring data out of bounds".to_string()); }
+    Ok((&data[start..end], end))
+}
+
+fn read_bint(data: &[u8], pos: usize) -> Result<(i64, usize), String> {
+    if pos >= data.len() || data[pos] != b'i' {
+        return Err(format!("expected 'i' at pos {}", pos));
+    }
+    let rel = data[pos..].iter().position(|&b| b == b'e').ok_or("unterminated integer")?;
+    let s = std::str::from_utf8(&data[pos + 1..pos + rel]).map_err(|e| e.to_string())?;
+    let n: i64 = s.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+    Ok((n, pos + rel + 1))
+}
+
+pub struct ParsedTorrentMeta {
+    pub info_hash: [u8; 20],
+    pub tracker_urls: Vec<String>,
+    pub name: String,
+    pub piece_length: u64,
+    pub pieces: Vec<u8>,
+    pub files: Vec<FileEntry>,
+    pub total_size: u64,
+}
+
+pub fn parse_torrent_meta(data: &[u8]) -> Result<ParsedTorrentMeta, String> {
+    if data.is_empty() || data[0] != b'd' {
+        return Err("torrent file must start with a bencode dict".to_string());
+    }
+    let mut tracker_urls: Vec<String> = Vec::new();
+    let mut info_raw: Option<&[u8]> = None;
+    let mut pos = 1usize;
+    while pos < data.len() && data[pos] != b'e' {
+        let (key, after_key) = read_bstring(data, pos)?;
+        pos = after_key;
+        match key {
+            b"announce" => {
+                let (val, after) = read_bstring(data, pos)?;
+                pos = after;
+                let url = String::from_utf8_lossy(val).into_owned();
+                if !url.is_empty() && !tracker_urls.contains(&url) {
+                    tracker_urls.insert(0, url);
+                }
+            }
+            b"announce-list" => {
+                if pos >= data.len() || data[pos] != b'l' {
+                    pos = bencode_end(data, pos)?;
+                    continue;
+                }
+                pos += 1;
+                while pos < data.len() && data[pos] != b'e' {
+                    if data[pos] != b'l' {
+                        pos = bencode_end(data, pos)?;
+                        continue;
+                    }
+                    pos += 1;
+                    while pos < data.len() && data[pos] != b'e' {
+                        if data[pos].is_ascii_digit() {
+                            let (val, after) = read_bstring(data, pos)?;
+                            pos = after;
+                            let url = String::from_utf8_lossy(val).into_owned();
+                            if !url.is_empty() && !tracker_urls.contains(&url) {
+                                tracker_urls.push(url);
+                            }
+                        } else {
+                            pos = bencode_end(data, pos)?;
+                        }
+                    }
+                    if pos < data.len() && data[pos] == b'e' { pos += 1; }
+                }
+                if pos < data.len() && data[pos] == b'e' { pos += 1; }
+            }
+            b"info" => {
+                let info_start = pos;
+                let info_end = bencode_end(data, pos)?;
+                info_raw = Some(&data[info_start..info_end]);
+                pos = info_end;
+            }
+            _ => {
+                pos = bencode_end(data, pos)?;
+            }
+        }
+    }
+    let info_bytes = info_raw.ok_or("no info dict in torrent")?;
+    let info_hash: [u8; 20] = {
+        let mut h = Sha1::new();
+        h.update(info_bytes);
+        h.finalize().into()
+    };
+    if info_bytes[0] != b'd' {
+        return Err("info value is not a dict".to_string());
+    }
+    let mut name = String::new();
+    let mut piece_length: u64 = 0;
+    let mut pieces: Vec<u8> = Vec::new();
+    let mut single_length: Option<u64> = None;
+    let mut multi_files: Vec<(u64, Vec<String>)> = Vec::new();
+    let mut ipos = 1usize;
+    while ipos < info_bytes.len() && info_bytes[ipos] != b'e' {
+        let (key, after_key) = read_bstring(info_bytes, ipos)?;
+        ipos = after_key;
+        match key {
+            b"name" => {
+                let (val, after) = read_bstring(info_bytes, ipos)?;
+                ipos = after;
+                name = String::from_utf8_lossy(val).into_owned();
+            }
+            b"piece length" => {
+                let (val, after) = read_bint(info_bytes, ipos)?;
+                ipos = after;
+                piece_length = val as u64;
+            }
+            b"pieces" => {
+                let (val, after) = read_bstring(info_bytes, ipos)?;
+                ipos = after;
+                pieces = val.to_vec();
+            }
+            b"length" => {
+                let (val, after) = read_bint(info_bytes, ipos)?;
+                ipos = after;
+                single_length = Some(val as u64);
+            }
+            b"files" => {
+                if ipos >= info_bytes.len() || info_bytes[ipos] != b'l' {
+                    ipos = bencode_end(info_bytes, ipos)?;
+                    continue;
+                }
+                ipos += 1;
+                while ipos < info_bytes.len() && info_bytes[ipos] != b'e' {
+                    if info_bytes[ipos] != b'd' {
+                        ipos = bencode_end(info_bytes, ipos)?;
+                        continue;
+                    }
+                    ipos += 1;
+                    let mut flen: u64 = 0;
+                    let mut path_comps: Vec<String> = Vec::new();
+                    while ipos < info_bytes.len() && info_bytes[ipos] != b'e' {
+                        let (fkey, after_fkey) = read_bstring(info_bytes, ipos)?;
+                        ipos = after_fkey;
+                        match fkey {
+                            b"length" => {
+                                let (v, after) = read_bint(info_bytes, ipos)?;
+                                ipos = after;
+                                flen = v as u64;
+                            }
+                            b"path" => {
+                                if ipos >= info_bytes.len() || info_bytes[ipos] != b'l' {
+                                    ipos = bencode_end(info_bytes, ipos)?;
+                                    continue;
+                                }
+                                ipos += 1;
+                                while ipos < info_bytes.len() && info_bytes[ipos] != b'e' {
+                                    let (comp, after) = read_bstring(info_bytes, ipos)?;
+                                    ipos = after;
+                                    path_comps.push(String::from_utf8_lossy(comp).into_owned());
+                                }
+                                if ipos < info_bytes.len() && info_bytes[ipos] == b'e' { ipos += 1; }
+                            }
+                            _ => { ipos = bencode_end(info_bytes, ipos)?; }
+                        }
+                    }
+                    if ipos < info_bytes.len() && info_bytes[ipos] == b'e' { ipos += 1; }
+                    multi_files.push((flen, path_comps));
+                }
+                if ipos < info_bytes.len() && info_bytes[ipos] == b'e' { ipos += 1; }
+            }
+            _ => { ipos = bencode_end(info_bytes, ipos)?; }
+        }
+    }
+    let (files, total_size) = if !multi_files.is_empty() {
+        let mut offset = 0u64;
+        let mut total = 0u64;
+        let entries: Vec<FileEntry> = multi_files
+            .into_iter()
+            .map(|(flen, comps)| {
+                let mut p = PathBuf::from(&name);
+                for c in &comps { p.push(c); }
+                let entry = FileEntry { path: p, name: comps, length: flen, offset };
+                offset += flen;
+                total += flen;
+                entry
+            })
+            .collect();
+        (entries, total)
+    } else {
+        let len = single_length.unwrap_or(0);
+        (
+            vec![FileEntry {
+                path: PathBuf::from(&name),
+                name: vec![name.clone()],
+                length: len,
+                offset: 0,
+            }],
+            len,
+        )
+    };
+    Ok(ParsedTorrentMeta { info_hash, tracker_urls, name, piece_length, pieces, files, total_size })
+}
+
+pub fn parse_magnet(uri: &str) -> (Vec<String>, Option<[u8; 20]>, Option<String>) {
+    let mut trackers: Vec<String> = Vec::new();
+    let mut info_hash: Option<[u8; 20]> = None;
+    let mut name: Option<String> = None;
+    let query = match uri.strip_prefix("magnet:?") {
+        Some(q) => q,
+        None => return (trackers, info_hash, name),
+    };
+    for param in query.split('&') {
+        if let Some(value) = param.strip_prefix("tr=") {
+            let decoded = percent_decode_str(value).decode_utf8_lossy().into_owned();
+            if !decoded.is_empty() && !trackers.contains(&decoded) {
+                trackers.push(decoded);
+            }
+        } else if let Some(value) = param.strip_prefix("xt=urn:btih:") {
+            if value.len() == 40
+                && let Ok(bytes) = hex::decode(value)
+                && let Ok(arr) = bytes.try_into()
+            {
+                info_hash = Some(arr);
+            }
+        } else if let Some(value) = param.strip_prefix("dn=") {
+            let decoded = percent_decode_str(value).decode_utf8_lossy().into_owned();
+            if !decoded.is_empty() {
+                name = Some(decoded);
+            }
+        }
+    }
+    (trackers, info_hash, name)
+}
 
 pub fn hash_pieces(
     files: &[FileEntry],
@@ -118,17 +403,26 @@ pub fn build_info_bencode(
 
 pub fn build_torrent_bencode(
     info_bytes: &[u8],
-    tracker_url: &str,
+    tracker_urls: &[String],
     creation_date: u64,
     webseed_urls: &[String],
 ) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(b"d");
+    let first = tracker_urls.first().map(|s| s.as_str()).unwrap_or("");
     out.extend_from_slice(b"8:announce");
-    write_bencode_string(&mut out, tracker_url.as_bytes());
-    let created_by = "Torrust-Actix bt-seed v0.1";
+    write_bencode_string(&mut out, first.as_bytes());
+    if !tracker_urls.is_empty() {
+        out.extend_from_slice(b"13:announce-listl");
+        out.push(b'l');
+        for url in tracker_urls {
+            write_bencode_string(&mut out, url.as_bytes());
+        }
+        out.push(b'e');
+        out.push(b'e');
+    }
     out.extend_from_slice(b"10:created by");
-    write_bencode_string(&mut out, created_by.as_bytes());
+    write_bencode_string(&mut out, CREATED_BY.as_bytes());
     out.extend_from_slice(b"13:creation datei");
     out.extend_from_slice(creation_date.to_string().as_bytes());
     out.extend_from_slice(b"e");
@@ -156,13 +450,15 @@ pub fn write_bencode_string(out: &mut Vec<u8>, s: &[u8]) {
     out.extend_from_slice(s);
 }
 
-pub fn build_magnet_uri(info_hash_hex: &str, name: &str, tracker_url: &str) -> String {
+pub fn build_magnet_uri(info_hash_hex: &str, name: &str, tracker_urls: &[String]) -> String {
     let encoded_name = utf8_percent_encode(name, QUERY_ENCODE).to_string();
-    let encoded_tracker = utf8_percent_encode(tracker_url, QUERY_ENCODE).to_string();
-    format!(
-        "magnet:?xt=urn:btih:{}&dn={}&tr={}",
-        info_hash_hex, encoded_name, encoded_tracker
-    )
+    let mut uri = format!("magnet:?xt=urn:btih:{}&dn={}", info_hash_hex, encoded_name);
+    for url in tracker_urls {
+        let encoded_tracker = utf8_percent_encode(url, QUERY_ENCODE).to_string();
+        uri.push_str("&tr=");
+        uri.push_str(&encoded_tracker);
+    }
+    uri
 }
 
 pub fn sha256_block(data: &[u8]) -> [u8; 32] {
@@ -395,18 +691,27 @@ pub fn build_hybrid_info_bencode(
 
 pub fn build_v2_torrent_bencode(
     info_bytes: &[u8],
-    tracker_url: &str,
+    tracker_urls: &[String],
     creation_date: u64,
     webseed_urls: &[String],
     piece_layers_bytes: &[u8],
 ) -> Vec<u8> {
     let mut out = Vec::new();
     out.push(b'd');
+    let first = tracker_urls.first().map(|s| s.as_str()).unwrap_or("");
     out.extend_from_slice(b"8:announce");
-    write_bencode_string(&mut out, tracker_url.as_bytes());
-    let created_by = b"Torrust-Actix bt-seed v0.1";
+    write_bencode_string(&mut out, first.as_bytes());
+    if !tracker_urls.is_empty() {
+        out.extend_from_slice(b"13:announce-listl");
+        out.push(b'l');
+        for url in tracker_urls {
+            write_bencode_string(&mut out, url.as_bytes());
+        }
+        out.push(b'e');
+        out.push(b'e');
+    }
     out.extend_from_slice(b"10:created by");
-    write_bencode_string(&mut out, created_by);
+    write_bencode_string(&mut out, CREATED_BY.as_bytes());
     out.extend_from_slice(b"13:creation date");
     out.push(b'i');
     out.extend_from_slice(creation_date.to_string().as_bytes());
@@ -431,26 +736,32 @@ pub fn build_v2_torrent_bencode(
     out
 }
 
-pub fn build_v2_magnet_uri(v2_hash_hex: &str, name: &str, tracker_url: &str) -> String {
+pub fn build_v2_magnet_uri(v2_hash_hex: &str, name: &str, tracker_urls: &[String]) -> String {
     let encoded_name = utf8_percent_encode(name, QUERY_ENCODE).to_string();
-    let encoded_tracker = utf8_percent_encode(tracker_url, QUERY_ENCODE).to_string();
-    format!(
-        "magnet:?xt=urn:btmh:1220{}&dn={}&tr={}",
-        v2_hash_hex, encoded_name, encoded_tracker
-    )
+    let mut uri = format!("magnet:?xt=urn:btmh:1220{}&dn={}", v2_hash_hex, encoded_name);
+    for url in tracker_urls {
+        let encoded_tracker = utf8_percent_encode(url, QUERY_ENCODE).to_string();
+        uri.push_str("&tr=");
+        uri.push_str(&encoded_tracker);
+    }
+    uri
 }
 
-pub fn build_hybrid_magnet_uri(v1_hex: &str, v2_hex: &str, name: &str, tracker_url: &str) -> String {
+pub fn build_hybrid_magnet_uri(v1_hex: &str, v2_hex: &str, name: &str, tracker_urls: &[String]) -> String {
     let encoded_name = utf8_percent_encode(name, QUERY_ENCODE).to_string();
-    let encoded_tracker = utf8_percent_encode(tracker_url, QUERY_ENCODE).to_string();
-    format!(
-        "magnet:?xt=urn:btih:{}&xt=urn:btmh:1220{}&dn={}&tr={}",
-        v1_hex, v2_hex, encoded_name, encoded_tracker
-    )
+    let mut uri = format!("magnet:?xt=urn:btih:{}&xt=urn:btmh:1220{}&dn={}", v1_hex, v2_hex, encoded_name);
+    for url in tracker_urls {
+        let encoded_tracker = utf8_percent_encode(url, QUERY_ENCODE).to_string();
+        uri.push_str("&tr=");
+        uri.push_str(&encoded_tracker);
+    }
+    uri
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_v1(
-    config: &SeederConfig,
+    tracker_urls: &[String],
+    webseed_urls: &[String],
     files: Vec<FileEntry>,
     total_size: u64,
     piece_length: u64,
@@ -465,14 +776,9 @@ pub fn build_v1(
         h.update(&info_bytes);
         h.finalize().into()
     };
-    let torrent_bytes = build_torrent_bencode(
-        &info_bytes,
-        &config.tracker_url,
-        creation_date,
-        &config.webseed_urls,
-    );
+    let torrent_bytes = build_torrent_bencode(&info_bytes, tracker_urls, creation_date, webseed_urls);
     let info_hash_hex = hex::encode(info_hash);
-    let magnet_uri = build_magnet_uri(&info_hash_hex, &name, &config.tracker_url);
+    let magnet_uri = build_magnet_uri(&info_hash_hex, &name, tracker_urls);
     Ok(TorrentInfo {
         name,
         piece_length,
@@ -485,11 +791,14 @@ pub fn build_v1(
         magnet_uri,
         version: TorrentVersion::V1,
         v2_info_hash: None,
+        tracker_urls: tracker_urls.to_vec(),
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_v2(
-    config: &SeederConfig,
+    tracker_urls: &[String],
+    webseed_urls: &[String],
     files: Vec<FileEntry>,
     total_size: u64,
     piece_length: u64,
@@ -515,15 +824,10 @@ pub fn build_v2(
         h.finalize().into()
     };
     let info_hash: [u8; 20] = v2_hash[..20].try_into().unwrap();
-    let torrent_bytes = build_v2_torrent_bencode(
-        &info_bytes,
-        &config.tracker_url,
-        creation_date,
-        &config.webseed_urls,
-        &piece_layers_bytes,
-    );
+    let torrent_bytes =
+        build_v2_torrent_bencode(&info_bytes, tracker_urls, creation_date, webseed_urls, &piece_layers_bytes);
     let v2_hash_hex = hex::encode(v2_hash);
-    let magnet_uri = build_v2_magnet_uri(&v2_hash_hex, &name, &config.tracker_url);
+    let magnet_uri = build_v2_magnet_uri(&v2_hash_hex, &name, tracker_urls);
     Ok(TorrentInfo {
         name,
         piece_length,
@@ -536,11 +840,14 @@ pub fn build_v2(
         magnet_uri,
         version: TorrentVersion::V2,
         v2_info_hash: Some(v2_hash),
+        tracker_urls: tracker_urls.to_vec(),
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_hybrid(
-    config: &SeederConfig,
+    tracker_urls: &[String],
+    webseed_urls: &[String],
     files: Vec<FileEntry>,
     total_size: u64,
     piece_length: u64,
@@ -572,16 +879,11 @@ pub fn build_hybrid(
         h.update(&info_bytes);
         h.finalize().into()
     };
-    let torrent_bytes = build_v2_torrent_bencode(
-        &info_bytes,
-        &config.tracker_url,
-        creation_date,
-        &config.webseed_urls,
-        &piece_layers_bytes,
-    );
+    let torrent_bytes =
+        build_v2_torrent_bencode(&info_bytes, tracker_urls, creation_date, webseed_urls, &piece_layers_bytes);
     let v1_hex = hex::encode(info_hash);
     let v2_hex = hex::encode(v2_hash);
-    let magnet_uri = build_hybrid_magnet_uri(&v1_hex, &v2_hex, &name, &config.tracker_url);
+    let magnet_uri = build_hybrid_magnet_uri(&v1_hex, &v2_hex, &name, tracker_urls);
     Ok(TorrentInfo {
         name,
         piece_length,
@@ -594,6 +896,7 @@ pub fn build_hybrid(
         magnet_uri,
         version: TorrentVersion::Hybrid,
         v2_info_hash: Some(v2_hash),
+        tracker_urls: tracker_urls.to_vec(),
     })
 }
 
