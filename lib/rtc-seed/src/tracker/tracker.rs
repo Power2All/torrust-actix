@@ -29,18 +29,16 @@ pub fn parse_announce_response(body: &[u8]) -> AnnounceResponse {
         }
         return out;
     }
-    if let Some(v) = dict.lookup(b"interval") {
-        if let Some(n) = v.int() {
+    if let Some(v) = dict.lookup(b"interval")
+        && let Some(n) = v.int() {
             out.interval = n as u64;
         }
-    }
-    if let Some(v) = dict.lookup(b"rtc interval") {
-        if let Some(n) = v.int() {
+    if let Some(v) = dict.lookup(b"rtc interval")
+        && let Some(n) = v.int() {
             out.rtc_interval = Some(n as u64);
         }
-    }
-    if let Some(answers) = dict.lookup(b"rtc_answers") {
-        if let Some(list) = answers.list() {
+    if let Some(answers) = dict.lookup(b"rtc_answers")
+        && let Some(list) = answers.list() {
             for item in list {
                 if let Some(d) = item.dict() {
                     let peer_id_hex = d
@@ -59,6 +57,5 @@ pub fn parse_announce_response(body: &[u8]) -> AnnounceResponse {
                 }
             }
         }
-    }
     out
 }

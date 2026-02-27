@@ -270,12 +270,11 @@ fn ft_encode(out: &mut Vec<u8>, node: &FtNode) {
             out.push(b'i');
             out.extend_from_slice(length.to_string().as_bytes());
             out.push(b'e');
-            if let Some(r) = root {
-                if *length > 0 {
+            if let Some(r) = root
+                && *length > 0 {
                     out.extend_from_slice(b"11:pieces root");
                     write_bencode_string(out, r);
                 }
-            }
             out.push(b'e');
             out.push(b'e');
         }

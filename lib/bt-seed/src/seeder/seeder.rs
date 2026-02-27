@@ -99,11 +99,10 @@ async fn send_bitfield(stream: &mut TcpStream, piece_count: usize) -> std::io::R
     let bitfield_len = piece_count.div_ceil(8);
     let mut bitfield = vec![0xFFu8; bitfield_len];
     let extra_bits = bitfield_len * 8 - piece_count;
-    if extra_bits > 0 {
-        if let Some(last) = bitfield.last_mut() {
+    if extra_bits > 0
+        && let Some(last) = bitfield.last_mut() {
             *last &= 0xFF << extra_bits;
         }
-    }
     let msg_len = 1 + bitfield_len;
     let mut msg = Vec::with_capacity(4 + msg_len);
     msg.extend_from_slice(&(msg_len as u32).to_be_bytes());

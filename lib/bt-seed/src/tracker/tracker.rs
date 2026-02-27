@@ -29,13 +29,12 @@ pub fn parse_http_announce_response(body: &[u8]) -> AnnounceResponse {
         }
         return out;
     }
-    if let Some(v) = dict.lookup(b"interval") {
-        if let Some(n) = v.int() {
+    if let Some(v) = dict.lookup(b"interval")
+        && let Some(n) = v.int() {
             out.interval = n as u64;
         }
-    }
-    if let Some(v) = dict.lookup(b"peers") {
-        if let Some(bytes) = v.bytes() {
+    if let Some(v) = dict.lookup(b"peers")
+        && let Some(bytes) = v.bytes() {
             let mut i = 0;
             while i + 6 <= bytes.len() {
                 let ip = Ipv4Addr::new(bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]);
@@ -44,7 +43,6 @@ pub fn parse_http_announce_response(body: &[u8]) -> AnnounceResponse {
                 i += 6;
             }
         }
-    }
     out
 }
 
