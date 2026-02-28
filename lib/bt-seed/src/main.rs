@@ -1,17 +1,24 @@
 mod config;
 mod seeder;
+mod stats;
 mod torrent;
 mod tracker;
+mod web;
 
 use clap::Parser;
+use config::structs::proxy_config::ProxyConfig;
 use config::structs::seeder_config::SeederConfig;
 use config::structs::torrents_file::TorrentsFile;
+use config::structs::web_config::WebConfig;
 use seeder::structs::seeder::Seeder;
+use stats::shared_stats::new_shared_stats;
 use std::path::{
     Path,
     PathBuf
 };
+use std::sync::Arc;
 use std::time::SystemTime;
+use tokio::sync::RwLock;
 use torrent::enums::torrent_version::TorrentVersion;
 use torrent::structs::torrent_builder::TorrentBuilder;
 
@@ -39,21 +46,101 @@ struct Cli {
     torrent_file: Option<PathBuf>,
     #[arg(long, value_name = "MAGNET")]
     magnet: Option<String>,
+    #[arg(long)]
+    web_port: Option<u16>,
+    #[arg(long)]
+    web_password: Option<String>,
+    #[arg(long, value_name = "FILE")]
+    web_cert: Option<PathBuf>,
+    #[arg(long, value_name = "FILE")]
+    web_key: Option<PathBuf>,
+    #[arg(long)]
+    proxy_type: Option<String>,
+    #[arg(long)]
+    proxy_host: Option<String>,
+    #[arg(long)]
+    proxy_port: Option<u16>,
+    #[arg(long)]
+    proxy_user: Option<String>,
+    #[arg(long)]
+    proxy_pass: Option<String>,
+    #[arg(long, default_value = "false")]
+    upnp: bool,
+    #[arg(long)]
+    log_level: Option<String>,
     files: Vec<PathBuf>,
+}
+
+fn spawn_web_server(
+    web_cfg: WebConfig,
+    yaml_path: PathBuf,
+    shared_file: Arc<RwLock<TorrentsFile>>,
+    stats: crate::stats::shared_stats::SharedStats,
+    reload_tx: tokio::sync::watch::Sender<()>,
+) {
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build web server runtime");
+        rt.block_on(async move {
+            if let Err(e) = web::server::start(web_cfg, yaml_path, shared_file, stats, reload_tx).await {
+                log::error!("[Web] Server error: {}", e);
+            }
+        });
+    });
+}
+
+fn parse_log_level(s: &str) -> log::LevelFilter {
+    match s.to_ascii_lowercase().as_str() {
+        "error" => log::LevelFilter::Error,
+        "warn"  => log::LevelFilter::Warn,
+        "debug" => log::LevelFilter::Debug,
+        "trace" => log::LevelFilter::Trace,
+        _       => log::LevelFilter::Info,
+    }
+}
+
+fn read_yaml_log_level(path: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let file: TorrentsFile = serde_yaml::from_str(&content).ok()?;
+    file.config.log_level
+}
+
+fn build_proxy_from_cli(cli: &Cli) -> Option<ProxyConfig> {
+    if let (Some(proxy_type), Some(proxy_host), Some(proxy_port)) =
+        (&cli.proxy_type, &cli.proxy_host, cli.proxy_port)
+    {
+        Some(ProxyConfig {
+            proxy_type: proxy_type.clone(),
+            host: proxy_host.clone(),
+            port: proxy_port,
+            username: cli.proxy_user.clone(),
+            password: cli.proxy_pass.clone(),
+        })
+    } else {
+        None
+    }
 }
 
 #[tokio::main]
 async fn main() {
+    let cli = Cli::parse();
+    let level_filter = {
+        let s = cli.log_level.clone()
+            .or_else(|| cli.torrents.as_deref().and_then(|p| read_yaml_log_level(Path::new(p))))
+            .unwrap_or_else(|| "info".to_string());
+        parse_log_level(&s)
+    };
     fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!("[{}] {}", record.level(), message))
         })
-        .level(log::LevelFilter::Info)
+        .level(level_filter)
         .chain(std::io::stderr())
         .apply()
         .expect("failed to initialize logging");
-    let cli = Cli::parse();
-    if let Some(yaml_path) = cli.torrents {
+    if let Some(yaml_path) = cli.torrents.clone() {
         let single_mode_used = !cli.files.is_empty()
             || cli.name.is_some()
             || cli.out.is_some()
@@ -67,14 +154,29 @@ async fn main() {
             );
             std::process::exit(1);
         }
-        if !yaml_path.exists() {
-            eprintln!("Torrents file not found: {}", yaml_path.display());
-            std::process::exit(1);
-        }
-        run_torrents_mode(yaml_path).await;
+        let cli_proxy = build_proxy_from_cli(&cli);
+        let cli_web = WebConfig {
+            port: cli.web_port.unwrap_or(0),
+            password: cli.web_password.clone(),
+            cert_path: cli.web_cert.clone(),
+            key_path: cli.web_key.clone(),
+        };
+        run_torrents_mode(yaml_path, cli_proxy, cli_web, cli.upnp).await;
     } else {
         let has_input = !cli.files.is_empty() || cli.torrent_file.is_some();
         if !has_input {
+            if cli.web_port.is_some() {
+                let yaml_path = PathBuf::from("torrents.yaml");
+                let cli_proxy = build_proxy_from_cli(&cli);
+                let cli_web = WebConfig {
+                    port: cli.web_port.unwrap_or(0),
+                    password: cli.web_password.clone(),
+                    cert_path: cli.web_cert.clone(),
+                    key_path: cli.web_key.clone(),
+                };
+                run_torrents_mode(yaml_path, cli_proxy, cli_web, cli.upnp).await;
+                return;
+            }
             eprintln!("Error: provide file(s) to seed, or --torrent-file <path>, or --torrents <yaml>.");
             std::process::exit(1);
         }
@@ -95,6 +197,7 @@ async fn main() {
             "hybrid" => TorrentVersion::Hybrid,
             _ => TorrentVersion::V1,
         };
+        let proxy = build_proxy_from_cli(&cli);
         let config = SeederConfig {
             tracker_urls: cli.trackers,
             file_paths: cli.files,
@@ -105,6 +208,10 @@ async fn main() {
             version,
             torrent_file: cli.torrent_file,
             magnet: cli.magnet,
+            upload_limit: None,
+            proxy,
+            upnp: cli.upnp,
+            show_stats: true,
         };
         println!("=== BtSeed (Rust native) ===");
         if config.tracker_urls.is_empty() && config.torrent_file.is_none() && config.magnet.is_none() {
@@ -142,6 +249,19 @@ async fn main() {
                 std::process::exit(1);
             }
         };
+        if let Some(web_port) = cli.web_port {
+            let yaml_path = PathBuf::from("torrents.yaml");
+            let shared_file = Arc::new(RwLock::new(TorrentsFile::default()));
+            let shared_stats = new_shared_stats();
+            let (reload_tx, _reload_rx) = tokio::sync::watch::channel(());
+            let web_cfg = WebConfig {
+                port: web_port,
+                password: cli.web_password.clone(),
+                cert_path: cli.web_cert.clone(),
+                key_path: cli.web_key.clone(),
+            };
+            spawn_web_server(web_cfg, yaml_path, shared_file, shared_stats, reload_tx);
+        }
         let mut seeder = Seeder::new(config, torrent_info);
         if let Err(e) = seeder.run().await {
             eprintln!("Fatal: {}", e);
@@ -150,13 +270,32 @@ async fn main() {
     }
 }
 
-fn load_yaml_entries(path: &Path) -> Result<Vec<(String, SeederConfig)>, Box<dyn std::error::Error>> {
+fn load_yaml(path: &Path) -> Result<TorrentsFile, Box<dyn std::error::Error>> {
     let content = std::fs::read_to_string(path)?;
     let file: TorrentsFile = serde_yaml::from_str(&content)?;
+    Ok(file)
+}
+
+fn load_yaml_entries(
+    path: &Path,
+    proxy: Option<&ProxyConfig>,
+    upnp: bool,
+) -> Result<(TorrentsFile, Vec<(String, SeederConfig)>), Box<dyn std::error::Error>> {
+    let file = load_yaml(path)?;
+    let effective_proxy = proxy.or(file.config.proxy.as_ref());
+    let effective_upnp = upnp || file.config.upnp.unwrap_or(false);
+    let effective_show_stats = file.config.show_stats.unwrap_or(true);
     let mut result = Vec::new();
     for (i, entry) in file.torrents.iter().enumerate() {
-        match entry.to_seeder_config() {
-            Ok(cfg) => {
+        if !entry.enabled {
+            let label = entry.name.clone().unwrap_or_else(|| format!("torrent-{}", i));
+            println!("[{}] disabled — skipping", label);
+            continue;
+        }
+        match entry.to_seeder_config(effective_proxy) {
+            Ok(mut cfg) => {
+                cfg.upnp = effective_upnp;
+                cfg.show_stats = effective_show_stats;
                 let label = cfg
                     .name
                     .clone()
@@ -170,7 +309,7 @@ fn load_yaml_entries(path: &Path) -> Result<Vec<(String, SeederConfig)>, Box<dyn
             }
         }
     }
-    Ok(result)
+    Ok((file, result))
 }
 
 fn file_mtime(path: &Path) -> Option<SystemTime> {
@@ -216,30 +355,66 @@ async fn seed_one(label: String, config: SeederConfig) {
     }
 }
 
-async fn run_torrents_mode(yaml_path: PathBuf) {
+async fn run_torrents_mode(yaml_path: PathBuf, cli_proxy: Option<ProxyConfig>, cli_web: WebConfig, cli_upnp: bool) {
     println!("=== BtSeed (Rust native, multi-torrent mode) ===");
     println!("Config  : {}", yaml_path.display());
     println!();
-
+    if !yaml_path.exists() {
+        println!("[bt-seed] Creating empty config file: {}", yaml_path.display());
+        let empty = TorrentsFile::default();
+        let s = serde_yaml::to_string(&empty).expect("serialize empty TorrentsFile");
+        std::fs::write(&yaml_path, s).expect("write empty YAML");
+    }
     #[cfg(unix)]
     let mut sighup = {
         use tokio::signal::unix::{signal, SignalKind};
         signal(SignalKind::hangup()).expect("failed to install SIGHUP handler")
     };
-
+    let shared_file: Arc<RwLock<TorrentsFile>> = Arc::new(RwLock::new(TorrentsFile::default()));
+    let shared_stats = new_shared_stats();
+    let (reload_tx, mut reload_rx) = tokio::sync::watch::channel(());
+    let yaml_for_web = match load_yaml(&yaml_path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("[bt-seed] Failed to load {}: {}", yaml_path.display(), e);
+            std::process::exit(1);
+        }
+    };
+    let effective_web_port = if cli_web.port > 0 {
+        Some(cli_web.port)
+    } else {
+        yaml_for_web.config.web_port
+    };
+    if let Some(web_port) = effective_web_port {
+        let web_cfg = WebConfig {
+            port: web_port,
+            password: cli_web.password.or(yaml_for_web.config.web_password.clone()),
+            cert_path: cli_web.cert_path.or(yaml_for_web.config.web_cert.clone()),
+            key_path: cli_web.key_path.or(yaml_for_web.config.web_key.clone()),
+        };
+        let sf = Arc::clone(&shared_file);
+        let ss = Arc::clone(&shared_stats);
+        let rtx = reload_tx.clone();
+        let yp = yaml_path.clone();
+        spawn_web_server(web_cfg, yp, sf, ss, rtx);
+    }
     loop {
-        let entries = match load_yaml_entries(&yaml_path) {
+        let (file, entries) = match load_yaml_entries(&yaml_path, cli_proxy.as_ref(), cli_upnp) {
             Ok(e) => e,
             Err(e) => {
                 eprintln!("[bt-seed] Failed to load {}: {}", yaml_path.display(), e);
                 std::process::exit(1);
             }
         };
-        if entries.is_empty() {
-            eprintln!("[bt-seed] No valid torrent entries found in YAML — nothing to seed.");
-            std::process::exit(1);
+        {
+            let mut sf = shared_file.write().await;
+            *sf = file;
         }
-        println!("[bt-seed] Starting {} torrent(s)…", entries.len());
+        if entries.is_empty() {
+            println!("[bt-seed] No enabled torrent entries — waiting for changes…");
+        } else {
+            println!("[bt-seed] Starting {} torrent(s)…", entries.len());
+        }
         let handles: Vec<_> = entries
             .into_iter()
             .map(|(label, cfg)| tokio::spawn(seed_one(label, cfg)))
@@ -253,6 +428,10 @@ async fn run_torrents_mode(yaml_path: PathBuf) {
                     println!("[bt-seed] SIGHUP received — reloading…");
                     break 'wait true;
                 },
+                _ = reload_rx.changed() => {
+                    println!("[bt-seed] Web UI triggered reload…");
+                    break 'wait true;
+                },
                 _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {
                     if file_mtime(&yaml_path) != initial_mtime {
                         println!("[bt-seed] Config file changed on disk — reloading…");
@@ -263,6 +442,10 @@ async fn run_torrents_mode(yaml_path: PathBuf) {
             #[cfg(not(unix))]
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => break 'wait false,
+                _ = reload_rx.changed() => {
+                    println!("[bt-seed] Web UI triggered reload…");
+                    break 'wait true;
+                },
                 _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {
                     if file_mtime(&yaml_path) != initial_mtime {
                         println!("[bt-seed] Config file changed on disk — reloading…");

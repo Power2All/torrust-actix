@@ -1,5 +1,8 @@
 use crate::config::structs::seeder_config::SeederConfig;
-use crate::seeder::seeder::setup_handlers;
+use crate::seeder::seeder::{
+    setup_handlers,
+    SharedRateLimiter
+};
 use crate::seeder::structs::peer_conn::PeerConn;
 use crate::torrent::structs::torrent_info::TorrentInfo;
 use std::sync::atomic::AtomicU64;
@@ -15,6 +18,7 @@ impl PeerConn {
         config: &SeederConfig,
         torrent_info: Arc<TorrentInfo>,
         uploaded: Arc<AtomicU64>,
+        rate_limiter: Option<SharedRateLimiter>,
     ) -> Result<Self, webrtc::Error> {
         let ice_servers: Vec<RTCIceServer> = config
             .ice_servers
@@ -39,7 +43,7 @@ impl PeerConn {
         let data_channel = peer_connection
             .create_data_channel("torrent", Some(dc_init))
             .await?;
-        setup_handlers(Arc::clone(&data_channel), Arc::clone(&torrent_info), Arc::clone(&uploaded));
+        setup_handlers(Arc::clone(&data_channel), Arc::clone(&torrent_info), Arc::clone(&uploaded), rate_limiter);
         let offer = peer_connection.create_offer(None).await?;
         peer_connection.set_local_description(offer).await?;
         tokio::select! {

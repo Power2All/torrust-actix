@@ -1,15 +1,21 @@
+use crate::config::structs::proxy_config::ProxyConfig;
 use crate::tracker::structs::announce_response::AnnounceResponse;
 use crate::tracker::structs::http_client::TrackerClient;
-use crate::tracker::tracker::parse_announce_response;
+use crate::tracker::tracker::{
+    build_reqwest_client,
+    parse_announce_response
+};
 use crate::tracker::types::TRACKER_ENCODE_SET;
 use percent_encoding::percent_encode;
 
 impl TrackerClient {
-    pub fn new(tracker_url: String, info_hash: [u8; 20], peer_id: [u8; 20]) -> Self {
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .build()
-            .expect("failed to build reqwest client");
+    pub fn new(
+        tracker_url: String,
+        info_hash: [u8; 20],
+        peer_id: [u8; 20],
+        proxy: Option<&ProxyConfig>,
+    ) -> Self {
+        let http = build_reqwest_client(proxy);
         Self { tracker_url, info_hash, peer_id, http }
     }
 

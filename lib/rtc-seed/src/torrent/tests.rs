@@ -354,6 +354,9 @@ mod tests {
             version,
             torrent_file: None,
             magnet: None,
+            upload_limit: None,
+            proxy: None,
+            show_stats: true,
         }
     }
 

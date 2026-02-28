@@ -13,6 +13,10 @@ impl Default for SeederConfig {
             version: TorrentVersion::V1,
             torrent_file: None,
             magnet: None,
+            upload_limit: None,
+            proxy: None,
+            upnp: false,
+            show_stats: true,
         }
     }
 }

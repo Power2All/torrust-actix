@@ -2,8 +2,6 @@ use crate::torrent::enums::torrent_version::TorrentVersion;
 use crate::torrent::structs::file_entry::FileEntry;
 use crate::torrent::structs::torrent_info::TorrentInfo;
 use crate::torrent::types::QUERY_ENCODE;
-
-const CREATED_BY: &str = concat!("Torrust-Actix rtc-seed v", env!("CARGO_PKG_VERSION"));
 use percent_encoding::{
     percent_decode_str,
     utf8_percent_encode
@@ -28,9 +26,8 @@ use std::time::{
     UNIX_EPOCH
 };
 
-// ─── bencode parser helpers ────────────────────────────────────────────────
+const CREATED_BY: &str = concat!("Torrust-Actix rtc-seed v", env!("CARGO_PKG_VERSION"));
 
-/// Advance `pos` past one complete bencode value.
 fn bencode_end(data: &[u8], pos: usize) -> Result<usize, String> {
     if pos >= data.len() {
         return Err(format!("bencode_end: pos {} out of range (len {})", pos, data.len()));
@@ -51,9 +48,9 @@ fn bencode_end(data: &[u8], pos: usize) -> Result<usize, String> {
         b'd' => {
             let mut p = pos + 1;
             while p < data.len() && data[p] != b'e' {
-                p = bencode_end(data, p)?; // key
+                p = bencode_end(data, p)?;
                 if p >= data.len() || data[p] == b'e' { break; }
-                p = bencode_end(data, p)?; // value
+                p = bencode_end(data, p)?;
             }
             if p >= data.len() { return Err("unterminated dict".to_string()); }
             Ok(p + 1)
@@ -72,7 +69,6 @@ fn bencode_end(data: &[u8], pos: usize) -> Result<usize, String> {
     }
 }
 
-/// Read a bencode byte string at `pos`; returns `(bytes, new_pos)`.
 fn read_bstring(data: &[u8], pos: usize) -> Result<(&[u8], usize), String> {
     let colon = data[pos..].iter().position(|&b| b == b':').ok_or("no colon")?;
     let len: usize = std::str::from_utf8(&data[pos..pos + colon])
@@ -85,7 +81,6 @@ fn read_bstring(data: &[u8], pos: usize) -> Result<(&[u8], usize), String> {
     Ok((&data[start..end], end))
 }
 
-/// Read a bencode integer at `pos`; returns `(value, new_pos)`.
 fn read_bint(data: &[u8], pos: usize) -> Result<(i64, usize), String> {
     if pos >= data.len() || data[pos] != b'i' {
         return Err(format!("expected 'i' at pos {}", pos));
@@ -95,8 +90,6 @@ fn read_bint(data: &[u8], pos: usize) -> Result<(i64, usize), String> {
     let n: i64 = s.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
     Ok((n, pos + rel + 1))
 }
-
-// ─── Parsed torrent metadata ────────────────────────────────────────────────
 
 pub struct ParsedTorrentMeta {
     pub info_hash: [u8; 20],
@@ -108,7 +101,6 @@ pub struct ParsedTorrentMeta {
     pub total_size: u64,
 }
 
-/// Parse a .torrent file (raw bytes). Returns metadata for seeding.
 pub fn parse_torrent_meta(data: &[u8]) -> Result<ParsedTorrentMeta, String> {
     if data.is_empty() || data[0] != b'd' {
         return Err("torrent file must start with a bencode dict".to_string());
@@ -116,7 +108,6 @@ pub fn parse_torrent_meta(data: &[u8]) -> Result<ParsedTorrentMeta, String> {
     let mut tracker_urls: Vec<String> = Vec::new();
     let mut info_raw: Option<&[u8]> = None;
     let mut pos = 1usize;
-    // parse top-level dict
     while pos < data.len() && data[pos] != b'e' {
         let (key, after_key) = read_bstring(data, pos)?;
         pos = after_key;
@@ -284,7 +275,6 @@ pub fn parse_torrent_meta(data: &[u8]) -> Result<ParsedTorrentMeta, String> {
     Ok(ParsedTorrentMeta { info_hash, tracker_urls, name, piece_length, pieces, files, total_size })
 }
 
-/// Parse tracker URLs (and optionally the info_hash + name) from a magnet URI.
 pub fn parse_magnet(uri: &str) -> (Vec<String>, Option<[u8; 20]>, Option<String>) {
     let mut trackers: Vec<String> = Vec::new();
     let mut info_hash: Option<[u8; 20]> = None;
@@ -315,8 +305,6 @@ pub fn parse_magnet(uri: &str) -> (Vec<String>, Option<[u8; 20]>, Option<String>
     }
     (trackers, info_hash, name)
 }
-
-// ─── torrent building helpers ───────────────────────────────────────────────
 
 pub fn hash_pieces(
     files: &[FileEntry],
@@ -413,7 +401,6 @@ pub fn build_info_bencode(
     out
 }
 
-/// Build the top-level bencode for a v1 torrent (BEP-12 announce-list support).
 pub fn build_torrent_bencode(
     info_bytes: &[u8],
     tracker_urls: &[String],
@@ -702,7 +689,6 @@ pub fn build_hybrid_info_bencode(
     out
 }
 
-/// Build the top-level bencode for a v2/hybrid torrent (BEP-12 announce-list support).
 pub fn build_v2_torrent_bencode(
     info_bytes: &[u8],
     tracker_urls: &[String],
@@ -771,8 +757,6 @@ pub fn build_hybrid_magnet_uri(v1_hex: &str, v2_hex: &str, name: &str, tracker_u
     }
     uri
 }
-
-// ─── high-level build functions ─────────────────────────────────────────────
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_v1(

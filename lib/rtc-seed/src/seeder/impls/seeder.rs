@@ -1,13 +1,17 @@
 use crate::config::structs::seeder_config::SeederConfig;
 use crate::seeder::seeder::{
     fmt_bytes,
-    generate_peer_id
+    generate_peer_id,
+    SharedRateLimiter
 };
 use crate::seeder::structs::peer_conn::PeerConn;
 use crate::seeder::structs::seeder::Seeder;
 use crate::torrent::structs::torrent_info::TorrentInfo;
 use crate::tracker::structs::http_client::TrackerClient;
+use governor::Quota;
+use governor::RateLimiter;
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::sync::atomic::{
     AtomicU64,
@@ -44,48 +48,50 @@ impl Seeder {
         }
         println!("\nMagnet URI:\n{}\n", self.torrent_info.magnet_uri);
         println!("Share the magnet URI or the .torrent file with leechers.\n");
-
+        let rate_limiter: Option<SharedRateLimiter> =
+            self.config.upload_limit.and_then(|kbs| {
+                NonZeroU32::new(kbs as u32 * 1024).map(|quota_cells| {
+                    Arc::new(RateLimiter::direct(Quota::per_second(quota_cells)))
+                })
+            });
         print!("Creating WebRTC offer (gathering ICE candidates)… ");
         let mut current_pc = PeerConn::new(
             &self.config,
             Arc::clone(&self.torrent_info),
             Arc::clone(&self.uploaded),
+            rate_limiter.clone(),
         )
         .await?;
         println!("done.");
         println!("Seeding… (Ctrl+C to stop)\n");
-
-        let peers_clone = Arc::clone(&self.peers);
-        let uploaded_clone = Arc::clone(&self.uploaded);
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-                let peers = peers_clone.lock().await;
-                let peer_count = peers.len();
-                drop(peers);
-                let up = uploaded_clone.load(Ordering::Relaxed);
-                let now = chrono::Local::now();
-                println!(
-                    "[{}] peers: {}  uploaded: {}",
-                    now.format("%H:%M:%S"),
-                    peer_count,
-                    fmt_bytes(up)
-                );
-            }
-        });
-
-        // Try each tracker in order (BEP-12); use the first responsive one.
+        if self.config.show_stats {
+            let peers_clone = Arc::clone(&self.peers);
+            let uploaded_clone = Arc::clone(&self.uploaded);
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                    let peers = peers_clone.lock().await;
+                    let peer_count = peers.len();
+                    drop(peers);
+                    let up = uploaded_clone.load(Ordering::Relaxed);
+                    let now = chrono::Local::now();
+                    println!(
+                        "[{}] peers: {}  uploaded: {}",
+                        now.format("%H:%M:%S"),
+                        peer_count,
+                        fmt_bytes(up)
+                    );
+                }
+            });
+        }
         let tracker_opt = self.pick_tracker().await;
-
         let mut event = "started";
         let mut rtc_interval_ms = self.config.rtc_interval_ms;
         loop {
             let uploaded = self.uploaded.load(Ordering::Relaxed);
-            // Determine which tracker to announce to this cycle.
             let tracker = match &tracker_opt {
                 Some(t) => t,
                 None => {
-                    // No tracker — just wait and keep serving.
                     tokio::time::sleep(std::time::Duration::from_millis(rtc_interval_ms)).await;
                     continue;
                 }
@@ -108,6 +114,7 @@ impl Seeder {
                             &self.config,
                             Arc::clone(&self.torrent_info),
                             Arc::clone(&self.uploaded),
+                            rate_limiter.clone(),
                         )
                         .await
                         {
@@ -131,27 +138,23 @@ impl Seeder {
                     log::warn!("[Tracker] Announce failed: {}", e);
                 }
             }
-
             tokio::time::sleep(std::time::Duration::from_millis(rtc_interval_ms)).await;
         }
     }
 
-    /// Try each tracker URL; return the first one that successfully responds to a ping.
-    /// Returns None if no trackers are configured.
     async fn pick_tracker(&self) -> Option<TrackerClient> {
         let urls = &self.torrent_info.tracker_urls;
         if urls.is_empty() {
             log::info!("[Tracker] No tracker configured — seeding without announcing.");
             return None;
         }
-        // For rtc-seed we just pick the first tracker and let announce errors be logged.
-        // A full BEP-12 retry-on-failure loop would require restructuring the announce loop.
         let url = &urls[0];
         log::info!("[Tracker] Using tracker: {}", url);
         Some(TrackerClient::new(
             url.clone(),
             self.torrent_info.info_hash,
             self.peer_id,
+            self.config.proxy.as_ref(),
         ))
     }
 }

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rtc-seed — Web Management</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/semantic-ui@2.5.0/dist/semantic.min.css">
+  <style>
+    body { padding: 20px; background: #f5f5f5; }
+    .container { max-width: 1100px; margin: 0 auto; }
+    .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    #add-form { display: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header-row">
+    <h2 class="ui header" style="margin:0">
+      <i class="wifi icon"></i>
+      <div class="content">rtc-seed Management
+        <div class="sub header" id="status-text">Loading…</div>
+      </div>
+    </h2>
+    <button class="ui primary button" onclick="toggleAddForm()">
+      <i class="plus icon"></i>Add Torrent
+    </button>
+  </div>
+
+  <!-- Add Torrent Form -->
+  <div class="ui segment" id="add-form">
+    <h4 class="ui dividing header">Add New Torrent</h4>
+    <form class="ui form" id="form-add">
+      <div class="four fields">
+        <div class="field">
+          <label>Name (optional)</label>
+          <input type="text" id="f-name" placeholder="My torrent">
+        </div>
+        <div class="field">
+          <label>Output .torrent file (optional)</label>
+          <input type="text" id="f-out" placeholder="/path/to/output.torrent">
+        </div>
+        <div class="field">
+          <label>Upload Limit (KB/s, blank = unlimited)</label>
+          <input type="number" id="f-upload-limit" placeholder="512" min="1">
+        </div>
+        <div class="field">
+          <label>Torrent Version</label>
+          <select id="f-version" class="ui dropdown">
+            <option value="v1">v1 (SHA-1, default)</option>
+            <option value="v2">v2 (SHA-256 Merkle)</option>
+            <option value="hybrid">hybrid (v1 + v2)</option>
+          </select>
+        </div>
+      </div>
+      <div class="two fields">
+        <div class="field">
+          <label>Path (file or folder — folder is scanned recursively)</label>
+          <input type="text" id="f-path" placeholder="/path/to/file.mkv  or  /path/to/MyCollection/">
+        </div>
+        <div class="field">
+          <label>Trackers (one per line, optional — auto-read from .torrent file if blank)</label>
+          <textarea id="f-trackers" rows="3" placeholder="http://tracker.example.com/announce"></textarea>
+        </div>
+      </div>
+      <div class="two fields">
+        <div class="field">
+          <label>Torrent File (pre-existing .torrent)</label>
+          <input type="text" id="f-torrent-file" placeholder="/path/to/existing.torrent">
+        </div>
+        <div class="field">
+          <label>Magnet URI</label>
+          <input type="text" id="f-magnet" placeholder="magnet:?xt=urn:btih:…">
+        </div>
+      </div>
+      <div class="field">
+        <div class="ui toggle checkbox">
+          <input type="checkbox" id="f-enabled" checked>
+          <label>Enabled</label>
+        </div>
+      </div>
+      <button class="ui green button" type="button" onclick="addTorrent()">
+        <i class="check icon"></i>Add
+      </button>
+      <button class="ui button" type="button" onclick="toggleAddForm()">Cancel</button>
+    </form>
+  </div>
+
+  <!-- Torrent Table -->
+  <div class="ui segment">
+    <table class="ui celled table" id="torrent-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Version</th>
+          <th>Enabled</th>
+          <th>Upload Limit</th>
+          <th>Uploaded</th>
+          <th>Peers</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="torrent-tbody">
+        <tr><td colspan="6" class="center aligned">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/semantic-ui@2.5.0/dist/semantic.min.js"></script>
+<script>
+let torrents = [];
+let stats = {};
+
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+  if (n < 1024*1024*1024) return (n/1024/1024).toFixed(1) + ' MB';
+  return (n/1024/1024/1024).toFixed(2) + ' GB';
+}
+
+async function loadTorrents() {
+  try {
+    const r = await fetch('/api/torrents');
+    torrents = await r.json();
+    renderTable();
+  } catch(e) {
+    document.getElementById('torrent-tbody').innerHTML =
+      '<tr><td colspan="7" class="center aligned negative">Failed to load torrents: ' + e.message + '</td></tr>';
+  }
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch('/api/status');
+    const data = await r.json();
+    stats = data.torrents || {};
+    document.getElementById('status-text').textContent =
+      'Active seeders: ' + Object.keys(stats).length;
+    renderTable();
+  } catch(e) {}
+}
+
+function renderTable() {
+  if (torrents.length === 0) {
+    document.getElementById('torrent-tbody').innerHTML =
+      '<tr><td colspan="7" class="center aligned">No torrents configured.</td></tr>';
+    return;
+  }
+  let html = '';
+  torrents.forEach((t, i) => {
+    const name = t.name || (t.file && t.file[0]) || t.torrent_file || t.magnet || 'torrent-' + i;
+    const st = stats[name] || {};
+    const uploaded = st.uploaded !== undefined ? fmtBytes(st.uploaded) : '—';
+    const peers = st.peer_count !== undefined ? st.peer_count : '—';
+    const enabledLabel = t.enabled
+      ? '<span class="ui green label">Yes</span>'
+      : '<span class="ui grey label">No</span>';
+    const limit = t.upload_limit ? t.upload_limit + ' KB/s' : '<em>unlimited</em>';
+    const version = t.version || 'v1';
+    html += `<tr style="${t.enabled ? '' : 'opacity:0.55'}">
+      <td><strong>${escHtml(name)}</strong></td>
+      <td><span class="ui tiny label">${escHtml(version)}</span></td>
+      <td>${enabledLabel}</td>
+      <td>${limit}</td>
+      <td>${uploaded}</td>
+      <td>${peers}</td>
+      <td>
+        <button class="ui mini button" onclick="toggleEnabled(${i})">
+          ${t.enabled ? 'Disable' : 'Enable'}
+        </button>
+        <button class="ui mini red button" onclick="deleteTorrent(${i})">
+          <i class="trash icon"></i>Delete
+        </button>
+      </td>
+    </tr>`;
+  });
+  document.getElementById('torrent-tbody').innerHTML = html;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toggleAddForm() {
+  const f = document.getElementById('add-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+async function addTorrent() {
+  const path = document.getElementById('f-path').value.trim();
+  const trackers = document.getElementById('f-trackers').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const entry = {
+    name: document.getElementById('f-name').value.trim() || null,
+    out: document.getElementById('f-out').value.trim() || null,
+    file: path ? [path] : [],
+    trackers,
+    torrent_file: document.getElementById('f-torrent-file').value.trim() || null,
+    magnet: document.getElementById('f-magnet').value.trim() || null,
+    enabled: document.getElementById('f-enabled').checked,
+    upload_limit: parseInt(document.getElementById('f-upload-limit').value) || null,
+    webseed: null,
+    ice: null,
+    rtc_interval: null,
+    version: document.getElementById('f-version').value,
+  };
+  const r = await fetch('/api/torrents', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(entry),
+  });
+  if (r.ok) {
+    toggleAddForm();
+    await loadTorrents();
+  } else {
+    alert('Failed to add torrent: ' + await r.text());
+  }
+}
+
+async function toggleEnabled(i) {
+  const t = {...torrents[i], enabled: !torrents[i].enabled};
+  const r = await fetch('/api/torrents/' + i, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(t),
+  });
+  if (r.ok) {
+    await loadTorrents();
+  } else {
+    alert('Failed to update torrent: ' + await r.text());
+  }
+}
+
+async function deleteTorrent(i) {
+  if (!confirm('Delete torrent entry ' + i + '?')) return;
+  const r = await fetch('/api/torrents/' + i, { method: 'DELETE' });
+  if (r.ok) {
+    await loadTorrents();
+  } else {
+    alert('Failed to delete: ' + await r.text());
+  }
+}
+
+(async () => {
+  await loadTorrents();
+  await loadStats();
+})();
+
+setInterval(loadStats, 5000);
+$(document).ready(() => { $('.ui.checkbox').checkbox(); });
+</script>
+</body>
+</html>

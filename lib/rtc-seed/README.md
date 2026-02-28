@@ -45,6 +45,15 @@ rtc-seed [OPTIONS] <FILE>...
 | `--ice <URL>` | Google STUN servers | ICE server URL; repeat for multiple |
 | `--rtc-interval <MS>` | `5000` | Tracker announce poll interval (milliseconds) |
 | `--torrent-version` | `v1` | Torrent format: `v1`, `v2`, or `hybrid` (see below) |
+| `--web-port <PORT>` | *(disabled)* | Enable the web management UI on this port |
+| `--web-password <PASS>` | *(none)* | Protect the web UI with HTTP Basic Auth |
+| `--web-cert <FILE>` | *(none)* | PEM certificate file — enables HTTPS for the web UI |
+| `--web-key <FILE>` | *(none)* | PEM private key file — required when `--web-cert` is set |
+| `--proxy-type <TYPE>` | *(none)* | Proxy type for tracker announces: `http`, `http_auth`, `socks4`, `socks5`, `socks5_auth` |
+| `--proxy-host <HOST>` | *(none)* | Proxy hostname or IP |
+| `--proxy-port <PORT>` | *(none)* | Proxy port |
+| `--proxy-user <USER>` | *(none)* | Proxy username (required for `http_auth` / `socks5_auth`) |
+| `--proxy-pass <PASS>` | *(none)* | Proxy password |
 
 ### Multi-torrent mode (YAML)
 
@@ -135,6 +144,37 @@ When `--torrents` is used, all single-torrent flags are forbidden.
   video.mp4
 ```
 
+### Seed with the web UI enabled
+
+```bash
+./target/debug/rtc-seed \
+  --torrents torrents.yaml \
+  --web-port 8091
+# Open http://localhost:8091 in a browser to manage torrents live.
+```
+
+### Seed with the web UI + password + HTTPS
+
+```bash
+./target/debug/rtc-seed \
+  --torrents torrents.yaml \
+  --web-port 8091 \
+  --web-password secret \
+  --web-cert cert.pem \
+  --web-key key.pem
+```
+
+### Seed with a SOCKS5 proxy for tracker announces
+
+```bash
+./target/debug/rtc-seed \
+  --tracker http://tracker.example.com/announce \
+  --proxy-type socks5 \
+  --proxy-host 127.0.0.1 \
+  --proxy-port 1080 \
+  video.mp4
+```
+
 ### Seed multiple torrents from a YAML file
 
 ```bash
@@ -149,12 +189,25 @@ Create a YAML file and pass it with `--torrents`. Each entry in the `torrents` l
 
 ```yaml
 ---
+# Optional global config (all fields are optional)
+config:
+  web_port: 8091                        # enables the web management UI
+  web_password: "secret"                # HTTP Basic Auth (omit for no auth)
+  web_cert: "/etc/ssl/certs/cert.pem"   # enables HTTPS (omit for plain HTTP)
+  web_key: "/etc/ssl/private/key.pem"
+  proxy:
+    proxy_type: socks5                  # http | http_auth | socks4 | socks5 | socks5_auth
+    host: "127.0.0.1"
+    port: 1080
+    username: "user"                    # optional (needed for http_auth, socks5_auth)
+    password: "pass"
+
 torrents:
   # Minimal entry — seed without announcing to any tracker
   - file:
       - "/data/movies/big_buck_bunny.mp4"
 
-  # BEP-12 multi-tracker (all listed in announce-list)
+  # BEP-12 multi-tracker with upload cap and torrent version
   - out: "/var/torrents/sunflower.torrent"
     name: "Sunflower 1080p"
     file:
@@ -168,6 +221,14 @@ torrents:
       - "stun:stun.l.google.com:19302"
     rtc_interval: 10000
     version: hybrid
+    upload_limit: 2048                  # cap upload at 2048 KB/s (2 MB/s)
+
+  # Temporarily disable a torrent without removing it
+  - file:
+      - "/data/movies/old_movie.mp4"
+    trackers:
+      - "http://tracker.example.com:6969/announce"
+    enabled: false
 
   # Re-seed from an existing .torrent (no re-hashing, trackers read from file)
   - torrent_file: "/var/torrents/movie.torrent"
@@ -183,7 +244,7 @@ torrents:
       - "/data/movies/movie.mp4"
 ```
 
-### Field reference
+### Per-torrent field reference
 
 | Field | Required | Description |
 |---|---|---|
@@ -197,12 +258,118 @@ torrents:
 | `ice` | no | ICE server URLs (default: Google STUN servers) |
 | `rtc_interval` | no | Announce poll interval in **milliseconds** (default: `5000`) |
 | `version` | no | Torrent format: `"v1"` (default), `"v2"`, or `"hybrid"` |
+| `enabled` | no | Set to `false` to skip this torrent without removing it from the config (default: `true`) |
+| `upload_limit` | no | Upload speed cap in **KB/s** for this torrent (omit for unlimited) |
+
+### Global config field reference (`config:`)
+
+| Field | Description |
+|---|---|
+| `web_port` | Port for the web management UI; omit to disable the UI |
+| `web_password` | HTTP Basic Auth password; omit for no authentication |
+| `web_cert` | PEM certificate path — enables HTTPS |
+| `web_key` | PEM private key path — required when `web_cert` is set |
+| `proxy.proxy_type` | `http` \| `http_auth` \| `socks4` \| `socks5` \| `socks5_auth` |
+| `proxy.host` | Proxy hostname or IP |
+| `proxy.port` | Proxy port |
+| `proxy.username` | Proxy username (optional) |
+| `proxy.password` | Proxy password (optional) |
+
+CLI flags (`--proxy-*`, `--web-*`) override the corresponding `config:` values when both are present.
+
+---
+
+## Web Management Interface
+
+When `--web-port` is set (or `config.web_port` in YAML), rtc-seed starts an embedded Actix-web server serving a browser-based management UI.
+
+### Features
+
+- **Live torrent table** — shows each torrent's name, enabled state, upload cap, bytes uploaded, and current peer count; auto-refreshes every 5 seconds
+- **Add torrent** — fill in the form to append a new entry to the YAML and start seeding immediately (no restart required)
+- **Edit torrent** — update any field inline; changes are written to YAML and the seeder reloads
+- **Toggle enabled** — one-click enable/disable without removing the entry from the config
+- **Delete torrent** — removes the entry from the YAML and stops seeding it
+
+### REST API
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Web UI (HTML page) |
+| `GET` | `/api/status` | JSON: per-torrent `uploaded` bytes and `peer_count` |
+| `GET` | `/api/torrents` | JSON: full `TorrentsFile.torrents` list |
+| `POST` | `/api/torrents` | Append a new torrent entry (JSON body) |
+| `PUT` | `/api/torrents/{idx}` | Replace the entry at index `idx` (JSON body) |
+| `DELETE` | `/api/torrents/{idx}` | Remove the entry at index `idx` |
+
+All mutating endpoints write the updated YAML to disk and trigger an in-process reload.
+
+### Authentication
+
+Set `config.web_password` (or `--web-password`) to enable HTTP Basic Auth.
+Username can be any non-empty string; only the password is checked.
+
+### HTTPS
+
+Provide `web_cert` and `web_key` (PEM format) to serve the UI over HTTPS.
+If only one is provided, the UI falls back to plain HTTP and a warning is logged.
+
+Generate a self-signed certificate for local testing:
+
+```bash
+openssl req -x509 -newkey rsa:2048 \
+  -keyout key.pem -out cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+```
+
+---
+
+## Upload Rate Limiting
+
+Set `upload_limit` (KB/s) in a torrent entry to cap the upload speed for that torrent.
+The limit is enforced per-connection using a token-bucket rate limiter (governor crate).
+
+```yaml
+torrents:
+  - file: ["/data/movies/big_file.mp4"]
+    trackers: ["http://tracker.example.com/announce"]
+    upload_limit: 1024   # max 1 MB/s upload for this torrent
+```
+
+Omit `upload_limit` (or set it to `null`) for unlimited upload speed.
+
+---
+
+## Proxy Support
+
+rtc-seed can route tracker HTTP announces through a proxy.
+Configure it in the `config:` section of the YAML or via `--proxy-*` CLI flags.
+
+```yaml
+config:
+  proxy:
+    proxy_type: socks5
+    host: "127.0.0.1"
+    port: 1080
+```
+
+Supported proxy types:
+
+| `proxy_type` | Protocol |
+|---|---|
+| `http` | HTTP CONNECT proxy (no auth) |
+| `http_auth` | HTTP CONNECT proxy with Basic Auth |
+| `socks4` | SOCKS4 |
+| `socks5` | SOCKS5 (no auth) |
+| `socks5_auth` | SOCKS5 with username/password |
+
+The proxy applies to **tracker HTTP announces only**. WebRTC ICE/DTLS connections use their own ICE/STUN negotiation and are not affected.
 
 ---
 
 ## Reloading the YAML config
 
-The Rust seeder supports **true in-process reload** — the process stays alive and all
+rtc-seed supports **true in-process reload** — the process stays alive and all
 seeder tasks are restarted without any process exit or process manager involvement.
 
 This is possible because each torrent runs as an independent `tokio::spawn` task.
@@ -215,6 +382,7 @@ On reload, every task handle is `.abort()`ed (Tokio cancels the future at its ne
 |---|---|---|
 | **Linux / macOS** | `kill -HUP <pid>` | SIGHUP via `tokio::signal::unix` |
 | **Windows + all** | Save the YAML file | File mtime polled every 2 s |
+| **Any** | Web UI add / edit / delete / toggle | REST API writes YAML and signals reload |
 | **Any** | `Ctrl+C` | Clean shutdown — all tasks aborted, process exits |
 
 ### Console output on reload
@@ -233,6 +401,21 @@ On reload, every task handle is `.abort()`ed (Tokio cancels the future at its ne
 If the YAML contains a syntax error after reload, the old tasks are still aborted
 (there is no rollback to the previous config). Fix the file and trigger another
 reload to recover.
+
+### Empty YAML auto-creation
+
+If `--torrents` points to a file that does not exist, rtc-seed creates an empty
+`torrents.yaml` automatically and starts the web UI (if `--web-port` is set).
+You can then add torrents through the browser without touching the file manually.
+
+You can also omit `--torrents` entirely. If `--web-port` is given but no files
+are provided, rtc-seed automatically creates `torrents.yaml` in the current
+directory and enters multi-torrent mode with an empty list:
+
+```bash
+rtc-seed --web-port 8091
+# Open http://localhost:8091 and add torrents through the browser.
+```
 
 ### Contrast with the Node.js seeder
 
@@ -307,7 +490,8 @@ torrents:
 4. **Announces to the tracker** — sends an SDP WebRTC offer in the announce query (`rtctorrent=1&rtcoffer=...`).
 5. **Waits for leechers** — polls the tracker on each `--rtc-interval`; when an SDP answer arrives it completes the WebRTC handshake.
 6. **Serves pieces on demand** — leechers request pieces over the data channel; the seeder reads from disk and sends them. No full-file buffering in RAM.
-7. **Prints upload stats** every 10 seconds: `[HH:MM:SS] peers: N  uploaded: X MB`.
+7. **Enforces upload cap** — if `upload_limit` is set, blocks the send loop with a token-bucket rate limiter before each piece.
+8. **Prints upload stats** every 10 seconds: `[HH:MM:SS] peers: N  uploaded: X MB`.
 
 ---
 

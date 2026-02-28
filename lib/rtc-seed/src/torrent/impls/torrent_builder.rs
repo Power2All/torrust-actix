@@ -15,23 +15,17 @@ use std::io;
 
 impl TorrentBuilder {
     pub fn build(config: &SeederConfig) -> io::Result<TorrentInfo> {
-        // ── resolve tracker URLs ──────────────────────────────────────────
         let mut tracker_urls: Vec<String> = config.tracker_urls.clone();
-
-        // If a torrent file is provided, parse it to get tracker URLs
-        // and build TorrentInfo directly from it (no re-hashing).
         if let Some(torrent_path) = &config.torrent_file {
             let data = std::fs::read(torrent_path)
                 .map_err(|e| io::Error::other(format!("reading {}: {}", torrent_path.display(), e)))?;
             let meta = parse_torrent_meta(&data)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
             for url in meta.tracker_urls {
                 if !tracker_urls.contains(&url) {
                     tracker_urls.push(url);
                 }
             }
-
             let files: Vec<FileEntry> = if !config.file_paths.is_empty() {
                 config
                     .file_paths
@@ -57,7 +51,6 @@ impl TorrentBuilder {
                     })
                     .collect()
             };
-
             let name = config.name.clone().unwrap_or(meta.name);
             let magnet_uri = build_magnet_uri_simple(&hex::encode(meta.info_hash), &name, &tracker_urls);
             return Ok(TorrentInfo {
@@ -79,8 +72,6 @@ impl TorrentBuilder {
                 tracker_urls,
             });
         }
-
-        // If a magnet URI is provided, parse its tracker URLs.
         if let Some(magnet_uri) = &config.magnet {
             let (mag_trackers, _mag_hash, _mag_name) = parse_magnet(magnet_uri);
             for url in mag_trackers {
@@ -89,34 +80,38 @@ impl TorrentBuilder {
                 }
             }
         }
-
-        // ── build from files ──────────────────────────────────────────────
         assert!(!config.file_paths.is_empty(), "no files provided");
+        // Compute name from the original paths before directory expansion
+        let name = config.name.clone().unwrap_or_else(|| {
+            config.file_paths[0]
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "torrent".to_string())
+        });
         let mut files: Vec<FileEntry> = Vec::new();
         let mut total_size: u64 = 0;
         for p in &config.file_paths {
             let meta = std::fs::metadata(p)?;
-            let length = meta.len();
-            let name: Vec<String> = p
-                .file_name()
-                .map(|n| vec![n.to_string_lossy().into_owned()])
-                .unwrap_or_else(|| vec!["file".to_string()]);
-            files.push(FileEntry { path: p.clone(), name, length, offset: total_size });
-            total_size += length;
+            if meta.is_dir() {
+                let mut dir_files: Vec<(std::path::PathBuf, Vec<String>)> = Vec::new();
+                collect_dir_files(p, p, &mut dir_files)?;
+                for (file_path, name_parts) in dir_files {
+                    let length = std::fs::metadata(&file_path)?.len();
+                    files.push(FileEntry { path: file_path, name: name_parts, length, offset: total_size });
+                    total_size += length;
+                }
+            } else {
+                let length = meta.len();
+                let name_parts = p
+                    .file_name()
+                    .map(|n| vec![n.to_string_lossy().into_owned()])
+                    .unwrap_or_else(|| vec!["file".to_string()]);
+                files.push(FileEntry { path: p.clone(), name: name_parts, length, offset: total_size });
+                total_size += length;
+            }
         }
         let piece_length: u64 = if total_size <= 8 * 1024 * 1024 { 16 * 1024 } else { 32 * 1024 };
         let piece_count = (total_size as f64 / piece_length as f64).ceil() as usize;
-        let name = config.name.clone().unwrap_or_else(|| {
-            if files.len() == 1 {
-                files[0].path.file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "torrent".to_string())
-            } else {
-                files[0].path.file_stem()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "torrent".to_string())
-            }
-        });
         let creation_date = torrent_creation_date();
         match config.version {
             TorrentVersion::V1 => {
@@ -132,8 +127,31 @@ impl TorrentBuilder {
     }
 }
 
+fn collect_dir_files(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    out: &mut Vec<(std::path::PathBuf, Vec<String>)>,
+) -> io::Result<()> {
+    let mut entries: Vec<_> = std::fs::read_dir(dir)?.collect::<io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|e| e.file_name());
+    for entry in entries {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_dir_files(root, &path, out)?;
+        } else {
+            let rel = path.strip_prefix(root).unwrap_or(&path);
+            let name_parts: Vec<String> = rel
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect();
+            out.push((path, name_parts));
+        }
+    }
+    Ok(())
+}
+
 fn build_magnet_uri_simple(hash_hex: &str, name: &str, tracker_urls: &[String]) -> String {
-    use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+    use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
     let encoded_name = utf8_percent_encode(name, NON_ALPHANUMERIC).to_string();
     let mut uri = format!("magnet:?xt=urn:btih:{}&dn={}", hash_hex, encoded_name);
     for url in tracker_urls {

@@ -1,3 +1,4 @@
+use crate::config::structs::proxy_config::ProxyConfig;
 use crate::tracker::structs::announce_response::AnnounceResponse;
 use bip_bencode::{
     BDecodeOpt,
@@ -5,6 +6,34 @@ use bip_bencode::{
     BencodeRef
 };
 use std::net::Ipv4Addr;
+
+pub fn build_reqwest_client(proxy: Option<&ProxyConfig>) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15));
+    if let Some(p) = proxy {
+        let scheme = match p.proxy_type.as_str() {
+            "http" | "http_auth" => "http",
+            "socks4" => "socks4",
+            "socks5" | "socks5_auth" => "socks5",
+            other => {
+                log::warn!("[Proxy] Unknown proxy type '{}' — ignoring proxy", other);
+                return builder.build().expect("failed to build reqwest client");
+            }
+        };
+        let proxy_url = format!("{}://{}:{}", scheme, p.host, p.port);
+        match reqwest::Proxy::all(&proxy_url) {
+            Ok(mut proxy_cfg) => {
+                if let (Some(user), Some(pass)) = (&p.username, &p.password) {
+                    proxy_cfg = proxy_cfg.basic_auth(user, pass);
+                }
+                builder = builder.proxy(proxy_cfg);
+            }
+            Err(e) => {
+                log::warn!("[Proxy] Failed to build proxy '{}': {} — ignoring", proxy_url, e);
+            }
+        }
+    }
+    builder.build().expect("failed to build reqwest client")
+}
 
 pub fn parse_http_announce_response(body: &[u8]) -> AnnounceResponse {
     let mut out = AnnounceResponse::default();

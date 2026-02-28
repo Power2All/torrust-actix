@@ -14,6 +14,12 @@ use crate::seeder::types::{
     MSG_UNCHOKE
 };
 use crate::torrent::structs::torrent_info::TorrentInfo;
+use governor::clock::DefaultClock;
+use governor::state::{
+    InMemoryState,
+    NotKeyed
+};
+use governor::RateLimiter;
 use rand::RngExt;
 use std::fs::File;
 use std::io::{
@@ -22,6 +28,7 @@ use std::io::{
     SeekFrom
 };
 use std::net::SocketAddr;
+use std::num::NonZeroU32;
 use std::sync::atomic::{
     AtomicU64,
     AtomicUsize,
@@ -33,6 +40,8 @@ use tokio::io::{
     AsyncWriteExt
 };
 use tokio::net::TcpStream;
+
+pub type SharedRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
 
 pub fn generate_peer_id() -> [u8; 20] {
     let prefix = b"-BS1000-";
@@ -154,6 +163,7 @@ pub async fn handle_peer(
     torrent_info: Arc<TorrentInfo>,
     uploaded: Arc<AtomicU64>,
     peer_count: Arc<AtomicUsize>,
+    rate_limiter: Option<SharedRateLimiter>,
 ) {
     let mut hs_buf = [0u8; BT_HANDSHAKE_LEN];
     if let Err(e) = stream.read_exact(&mut hs_buf).await {
@@ -218,6 +228,11 @@ pub async fn handle_peer(
                         log::debug!("[BT] Request: piece={} begin={} len={}", index, begin, length);
                         match read_block(&torrent_info, index as usize, begin as u64, length as usize) {
                             Ok(data) => {
+                                if let Some(rl) = &rate_limiter {
+                                    let n = NonZeroU32::new(data.len() as u32)
+                                        .unwrap_or(NonZeroU32::MIN);
+                                    rl.until_n_ready(n).await.ok();
+                                }
                                 let bytes_sent = data.len() as u64;
                                 if let Err(e) = send_piece_block(&mut stream, index, begin, &data).await {
                                     log::debug!("[BT] Send error to {}: {}", addr, e);

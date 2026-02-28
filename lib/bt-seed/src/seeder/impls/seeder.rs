@@ -2,18 +2,22 @@ use crate::config::structs::seeder_config::SeederConfig;
 use crate::seeder::seeder::{
     fmt_bytes,
     generate_peer_id,
-    handle_peer
+    handle_peer,
+    SharedRateLimiter
 };
 use crate::seeder::structs::seeder::Seeder;
 use crate::torrent::structs::torrent_info::TorrentInfo;
 use crate::tracker::structs::tracker_client::TrackerClient;
+use governor::Quota;
+use governor::RateLimiter;
+use std::num::NonZeroU32;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{
     AtomicU64,
     AtomicUsize,
     Ordering
 };
+use std::sync::Arc;
 
 impl Seeder {
     pub fn new(config: SeederConfig, torrent_info: TorrentInfo) -> Self {
@@ -47,22 +51,63 @@ impl Seeder {
         let listen_addr = format!("0.0.0.0:{}", self.config.listen_port);
         let listener = tokio::net::TcpListener::bind(&listen_addr).await?;
         println!("Seeding… on {} (Ctrl+C to stop)\n", listen_addr);
+        let rate_limiter: Option<SharedRateLimiter> =
+            self.config.upload_limit.and_then(|kbs| {
+                NonZeroU32::new(kbs as u32 * 1024).map(|quota_cells| {
+                    Arc::new(RateLimiter::direct(Quota::per_second(quota_cells)))
+                })
+            });
+        if self.config.upnp {
+            let port = self.config.listen_port;
+            tokio::spawn(async move {
+                let local_ip = {
+                    let s = std::net::UdpSocket::bind("0.0.0.0:0").unwrap();
+                    if s.connect("8.8.8.8:80").is_err() {
+                        return;
+                    }
+                    match s.local_addr().unwrap().ip() {
+                        std::net::IpAddr::V4(v4) => v4,
+                        _ => return,
+                    }
+                };
+                match igd_next::aio::tokio::search_gateway(Default::default()).await {
+                    Ok(gw) => {
+                        let local_addr = std::net::SocketAddr::V4(
+                            std::net::SocketAddrV4::new(local_ip, port)
+                        );
+                        match gw.add_port(
+                            igd_next::PortMappingProtocol::TCP,
+                            port,
+                            local_addr,
+                            0,
+                            "bt-seed",
+                        ).await {
+                            Ok(()) => log::info!("[UPnP] Port {} mapped successfully", port),
+                            Err(e) => log::warn!("[UPnP] Port mapping failed: {}", e),
+                        }
+                    }
+                    Err(e) => log::warn!("[UPnP] Gateway discovery failed: {}", e),
+                }
+            });
+        }
         let mut announce_interval_secs: u64 = 300;
         let tracker_opt: Option<TrackerClient> = self.try_announce_start(&mut announce_interval_secs).await;
-        let uploaded_stats = Arc::clone(&self.uploaded);
-        let peer_count_stats = Arc::clone(&self.peer_count);
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-                let up = uploaded_stats.load(Ordering::Relaxed);
-                let pc = peer_count_stats.load(Ordering::Relaxed);
-                let now = chrono::Local::now();
-                println!(
-                    "[{}] peers: {}  uploaded: {}",
-                    now.format("%H:%M:%S"), pc, fmt_bytes(up)
-                );
-            }
-        });
+        if self.config.show_stats {
+            let uploaded_stats = Arc::clone(&self.uploaded);
+            let peer_count_stats = Arc::clone(&self.peer_count);
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                    let up = uploaded_stats.load(Ordering::Relaxed);
+                    let pc = peer_count_stats.load(Ordering::Relaxed);
+                    let now = chrono::Local::now();
+                    println!(
+                        "[{}] peers: {}  uploaded: {}",
+                        now.format("%H:%M:%S"), pc, fmt_bytes(up)
+                    );
+                }
+            });
+        }
         if let Some(tracker) = tracker_opt {
             let tracker_ann = tracker.clone();
             let uploaded_ann = Arc::clone(&self.uploaded);
@@ -90,8 +135,9 @@ impl Seeder {
                     let ti = Arc::clone(&self.torrent_info);
                     let up = Arc::clone(&self.uploaded);
                     let pc = Arc::clone(&self.peer_count);
+                    let rl = rate_limiter.clone();
                     tokio::spawn(async move {
-                        handle_peer(stream, addr, info_hash, peer_id, ti, up, pc).await;
+                        handle_peer(stream, addr, info_hash, peer_id, ti, up, pc, rl).await;
                     });
                 }
                 Err(e) => {
@@ -113,6 +159,7 @@ impl Seeder {
                 self.torrent_info.info_hash,
                 self.peer_id,
                 self.config.listen_port,
+                self.config.proxy.as_ref(),
             );
             match tracker.announce(0, "started").await {
                 Ok(resp) => {

@@ -1,3 +1,4 @@
+use crate::config::structs::proxy_config::ProxyConfig;
 use crate::torrent::enums::torrent_version::TorrentVersion;
 use std::path::PathBuf;
 
@@ -12,4 +13,8 @@ pub struct SeederConfig {
     pub version: TorrentVersion,
     pub torrent_file: Option<PathBuf>,
     pub magnet: Option<String>,
+    pub upload_limit: Option<u64>,
+    pub proxy: Option<ProxyConfig>,
+    pub upnp: bool,
+    pub show_stats: bool,
 }

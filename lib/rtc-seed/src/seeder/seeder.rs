@@ -7,6 +7,12 @@ use crate::seeder::types::{
 };
 use crate::torrent::structs::torrent_info::TorrentInfo;
 use bytes::Bytes;
+use governor::clock::DefaultClock;
+use governor::state::{
+    InMemoryState,
+    NotKeyed
+};
+use governor::RateLimiter;
 use rand::RngExt;
 use std::fs::File;
 use std::io::{
@@ -14,6 +20,7 @@ use std::io::{
     Seek,
     SeekFrom
 };
+use std::num::NonZeroU32;
 use std::sync::atomic::{
     AtomicU64,
     Ordering
@@ -21,6 +28,8 @@ use std::sync::atomic::{
 use std::sync::Arc;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
+
+pub type SharedRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
 
 pub fn generate_peer_id() -> [u8; 20] {
     let prefix = b"-RS1000-";
@@ -49,10 +58,12 @@ pub fn setup_handlers(
     dc: Arc<RTCDataChannel>,
     torrent_info: Arc<TorrentInfo>,
     uploaded: Arc<AtomicU64>,
+    rate_limiter: Option<SharedRateLimiter>,
 ) {
     let dc_msg = Arc::clone(&dc);
     let ti_msg = Arc::clone(&torrent_info);
     let up_msg = Arc::clone(&uploaded);
+    let rl_msg = rate_limiter;
     dc.on_open(Box::new(|| {
         log::info!("[Seeder] Data channel opened");
         Box::pin(async {})
@@ -70,8 +81,9 @@ pub fn setup_handlers(
         let dc2 = Arc::clone(&dc_msg);
         let ti2 = Arc::clone(&ti_msg);
         let up2 = Arc::clone(&up_msg);
+        let rl2 = rl_msg.clone();
         Box::pin(async move {
-            handle_message(data, dc2, ti2, up2).await;
+            handle_message(data, dc2, ti2, up2, rl2).await;
         })
     }));
 }
@@ -81,6 +93,7 @@ async fn handle_message(
     dc: Arc<RTCDataChannel>,
     torrent_info: Arc<TorrentInfo>,
     uploaded: Arc<AtomicU64>,
+    rate_limiter: Option<SharedRateLimiter>,
 ) {
     if data.len() < 5 {
         return;
@@ -92,6 +105,10 @@ async fn handle_message(
     log::debug!("[Seeder] Piece request: {}", piece_index);
     match read_piece(&torrent_info, piece_index) {
         Ok(piece_data) => {
+            if let Some(rl) = &rate_limiter {
+                let n = NonZeroU32::new(piece_data.len() as u32).unwrap_or(NonZeroU32::MIN);
+                rl.until_n_ready(n).await.ok();
+            }
             let bytes_sent = send_piece(&dc, piece_index, &piece_data).await;
             match bytes_sent {
                 Ok(n) => {
