@@ -50,6 +50,38 @@ cd torrust-actix
 cargo build --release
 ```
 
+> **Note:** `lib/torrust-client` (the optional desktop GUI) is **excluded from the default build**.
+> It requires the `fontconfig` system library and a graphical environment (Slint UI framework).
+> See [lib/torrust-client — Optional GUI](#optional-gui-torrust-client) below for details.
+
+### Optional GUI: torrust-client
+
+`lib/torrust-client` is a desktop GUI front-end built with the [Slint](https://slint.dev/) UI framework.
+It is a workspace member but is **not compiled by default** (`default-members` excludes it).
+
+#### System requirements (Linux)
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install libfontconfig1-dev
+
+# Fedora / RHEL
+sudo dnf install fontconfig-devel
+
+# Arch
+sudo pacman -S fontconfig
+```
+
+#### Building
+
+```bash
+# Build only the GUI client
+cargo build --release -p torrust-client
+
+# Or build the entire workspace including the GUI
+cargo build --release --workspace
+```
+
 ### Usage
 Run the code using `--help` argument for using in your enironment:
 ```bash
