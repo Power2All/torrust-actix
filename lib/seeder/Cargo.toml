@@ -42,3 +42,5 @@ rustls-pemfile = "^2"
 governor = "^0.10"
 argon2 = { version = "^0.5", features = ["password-hash"] }
 rpassword = "^7"
+actix-ws = "^0.3"
+futures-util = { version = "^0.3", default-features = false, features = ["std"] }

@@ -37,6 +37,19 @@
     .proto-rtc { background: #21ba45 !important; color: #fff !important; }
     .proto-both{ background: #00b5ad !important; color: #fff !important; }
 
+    /* Chart section */
+    #chart-section { margin-bottom: 16px; }
+    #chart-wrap { position: relative; height: 160px; }
+
+    /* Console output */
+    #console-output {
+      background: #0d1117; color: #c9d1d9;
+      font-family: 'Courier New', Courier, monospace; font-size: 0.80em;
+      height: 500px; overflow-y: auto;
+      padding: 12px; white-space: pre-wrap; word-break: break-all;
+      line-height: 1.45;
+    }
+
     /* ── Dark mode ───────────────────────────────────────────────────── */
     html.dark-mode body { background: #1b1c1d; color: #e0e0e0; }
     html.dark-mode #login-box {
@@ -78,6 +91,7 @@
     html.dark-mode .browser-item:hover { background: #353637; }
     html.dark-mode #browser-breadcrumb { color: #bbb; }
     html.dark-mode .ui.breadcrumb a { color: #6ab0e0; }
+    html.dark-mode #console-output { background: #0a0e14; color: #b8c0ca; }
   </style>
 </head>
 <body>
@@ -117,6 +131,9 @@
         <option value="light">Light</option>
         <option value="dark">Dark</option>
       </select>
+      <button class="ui icon button" title="Console Log" onclick="openConsole()">
+        <i class="terminal icon"></i> Console
+      </button>
       <button class="ui icon button" title="Global Settings" onclick="openSettings()">
         <i class="cog icon"></i> Settings
       </button>
@@ -126,6 +143,24 @@
       <button class="ui basic button" onclick="doLogout()" id="logout-btn" style="display:none">
         <i class="sign out icon"></i>Logout
       </button>
+    </div>
+  </div>
+
+  <!-- Live Statistics Chart -->
+  <div class="ui segment" id="chart-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span style="font-weight:600;font-size:0.92em;opacity:0.8">
+        <i class="chart line icon"></i>Live Statistics
+        <span id="ws-indicator" style="font-size:0.8em;margin-left:8px;opacity:0.6"></span>
+      </span>
+      <div class="ui tiny buttons" id="chart-range-btns">
+        <button class="ui button active" onclick="setChartRange(24)">24h</button>
+        <button class="ui button" onclick="setChartRange(48)">48h</button>
+        <button class="ui button" onclick="setChartRange(72)">72h</button>
+      </div>
+    </div>
+    <div id="chart-wrap">
+      <canvas id="main-chart"></canvas>
     </div>
   </div>
 
@@ -227,6 +262,25 @@
         <i class="check icon"></i>Select This Folder
       </button>
       <button class="ui button" onclick="$('#file-browser-modal').modal('hide')">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Console Modal -->
+  <div class="ui modal" id="console-modal">
+    <div class="header" style="display:flex;align-items:center;justify-content:space-between">
+      <span><i class="terminal icon"></i> Console Log</span>
+      <div style="display:flex;align-items:center;gap:12px">
+        <label style="font-size:0.85em;font-weight:normal;cursor:pointer">
+          <input type="checkbox" id="console-autoscroll" checked> Auto-scroll
+        </label>
+        <button class="ui mini button" onclick="clearConsole()"><i class="trash icon"></i> Clear</button>
+      </div>
+    </div>
+    <div class="content" style="padding:0">
+      <div id="console-output"></div>
+    </div>
+    <div class="actions">
+      <button class="ui button" onclick="$('#console-modal').modal('hide')">Close</button>
     </div>
   </div>
 
@@ -396,6 +450,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/semantic-ui@2.5.0/dist/semantic.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script>
 let torrents = [];
 let stats = {};
@@ -417,14 +473,16 @@ function setTheme(theme) {
   const ico = document.getElementById('theme-icon');
   if (sel) sel.value = theme;
   if (ico) ico.className = themeIcons[theme] + ' icon';
+  updateChartColors();
 }
 
 // Update when system preference changes (only matters in Auto mode)
 window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change', () => {
   const t = localStorage.getItem('seeder_theme') || 'auto';
-  if (t === 'auto') applyTheme('auto');
+  if (t === 'auto') { applyTheme('auto'); updateChartColors(); }
 });
 
+// ── Auth helpers ───────────────────────────────────────────────────────────
 function authHeaders() {
   const h = {'Content-Type': 'application/json'};
   if (authToken) h['Authorization'] = 'Bearer ' + authToken;
@@ -437,6 +495,7 @@ async function apiFetch(url, opts = {}) {
   if (r.status === 401) {
     authToken = null;
     localStorage.removeItem('seeder_token');
+    disconnectWs();
     showLogin();
     throw new Error('Unauthorized');
   }
@@ -462,6 +521,7 @@ function showApp() {
   document.getElementById('main-app').style.display = 'block';
   const hasAuth = authToken && authToken !== 'noauth';
   document.getElementById('logout-btn').style.display = hasAuth ? '' : 'none';
+  connectWs();
 }
 
 async function doLogin() {
@@ -490,6 +550,7 @@ async function doLogin() {
 }
 
 async function doLogout() {
+  disconnectWs();
   try {
     await fetch('/api/logout', {
       method: 'POST',
@@ -543,6 +604,7 @@ async function init() {
 
 init();
 
+// ── Utilities ──────────────────────────────────────────────────────────────
 function fmtBytes(n) {
   if (n < 1024) return n + ' B';
   if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
@@ -550,6 +612,288 @@ function fmtBytes(n) {
   return (n/1024/1024/1024).toFixed(2) + ' GB';
 }
 
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+let ws = null;
+let wsReconnectTimeout = null;
+let wsReconnectDelay = 1000;
+const WS_RECONNECT_MAX = 30000;
+
+function connectWs() {
+  if (!authToken) return;
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const token = (authToken && authToken !== 'noauth') ? '?token=' + encodeURIComponent(authToken) : '';
+  const url = proto + '//' + location.host + '/api/ws' + token;
+  try {
+    ws = new WebSocket(url);
+  } catch(e) {
+    scheduleWsReconnect();
+    return;
+  }
+  ws.onopen = function() {
+    wsReconnectDelay = 1000;
+    document.getElementById('ws-indicator').textContent = '● live';
+    document.getElementById('ws-indicator').style.color = '#21ba45';
+  };
+  ws.onmessage = function(e) {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'stats') handleStatsMsg(msg);
+      else if (msg.type === 'log') handleLogMsg(msg);
+    } catch(_) {}
+  };
+  ws.onclose = function() {
+    ws = null;
+    document.getElementById('ws-indicator').textContent = '○ disconnected';
+    document.getElementById('ws-indicator').style.color = '#aaa';
+    if (authToken) scheduleWsReconnect();
+  };
+  ws.onerror = function() {
+    if (ws) ws.close();
+  };
+}
+
+function scheduleWsReconnect() {
+  clearTimeout(wsReconnectTimeout);
+  wsReconnectTimeout = setTimeout(function() {
+    if (authToken) connectWs();
+  }, wsReconnectDelay);
+  wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX);
+}
+
+function disconnectWs() {
+  clearTimeout(wsReconnectTimeout);
+  document.getElementById('ws-indicator').textContent = '';
+  if (ws) {
+    ws.onclose = null;
+    ws.close();
+    ws = null;
+  }
+}
+
+// ── Chart ──────────────────────────────────────────────────────────────────
+let chart = null;
+let wsData = [];          // [{ts: unixSecs, peers: N, rate: bytes_per_sec}, …]
+let wsRange = 24;         // hours to display
+const WS_MAX_HOURS = 72;
+
+function getChartColors() {
+  const dark = document.documentElement.classList.contains('dark-mode');
+  return {
+    peers: dark ? 'rgba(91, 192, 255, 0.9)'  : 'rgba(33, 133, 208, 0.9)',
+    rate:  dark ? 'rgba(0, 210, 150, 0.9)'   : 'rgba(33, 186, 69, 0.9)',
+    grid:  dark ? 'rgba(255,255,255,0.08)'   : 'rgba(0,0,0,0.07)',
+    text:  dark ? '#9aa'                      : '#666',
+  };
+}
+
+function initChart() {
+  const c = getChartColors();
+  const ctx = document.getElementById('main-chart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Peers',
+          data: [],
+          borderColor: c.peers,
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.15,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Upload (KB/s)',
+          data: [],
+          borderColor: c.rate,
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.15,
+          yAxisID: 'y2',
+        },
+      ],
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: c.text, boxWidth: 12, font: { size: 11 } },
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.datasetIndex === 1) {
+                return 'Upload: ' + fmtBytes(ctx.parsed.y) + '/s';
+              }
+              return 'Peers: ' + ctx.parsed.y;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            tooltipFormat: 'HH:mm:ss',
+            displayFormats: { second: 'HH:mm', minute: 'HH:mm', hour: 'HH:mm' },
+          },
+          ticks: { color: c.text, maxTicksLimit: 8, font: { size: 10 } },
+          grid: { color: c.grid },
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          title: { display: true, text: 'Peers', color: c.text, font: { size: 10 } },
+          ticks: { color: c.text, precision: 0, font: { size: 10 } },
+          grid: { color: c.grid },
+          min: 0,
+        },
+        y2: {
+          type: 'linear',
+          position: 'right',
+          title: { display: true, text: 'Upload KB/s', color: c.text, font: { size: 10 } },
+          ticks: {
+            color: c.text,
+            font: { size: 10 },
+            callback: function(v) { return (v / 1024).toFixed(1); },
+          },
+          grid: { display: false },
+          min: 0,
+        },
+      },
+    },
+  });
+}
+
+function updateChartColors() {
+  if (!chart) return;
+  const c = getChartColors();
+  chart.data.datasets[0].borderColor = c.peers;
+  chart.data.datasets[1].borderColor = c.rate;
+  const opts = chart.options;
+  opts.plugins.legend.labels.color = c.text;
+  opts.scales.x.ticks.color = c.text;
+  opts.scales.x.grid.color = c.grid;
+  opts.scales.y.title.color = c.text;
+  opts.scales.y.ticks.color = c.text;
+  opts.scales.y.grid.color = c.grid;
+  opts.scales.y2.title.color = c.text;
+  opts.scales.y2.ticks.color = c.text;
+  chart.update('none');
+}
+
+function downsample(arr, maxPoints) {
+  if (arr.length <= maxPoints) return arr;
+  const step = arr.length / maxPoints;
+  const result = [];
+  for (let i = 0; i < maxPoints; i++) {
+    result.push(arr[Math.floor(i * step)]);
+  }
+  return result;
+}
+
+function setChartRange(hours) {
+  wsRange = hours;
+  document.querySelectorAll('#chart-range-btns .button').forEach(function(btn, i) {
+    const h = [24, 48, 72][i];
+    btn.classList.toggle('active', h === hours);
+  });
+  updateChart();
+}
+
+function updateChart() {
+  if (!chart) return;
+  const now = Date.now() / 1000;
+  const cutoff = now - wsRange * 3600;
+  let visible = wsData;
+  if (wsData.length > 0 && wsData[0].ts < cutoff) {
+    // Binary search for cutoff index
+    let lo = 0, hi = wsData.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (wsData[mid].ts < cutoff) lo = mid + 1; else hi = mid;
+    }
+    visible = wsData.slice(lo);
+  }
+  const sampled = downsample(visible, 1440);
+  chart.data.datasets[0].data = sampled.map(function(d) { return { x: d.ts * 1000, y: d.peers }; });
+  chart.data.datasets[1].data = sampled.map(function(d) { return { x: d.ts * 1000, y: d.rate }; });
+  chart.update('none');
+}
+
+function handleStatsMsg(msg) {
+  wsData.push({ ts: msg.ts, peers: msg.peers, rate: msg.rate });
+  // Trim to WS_MAX_HOURS
+  const cutoff = msg.ts - WS_MAX_HOURS * 3600;
+  while (wsData.length > 0 && wsData[0].ts < cutoff) wsData.shift();
+  updateChart();
+  // Update subtitle with live data from WS (overrides HTTP polling)
+  document.getElementById('status-text').textContent =
+    'Peers: ' + msg.peers + '   Upload: ' + fmtBytes(msg.rate) + '/s';
+}
+
+// ── Console ────────────────────────────────────────────────────────────────
+let consoleLines = [];
+const MAX_CONSOLE_LINES = 10000;
+
+function handleLogMsg(msg) {
+  consoleLines.push(msg.line);
+  if (consoleLines.length > MAX_CONSOLE_LINES) consoleLines.shift();
+  // Append live to the console modal if it's open
+  const el = document.getElementById('console-output');
+  if (el && $('#console-modal').hasClass('active')) {
+    appendConsoleLine(el, msg.line);
+  }
+}
+
+function appendConsoleLine(el, line) {
+  const div = document.createElement('div');
+  div.textContent = line;
+  el.appendChild(div);
+  // Keep DOM trim to avoid memory buildup
+  while (el.children.length > MAX_CONSOLE_LINES) el.removeChild(el.firstChild);
+  if (document.getElementById('console-autoscroll').checked) {
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+function openConsole() {
+  const el = document.getElementById('console-output');
+  el.innerHTML = '';
+  for (let i = 0; i < consoleLines.length; i++) {
+    const div = document.createElement('div');
+    div.textContent = consoleLines[i];
+    el.appendChild(div);
+  }
+  $('#console-modal').modal({
+    onVisible: function() {
+      if (document.getElementById('console-autoscroll').checked) {
+        el.scrollTop = el.scrollHeight;
+      }
+    },
+  }).modal('show');
+}
+
+function clearConsole() {
+  consoleLines = [];
+  document.getElementById('console-output').innerHTML = '';
+}
+
+// ── Torrent table ──────────────────────────────────────────────────────────
 async function loadTorrents() {
   try {
     const r = await apiFetch('/api/torrents');
@@ -569,8 +913,11 @@ async function loadStats() {
     const r = await apiFetch('/api/status');
     const data = await r.json();
     stats = data.torrents || {};
-    document.getElementById('status-text').textContent =
-      'Active seeders: ' + Object.keys(stats).length;
+    // Only update status text if WS is not live (WS gives better real-time data)
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      document.getElementById('status-text').textContent =
+        'Active seeders: ' + Object.keys(stats).length;
+    }
     renderTable();
   } catch(_) {}
 }
@@ -614,10 +961,6 @@ function renderTable() {
     </tr>`;
   });
   document.getElementById('torrent-tbody').innerHTML = html;
-}
-
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function toggleAddForm() {
@@ -778,21 +1121,21 @@ async function saveSettings() {
 }
 
 setInterval(loadStats, 5000);
-$(document).ready(() => {
+
+$(document).ready(function() {
   $('.ui.checkbox').checkbox();
   $('.tabular.menu .item').tab();
   // Sync theme picker to saved preference
   const savedTheme = localStorage.getItem('seeder_theme') || 'auto';
   setTheme(savedTheme);
+  // Init chart
+  initChart();
 });
 
+// ── File Browser ───────────────────────────────────────────────────────────
 let browserTarget = null;
 let browserMode   = 'any';
 let browserPath   = '/';
-
-function escAttr(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-}
 
 function openBrowser(inputId, mode) {
   browserTarget = inputId;

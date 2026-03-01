@@ -10,6 +10,7 @@ use crate::web::api::{
     get_logo,
     get_status,
     get_torrents,
+    get_ws,
     post_login,
     post_logout,
     update_config,
@@ -27,10 +28,11 @@ use actix_web::{
     App,
     HttpServer,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{
+    broadcast,
     watch,
     Mutex,
     RwLock
@@ -42,6 +44,8 @@ pub async fn start(
     shared_file: Arc<RwLock<TorrentsFile>>,
     stats: SharedStats,
     reload_tx: watch::Sender<()>,
+    log_tx: broadcast::Sender<String>,
+    log_buffer: Arc<std::sync::Mutex<VecDeque<String>>>,
 ) -> std::io::Result<()> {
     let sessions: SessionStore = Arc::new(Mutex::new(HashMap::new()));
     let state = Data::new(AppState {
@@ -51,6 +55,8 @@ pub async fn start(
         reload_tx,
         web_password: config.password.clone(),
         sessions,
+        log_tx,
+        log_buffer,
     });
     let cert_key = if let (Some(cert), Some(key)) = (config.cert_path, config.key_path) {
         Some((cert, key))
@@ -65,6 +71,7 @@ pub async fn start(
             .app_data(web::JsonConfig::default().limit(1024 * 1024))
             .route("/", web::get().to(get_index))
             .route("/logo.png", web::get().to(get_logo))
+            .route("/api/ws", web::get().to(get_ws))
             .route("/api/login", web::post().to(post_login))
             .route("/api/logout", web::post().to(post_logout))
             .route("/api/status", web::get().to(get_status))

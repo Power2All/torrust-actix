@@ -9,6 +9,8 @@ use clap::{
     Parser,
     Subcommand
 };
+use std::collections::VecDeque;
+use tokio::sync::broadcast;
 use config::enums::seed_protocol::SeedProtocol;
 use config::structs::proxy_config::ProxyConfig;
 use config::structs::seeder_config::SeederConfig;
@@ -34,6 +36,28 @@ enum SubCmd {
     HashPassword {
         password: Option<String>,
     },
+}
+
+/// Fern log target that fans log lines out to the WebSocket broadcast channel
+/// and appends them to the in-memory ring buffer (max 10 000 lines).
+struct BroadcastLog {
+    tx: broadcast::Sender<String>,
+    buffer: std::sync::Arc<std::sync::Mutex<VecDeque<String>>>,
+}
+
+impl log::Log for BroadcastLog {
+    fn enabled(&self, _: &log::Metadata) -> bool { true }
+    fn log(&self, record: &log::Record) {
+        let msg = record.args().to_string();
+        let _ = self.tx.send(msg.clone());
+        if let Ok(mut buf) = self.buffer.lock() {
+            buf.push_back(msg);
+            if buf.len() > 10_000 {
+                buf.pop_front();
+            }
+        }
+    }
+    fn flush(&self) {}
 }
 
 #[derive(Parser, Debug)]
@@ -107,6 +131,8 @@ fn spawn_web_server(
     shared_file: Arc<RwLock<TorrentsFile>>,
     stats: crate::stats::shared_stats::SharedStats,
     reload_tx: tokio::sync::watch::Sender<()>,
+    log_tx: broadcast::Sender<String>,
+    log_buffer: std::sync::Arc<std::sync::Mutex<VecDeque<String>>>,
 ) {
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -114,7 +140,9 @@ fn spawn_web_server(
             .build()
             .expect("failed to build web server runtime");
         rt.block_on(async move {
-            if let Err(e) = web::server::start(web_cfg, yaml_path, shared_file, stats, reload_tx).await {
+            if let Err(e) = web::server::start(
+                web_cfg, yaml_path, shared_file, stats, reload_tx, log_tx, log_buffer,
+            ).await {
                 log::error!("[Web] Server error: {}", e);
             }
         });
@@ -191,6 +219,12 @@ async fn main() {
         hash_password_cmd(password);
         return;
     }
+    // Create the log broadcast channel and ring buffer *before* fern so the
+    // BroadcastLog target can be chained in.
+    let log_buffer: std::sync::Arc<std::sync::Mutex<VecDeque<String>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(VecDeque::new()));
+    let (log_tx, _) = broadcast::channel::<String>(4096);
+
     let level_filter = {
         let s = cli.log_level.clone()
             .or_else(|| cli.config.as_deref().and_then(|p| read_yaml_log_level(Path::new(p))))
@@ -203,6 +237,10 @@ async fn main() {
         })
         .level(level_filter)
         .chain(std::io::stderr())
+        .chain(Box::new(BroadcastLog {
+            tx: log_tx.clone(),
+            buffer: std::sync::Arc::clone(&log_buffer),
+        }) as Box<dyn log::Log>)
         .apply()
         .expect("failed to initialize logging");
     if let Some(yaml_path) = cli.config.clone() {
@@ -227,7 +265,7 @@ async fn main() {
             cert_path: cli.web_cert.clone(),
             key_path: cli.web_key.clone(),
         };
-        run_torrents_mode(yaml_path, cli_proxy, cli_web, cli.upnp, cli.protocol.as_deref()).await;
+        run_torrents_mode(yaml_path, cli_proxy, cli_web, cli.upnp, cli.protocol.as_deref(), log_tx.clone(), std::sync::Arc::clone(&log_buffer)).await;
     } else {
         let has_input = !cli.files.is_empty() || cli.torrent_file.is_some();
         if !has_input {
@@ -240,7 +278,7 @@ async fn main() {
                     cert_path: cli.web_cert.clone(),
                     key_path: cli.web_key.clone(),
                 };
-                run_torrents_mode(yaml_path, cli_proxy, cli_web, cli.upnp, cli.protocol.as_deref()).await;
+                run_torrents_mode(yaml_path, cli_proxy, cli_web, cli.upnp, cli.protocol.as_deref(), log_tx.clone(), std::sync::Arc::clone(&log_buffer)).await;
                 return;
             }
             eprintln!("Error: provide file(s) to seed, or --torrent-file <path>, or --config <yaml>.");
@@ -345,7 +383,7 @@ async fn main() {
                 cert_path: cli.web_cert.clone(),
                 key_path: cli.web_key.clone(),
             };
-            spawn_web_server(web_cfg, yaml_path, shared_file, shared_stats, reload_tx);
+            spawn_web_server(web_cfg, yaml_path, shared_file, shared_stats, reload_tx, log_tx.clone(), std::sync::Arc::clone(&log_buffer));
         }
         let mut s = Seeder::new(config, torrent_info);
         if let Err(e) = s.run(None).await {
@@ -471,6 +509,8 @@ async fn run_torrents_mode(
     cli_web: WebConfig,
     cli_upnp: bool,
     cli_protocol: Option<&str>,
+    log_tx: broadcast::Sender<String>,
+    log_buffer: std::sync::Arc<std::sync::Mutex<VecDeque<String>>>,
 ) {
     println!("=== Seeder (BT+RTC, multi-torrent mode) ===");
     println!("Config  : {}", yaml_path.display());
@@ -512,7 +552,7 @@ async fn run_torrents_mode(
         let ss = Arc::clone(&shared_stats);
         let rtx = reload_tx.clone();
         let yp = yaml_path.clone();
-        spawn_web_server(web_cfg, yp, sf, ss, rtx);
+        spawn_web_server(web_cfg, yp, sf, ss, rtx, log_tx.clone(), std::sync::Arc::clone(&log_buffer));
     }
     loop {
         let (file, entries) = match load_yaml_entries(&yaml_path, cli_proxy.as_ref(), cli_upnp, cli_protocol) {
