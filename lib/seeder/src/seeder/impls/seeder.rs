@@ -45,7 +45,11 @@ impl Seeder {
         self.uploaded.load(Ordering::Relaxed)
     }
 
-    pub async fn run(&mut self, registry: Option<TorrentRegistry>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn run(
+        &mut self,
+        registry: Option<TorrentRegistry>,
+        mut ext_stop_rx: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let out_path = self.config.out_file.clone().unwrap_or_else(|| {
             PathBuf::from(format!("{}.torrent", self.torrent_info.name))
         });
@@ -312,8 +316,20 @@ impl Seeder {
         } else {
             None
         };
-        tokio::signal::ctrl_c().await.ok();
-        println!("\n[Seeder] Shutting down…");
+        // Wait for either Ctrl+C or an external stop signal (e.g. torrent disabled/deleted via UI).
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                println!("\n[Seeder] Ctrl+C received — shutting down…");
+            }
+            _ = async {
+                loop {
+                    ext_stop_rx.changed().await.ok();
+                    if *ext_stop_rx.borrow() { break; }
+                }
+            } => {
+                log::info!("[Seeder] Stop signal received — shutting down…");
+            }
+        }
         stop_tx.send(true).ok();
         if let Some(h) = bt_reannounce_handle { h.abort(); }
         if let Some(h) = rtc_handle {

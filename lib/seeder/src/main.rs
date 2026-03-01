@@ -385,8 +385,10 @@ async fn main() {
             };
             spawn_web_server(web_cfg, yaml_path, shared_file, shared_stats, reload_tx, log_tx.clone(), std::sync::Arc::clone(&log_buffer));
         }
+        // Single-torrent mode: only ctrl_c stops it (ext stop never fires).
+        let (_stop_tx, stop_rx) = tokio::sync::watch::channel(false);
         let mut s = Seeder::new(config, torrent_info);
-        if let Err(e) = s.run(None).await {
+        if let Err(e) = s.run(None, stop_rx).await {
             eprintln!("Fatal: {}", e);
             std::process::exit(1);
         }
@@ -460,7 +462,12 @@ fn file_mtime(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).ok().and_then(|m| m.modified().ok())
 }
 
-async fn seed_one(label: String, config: SeederConfig, registry: Option<seeder::structs::torrent_registry::TorrentRegistry>) {
+async fn seed_one(
+    label: String,
+    config: SeederConfig,
+    registry: Option<seeder::structs::torrent_registry::TorrentRegistry>,
+    stop_rx: tokio::sync::watch::Receiver<bool>,
+) {
     if config.tracker_urls.is_empty() && config.torrent_file.is_none() && config.magnet.is_none() {
         println!("[{}] Trackers: (none)", label);
     } else if !config.tracker_urls.is_empty() {
@@ -498,7 +505,7 @@ async fn seed_one(label: String, config: SeederConfig, registry: Option<seeder::
         }
     };
     let mut s = Seeder::new(config, torrent_info);
-    if let Err(e) = s.run(registry).await {
+    if let Err(e) = s.run(registry, stop_rx).await {
         eprintln!("[{}] Fatal: {}", label, e);
     }
 }
@@ -589,11 +596,14 @@ async fn run_torrents_mode(
         } else {
             None
         };
+        let mut stop_txs: Vec<tokio::sync::watch::Sender<bool>> = Vec::new();
         let handles: Vec<_> = entries
             .into_iter()
             .map(|(label, cfg)| {
+                let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
+                stop_txs.push(stop_tx);
                 let reg = if cfg.protocol.has_bt() { Some(Arc::clone(&registry)) } else { None };
-                tokio::spawn(seed_one(label, cfg, reg))
+                tokio::spawn(seed_one(label, cfg, reg, stop_rx))
             })
             .collect();
         let initial_mtime = file_mtime(&yaml_path);
@@ -635,24 +645,33 @@ async fn run_torrents_mode(
             h.abort();
             let _ = h.await;
         }
+        // Signal every seeder to stop gracefully so they can send "stopped" announces.
+        for tx in &stop_txs {
+            let _ = tx.send(true);
+        }
+        let shutdown_msg = if should_reload {
+            "[seeder] Reloading — waiting for seeders to send 'stopped' announces (up to 15s)…"
+        } else {
+            "[seeder] Shutting down — waiting for seeders to send 'stopped' announces (up to 15s)…"
+        };
+        println!("{}", shutdown_msg);
+        // Keep abort handles so we can forcibly kill any seeder that doesn't finish in time.
+        let abort_handles: Vec<_> = handles.iter().map(|h| h.abort_handle()).collect();
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            async {
+                for h in handles {
+                    let _ = h.await;
+                }
+            },
+        ).await;
+        // Abort any stragglers that didn't finish within the timeout.
+        for ah in abort_handles {
+            ah.abort();
+        }
         if should_reload {
-            for h in &handles {
-                h.abort();
-            }
-            for h in handles {
-                let _ = h.await;
-            }
             println!("[seeder] Applying new config…\n");
         } else {
-            println!("[seeder] Shutting down — waiting for tracker announcements (up to 10s)…");
-            let _ = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                async {
-                    for h in handles {
-                        let _ = h.await;
-                    }
-                },
-            ).await;
             println!("[seeder] Shutting down.");
             break;
         }

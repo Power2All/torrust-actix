@@ -857,7 +857,12 @@ function handleStatsMsg(msg) {
   const cutoff = msg.ts - WS_MAX_HOURS * 3600;
   while (wsData.length > 0 && wsData[0].ts < cutoff) wsData.shift();
   updateChart();
-  // Update subtitle with live data from WS (overrides HTTP polling)
+  // Update per-torrent stats and refresh table
+  if (msg.torrents) {
+    stats = msg.torrents;
+    renderTable();
+  }
+  // Update subtitle with live data from WS
   document.getElementById('status-text').textContent =
     'Peers: ' + msg.peers + '   Upload: ' + fmtBytes(msg.rate) + '/s';
 }

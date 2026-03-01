@@ -243,6 +243,15 @@ async fn ws_loop(
                 let st = stats.read().await;
                 let total_peers: usize = st.values().map(|v| v.peer_count).sum();
                 let total_uploaded: u64 = st.values().map(|v| v.uploaded).sum();
+                let torrents_map: std::collections::HashMap<String, serde_json::Value> = st
+                    .iter()
+                    .map(|(k, v)| {
+                        (k.clone(), json!({
+                            "uploaded":   v.uploaded,
+                            "peer_count": v.peer_count,
+                        }))
+                    })
+                    .collect();
                 drop(st);
 
                 let elapsed = last_tick.elapsed().as_secs_f64().max(0.001);
@@ -255,10 +264,11 @@ async fn ws_loop(
                 last_tick = Instant::now();
 
                 let msg = serde_json::to_string(&json!({
-                    "type": "stats",
-                    "ts":    ts,
-                    "peers": total_peers,
-                    "rate":  rate,
+                    "type":     "stats",
+                    "ts":       ts,
+                    "peers":    total_peers,
+                    "rate":     rate,
+                    "torrents": torrents_map,
                 })).unwrap_or_default();
                 if session.text(msg).await.is_err() { break; }
             }
