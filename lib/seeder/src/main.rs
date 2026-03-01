@@ -45,7 +45,7 @@ struct Cli {
     #[command(subcommand)]
     command: Option<SubCmd>,
     #[arg(long, value_name = "FILE")]
-    torrents: Option<PathBuf>,
+    config: Option<PathBuf>,
     #[arg(long = "tracker")]
     trackers: Vec<String>,
     #[arg(long)]
@@ -193,7 +193,7 @@ async fn main() {
     }
     let level_filter = {
         let s = cli.log_level.clone()
-            .or_else(|| cli.torrents.as_deref().and_then(|p| read_yaml_log_level(Path::new(p))))
+            .or_else(|| cli.config.as_deref().and_then(|p| read_yaml_log_level(Path::new(p))))
             .unwrap_or_else(|| "info".to_string());
         parse_log_level(&s)
     };
@@ -205,7 +205,7 @@ async fn main() {
         .chain(std::io::stderr())
         .apply()
         .expect("failed to initialize logging");
-    if let Some(yaml_path) = cli.torrents.clone() {
+    if let Some(yaml_path) = cli.config.clone() {
         let single_mode_used = !cli.files.is_empty()
             || cli.name.is_some()
             || cli.out.is_some()
@@ -215,7 +215,7 @@ async fn main() {
             || cli.magnet.is_some();
         if single_mode_used {
             eprintln!(
-                "Error: --torrents cannot be combined with single-torrent options \
+                "Error: --config cannot be combined with single-torrent options \
                  (positional files, --name, --out, --webseed, --ice, --torrent-file, --magnet)."
             );
             std::process::exit(1);
@@ -243,7 +243,7 @@ async fn main() {
                 run_torrents_mode(yaml_path, cli_proxy, cli_web, cli.upnp, cli.protocol.as_deref()).await;
                 return;
             }
-            eprintln!("Error: provide file(s) to seed, or --torrent-file <path>, or --torrents <yaml>.");
+            eprintln!("Error: provide file(s) to seed, or --torrent-file <path>, or --config <yaml>.");
             std::process::exit(1);
         }
         for path in &cli.files {

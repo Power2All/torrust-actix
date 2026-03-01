@@ -148,16 +148,16 @@ seeder --protocol both --port 6881 \
 
 ## Usage — multi-torrent (YAML)
 
-Pass a YAML config file with `--torrents`:
+Pass a YAML config file with `--config`:
 
 ```bash
-seeder --torrents torrents.yaml
+seeder --config torrents.yaml
 
 # Override protocol and port from CLI
-seeder --torrents torrents.yaml --protocol bt --port 6881
+seeder --config torrents.yaml --protocol bt --port 6881
 
 # With web UI (port from CLI overrides YAML)
-seeder --torrents torrents.yaml --web-port 8092
+seeder --config torrents.yaml --web-port 8092
 ```
 
 If the YAML file does not exist, `seeder` creates an empty one and waits. The config is hot-reloaded when the file changes on disk, a `SIGHUP` is received (Unix), or the web UI triggers a reload.
