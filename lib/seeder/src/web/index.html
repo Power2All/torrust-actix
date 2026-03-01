@@ -39,7 +39,6 @@
 
     /* Chart section */
     #chart-section { margin-bottom: 16px; }
-    #chart-wrap { position: relative; height: 160px; }
 
     /* Console output */
     #console-output {
@@ -159,8 +158,23 @@
         <button class="ui button" onclick="setChartRange(72)">72h</button>
       </div>
     </div>
-    <div id="chart-wrap">
-      <canvas id="main-chart"></canvas>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-size:0.82em;opacity:0.65;margin-bottom:4px;text-align:center;font-weight:600">
+          <i class="users icon"></i>Peers
+        </div>
+        <div id="chart-wrap-peers" style="position:relative;height:140px">
+          <canvas id="chart-peers"></canvas>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.82em;opacity:0.65;margin-bottom:4px;text-align:center;font-weight:600">
+          <i class="upload icon"></i>Upload Speed
+        </div>
+        <div id="chart-wrap-rate" style="position:relative;height:140px">
+          <canvas id="chart-rate"></canvas>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -680,7 +694,8 @@ function disconnectWs() {
 }
 
 // ── Chart ──────────────────────────────────────────────────────────────────
-let chart = null;
+let chartPeers = null;
+let chartRate  = null;
 let wsData = [];          // [{ts: unixSecs, peers: N, rate: bytes_per_sec}, …]
 let wsRange = 24;         // hours to display
 const WS_MAX_HOURS = 72;
@@ -695,105 +710,101 @@ function getChartColors() {
   };
 }
 
+function makeChartOptions(c, yLabel, yTickCb) {
+  return {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: function(ctx) { return yLabel + ': ' + (yTickCb ? yTickCb(ctx.parsed.y) : ctx.parsed.y); },
+        },
+      },
+    },
+    scales: {
+      x: {
+        type: 'time',
+        time: {
+          tooltipFormat: 'HH:mm:ss',
+          displayFormats: { second: 'HH:mm', minute: 'HH:mm', hour: 'HH:mm' },
+        },
+        ticks: { color: c.text, maxTicksLimit: 8, font: { size: 10 } },
+        grid: { color: c.grid },
+      },
+      y: {
+        type: 'linear',
+        position: 'left',
+        ticks: {
+          color: c.text,
+          precision: 0,
+          font: { size: 10 },
+          callback: yTickCb || undefined,
+        },
+        grid: { color: c.grid },
+        min: 0,
+      },
+    },
+  };
+}
+
 function initChart() {
   const c = getChartColors();
-  const ctx = document.getElementById('main-chart').getContext('2d');
-  chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      datasets: [
-        {
-          label: 'Peers',
+
+  chartPeers = new Chart(
+    document.getElementById('chart-peers').getContext('2d'),
+    {
+      type: 'line',
+      data: {
+        datasets: [{
           data: [],
           borderColor: c.peers,
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           pointRadius: 0,
           tension: 0.15,
-          yAxisID: 'y',
-        },
-        {
-          label: 'Upload (KB/s)',
+        }],
+      },
+      options: makeChartOptions(c, 'Peers', null),
+    }
+  );
+
+  chartRate = new Chart(
+    document.getElementById('chart-rate').getContext('2d'),
+    {
+      type: 'line',
+      data: {
+        datasets: [{
           data: [],
           borderColor: c.rate,
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           pointRadius: 0,
           tension: 0.15,
-          yAxisID: 'y2',
-        },
-      ],
-    },
-    options: {
-      animation: false,
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          labels: { color: c.text, boxWidth: 12, font: { size: 11 } },
-        },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              if (ctx.datasetIndex === 1) {
-                return 'Upload: ' + fmtBytes(ctx.parsed.y) + '/s';
-              }
-              return 'Peers: ' + ctx.parsed.y;
-            },
-          },
-        },
+        }],
       },
-      scales: {
-        x: {
-          type: 'time',
-          time: {
-            tooltipFormat: 'HH:mm:ss',
-            displayFormats: { second: 'HH:mm', minute: 'HH:mm', hour: 'HH:mm' },
-          },
-          ticks: { color: c.text, maxTicksLimit: 8, font: { size: 10 } },
-          grid: { color: c.grid },
-        },
-        y: {
-          type: 'linear',
-          position: 'left',
-          title: { display: true, text: 'Peers', color: c.text, font: { size: 10 } },
-          ticks: { color: c.text, precision: 0, font: { size: 10 } },
-          grid: { color: c.grid },
-          min: 0,
-        },
-        y2: {
-          type: 'linear',
-          position: 'right',
-          title: { display: true, text: 'Upload KB/s', color: c.text, font: { size: 10 } },
-          ticks: {
-            color: c.text,
-            font: { size: 10 },
-            callback: function(v) { return (v / 1024).toFixed(1); },
-          },
-          grid: { display: false },
-          min: 0,
-        },
-      },
-    },
-  });
+      options: makeChartOptions(c, 'Upload', function(v) { return fmtBytes(v) + '/s'; }),
+    }
+  );
+}
+
+function applyColorsToChart(ch, borderColor, c) {
+  if (!ch) return;
+  ch.data.datasets[0].borderColor = borderColor;
+  const opts = ch.options;
+  opts.scales.x.ticks.color = c.text;
+  opts.scales.x.grid.color  = c.grid;
+  opts.scales.y.ticks.color = c.text;
+  opts.scales.y.grid.color  = c.grid;
+  ch.update('none');
 }
 
 function updateChartColors() {
-  if (!chart) return;
   const c = getChartColors();
-  chart.data.datasets[0].borderColor = c.peers;
-  chart.data.datasets[1].borderColor = c.rate;
-  const opts = chart.options;
-  opts.plugins.legend.labels.color = c.text;
-  opts.scales.x.ticks.color = c.text;
-  opts.scales.x.grid.color = c.grid;
-  opts.scales.y.title.color = c.text;
-  opts.scales.y.ticks.color = c.text;
-  opts.scales.y.grid.color = c.grid;
-  opts.scales.y2.title.color = c.text;
-  opts.scales.y2.ticks.color = c.text;
-  chart.update('none');
+  applyColorsToChart(chartPeers, c.peers, c);
+  applyColorsToChart(chartRate,  c.rate,  c);
 }
 
 function downsample(arr, maxPoints) {
@@ -816,7 +827,7 @@ function setChartRange(hours) {
 }
 
 function updateChart() {
-  if (!chart) return;
+  if (!chartPeers && !chartRate) return;
   const now = Date.now() / 1000;
   const cutoff = now - wsRange * 3600;
   let visible = wsData;
@@ -830,9 +841,14 @@ function updateChart() {
     visible = wsData.slice(lo);
   }
   const sampled = downsample(visible, 1440);
-  chart.data.datasets[0].data = sampled.map(function(d) { return { x: d.ts * 1000, y: d.peers }; });
-  chart.data.datasets[1].data = sampled.map(function(d) { return { x: d.ts * 1000, y: d.rate }; });
-  chart.update('none');
+  if (chartPeers) {
+    chartPeers.data.datasets[0].data = sampled.map(function(d) { return { x: d.ts * 1000, y: d.peers }; });
+    chartPeers.update('none');
+  }
+  if (chartRate) {
+    chartRate.data.datasets[0].data = sampled.map(function(d) { return { x: d.ts * 1000, y: d.rate }; });
+    chartRate.update('none');
+  }
 }
 
 function handleStatsMsg(msg) {
