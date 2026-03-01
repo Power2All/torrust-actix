@@ -5,14 +5,13 @@ use crate::torrent::enums::torrent_version::TorrentVersion;
 use std::path::PathBuf;
 
 impl TorrentEntry {
-    pub fn to_seeder_config(&self, proxy: Option<&ProxyConfig>) -> Result<SeederConfig, String> {
+    pub fn to_seeder_config(&self, proxy: Option<&ProxyConfig>, listen_port: u16) -> Result<SeederConfig, String> {
         if self.file.is_empty() && self.torrent_file.is_none() {
             return Err("torrent entry needs at least one file or a torrent_file path".to_string());
         }
         let file_paths: Vec<PathBuf> = self.file.iter().map(PathBuf::from).collect();
         let out_file = self.out.as_ref().map(PathBuf::from);
         let webseed_urls = self.webseed.clone().unwrap_or_default();
-        let listen_port = self.port.unwrap_or(6881);
         let version = match self.version.as_deref() {
             Some("v2") => TorrentVersion::V2,
             Some("hybrid") => TorrentVersion::Hybrid,

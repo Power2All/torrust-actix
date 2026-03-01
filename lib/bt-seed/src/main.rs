@@ -10,7 +10,9 @@ use config::structs::proxy_config::ProxyConfig;
 use config::structs::seeder_config::SeederConfig;
 use config::structs::torrents_file::TorrentsFile;
 use config::structs::web_config::WebConfig;
+use seeder::seeder::run_shared_listener;
 use seeder::structs::seeder::Seeder;
+use seeder::structs::torrent_registry::new_registry;
 use stats::shared_stats::new_shared_stats;
 use std::path::{
     Path,
@@ -263,7 +265,7 @@ async fn main() {
             spawn_web_server(web_cfg, yaml_path, shared_file, shared_stats, reload_tx);
         }
         let mut seeder = Seeder::new(config, torrent_info);
-        if let Err(e) = seeder.run().await {
+        if let Err(e) = seeder.run(None).await {
             eprintln!("Fatal: {}", e);
             std::process::exit(1);
         }
@@ -285,6 +287,7 @@ fn load_yaml_entries(
     let effective_proxy = proxy.or(file.config.proxy.as_ref());
     let effective_upnp = upnp || file.config.upnp.unwrap_or(false);
     let effective_show_stats = file.config.show_stats.unwrap_or(true);
+    let effective_listen_port = file.config.listen_port.unwrap_or(6881);
     let mut result = Vec::new();
     for (i, entry) in file.torrents.iter().enumerate() {
         if !entry.enabled {
@@ -292,7 +295,7 @@ fn load_yaml_entries(
             println!("[{}] disabled — skipping", label);
             continue;
         }
-        match entry.to_seeder_config(effective_proxy) {
+        match entry.to_seeder_config(effective_proxy, effective_listen_port) {
             Ok(mut cfg) => {
                 cfg.upnp = effective_upnp;
                 cfg.show_stats = effective_show_stats;
@@ -316,7 +319,7 @@ fn file_mtime(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).ok().and_then(|m| m.modified().ok())
 }
 
-async fn seed_one(label: String, config: SeederConfig) {
+async fn seed_one(label: String, config: SeederConfig, registry: Option<seeder::structs::torrent_registry::TorrentRegistry>) {
     if config.tracker_urls.is_empty() && config.torrent_file.is_none() && config.magnet.is_none() {
         println!("[{}] Trackers: (none)", label);
     } else if !config.tracker_urls.is_empty() {
@@ -329,7 +332,6 @@ async fn seed_one(label: String, config: SeederConfig) {
     if !files.is_empty() {
         println!("[{}] Files   : {}", label, files.join(", "));
     }
-    println!("[{}] Port    : {}", label, config.listen_port);
     if !config.webseed_urls.is_empty() {
         println!("[{}] Webseeds: {}", label, config.webseed_urls.join(", "));
     }
@@ -350,7 +352,7 @@ async fn seed_one(label: String, config: SeederConfig) {
         }
     };
     let mut seeder = Seeder::new(config, torrent_info);
-    if let Err(e) = seeder.run().await {
+    if let Err(e) = seeder.run(registry).await {
         eprintln!("[{}] Fatal: {}", label, e);
     }
 }
@@ -406,6 +408,8 @@ async fn run_torrents_mode(yaml_path: PathBuf, cli_proxy: Option<ProxyConfig>, c
                 std::process::exit(1);
             }
         };
+        let effective_listen_port = file.config.listen_port.unwrap_or(6881);
+        let effective_upnp = cli_upnp || file.config.upnp.unwrap_or(false);
         {
             let mut sf = shared_file.write().await;
             *sf = file;
@@ -413,11 +417,21 @@ async fn run_torrents_mode(yaml_path: PathBuf, cli_proxy: Option<ProxyConfig>, c
         if entries.is_empty() {
             println!("[bt-seed] No enabled torrent entries — waiting for changes…");
         } else {
-            println!("[bt-seed] Starting {} torrent(s)…", entries.len());
+            println!("[bt-seed] Starting {} torrent(s) on shared port {}…", entries.len(), effective_listen_port);
         }
+        let registry = new_registry();
+        let listener_handle = {
+            let reg = Arc::clone(&registry);
+            tokio::spawn(async move {
+                run_shared_listener(effective_listen_port, reg, effective_upnp).await;
+            })
+        };
         let handles: Vec<_> = entries
             .into_iter()
-            .map(|(label, cfg)| tokio::spawn(seed_one(label, cfg)))
+            .map(|(label, cfg)| {
+                let reg = Arc::clone(&registry);
+                tokio::spawn(seed_one(label, cfg, Some(reg)))
+            })
             .collect();
         let initial_mtime = file_mtime(&yaml_path);
         let should_reload = 'wait: loop {
@@ -454,16 +468,28 @@ async fn run_torrents_mode(yaml_path: PathBuf, cli_proxy: Option<ProxyConfig>, c
                 }
             }
         };
-        for h in &handles {
-            h.abort();
-        }
-        for h in handles {
-            let _ = h.await;
-        }
-        if !should_reload {
+        listener_handle.abort();
+        let _ = listener_handle.await;
+        if should_reload {
+            for h in &handles {
+                h.abort();
+            }
+            for h in handles {
+                let _ = h.await;
+            }
+            println!("[bt-seed] Applying new config…\n");
+        } else {
+            println!("[bt-seed] Shutting down — waiting for tracker announcements (up to 10s)…");
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                async {
+                    for h in handles {
+                        let _ = h.await;
+                    }
+                },
+            ).await;
             println!("[bt-seed] Shutting down.");
             break;
         }
-        println!("[bt-seed] Applying new config…\n");
     }
 }

@@ -1,3 +1,4 @@
+use crate::config::structs::global_config::GlobalConfig;
 use crate::config::structs::torrent_entry::TorrentEntry;
 use crate::config::structs::torrents_file::TorrentsFile;
 use crate::stats::shared_stats::SharedStats;
@@ -130,6 +131,33 @@ pub async fn delete_torrent(data: Data<AppState>, idx: Path<usize>) -> HttpRespo
         return HttpResponse::NotFound().body("index out of range");
     }
     file.torrents.remove(i);
+    if let Err(e) = write_yaml(&data.yaml_path, &file) {
+        return HttpResponse::InternalServerError().body(e.to_string());
+    }
+    let _ = data.reload_tx.send(());
+    HttpResponse::Ok().json(json!({"ok": true}))
+}
+
+pub async fn get_config(data: Data<AppState>) -> HttpResponse {
+    let file = data.shared_file.read().await;
+    HttpResponse::Ok().json(&file.config)
+}
+
+pub async fn update_config(data: Data<AppState>, body: Json<GlobalConfig>) -> HttpResponse {
+    let new_cfg = body.into_inner();
+    if let Some(ref level_str) = new_cfg.log_level {
+        let filter = match level_str.to_ascii_lowercase().as_str() {
+            "error" => log::LevelFilter::Error,
+            "warn"  => log::LevelFilter::Warn,
+            "debug" => log::LevelFilter::Debug,
+            "trace" => log::LevelFilter::Trace,
+            _       => log::LevelFilter::Info,
+        };
+        log::set_max_level(filter);
+        log::info!("[Config] Log level set to {}", level_str);
+    }
+    let mut file = data.shared_file.write().await;
+    file.config = new_cfg;
     if let Err(e) = write_yaml(&data.yaml_path, &file) {
         return HttpResponse::InternalServerError().body(e.to_string());
     }

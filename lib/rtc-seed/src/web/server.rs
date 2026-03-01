@@ -5,9 +5,11 @@ use crate::web::api::{
     add_torrent,
     browse,
     delete_torrent,
+    get_config,
     get_index,
     get_status,
     get_torrents,
+    update_config,
     update_torrent,
     AppState,
 };
@@ -76,6 +78,8 @@ pub async fn start(
             .route("/api/torrents", web::post().to(add_torrent))
             .route("/api/torrents/{idx}", web::put().to(update_torrent))
             .route("/api/torrents/{idx}", web::delete().to(delete_torrent))
+            .route("/api/config", web::get().to(get_config))
+            .route("/api/config", web::put().to(update_config))
             .route("/api/browse", web::get().to(browse))
     });
     if let Some((cert_path, key_path)) = cert_key {

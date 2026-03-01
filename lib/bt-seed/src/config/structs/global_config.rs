@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct GlobalConfig {
+    pub listen_port: Option<u16>,
     pub web_port: Option<u16>,
     pub web_password: Option<String>,
     pub web_cert: Option<PathBuf>,

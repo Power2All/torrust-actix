@@ -1,4 +1,5 @@
 use crate::seeder::structs::peer_count_guard::PeerCountGuard;
+use crate::seeder::structs::torrent_registry::TorrentRegistry;
 use crate::seeder::types::{
     BT_HANDSHAKE_LEN,
     BT_PROTOCOL,
@@ -157,9 +158,10 @@ async fn read_message(stream: &mut TcpStream) -> std::io::Result<Option<(u8, Vec
     Ok(Some((id, payload)))
 }
 
-pub async fn handle_peer(
+async fn handle_peer_connection(
     mut stream: TcpStream,
     addr: SocketAddr,
+    peer_hs: [u8; BT_HANDSHAKE_LEN],
     info_hash: [u8; 20],
     our_peer_id: [u8; 20],
     torrent_info: Arc<TorrentInfo>,
@@ -167,20 +169,7 @@ pub async fn handle_peer(
     peer_count: Arc<AtomicUsize>,
     rate_limiter: Option<SharedRateLimiter>,
 ) {
-    let mut hs_buf = [0u8; BT_HANDSHAKE_LEN];
-    if let Err(e) = stream.read_exact(&mut hs_buf).await {
-        log::debug!("[BT] Handshake read failed from {}: {}", addr, e);
-        return;
-    }
-    if &hs_buf[0..20] != BT_PROTOCOL {
-        log::debug!("[BT] Invalid protocol header from {}", addr);
-        return;
-    }
-    if hs_buf[28..48] != info_hash {
-        log::debug!("[BT] Info hash mismatch from {}", addr);
-        return;
-    }
-    let peer_id_hex = hex::encode(&hs_buf[48..68]);
+    let peer_id_hex = hex::encode(&peer_hs[48..68]);
     let our_hs = make_handshake(&info_hash, &our_peer_id);
     if let Err(e) = stream.write_all(&our_hs).await {
         log::debug!("[BT] Handshake write failed to {}: {}", addr, e);
@@ -269,4 +258,114 @@ pub async fn handle_peer(
         peer_id_hex.get(..8).unwrap_or(&peer_id_hex),
         fmt_bytes(peer_uploaded.load(Ordering::Relaxed))
     );
+}
+
+pub async fn handle_peer(
+    mut stream: TcpStream,
+    addr: SocketAddr,
+    info_hash: [u8; 20],
+    our_peer_id: [u8; 20],
+    torrent_info: Arc<TorrentInfo>,
+    uploaded: Arc<AtomicU64>,
+    peer_count: Arc<AtomicUsize>,
+    rate_limiter: Option<SharedRateLimiter>,
+) {
+    let mut hs_buf = [0u8; BT_HANDSHAKE_LEN];
+    if let Err(e) = stream.read_exact(&mut hs_buf).await {
+        log::debug!("[BT] Handshake read failed from {}: {}", addr, e);
+        return;
+    }
+    if &hs_buf[0..20] != BT_PROTOCOL {
+        log::debug!("[BT] Invalid protocol header from {}", addr);
+        return;
+    }
+    if hs_buf[28..48] != info_hash {
+        log::debug!("[BT] Info hash mismatch from {}", addr);
+        return;
+    }
+    handle_peer_connection(stream, addr, hs_buf, info_hash, our_peer_id, torrent_info, uploaded, peer_count, rate_limiter).await;
+}
+
+pub async fn dispatch_connection(
+    mut stream: TcpStream,
+    addr: SocketAddr,
+    registry: TorrentRegistry,
+) {
+    let mut hs_buf = [0u8; BT_HANDSHAKE_LEN];
+    if let Err(e) = stream.read_exact(&mut hs_buf).await {
+        log::debug!("[BT] Handshake read failed from {}: {}", addr, e);
+        return;
+    }
+    if &hs_buf[0..20] != BT_PROTOCOL {
+        log::debug!("[BT] Invalid protocol header from {}", addr);
+        return;
+    }
+    let info_hash: [u8; 20] = match hs_buf[28..48].try_into() {
+        Ok(h) => h,
+        Err(_) => return,
+    };
+    let entry = {
+        let reg = registry.read().await;
+        reg.get(&info_hash).cloned()
+    };
+    match entry {
+        Some(e) => {
+            handle_peer_connection(
+                stream, addr, hs_buf,
+                info_hash, e.our_peer_id,
+                e.torrent_info, e.uploaded, e.peer_count, e.rate_limiter,
+            ).await;
+        }
+        None => {
+            log::debug!("[BT] Unknown info_hash from {} — no matching torrent registered", addr);
+        }
+    }
+}
+
+pub async fn run_shared_listener(port: u16, registry: TorrentRegistry, upnp: bool) {
+    let listen_addr = format!("0.0.0.0:{}", port);
+    let listener = match tokio::net::TcpListener::bind(&listen_addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            log::error!("[BT] Failed to bind shared listener on {}: {}", listen_addr, e);
+            return;
+        }
+    };
+    log::info!("[BT] Shared listener on {} (all torrents)", listen_addr);
+    if upnp {
+        tokio::spawn(async move {
+            let local_ip = {
+                let s = std::net::UdpSocket::bind("0.0.0.0:0").unwrap();
+                if s.connect("8.8.8.8:80").is_err() { return; }
+                match s.local_addr().unwrap().ip() {
+                    std::net::IpAddr::V4(v4) => v4,
+                    _ => return,
+                }
+            };
+            match igd_next::aio::tokio::search_gateway(Default::default()).await {
+                Ok(gw) => {
+                    let local_addr = std::net::SocketAddr::V4(
+                        std::net::SocketAddrV4::new(local_ip, port)
+                    );
+                    match gw.add_port(
+                        igd_next::PortMappingProtocol::TCP,
+                        port, local_addr, 0, "bt-seed",
+                    ).await {
+                        Ok(()) => log::info!("[UPnP] Port {} mapped successfully", port),
+                        Err(e) => log::warn!("[UPnP] Port mapping failed: {}", e),
+                    }
+                }
+                Err(e) => log::warn!("[UPnP] Gateway discovery failed: {}", e),
+            }
+        });
+    }
+    loop {
+        match listener.accept().await {
+            Ok((stream, addr)) => {
+                let reg = Arc::clone(&registry);
+                tokio::spawn(dispatch_connection(stream, addr, reg));
+            }
+            Err(e) => log::warn!("[BT] Accept error: {}", e),
+        }
+    }
 }

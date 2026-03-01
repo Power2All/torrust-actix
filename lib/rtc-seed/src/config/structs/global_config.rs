@@ -12,8 +12,6 @@ pub struct GlobalConfig {
     pub web_cert: Option<PathBuf>,
     pub web_key: Option<PathBuf>,
     pub proxy: Option<ProxyConfig>,
-    /// Minimum log level: "error" | "warn" | "info" (default) | "debug" | "trace"
     pub log_level: Option<String>,
-    /// Print periodic upload stats every 10 s (default: true)
     pub show_stats: Option<bool>,
 }

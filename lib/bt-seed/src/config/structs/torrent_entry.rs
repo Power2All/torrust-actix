@@ -16,7 +16,6 @@ pub struct TorrentEntry {
     #[serde(default)]
     pub trackers: Vec<String>,
     pub webseed: Option<Vec<String>>,
-    pub port: Option<u16>,
     pub version: Option<String>,
     pub torrent_file: Option<String>,
     pub magnet: Option<String>,

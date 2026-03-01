@@ -5,9 +5,11 @@ use crate::web::api::{
     add_torrent,
     browse,
     delete_torrent,
+    get_config,
     get_index,
     get_status,
     get_torrents,
+    update_config,
     update_torrent,
 };
 use crate::web::structs::app_state::AppState;
@@ -72,6 +74,8 @@ pub async fn start(
             .wrap(Condition::new(has_password, auth))
             .route("/", web::get().to(get_index))
             .route("/api/status", web::get().to(get_status))
+            .route("/api/config", web::get().to(get_config))
+            .route("/api/config", web::put().to(update_config))
             .route("/api/torrents", web::get().to(get_torrents))
             .route("/api/torrents", web::post().to(add_torrent))
             .route("/api/torrents/{idx}", web::put().to(update_torrent))

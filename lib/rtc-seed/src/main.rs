@@ -460,16 +460,26 @@ async fn run_torrents_mode(yaml_path: PathBuf, cli_proxy: Option<ProxyConfig>, c
                 }
             }
         };
-        for h in &handles {
-            h.abort();
-        }
-        for h in handles {
-            let _ = h.await;
-        }
-        if !should_reload {
+        if should_reload {
+            for h in &handles {
+                h.abort();
+            }
+            for h in handles {
+                let _ = h.await;
+            }
+            println!("[rtc-seed] Applying new config…\n");
+        } else {
+            println!("[rtc-seed] Shutting down — waiting for tracker announcements (up to 10s)…");
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                async {
+                    for h in handles {
+                        let _ = h.await;
+                    }
+                },
+            ).await;
             println!("[rtc-seed] Shutting down.");
             break;
         }
-        println!("[rtc-seed] Applying new config…\n");
     }
 }

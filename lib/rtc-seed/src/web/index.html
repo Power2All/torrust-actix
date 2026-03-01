@@ -21,9 +21,14 @@
         <div class="sub header" id="status-text">Loading…</div>
       </div>
     </h2>
-    <button class="ui primary button" onclick="toggleAddForm()">
-      <i class="plus icon"></i>Add Torrent
-    </button>
+    <div>
+      <button class="ui icon button" title="Global Settings" onclick="openSettings()">
+        <i class="cog icon"></i> Settings
+      </button>
+      <button class="ui primary button" onclick="toggleAddForm()">
+        <i class="plus icon"></i>Add Torrent
+      </button>
+    </div>
   </div>
 
   <!-- Add Torrent Form -->
@@ -108,6 +113,113 @@
     </div>
   </div>
 
+  <!-- Settings Modal -->
+  <div class="ui modal" id="settings-modal">
+    <div class="header"><i class="cog icon"></i> Global Settings</div>
+    <div class="content">
+      <div class="ui top attached tabular menu" id="settings-tabs">
+        <a class="item active" data-tab="network">Network</a>
+        <a class="item" data-tab="security">Security</a>
+        <a class="item" data-tab="logging">Logging</a>
+      </div>
+
+      <!-- Network tab -->
+      <div class="ui bottom attached active tab segment" data-tab="network">
+        <div class="ui form">
+          <h4 class="ui dividing header">Proxy (tracker announces)</h4>
+          <div class="three fields">
+            <div class="field">
+              <label>Proxy Type</label>
+              <select id="s-proxy-type" class="ui dropdown">
+                <option value="">(none)</option>
+                <option value="http">HTTP</option>
+                <option value="http_auth">HTTP with Auth</option>
+                <option value="socks4">SOCKS4</option>
+                <option value="socks5">SOCKS5</option>
+                <option value="socks5_auth">SOCKS5 with Auth</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Proxy Host</label>
+              <input type="text" id="s-proxy-host" placeholder="127.0.0.1">
+            </div>
+            <div class="field">
+              <label>Proxy Port</label>
+              <input type="number" id="s-proxy-port" placeholder="1080" min="1" max="65535">
+            </div>
+          </div>
+          <div class="two fields">
+            <div class="field">
+              <label>Proxy Username (if required)</label>
+              <input type="text" id="s-proxy-user" placeholder="username">
+            </div>
+            <div class="field">
+              <label>Proxy Password (if required)</label>
+              <input type="password" id="s-proxy-pass" placeholder="password">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security tab -->
+      <div class="ui bottom attached tab segment" data-tab="security">
+        <div class="ui form">
+          <div class="field">
+            <label>Web UI Password (leave blank to disable authentication)</label>
+            <input type="password" id="s-web-password" placeholder="(no password)">
+          </div>
+          <div class="field">
+            <label>TLS Certificate (.pem) — requires restart to take effect</label>
+            <div class="ui action input">
+              <input type="text" id="s-web-cert" placeholder="/path/to/cert.pem">
+              <button class="ui icon button" type="button" onclick="openBrowser('s-web-cert','file')"><i class="folder open icon"></i></button>
+            </div>
+          </div>
+          <div class="field">
+            <label>TLS Private Key (.pem) — requires restart to take effect</label>
+            <div class="ui action input">
+              <input type="text" id="s-web-key" placeholder="/path/to/key.pem">
+              <button class="ui icon button" type="button" onclick="openBrowser('s-web-key','file')"><i class="folder open icon"></i></button>
+            </div>
+          </div>
+          <div class="ui info message">
+            <i class="info circle icon"></i>
+            Password changes take effect immediately on save. TLS cert/key changes require a process restart.
+          </div>
+        </div>
+      </div>
+
+      <!-- Logging tab -->
+      <div class="ui bottom attached tab segment" data-tab="logging">
+        <div class="ui form">
+          <div class="two fields">
+            <div class="field">
+              <label>Log Level (takes effect immediately)</label>
+              <select id="s-log-level" class="ui dropdown">
+                <option value="error">error</option>
+                <option value="warn">warn</option>
+                <option value="info">info (default)</option>
+                <option value="debug">debug</option>
+                <option value="trace">trace</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <div class="ui toggle checkbox" style="margin-top:8px">
+                <input type="checkbox" id="s-show-stats" checked>
+                <label>Show periodic upload stats (takes effect on reload)</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="ui green button" onclick="saveSettings()"><i class="save icon"></i>Save</button>
+      <button class="ui button" onclick="$('#settings-modal').modal('hide')">Cancel</button>
+    </div>
+  </div>
+
   <!-- Torrent Table -->
   <div class="ui segment">
     <table class="ui celled table" id="torrent-table">
@@ -123,7 +235,7 @@
         </tr>
       </thead>
       <tbody id="torrent-tbody">
-        <tr><td colspan="6" class="center aligned">Loading…</td></tr>
+        <tr><td colspan="7" class="center aligned">Loading…</td></tr>
       </tbody>
     </table>
   </div>
@@ -264,13 +376,82 @@ async function deleteTorrent(i) {
   }
 }
 
+// ─── Settings ─────────────────────────────────────────────────────────────
+async function openSettings() {
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    document.getElementById('s-web-password').value = cfg.web_password || '';
+    document.getElementById('s-web-cert').value = cfg.web_cert || '';
+    document.getElementById('s-web-key').value = cfg.web_key || '';
+    document.getElementById('s-log-level').value = cfg.log_level || 'info';
+    document.getElementById('s-show-stats').checked = cfg.show_stats !== false;
+    if (cfg.proxy) {
+      document.getElementById('s-proxy-type').value = cfg.proxy.proxy_type || '';
+      document.getElementById('s-proxy-host').value = cfg.proxy.host || '';
+      document.getElementById('s-proxy-port').value = cfg.proxy.port || '';
+      document.getElementById('s-proxy-user').value = cfg.proxy.username || '';
+      document.getElementById('s-proxy-pass').value = cfg.proxy.password || '';
+    } else {
+      document.getElementById('s-proxy-type').value = '';
+      document.getElementById('s-proxy-host').value = '';
+      document.getElementById('s-proxy-port').value = '';
+      document.getElementById('s-proxy-user').value = '';
+      document.getElementById('s-proxy-pass').value = '';
+    }
+  } catch(e) {
+    alert('Failed to load settings: ' + e.message);
+    return;
+  }
+  $('#settings-modal').modal('show');
+}
+
+async function saveSettings() {
+  const proxyType = document.getElementById('s-proxy-type').value;
+  const proxyHost = document.getElementById('s-proxy-host').value.trim();
+  const proxyPort = parseInt(document.getElementById('s-proxy-port').value) || 0;
+  const hasProxy = proxyType && proxyHost && proxyPort;
+  const webPassword = document.getElementById('s-web-password').value;
+  const webCert = document.getElementById('s-web-cert').value.trim();
+  const webKey = document.getElementById('s-web-key').value.trim();
+  const cfg = {
+    web_port: null,
+    web_password: webPassword || null,
+    web_cert: webCert || null,
+    web_key: webKey || null,
+    proxy: hasProxy ? {
+      proxy_type: proxyType,
+      host: proxyHost,
+      port: proxyPort,
+      username: document.getElementById('s-proxy-user').value.trim() || null,
+      password: document.getElementById('s-proxy-pass').value || null,
+    } : null,
+    log_level: document.getElementById('s-log-level').value || null,
+    show_stats: document.getElementById('s-show-stats').checked ? true : null,
+  };
+  const r = await fetch('/api/config', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(cfg),
+  });
+  if (r.ok) {
+    $('#settings-modal').modal('hide');
+    document.getElementById('status-text').textContent = 'Settings saved — seeders reloading…';
+  } else {
+    alert('Failed to save settings: ' + await r.text());
+  }
+}
+
 (async () => {
   await loadTorrents();
   await loadStats();
 })();
 
 setInterval(loadStats, 5000);
-$(document).ready(() => { $('.ui.checkbox').checkbox(); });
+$(document).ready(() => {
+  $('.ui.checkbox').checkbox();
+  $('.tabular.menu .item').tab();
+});
 
 // ─── File Browser ─────────────────────────────────────────────────────────
 let browserTarget = null;
@@ -295,7 +476,14 @@ function openBrowser(inputId, mode) {
   document.getElementById('browser-select-dir-btn').style.display =
     mode === 'file' ? 'none' : '';
   browserNavigate(startPath);
-  $('#file-browser-modal').modal('show');
+  $('#file-browser-modal').modal({
+    onHidden: function() {
+      // Re-show settings modal if we were browsing from it
+      if (['s-web-cert','s-web-key'].includes(browserTarget)) {
+        $('#settings-modal').modal('show');
+      }
+    }
+  }).modal('show');
 }
 
 async function browserNavigate(path) {
@@ -314,7 +502,7 @@ async function browserNavigate(path) {
   // Breadcrumb
   const parts = (data.path === '/' ? [] : data.path.replace(/\/$/, '').split('/').filter(Boolean));
   let bc = '<div class="ui small breadcrumb">';
-  bc += '<a class="section" href="#" onclick="browserNavigate(\'/\');return false;">/</a>';
+  bc += '<a class="section" href="#" onclick="browserNavigate(\'\/\');return false;">/</a>';
   let built = '';
   for (const p of parts) {
     built += '/' + p;
