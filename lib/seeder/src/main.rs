@@ -9,8 +9,6 @@ use clap::{
     Parser,
     Subcommand
 };
-use std::collections::VecDeque;
-use tokio::sync::broadcast;
 use config::enums::seed_protocol::SeedProtocol;
 use config::structs::proxy_config::ProxyConfig;
 use config::structs::seeder_config::SeederConfig;
@@ -20,12 +18,14 @@ use seeder::seeder::run_shared_listener;
 use seeder::structs::seeder::Seeder;
 use seeder::structs::torrent_registry::new_registry;
 use stats::shared_stats::new_shared_stats;
+use std::collections::VecDeque;
 use std::path::{
     Path,
     PathBuf
 };
 use std::sync::Arc;
 use std::time::SystemTime;
+use tokio::sync::broadcast;
 use tokio::sync::RwLock;
 use torrent::enums::torrent_version::TorrentVersion;
 use torrent::structs::torrent_builder::TorrentBuilder;
@@ -38,8 +38,6 @@ enum SubCmd {
     },
 }
 
-/// Fern log target that fans log lines out to the WebSocket broadcast channel
-/// and appends them to the in-memory ring buffer (max 10 000 lines).
 struct BroadcastLog {
     tx: broadcast::Sender<String>,
     buffer: std::sync::Arc<std::sync::Mutex<VecDeque<String>>>,
@@ -219,12 +217,9 @@ async fn main() {
         hash_password_cmd(password);
         return;
     }
-    // Create the log broadcast channel and ring buffer *before* fern so the
-    // BroadcastLog target can be chained in.
     let log_buffer: std::sync::Arc<std::sync::Mutex<VecDeque<String>>> =
         std::sync::Arc::new(std::sync::Mutex::new(VecDeque::new()));
     let (log_tx, _) = broadcast::channel::<String>(4096);
-
     let level_filter = {
         let s = cli.log_level.clone()
             .or_else(|| cli.config.as_deref().and_then(|p| read_yaml_log_level(Path::new(p))))
@@ -385,7 +380,6 @@ async fn main() {
             };
             spawn_web_server(web_cfg, yaml_path, shared_file, shared_stats, reload_tx, log_tx.clone(), std::sync::Arc::clone(&log_buffer));
         }
-        // Single-torrent mode: only ctrl_c stops it (ext stop never fires).
         let (_stop_tx, stop_rx) = tokio::sync::watch::channel(false);
         let mut s = Seeder::new(config, torrent_info);
         if let Err(e) = s.run(None, stop_rx).await {
@@ -467,6 +461,7 @@ async fn seed_one(
     config: SeederConfig,
     registry: Option<seeder::structs::torrent_registry::TorrentRegistry>,
     stop_rx: tokio::sync::watch::Receiver<bool>,
+    shared_stats: stats::shared_stats::SharedStats,
 ) {
     if config.tracker_urls.is_empty() && config.torrent_file.is_none() && config.magnet.is_none() {
         println!("[{}] Trackers: (none)", label);
@@ -505,9 +500,41 @@ async fn seed_one(
         }
     };
     let mut s = Seeder::new(config, torrent_info);
+    {
+        use std::sync::atomic::Ordering;
+        let uploaded_arc  = Arc::clone(&s.uploaded);
+        let peer_count_arc = Arc::clone(&s.peer_count);
+        let peers_arc     = Arc::clone(&s.peers);
+        let stats_map     = Arc::clone(&shared_stats);
+        let stats_label   = label.clone();
+        let mut srx       = stop_rx.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                        let bt   = peer_count_arc.load(Ordering::Relaxed);
+                        let rtc  = peers_arc.lock().await.len();
+                        let up   = uploaded_arc.load(Ordering::Relaxed);
+                        stats_map.write().await.insert(
+                            stats_label.clone(),
+                            stats::shared_stats::TorrentStats { uploaded: up, peer_count: bt + rtc },
+                        );
+                    }
+                    _ = srx.changed() => {
+                        if *srx.borrow() {
+                            stats_map.write().await.remove(&stats_label);
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     if let Err(e) = s.run(registry, stop_rx).await {
         eprintln!("[{}] Fatal: {}", label, e);
     }
+    shared_stats.write().await.remove(&label);
 }
 
 async fn run_torrents_mode(
@@ -603,7 +630,8 @@ async fn run_torrents_mode(
                 let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
                 stop_txs.push(stop_tx);
                 let reg = if cfg.protocol.has_bt() { Some(Arc::clone(&registry)) } else { None };
-                tokio::spawn(seed_one(label, cfg, reg, stop_rx))
+                let ss = Arc::clone(&shared_stats);
+                tokio::spawn(seed_one(label, cfg, reg, stop_rx, ss))
             })
             .collect();
         let initial_mtime = file_mtime(&yaml_path);
@@ -645,7 +673,6 @@ async fn run_torrents_mode(
             h.abort();
             let _ = h.await;
         }
-        // Signal every seeder to stop gracefully so they can send "stopped" announces.
         for tx in &stop_txs {
             let _ = tx.send(true);
         }
@@ -655,7 +682,6 @@ async fn run_torrents_mode(
             "[seeder] Shutting down — waiting for seeders to send 'stopped' announces (up to 15s)…"
         };
         println!("{}", shutdown_msg);
-        // Keep abort handles so we can forcibly kill any seeder that doesn't finish in time.
         let abort_handles: Vec<_> = handles.iter().map(|h| h.abort_handle()).collect();
         let _ = tokio::time::timeout(
             std::time::Duration::from_secs(15),
@@ -665,7 +691,6 @@ async fn run_torrents_mode(
                 }
             },
         ).await;
-        // Abort any stragglers that didn't finish within the timeout.
         for ah in abort_handles {
             ah.abort();
         }
