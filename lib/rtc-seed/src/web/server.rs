@@ -3,6 +3,7 @@ use crate::config::structs::web_config::WebConfig;
 use crate::stats::shared_stats::SharedStats;
 use crate::web::api::{
     add_torrent,
+    browse,
     delete_torrent,
     get_index,
     get_status,
@@ -75,6 +76,7 @@ pub async fn start(
             .route("/api/torrents", web::post().to(add_torrent))
             .route("/api/torrents/{idx}", web::put().to(update_torrent))
             .route("/api/torrents/{idx}", web::delete().to(delete_torrent))
+            .route("/api/browse", web::get().to(browse))
     });
     if let Some((cert_path, key_path)) = cert_key {
         let cert_data = std::fs::read(&cert_path)?;

@@ -188,6 +188,7 @@ pub async fn handle_peer(
     }
     peer_count.fetch_add(1, Ordering::Relaxed);
     let _guard = PeerCountGuard { count: Arc::clone(&peer_count) };
+    let peer_uploaded = Arc::new(AtomicU64::new(0));
     log::info!(
         "[BT] Peer connected: {} ({}…)",
         addr,
@@ -241,6 +242,7 @@ pub async fn handle_peer(
                                     break;
                                 }
                                 uploaded.fetch_add(bytes_sent, Ordering::Relaxed);
+                                peer_uploaded.fetch_add(bytes_sent, Ordering::Relaxed);
                             }
                             Err(e) => {
                                 log::warn!("[BT] Block read error: {}", e);
@@ -262,8 +264,9 @@ pub async fn handle_peer(
     }
 
     log::info!(
-        "[BT] Peer disconnected: {} ({}…)",
+        "[BT] Peer disconnected: {} ({}…) — uploaded: {}",
         addr,
-        peer_id_hex.get(..8).unwrap_or(&peer_id_hex)
+        peer_id_hex.get(..8).unwrap_or(&peer_id_hex),
+        fmt_bytes(peer_uploaded.load(Ordering::Relaxed))
     );
 }

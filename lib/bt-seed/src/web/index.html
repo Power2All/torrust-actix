@@ -56,7 +56,10 @@
       <div class="two fields">
         <div class="field">
           <label>Data Path (file or folder to seed — auto-discovered next to .torrent file if blank)</label>
-          <input type="text" id="f-path" placeholder="/path/to/file.mkv  or  /path/to/MyCollection/">
+          <div class="ui action input">
+            <input type="text" id="f-path" placeholder="/path/to/file.mkv  or  /path/to/MyCollection/">
+            <button class="ui icon button" type="button" title="Browse" onclick="openBrowser('f-path','any')"><i class="folder open icon"></i></button>
+          </div>
         </div>
         <div class="field">
           <label>Trackers (one per line, optional — auto-read from .torrent file if blank)</label>
@@ -66,7 +69,10 @@
       <div class="three fields">
         <div class="field">
           <label>Torrent Metadata File (.torrent — for re-seeding an existing torrent)</label>
-          <input type="text" id="f-torrent-file" placeholder="/path/to/existing.torrent">
+          <div class="ui action input">
+            <input type="text" id="f-torrent-file" placeholder="/path/to/existing.torrent">
+            <button class="ui icon button" type="button" title="Browse" onclick="openBrowser('f-torrent-file','file')"><i class="folder open icon"></i></button>
+          </div>
         </div>
         <div class="field">
           <label>Magnet URI</label>
@@ -88,6 +94,23 @@
       </button>
       <button class="ui button" type="button" onclick="toggleAddForm()">Cancel</button>
     </form>
+  </div>
+
+  <!-- File Browser Modal -->
+  <div class="ui modal" id="file-browser-modal">
+    <div class="header"><i class="folder open icon"></i> <span id="browser-title">Browse</span></div>
+    <div class="content" style="padding-bottom:0">
+      <div id="browser-breadcrumb" style="margin-bottom:8px;font-size:0.9em;word-break:break-all"></div>
+      <div style="border:1px solid #ddd;border-radius:4px;max-height:380px;overflow-y:auto">
+        <div id="browser-list" style="margin:0"></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="ui blue button" id="browser-select-dir-btn" onclick="browserSelectFolder()">
+        <i class="check icon"></i>Select This Folder
+      </button>
+      <button class="ui button" onclick="$('#file-browser-modal').modal('hide')">Cancel</button>
+    </div>
   </div>
 
   <!-- Torrent Table -->
@@ -258,6 +281,114 @@ setInterval(loadStats, 5000);
 
 // Initialize Semantic UI checkboxes
 $(document).ready(() => { $('.ui.checkbox').checkbox(); });
+
+// ─── File Browser ─────────────────────────────────────────────────────────
+let browserTarget = null;
+let browserMode   = 'any'; // 'any' | 'file'
+let browserPath   = '/';
+
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
+
+function openBrowser(inputId, mode) {
+  browserTarget = inputId;
+  browserMode   = mode;
+  const cur = document.getElementById(inputId).value.trim();
+  let startPath = '/';
+  if (cur) {
+    const slash = cur.lastIndexOf('/');
+    startPath = slash > 0 ? cur.substring(0, slash) : '/';
+  }
+  document.getElementById('browser-title').textContent =
+    mode === 'file' ? 'Select File' : 'Select File or Folder';
+  document.getElementById('browser-select-dir-btn').style.display =
+    mode === 'file' ? 'none' : '';
+  browserNavigate(startPath);
+  $('#file-browser-modal').modal('show');
+}
+
+async function browserNavigate(path) {
+  browserPath = path;
+  document.getElementById('browser-list').innerHTML =
+    '<div style="padding:16px;color:#999;text-align:center">Loading…</div>';
+  const r = await fetch('/api/browse?path=' + encodeURIComponent(path));
+  if (!r.ok) {
+    document.getElementById('browser-list').innerHTML =
+      '<div style="padding:12px;color:#c00">Error: ' + escHtml(await r.text()) + '</div>';
+    return;
+  }
+  const data = await r.json();
+  browserPath = data.path;
+
+  // Breadcrumb
+  const parts = (data.path === '/' ? [] : data.path.replace(/\/$/, '').split('/').filter(Boolean));
+  let bc = '<div class="ui small breadcrumb">';
+  bc += '<a class="section" href="#" onclick="browserNavigate(\'/\');return false;">/</a>';
+  let built = '';
+  for (const p of parts) {
+    built += '/' + p;
+    const bp = built;
+    bc += '<i class="right angle icon divider"></i>';
+    bc += `<a class="section" href="#" onclick="browserNavigate(${JSON.stringify(bp)});return false;">${escHtml(p)}</a>`;
+  }
+  bc += '</div>';
+  document.getElementById('browser-breadcrumb').innerHTML = bc;
+
+  // Entries
+  const base = data.path === '/' ? '' : data.path.replace(/\/$/, '');
+  let html = '';
+  if (data.parent !== null) {
+    html += `<div class="browser-item" data-path="${escAttr(data.parent)}" data-isdir="true"
+               style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid #f0f0f0">
+      <i class="level up alternate icon" style="color:#888;margin:0;flex-shrink:0"></i>
+      <span style="color:#555">..</span>
+    </div>`;
+  }
+  for (const e of data.entries) {
+    const fp = base + '/' + e.name;
+    if (e.is_dir) {
+      html += `<div class="browser-item" data-path="${escAttr(fp)}" data-isdir="true"
+                 style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid #f0f0f0">
+        <i class="folder icon" style="color:#f0c040;margin:0;flex-shrink:0"></i>
+        <span>${escHtml(e.name)}</span>
+      </div>`;
+    } else {
+      const sel = browserMode !== 'dir';
+      html += `<div class="browser-item" data-path="${escAttr(fp)}" data-isdir="false" data-selectable="${sel}"
+                 style="padding:8px 12px;${sel?'cursor:pointer':'opacity:0.45'};display:flex;align-items:center;gap:8px;border-bottom:1px solid #f0f0f0">
+        <i class="file outline icon" style="color:#888;margin:0;flex-shrink:0"></i>
+        <span>${escHtml(e.name)}</span>
+        <span style="color:#aaa;font-size:0.82em;margin-left:auto;flex-shrink:0">${fmtBytes(e.size)}</span>
+      </div>`;
+    }
+  }
+  if (!html) {
+    html = '<div style="padding:16px;color:#999;text-align:center">Empty folder</div>';
+  }
+  document.getElementById('browser-list').innerHTML = html;
+}
+
+function browserSelectFile(path) {
+  document.getElementById(browserTarget).value = path;
+  $('#file-browser-modal').modal('hide');
+}
+
+function browserSelectFolder() {
+  document.getElementById(browserTarget).value = browserPath;
+  $('#file-browser-modal').modal('hide');
+}
+
+$(document).on('click', '.browser-item', function() {
+  const path   = this.dataset.path;
+  const isDir  = this.dataset.isdir === 'true';
+  const sel    = this.dataset.selectable !== 'false';
+  if (isDir) {
+    browserNavigate(path);
+  } else if (sel) {
+    browserSelectFile(path);
+  }
+});
 </script>
 </body>
 </html>

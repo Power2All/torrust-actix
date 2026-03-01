@@ -105,57 +105,69 @@ impl Seeder {
         let mut rtc_interval_ms = self.config.rtc_interval_ms;
         loop {
             let uploaded = self.uploaded.load(Ordering::Relaxed);
-            let tracker = match &tracker_opt {
-                Some(t) => t,
-                None => {
-                    tokio::time::sleep(std::time::Duration::from_millis(rtc_interval_ms)).await;
-                    continue;
-                }
-            };
-            match tracker
-                .announce_seeder(&current_pc.sdp_offer, uploaded, event)
-                .await
-            {
-                Ok(resp) => {
-                    event = "";
-                    if let Some(ri) = resp.rtc_interval {
-                        rtc_interval_ms = ri * 1000;
-                    }
-                    for answer in resp.rtc_answers {
-                        log::info!(
-                            "[Seeder] Answer from peer {}…",
-                            answer.peer_id_hex.get(..8).unwrap_or(&answer.peer_id_hex)
-                        );
-                        let next_pc = match PeerConn::new(
-                            &self.config,
-                            Arc::clone(&self.torrent_info),
-                            Arc::clone(&self.uploaded),
-                            rate_limiter.clone(),
-                        )
-                        .await
-                        {
-                            Ok(pc) => pc,
-                            Err(e) => {
-                                log::error!("[Seeder] Failed to create new PeerConn: {}", e);
-                                break;
+            if let Some(tracker) = &tracker_opt {
+                match tracker
+                    .announce_seeder(&current_pc.sdp_offer, uploaded, event)
+                    .await
+                {
+                    Ok(resp) => {
+                        event = "";
+                        if let Some(ri) = resp.rtc_interval {
+                            rtc_interval_ms = ri * 1000;
+                        }
+                        for answer in resp.rtc_answers {
+                            log::info!(
+                                "[Seeder] Answer from peer {}…",
+                                answer.peer_id_hex.get(..8).unwrap_or(&answer.peer_id_hex)
+                            );
+                            let next_pc = match PeerConn::new(
+                                &self.config,
+                                Arc::clone(&self.torrent_info),
+                                Arc::clone(&self.uploaded),
+                                rate_limiter.clone(),
+                            )
+                            .await
+                            {
+                                Ok(pc) => pc,
+                                Err(e) => {
+                                    log::error!("[Seeder] Failed to create new PeerConn: {}", e);
+                                    break;
+                                }
+                            };
+                            if let Err(e) = current_pc.handle_answer(answer.sdp_answer).await {
+                                log::error!("[Seeder] handle_answer failed: {}", e);
                             }
-                        };
-                        if let Err(e) = current_pc.handle_answer(answer.sdp_answer).await {
-                            log::error!("[Seeder] handle_answer failed: {}", e);
+                            {
+                                let mut peers = self.peers.lock().await;
+                                peers.insert(answer.peer_id_hex, Arc::new(current_pc));
+                            }
+                            current_pc = next_pc;
                         }
-                        {
-                            let mut peers = self.peers.lock().await;
-                            peers.insert(answer.peer_id_hex, Arc::new(current_pc));
-                        }
-                        current_pc = next_pc;
                     }
-                }
-                Err(e) => {
-                    log::warn!("[Tracker] Announce failed: {}", e);
+                    Err(e) => {
+                        log::warn!("[Tracker] Announce failed: {}", e);
+                    }
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_millis(rtc_interval_ms)).await;
+            tokio::select! {
+                _ = tokio::time::sleep(std::time::Duration::from_millis(rtc_interval_ms)) => {}
+                _ = tokio::signal::ctrl_c() => break,
+            }
         }
+        println!("\n[RTC] Shutting down…");
+        if let Some(ref tracker) = tracker_opt {
+            let uploaded = self.uploaded.load(Ordering::Relaxed);
+            log::info!("[Tracker] Sending 'stopped' announcement…");
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                tracker.announce_seeder("", uploaded, "stopped"),
+            ).await {
+                Ok(Ok(_))  => log::info!("[Tracker] Stopped announcement sent"),
+                Ok(Err(e)) => log::warn!("[Tracker] Stopped announce failed: {}", e),
+                Err(_)     => log::warn!("[Tracker] Stopped announce timed out"),
+            }
+        }
+        Ok(())
     }
 
     async fn pick_tracker(&self) -> Option<TrackerClient> {

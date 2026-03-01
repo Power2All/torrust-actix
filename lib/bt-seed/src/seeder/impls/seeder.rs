@@ -124,7 +124,7 @@ impl Seeder {
                 }
             });
         }
-        if let Some(tracker) = tracker_opt {
+        if let Some(ref tracker) = tracker_opt {
             let tracker_ann = tracker.clone();
             let uploaded_ann = Arc::clone(&self.uploaded);
             tokio::spawn(async move {
@@ -146,21 +146,42 @@ impl Seeder {
         let info_hash = self.torrent_info.info_hash;
         let peer_id = self.peer_id;
         loop {
-            match listener.accept().await {
-                Ok((stream, addr)) => {
-                    let ti = Arc::clone(&self.torrent_info);
-                    let up = Arc::clone(&self.uploaded);
-                    let pc = Arc::clone(&self.peer_count);
-                    let rl = rate_limiter.clone();
-                    tokio::spawn(async move {
-                        handle_peer(stream, addr, info_hash, peer_id, ti, up, pc, rl).await;
-                    });
+            tokio::select! {
+                result = listener.accept() => {
+                    match result {
+                        Ok((stream, addr)) => {
+                            let ti = Arc::clone(&self.torrent_info);
+                            let up = Arc::clone(&self.uploaded);
+                            let pc = Arc::clone(&self.peer_count);
+                            let rl = rate_limiter.clone();
+                            tokio::spawn(async move {
+                                handle_peer(stream, addr, info_hash, peer_id, ti, up, pc, rl).await;
+                            });
+                        }
+                        Err(e) => {
+                            log::warn!("[BT] Accept error: {}", e);
+                        }
+                    }
                 }
-                Err(e) => {
-                    log::warn!("[BT] Accept error: {}", e);
+                _ = tokio::signal::ctrl_c() => {
+                    println!("\n[BT] Shutting down…");
+                    if let Some(ref tracker) = tracker_opt {
+                        let uploaded = self.uploaded.load(Ordering::Relaxed);
+                        log::info!("[Tracker] Sending 'stopped' announcement…");
+                        match tokio::time::timeout(
+                            std::time::Duration::from_secs(5),
+                            tracker.announce(uploaded, "stopped"),
+                        ).await {
+                            Ok(Ok(_))  => log::info!("[Tracker] Stopped announcement sent"),
+                            Ok(Err(e)) => log::warn!("[Tracker] Stopped announce failed: {}", e),
+                            Err(_)     => log::warn!("[Tracker] Stopped announce timed out"),
+                        }
+                    }
+                    break;
                 }
             }
         }
+        Ok(())
     }
 
     async fn try_announce_start(&self, interval_out: &mut u64) -> Option<TrackerClient> {
