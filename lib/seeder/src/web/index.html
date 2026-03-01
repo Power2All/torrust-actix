@@ -798,10 +798,10 @@ function openBrowser(inputId, mode) {
   browserTarget = inputId;
   browserMode   = mode;
   const cur = document.getElementById(inputId).value.trim();
-  let startPath = '/';
+  let startPath = '';
   if (cur) {
     const slash = cur.lastIndexOf('/');
-    startPath = slash > 0 ? cur.substring(0, slash) : '/';
+    startPath = slash > 0 ? cur.substring(0, slash) : '';
   }
   document.getElementById('browser-title').textContent =
     mode === 'file' ? 'Select File' : 'Select File or Folder';

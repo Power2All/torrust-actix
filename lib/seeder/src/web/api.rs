@@ -105,8 +105,16 @@ pub async fn browse(req: HttpRequest, query: Query<BrowseQuery>, data: Data<AppS
     if !is_authenticated(&req, &data).await {
         return HttpResponse::Unauthorized().json(json!({"error": "Unauthorized"}));
     }
-    let raw = query.path.as_deref().unwrap_or("/");
-    let dir = std::path::Path::new(raw);
+    let raw = query.path.as_deref().unwrap_or("");
+    let dir_buf;
+    let dir = if raw.is_empty() {
+        dir_buf = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("/"));
+        dir_buf.as_path()
+    } else {
+        dir_buf = std::path::PathBuf::from(raw);
+        dir_buf.as_path()
+    };
     let read_dir = match std::fs::read_dir(dir) {
         Ok(rd) => rd,
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
