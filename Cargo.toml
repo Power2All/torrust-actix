@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "lib/rtc-seed", "lib/bt-seed"]
+members = [".", "lib/torrust-client", "lib/seeder"]
 resolver = "3"
 
 [package]

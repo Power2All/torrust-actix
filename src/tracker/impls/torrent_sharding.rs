@@ -100,6 +100,7 @@ impl TorrentSharding {
             let cutoff = now - peer_timeout;
             let rtc_cutoff = now - rtc_peer_timeout;
             let mut expired_full: Vec<InfoHash> = Vec::new();
+            #[allow(clippy::type_complexity)]
             let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
             {
                 let shard_read = shard_arc.read();
