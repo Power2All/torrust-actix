@@ -1,0 +1,11 @@
+{
+  "name": "torrust-client",
+  "version": "4.2.0",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

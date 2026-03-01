@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Torrust Client</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      user-select: none;
+    }
+
+    h1 {
+      font-size: 2.4rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      margin-bottom: 2rem;
+    }
+
+    button {
+      padding: 0.55rem 1.6rem;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: 500;
+      border: none;
+      border-radius: 6px;
+      background: #89b4fa;
+      color: #1e1e2e;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    button:hover  { background: #74c7ec; }
+    button:active { transform: scale(0.96); }
+  </style>
+</head>
+<body>
+  <h1>Hello World!</h1>
+  <button id="close-btn">Close</button>
+
+  <script>
+    document.getElementById('close-btn').addEventListener('click', async () => {
+      // window.__TAURI__ is available because withGlobalTauri = true in tauri.conf.json
+      await window.__TAURI__.core.invoke('close_app');
+    });
+  </script>
+</body>
+</html>

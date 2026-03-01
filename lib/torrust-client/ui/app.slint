@@ -1,0 +1,30 @@
+import { Button, VerticalBox } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "Torrust Client";
+    preferred-width: 400px;
+    preferred-height: 220px;
+    min-width: 300px;
+    min-height: 160px;
+
+    /// Emitted by the Close button. The native X button quits automatically.
+    callback quit();
+
+    VerticalBox {
+        alignment: center;
+        spacing: 20px;
+        padding: 32px;
+
+        Text {
+            text: "Hello World!";
+            font-size: 28px;
+            font-weight: 700;
+            horizontal-alignment: center;
+        }
+
+        Button {
+            text: "Close";
+            clicked => { root.quit(); }
+        }
+    }
+}
