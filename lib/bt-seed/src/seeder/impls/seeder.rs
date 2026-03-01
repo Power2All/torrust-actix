@@ -48,6 +48,22 @@ impl Seeder {
         }
         println!("\nMagnet URI:\n{}\n", self.torrent_info.magnet_uri);
         println!("Share the magnet URI or the .torrent file with leechers.\n");
+        // Print resolved data-file paths and validate they all exist.
+        println!("Data  :");
+        for file in &self.torrent_info.files {
+            println!("  {}", file.path.display());
+        }
+        println!();
+        let mut missing = false;
+        for file in &self.torrent_info.files {
+            if !file.path.exists() {
+                eprintln!("[BT] Missing file: {}", file.path.display());
+                missing = true;
+            }
+        }
+        if missing {
+            return Err("one or more data files are missing — cannot seed".into());
+        }
         let listen_addr = format!("0.0.0.0:{}", self.config.listen_port);
         let listener = tokio::net::TcpListener::bind(&listen_addr).await?;
         println!("Seeding… on {} (Ctrl+C to stop)\n", listen_addr);

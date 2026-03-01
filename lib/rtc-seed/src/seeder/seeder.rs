@@ -180,7 +180,9 @@ fn read_piece(info: &TorrentInfo, piece_index: usize) -> std::io::Result<Vec<u8>
         }
         let in_file_start = overlap_start - file_entry.offset;
         let n = (overlap_end - overlap_start) as usize;
-        let mut f = File::open(&file_entry.path)?;
+        let mut f = File::open(&file_entry.path).map_err(|e| {
+            std::io::Error::new(e.kind(), format!("{}: {}", file_entry.path.display(), e))
+        })?;
         f.seek(SeekFrom::Start(in_file_start))?;
         f.read_exact(&mut buf[filled..filled + n])?;
         filled += n;

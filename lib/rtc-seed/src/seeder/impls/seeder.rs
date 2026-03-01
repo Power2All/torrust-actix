@@ -48,6 +48,22 @@ impl Seeder {
         }
         println!("\nMagnet URI:\n{}\n", self.torrent_info.magnet_uri);
         println!("Share the magnet URI or the .torrent file with leechers.\n");
+        // Print resolved data-file paths and validate they all exist.
+        println!("Data  :");
+        for file in &self.torrent_info.files {
+            println!("  {}", file.path.display());
+        }
+        println!();
+        let mut missing = false;
+        for file in &self.torrent_info.files {
+            if !file.path.exists() {
+                eprintln!("[RTC] Missing file: {}", file.path.display());
+                missing = true;
+            }
+        }
+        if missing {
+            return Err("one or more data files are missing — cannot seed".into());
+        }
         let rate_limiter: Option<SharedRateLimiter> =
             self.config.upload_limit.and_then(|kbs| {
                 NonZeroU32::new(kbs as u32 * 1024).map(|quota_cells| {
