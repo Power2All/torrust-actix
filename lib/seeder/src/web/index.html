@@ -4,12 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>seeder — Web Management</title>
+  <!-- Apply saved theme before CSS loads to prevent flash -->
+  <script>
+  (function(){
+    var t = localStorage.getItem('seeder_theme') || 'auto';
+    var dark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme:dark)').matches);
+    if (dark) document.documentElement.classList.add('dark-mode');
+  })();
+  </script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/semantic-ui@2.5.0/dist/semantic.min.css">
   <style>
     body { padding: 20px; background: #f5f5f5; }
     .container { max-width: 1200px; margin: 0 auto; }
     .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-    #add-form { display: none; }
+    #theme-select {
+      height: 32px; padding: 0 8px; border-radius: 4px;
+      border: 1px solid #ccc; background: #fff;
+      cursor: pointer; font-size: 0.9em; vertical-align: middle;
+    }
     #login-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.55);
       display: flex; align-items: center; justify-content: center;
@@ -23,6 +35,48 @@
     .proto-bt  { background: #2185d0 !important; color: #fff !important; }
     .proto-rtc { background: #21ba45 !important; color: #fff !important; }
     .proto-both{ background: #00b5ad !important; color: #fff !important; }
+
+    /* ── Dark mode ───────────────────────────────────────────────────── */
+    html.dark-mode body { background: #1b1c1d; color: #e0e0e0; }
+    html.dark-mode #login-box {
+      background: #27292a; color: #e0e0e0;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+    html.dark-mode .ui.segment,
+    html.dark-mode .ui.bottom.attached.segment {
+      background: #27292a; border-color: #444; color: #e0e0e0;
+    }
+    html.dark-mode .ui.celled.table { background: #27292a; color: #e0e0e0; border-color: #444; }
+    html.dark-mode .ui.celled.table thead th { background: #1f2021; color: #e0e0e0; border-color: #444; }
+    html.dark-mode .ui.celled.table tbody tr td { border-color: #3d3d3d; }
+    html.dark-mode .ui.celled.table tbody tr:hover td { background: #353637 !important; }
+    html.dark-mode .ui.form input[type="text"],
+    html.dark-mode .ui.form input[type="number"],
+    html.dark-mode .ui.form input[type="password"],
+    html.dark-mode .ui.form textarea,
+    html.dark-mode .ui.form select,
+    html.dark-mode .ui.input input { background: #3a3b3c !important; color: #e0e0e0 !important; border-color: #555 !important; }
+    html.dark-mode .ui.modal { background: #27292a; color: #e0e0e0; }
+    html.dark-mode .ui.modal > .header { background: #1f2021; color: #e0e0e0; border-color: #444; }
+    html.dark-mode .ui.modal > .content { background: #27292a; color: #e0e0e0; }
+    html.dark-mode .ui.modal > .actions { background: #1f2021; border-color: #444; }
+    html.dark-mode .ui.top.attached.tabular.menu { background: #1f2021; border-color: #444; }
+    html.dark-mode .ui.top.attached.tabular.menu .item { color: #bbb; border-color: transparent; }
+    html.dark-mode .ui.top.attached.tabular.menu .active.item { background: #27292a; color: #fff; border-color: #444 #444 #27292a; }
+    html.dark-mode .ui.header,
+    html.dark-mode .ui.header .sub.header,
+    html.dark-mode .ui.dividing.header { color: #e0e0e0 !important; border-color: #444; }
+    html.dark-mode label { color: #bbb !important; }
+    html.dark-mode .ui.info.message { background: #1e3a4a; color: #9dcfe8; border-color: #2a5a7a; }
+    html.dark-mode .ui.toggle.checkbox label { color: #bbb !important; }
+    html.dark-mode .ui.basic.button { color: #e0e0e0 !important; box-shadow: 0 0 0 1px #666 inset !important; }
+    html.dark-mode .ui.basic.button:hover { background: #3a3b3c !important; }
+    html.dark-mode #theme-select { background: #3a3b3c; color: #e0e0e0; border-color: #555; }
+    html.dark-mode #theme-icon { color: #ccc; }
+    html.dark-mode .browser-item { border-bottom-color: #3d3d3d !important; color: #e0e0e0; }
+    html.dark-mode .browser-item:hover { background: #353637; }
+    html.dark-mode #browser-breadcrumb { color: #bbb; }
+    html.dark-mode .ui.breadcrumb a { color: #6ab0e0; }
   </style>
 </head>
 <body>
@@ -52,7 +106,13 @@
         <div class="sub header" id="status-text">Loading…</div>
       </div>
     </h2>
-    <div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <i id="theme-icon" class="adjust icon" style="opacity:0.6"></i>
+      <select id="theme-select" onchange="setTheme(this.value)" title="Color theme">
+        <option value="auto">Auto</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
       <button class="ui icon button" title="Global Settings" onclick="openSettings()">
         <i class="cog icon"></i> Settings
       </button>
@@ -66,7 +126,7 @@
   </div>
 
   <!-- Add Torrent Form -->
-  <div class="ui segment" id="add-form">
+  <div class="ui segment" id="add-form" style="display:none">
     <h4 class="ui dividing header">Add New Torrent</h4>
     <form class="ui form" id="form-add">
       <div class="four fields">
@@ -336,6 +396,30 @@
 let torrents = [];
 let stats = {};
 let authToken = localStorage.getItem('seeder_token') || null;
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+const themeIcons = { auto: 'adjust', light: 'sun', dark: 'moon' };
+
+function applyTheme(theme) {
+  const dark = theme === 'dark' ||
+    (theme === 'auto' && window.matchMedia('(prefers-color-scheme:dark)').matches);
+  document.documentElement.classList.toggle('dark-mode', dark);
+}
+
+function setTheme(theme) {
+  localStorage.setItem('seeder_theme', theme);
+  applyTheme(theme);
+  const sel = document.getElementById('theme-select');
+  const ico = document.getElementById('theme-icon');
+  if (sel) sel.value = theme;
+  if (ico) ico.className = themeIcons[theme] + ' icon';
+}
+
+// Update when system preference changes (only matters in Auto mode)
+window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change', () => {
+  const t = localStorage.getItem('seeder_theme') || 'auto';
+  if (t === 'auto') applyTheme('auto');
+});
 
 function authHeaders() {
   const h = {'Content-Type': 'application/json'};
@@ -686,6 +770,9 @@ setInterval(loadStats, 5000);
 $(document).ready(() => {
   $('.ui.checkbox').checkbox();
   $('.tabular.menu .item').tab();
+  // Sync theme picker to saved preference
+  const savedTheme = localStorage.getItem('seeder_theme') || 'auto';
+  setTheme(savedTheme);
 });
 
 let browserTarget = null;
