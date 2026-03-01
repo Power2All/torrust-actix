@@ -440,11 +440,17 @@ async function apiFetch(url, opts = {}) {
 }
 
 function showLogin() {
-  document.getElementById('login-overlay').style.display = 'flex';
+  const overlay = document.getElementById('login-overlay');
+  const alreadyVisible = overlay.style.display === 'flex';
+  overlay.style.display = 'flex';
   document.getElementById('main-app').style.display = 'none';
-  document.getElementById('login-password').value = '';
-  document.getElementById('login-error').style.display = 'none';
-  setTimeout(() => document.getElementById('login-password').focus(), 100);
+  // Only reset the form when first showing the overlay — not on repeated 401s
+  // that fire while the user is already typing their password.
+  if (!alreadyVisible) {
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error').style.display = 'none';
+    setTimeout(() => document.getElementById('login-password').focus(), 100);
+  }
 }
 
 function showApp() {
@@ -554,6 +560,7 @@ async function loadTorrents() {
 }
 
 async function loadStats() {
+  if (!authToken) return; // skip polling while logged out — avoids 401 resetting the login form
   try {
     const r = await apiFetch('/api/status');
     const data = await r.json();
