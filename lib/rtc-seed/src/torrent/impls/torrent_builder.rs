@@ -39,8 +39,6 @@ impl TorrentBuilder {
                     })
                     .collect()
             } else {
-                // Resolve relative paths from the torrent metadata.
-                // Prefer the directory containing the .torrent file, then fall back to cwd.
                 let torrent_dir = torrent_path
                     .parent()
                     .and_then(|p| p.canonicalize().ok());
@@ -49,7 +47,6 @@ impl TorrentBuilder {
                     .into_iter()
                     .map(|mut f| {
                         if f.path.is_relative() {
-                            // Try torrent-file directory first
                             if let Some(ref dir) = torrent_dir {
                                 let candidate = dir.join(&f.path);
                                 if candidate.exists() {
@@ -93,7 +90,6 @@ impl TorrentBuilder {
             }
         }
         assert!(!config.file_paths.is_empty(), "no files provided");
-        // Compute name from the original paths before directory expansion
         let name = config.name.clone().unwrap_or_else(|| {
             config.file_paths[0]
                 .file_name()

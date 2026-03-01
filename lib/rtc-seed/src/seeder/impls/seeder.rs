@@ -48,7 +48,6 @@ impl Seeder {
         }
         println!("\nMagnet URI:\n{}\n", self.torrent_info.magnet_uri);
         println!("Share the magnet URI or the .torrent file with leechers.\n");
-        // Print resolved data-file paths and validate they all exist.
         println!("Data  :");
         for file in &self.torrent_info.files {
             println!("  {}", file.path.display());

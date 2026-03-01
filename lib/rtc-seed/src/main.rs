@@ -167,8 +167,6 @@ async fn main() {
         let has_input = !cli.files.is_empty() || cli.torrent_file.is_some();
         if !has_input {
             if cli.web_port.is_some() {
-                // No files given but --web-port is set: start empty multi-torrent mode
-                // so the user can add torrents through the web UI.
                 let yaml_path = PathBuf::from("torrents.yaml");
                 let cli_proxy = build_proxy_from_cli(&cli);
                 let cli_web = WebConfig {
