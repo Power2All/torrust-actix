@@ -34,7 +34,7 @@ A unified Rust seeder that serves torrent data over **BitTorrent** (BT wire prot
 When `protocol` is `bt` or `both` (the default):
 
 1. **Torrent creation** — the seeder hashes the piece data (SHA-1 v1, SHA-256 v2, or hybrid) and writes a `.torrent` file.
-2. **Tracker announce** — announces `started` to each configured tracker URL in order, using HTTP (`http://`, `https://`) or the UDP tracker protocol (`udp://`). The first tracker that responds is used for subsequent re-announces.
+2. **Tracker announce** — announces `started` to every configured tracker URL using HTTP (`http://`, `https://`) or the UDP tracker protocol (`udp://`). All trackers that respond successfully are kept; re-announces are sent to all of them. The re-announce interval is the minimum interval reported by any tracker.
 3. **TCP listener** — binds a TCP port (default `6881`). In multi-torrent mode a single shared listener handles all torrents by looking up the info-hash from the BT handshake.
 4. **Peer connection** — for each inbound TCP connection the seeder performs the BT handshake, sends a full bitfield, unchokes the peer, then fulfils `REQUEST` messages by reading blocks directly from disk (no full-file buffering).
 5. **UPnP** — optionally maps the TCP port on the local gateway using `igd-next`.
@@ -45,7 +45,7 @@ When `protocol` is `bt` or `both` (the default):
 When `protocol` is `rtc` or `both`:
 
 1. **Offer creation** — a `RTCPeerConnection` is created and an SDP offer is generated with ICE candidates gathered (up to 5 s timeout). The seeder always holds one unused offer ready to hand to the next incoming peer.
-2. **Tracker announce** — announces to the first HTTP(S) tracker URL with the SDP offer encoded as `rtcoffer=`. The tracker stores the offer alongside the seeder's peer entry.
+2. **Tracker announce** — announces to every HTTP(S) tracker URL with the SDP offer encoded as `rtcoffer=`. Each tracker stores the offer alongside the seeder's peer entry. Answers are collected from all trackers each signaling cycle.
 3. **Answer polling** — each signaling cycle the seeder re-announces and retrieves any pending `rtc_answers` from the tracker. For each answer it calls `set_remote_description` on the corresponding `PeerConnection`, completing the WebRTC handshake, and immediately creates a fresh offer for the next peer.
 4. **Data channel** — once the WebRTC data channel opens, the seeder listens for `MSG_PIECE_REQUEST` frames (1-byte type `0x01` + 4-byte big-endian piece index). It reads the full piece from disk and replies with either a single `MSG_PIECE_DATA` frame (≤ 65 531 bytes) or multiple `MSG_PIECE_CHUNK` frames for large pieces.
 5. **Re-announce interval** — controlled by `rtc_interval_ms` (default `5000` ms), overridden by the tracker's `rtc interval` response field.
@@ -64,8 +64,8 @@ When `protocol` is `both` (the default):
 On `Ctrl-C`:
 
 1. The watch channel broadcasts `true` — all background tasks (BT listener, BT re-announce, RTC signaling) exit their loops.
-2. The RTC task sends a `stopped` announcement before returning (up to 5 s timeout).
-3. After tasks finish, any BT tracker also receives a `stopped` announcement (up to 5 s timeout).
+2. The RTC task sends a `stopped` announcement to **every** RTC tracker before returning (up to 5 s per tracker).
+3. After tasks finish, every BT tracker receives a `stopped` announcement (up to 5 s per tracker).
 4. In multi-torrent mode the shared TCP listener is aborted and the registry entry is removed.
 
 ---
@@ -328,6 +328,24 @@ config:
 | Serve both clients simultaneously | `both` | Yes | Yes |
 
 A torrent entry with `protocol: bt` in a `both`-mode YAML session still benefits from the shared BT listener — it just won't make RTC offers. Similarly, a `protocol: rtc` entry skips the BT registry entirely.
+
+---
+
+## Client identification
+
+The seeder uses the Azureus-style peer ID format:
+
+```
+-TS0420-<12 random digits>
+```
+
+| Part | Value | Meaning |
+|---|---|---|
+| `TS` | client code | **T**orrust **S**eeder |
+| `0420` | version digits | v4.2.0 |
+| 12 digits | random | unique per session |
+
+BitTorrent clients that maintain a known-client database (e.g. qBittorrent, Transmission) will display the raw code (`TS`) until Torrust is added to their fingerprint database. The seeder will **not** be misidentified as any other client.
 
 ---
 

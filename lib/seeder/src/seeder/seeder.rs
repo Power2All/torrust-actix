@@ -53,7 +53,7 @@ use webrtc::data_channel::RTCDataChannel;
 pub type SharedRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
 
 pub fn generate_peer_id() -> [u8; 20] {
-    let prefix = b"-SD1000-";
+    let prefix = b"-TS0420-";
     let mut id = [0u8; 20];
     id[..prefix.len()].copy_from_slice(prefix);
     rand::rng().fill(&mut id[prefix.len()..]);

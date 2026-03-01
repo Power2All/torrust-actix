@@ -121,17 +121,22 @@ impl Seeder {
                 }
             });
         }
+
+        // Announce to ALL valid BT trackers (http, https, udp).
         let mut bt_announce_interval: u64 = 300;
-        let bt_tracker_opt: Option<BtTrackerClient> = if protocol.has_bt() {
-            self.try_bt_announce_start(&mut bt_announce_interval).await
+        let bt_trackers: Vec<BtTrackerClient> = if protocol.has_bt() {
+            self.try_bt_announce_all(&mut bt_announce_interval).await
         } else {
-            None
+            Vec::new()
         };
-        let mut rtc_tracker_opt: Option<RtcTrackerClient> = None;
+
+        // Collect all HTTP(S) trackers for RTC.
+        let mut rtc_trackers: Vec<RtcTrackerClient> = Vec::new();
         let mut initial_peer_conn: Option<PeerConn> = None;
-        if protocol.has_rtc()
-            && let Some(tc) = self.pick_rtc_tracker() {
-                rtc_tracker_opt = Some(tc);
+        if protocol.has_rtc() {
+            let tcs = self.pick_rtc_trackers();
+            if !tcs.is_empty() {
+                rtc_trackers = tcs;
                 print!("Creating WebRTC offer (gathering ICE candidates)… ");
                 match PeerConn::new(
                     &self.config,
@@ -148,10 +153,13 @@ impl Seeder {
                     }
                 }
             }
+        }
 
         println!("Seeding… (Ctrl+C to stop)\n");
-        let bt_reannounce_handle = if let Some(ref tracker) = bt_tracker_opt {
-            let tracker_ann = tracker.clone();
+
+        // BT re-announce task — iterates over ALL trackers every interval.
+        let bt_reannounce_handle = if !bt_trackers.is_empty() {
+            let trackers_ann = bt_trackers.clone();
             let uploaded_ann = Arc::clone(&self.uploaded);
             let mut srx = stop_rx.clone();
             Some(tokio::spawn(async move {
@@ -160,12 +168,14 @@ impl Seeder {
                     tokio::select! {
                         _ = tokio::time::sleep(interval) => {
                             let up = uploaded_ann.load(Ordering::Relaxed);
-                            match tracker_ann.announce(up, "").await {
-                                Ok(resp) => {
-                                    log::info!("[Tracker/BT] Re-announced (interval={}s)", resp.interval);
-                                }
-                                Err(e) => {
-                                    log::warn!("[Tracker/BT] Re-announce failed: {}", e);
+                            for tracker in &trackers_ann {
+                                match tracker.announce(up, "").await {
+                                    Ok(resp) => {
+                                        log::info!("[Tracker/BT] Re-announced (interval={}s)", resp.interval);
+                                    }
+                                    Err(e) => {
+                                        log::warn!("[Tracker/BT] Re-announce failed: {}", e);
+                                    }
                                 }
                             }
                         }
@@ -178,6 +188,7 @@ impl Seeder {
         } else {
             None
         };
+
         if protocol.has_bt() {
             if let Some(ref reg) = registry {
                 let entry = TorrentRegistryEntry {
@@ -258,11 +269,14 @@ impl Seeder {
                 });
             }
         }
+
+        // RTC signaling task — announces to ALL HTTP trackers, collects answers from all.
         let rtc_handle = if protocol.has_rtc()
-            && let Some(tracker) = rtc_tracker_opt.clone()
+            && !rtc_trackers.is_empty()
             && let Some(current_pc) = initial_peer_conn.take()
         {
             let mut current_pc = current_pc;
+            let trackers_rtc = rtc_trackers.clone();
             let peers = Arc::clone(&self.peers);
             let uploaded_rtc = Arc::clone(&self.uploaded);
             let config_rtc = self.config.clone();
@@ -274,52 +288,60 @@ impl Seeder {
                 let mut rtc_interval_ms = config_rtc.rtc_interval_ms;
                 loop {
                     let uploaded = uploaded_rtc.load(Ordering::Relaxed);
-                    match tracker.announce_seeder(&current_pc.sdp_offer, uploaded, event).await {
-                        Ok(resp) => {
-                            event = "";
-                            if let Some(ri) = resp.rtc_interval {
-                                rtc_interval_ms = ri * 1000;
+                    // Announce to every RTC tracker and collect all answers.
+                    let mut all_answers = Vec::new();
+                    for tracker in &trackers_rtc {
+                        match tracker.announce_seeder(&current_pc.sdp_offer, uploaded, event).await {
+                            Ok(resp) => {
+                                if let Some(ri) = resp.rtc_interval {
+                                    rtc_interval_ms = ri * 1000;
+                                }
+                                all_answers.extend(resp.rtc_answers);
                             }
-                            for answer in resp.rtc_answers {
-                                log::info!(
-                                    "[RTC] Answer from peer {}…",
-                                    answer.peer_id_hex.get(..8).unwrap_or(&answer.peer_id_hex)
-                                );
-                                let next_pc = match PeerConn::new(
-                                    &config_rtc,
-                                    Arc::clone(&torrent_info_rtc),
-                                    Arc::clone(&uploaded_rtc),
-                                    rl_rtc.clone(),
-                                ).await {
-                                    Ok(pc) => pc,
-                                    Err(e) => {
-                                        log::error!("[RTC] Failed to create new PeerConn: {}", e);
-                                        break;
-                                    }
-                                };
-                                if let Err(e) = current_pc.handle_answer(answer.sdp_answer).await {
-                                    log::error!("[RTC] handle_answer failed: {}", e);
-                                }
-                                {
-                                    let mut p = peers.lock().await;
-                                    p.insert(answer.peer_id_hex, Arc::new(current_pc));
-                                }
-                                current_pc = next_pc;
+                            Err(e) => {
+                                log::warn!("[Tracker/RTC] Announce to {} failed: {}", tracker.tracker_url, e);
                             }
                         }
-                        Err(e) => {
-                            log::warn!("[Tracker/RTC] Announce failed: {}", e);
+                    }
+                    event = "";
+                    for answer in all_answers {
+                        log::info!(
+                            "[RTC] Answer from peer {}…",
+                            answer.peer_id_hex.get(..8).unwrap_or(&answer.peer_id_hex)
+                        );
+                        let next_pc = match PeerConn::new(
+                            &config_rtc,
+                            Arc::clone(&torrent_info_rtc),
+                            Arc::clone(&uploaded_rtc),
+                            rl_rtc.clone(),
+                        ).await {
+                            Ok(pc) => pc,
+                            Err(e) => {
+                                log::error!("[RTC] Failed to create new PeerConn: {}", e);
+                                break;
+                            }
+                        };
+                        if let Err(e) = current_pc.handle_answer(answer.sdp_answer).await {
+                            log::error!("[RTC] handle_answer failed: {}", e);
                         }
+                        {
+                            let mut p = peers.lock().await;
+                            p.insert(answer.peer_id_hex, Arc::new(current_pc));
+                        }
+                        current_pc = next_pc;
                     }
                     tokio::select! {
                         _ = tokio::time::sleep(std::time::Duration::from_millis(rtc_interval_ms)) => {}
                         _ = srx.changed() => {
                             if *srx.borrow() {
+                                // Send "stopped" to all RTC trackers on shutdown.
                                 let up = uploaded_rtc.load(Ordering::Relaxed);
-                                let _ = tokio::time::timeout(
-                                    std::time::Duration::from_secs(5),
-                                    tracker.announce_seeder("", up, "stopped"),
-                                ).await;
+                                for tracker in &trackers_rtc {
+                                    let _ = tokio::time::timeout(
+                                        std::time::Duration::from_secs(5),
+                                        tracker.announce_seeder("", up, "stopped"),
+                                    ).await;
+                                }
                                 break;
                             }
                         }
@@ -329,6 +351,7 @@ impl Seeder {
         } else {
             None
         };
+
         // Wait for either Ctrl+C or an external stop signal (e.g. torrent disabled/deleted via UI).
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
@@ -353,28 +376,35 @@ impl Seeder {
                 let mut map = reg.write().await;
                 map.remove(&self.torrent_info.info_hash);
             }
-        if let Some(ref tracker) = bt_tracker_opt {
+        // Send "stopped" to ALL BT trackers.
+        if !bt_trackers.is_empty() {
             let uploaded = self.uploaded.load(Ordering::Relaxed);
-            log::info!("[Tracker/BT] Sending 'stopped' announcement…");
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                tracker.announce(uploaded, "stopped"),
-            ).await {
-                Ok(Ok(_))  => log::info!("[Tracker/BT] Stopped announcement sent"),
-                Ok(Err(e)) => log::warn!("[Tracker/BT] Stopped announce failed: {}", e),
-                Err(_)     => log::warn!("[Tracker/BT] Stopped announce timed out"),
+            log::info!("[Tracker/BT] Sending 'stopped' announcement to {} tracker(s)…", bt_trackers.len());
+            for tracker in &bt_trackers {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    tracker.announce(uploaded, "stopped"),
+                ).await {
+                    Ok(Ok(_))  => log::info!("[Tracker/BT] Stopped announcement sent"),
+                    Ok(Err(e)) => log::warn!("[Tracker/BT] Stopped announce failed: {}", e),
+                    Err(_)     => log::warn!("[Tracker/BT] Stopped announce timed out"),
+                }
             }
         }
 
         Ok(())
     }
 
-    async fn try_bt_announce_start(&self, interval_out: &mut u64) -> Option<BtTrackerClient> {
+    /// Announce to ALL valid BT tracker URLs (http, https, udp).
+    /// Returns a client for every tracker that accepted the "started" announce.
+    /// Sets `interval_out` to the minimum interval reported by any tracker.
+    async fn try_bt_announce_all(&self, interval_out: &mut u64) -> Vec<BtTrackerClient> {
         let urls = &self.torrent_info.tracker_urls;
         if urls.is_empty() {
             log::info!("[Tracker/BT] No tracker configured — seeding without announcing.");
-            return None;
+            return Vec::new();
         }
+        let mut trackers = Vec::new();
         for url in urls {
             if url.starts_with("udp://") || url.starts_with("http://") || url.starts_with("https://") {
                 let tracker = BtTrackerClient::new(
@@ -386,30 +416,37 @@ impl Seeder {
                 );
                 match tracker.announce(0, "started").await {
                     Ok(resp) => {
-                        *interval_out = resp.interval.max(30);
-                        log::info!("[Tracker/BT] Announced to {}: interval={}s", url, interval_out);
-                        return Some(tracker);
+                        let interval = resp.interval.max(30);
+                        if interval < *interval_out {
+                            *interval_out = interval;
+                        }
+                        log::info!("[Tracker/BT] Announced to {}: interval={}s", url, interval);
+                        trackers.push(tracker);
                     }
                     Err(e) => {
-                        log::warn!("[Tracker/BT] {} failed: {} — trying next", url, e);
+                        log::warn!("[Tracker/BT] {} failed: {} — skipping", url, e);
                     }
                 }
             }
         }
-        log::warn!("[Tracker/BT] All trackers failed — seeding without BT announcing.");
-        None
+        if trackers.is_empty() {
+            log::warn!("[Tracker/BT] All trackers failed — seeding without BT announcing.");
+        }
+        trackers
     }
 
-    fn pick_rtc_tracker(&self) -> Option<RtcTrackerClient> {
+    /// Returns clients for ALL HTTP(S) tracker URLs (RTC only uses HTTP).
+    fn pick_rtc_trackers(&self) -> Vec<RtcTrackerClient> {
         let urls = &self.torrent_info.tracker_urls;
         if urls.is_empty() {
             log::info!("[Tracker/RTC] No tracker configured — seeding without announcing.");
-            return None;
+            return Vec::new();
         }
+        let mut trackers = Vec::new();
         for url in urls {
             if url.starts_with("http://") || url.starts_with("https://") {
                 log::info!("[Tracker/RTC] Using tracker: {}", url);
-                return Some(RtcTrackerClient::new(
+                trackers.push(RtcTrackerClient::new(
                     url.clone(),
                     self.torrent_info.info_hash,
                     self.peer_id,
@@ -417,7 +454,9 @@ impl Seeder {
                 ));
             }
         }
-        log::warn!("[Tracker/RTC] No HTTP tracker found — RTC seeding without announcing.");
-        None
+        if trackers.is_empty() {
+            log::warn!("[Tracker/RTC] No HTTP tracker found — RTC seeding without announcing.");
+        }
+        trackers
     }
 }

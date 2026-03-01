@@ -1,4 +1,5 @@
 use seeder::config::enums::seed_protocol::SeedProtocol;
+use seeder::seeder::seeder::generate_peer_id;
 
 #[test]
 fn bt_has_bt() {
@@ -71,4 +72,33 @@ fn clone_preserves_variant() {
     assert_eq!(SeedProtocol::Bt.clone(), SeedProtocol::Bt);
     assert_eq!(SeedProtocol::Rtc.clone(), SeedProtocol::Rtc);
     assert_eq!(SeedProtocol::Both.clone(), SeedProtocol::Both);
+}
+
+// --- peer_id ---
+
+#[test]
+fn peer_id_is_20_bytes() {
+    let id = generate_peer_id();
+    assert_eq!(id.len(), 20);
+}
+
+#[test]
+fn peer_id_prefix_is_torrust_seeder() {
+    let id = generate_peer_id();
+    assert_eq!(&id[..8], b"-TS0420-", "peer ID must carry the Torrust-Seeder fingerprint");
+}
+
+#[test]
+fn peer_id_suffix_is_ascii_digits() {
+    let id = generate_peer_id();
+    for &byte in &id[8..] {
+        assert!(byte.is_ascii_digit(), "random suffix must be ASCII digits (got 0x{:02x})", byte);
+    }
+}
+
+#[test]
+fn peer_ids_are_unique() {
+    let a = generate_peer_id();
+    let b = generate_peer_id();
+    assert_ne!(a, b, "consecutive peer IDs should differ");
 }
