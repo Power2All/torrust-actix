@@ -7,6 +7,7 @@ use crate::web::api::{
     delete_torrent,
     get_config,
     get_index,
+    get_logo,
     get_status,
     get_torrents,
     post_login,
@@ -63,6 +64,7 @@ pub async fn start(
             .app_data(state.clone())
             .app_data(web::JsonConfig::default().limit(1024 * 1024))
             .route("/", web::get().to(get_index))
+            .route("/logo.png", web::get().to(get_logo))
             .route("/api/login", web::post().to(post_login))
             .route("/api/logout", web::post().to(post_logout))
             .route("/api/status", web::get().to(get_status))

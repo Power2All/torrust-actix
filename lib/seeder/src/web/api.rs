@@ -145,6 +145,13 @@ pub async fn get_index() -> HttpResponse {
         .body(include_str!("index.html"))
 }
 
+pub async fn get_logo() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("image/png")
+        .insert_header(("Cache-Control", "public, max-age=86400"))
+        .body(include_bytes!("logo.png").as_ref())
+}
+
 pub async fn get_status(req: HttpRequest, data: Data<AppState>) -> HttpResponse {
     if !is_authenticated(&req, &data).await {
         return HttpResponse::Unauthorized().json(json!({"error": "Unauthorized"}));

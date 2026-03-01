@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>seeder — Web Management</title>
+  <link rel="icon" type="image/png" href="/logo.png">
   <!-- Apply saved theme before CSS loads to prevent flash -->
   <script>
   (function(){
@@ -84,7 +85,10 @@
 <!-- Login overlay (shown when auth is required and no valid token) -->
 <div id="login-overlay" style="display:none">
   <div id="login-box">
-    <h3><i class="lock icon"></i> seeder Login</h3>
+    <div style="text-align:center;margin-bottom:16px">
+      <img src="/logo.png" style="width:64px;height:64px;border-radius:8px">
+    </div>
+    <h3 style="margin:0 0 20px;text-align:center"><i class="lock icon"></i> seeder Login</h3>
     <div class="ui form" id="login-form">
       <div class="field">
         <label>Password</label>
@@ -101,7 +105,7 @@
 <div class="container" id="main-app" style="display:none">
   <div class="header-row">
     <h2 class="ui header" style="margin:0">
-      <i class="seedling icon"></i>
+      <img src="/logo.png" style="width:36px;height:36px;vertical-align:middle;margin-right:8px;border-radius:4px">
       <div class="content">seeder Management
         <div class="sub header" id="status-text">Loading…</div>
       </div>
