@@ -535,6 +535,8 @@ function showApp() {
   document.getElementById('main-app').style.display = 'block';
   const hasAuth = authToken && authToken !== 'noauth';
   document.getElementById('logout-btn').style.display = hasAuth ? '' : 'none';
+  // Init charts here, after the container is visible, so the canvas has real dimensions.
+  if (!chartPeers) initChart();
   connectWs();
 }
 
@@ -1149,8 +1151,7 @@ $(document).ready(function() {
   // Sync theme picker to saved preference
   const savedTheme = localStorage.getItem('seeder_theme') || 'auto';
   setTheme(savedTheme);
-  // Init chart
-  initChart();
+  // Charts are initialized in showApp() once the container is visible.
 });
 
 // ── File Browser ───────────────────────────────────────────────────────────

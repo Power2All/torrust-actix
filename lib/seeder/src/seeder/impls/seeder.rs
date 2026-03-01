@@ -84,6 +84,10 @@ impl Seeder {
                 })
             });
 
+        // Create the internal stop channel early so every subtask (stats, peers, listener)
+        // can receive the same shutdown signal.
+        let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
+
         let protocol = &self.config.protocol;
         if self.config.show_stats {
             let uploaded_stats = Arc::clone(&self.uploaded);
@@ -91,22 +95,29 @@ impl Seeder {
             let peers_stats = Arc::clone(&self.peers);
             let has_bt = protocol.has_bt();
             let has_rtc = protocol.has_rtc();
+            let mut srx = stop_rx.clone();
             tokio::spawn(async move {
                 loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-                    let up = uploaded_stats.load(Ordering::Relaxed);
-                    let now = chrono::Local::now();
-                    let mut parts = Vec::new();
-                    if has_bt {
-                        let pc = peer_count_stats.load(Ordering::Relaxed);
-                        parts.push(format!("bt_peers: {}", pc));
+                    tokio::select! {
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
+                            let up = uploaded_stats.load(Ordering::Relaxed);
+                            let now = chrono::Local::now();
+                            let mut parts = Vec::new();
+                            if has_bt {
+                                let pc = peer_count_stats.load(Ordering::Relaxed);
+                                parts.push(format!("bt_peers: {}", pc));
+                            }
+                            if has_rtc {
+                                let rtc_count = peers_stats.lock().await.len();
+                                parts.push(format!("rtc_peers: {}", rtc_count));
+                            }
+                            parts.push(format!("uploaded: {}", fmt_bytes(up)));
+                            println!("[{}] {}", now.format("%H:%M:%S"), parts.join("  "));
+                        }
+                        _ = srx.changed() => {
+                            if *srx.borrow() { break; }
+                        }
                     }
-                    if has_rtc {
-                        let rtc_count = peers_stats.lock().await.len();
-                        parts.push(format!("rtc_peers: {}", rtc_count));
-                    }
-                    parts.push(format!("uploaded: {}", fmt_bytes(up)));
-                    println!("[{}] {}", now.format("%H:%M:%S"), parts.join("  "));
                 }
             });
         }
@@ -139,7 +150,6 @@ impl Seeder {
             }
 
         println!("Seeding… (Ctrl+C to stop)\n");
-        let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
         let bt_reannounce_handle = if let Some(ref tracker) = bt_tracker_opt {
             let tracker_ann = tracker.clone();
             let uploaded_ann = Arc::clone(&self.uploaded);
@@ -176,6 +186,7 @@ impl Seeder {
                     peer_count: Arc::clone(&self.peer_count),
                     our_peer_id: self.peer_id,
                     rate_limiter: rate_limiter.clone(),
+                    stop_rx: stop_rx.clone(),
                 };
                 let mut map = reg.write().await;
                 map.insert(self.torrent_info.info_hash, entry);
@@ -218,6 +229,7 @@ impl Seeder {
                 let torrent_info_bt = Arc::clone(&self.torrent_info);
                 let rl_bt = rate_limiter.clone();
                 let mut srx = stop_rx.clone();
+                let peer_stop_rx = stop_rx.clone();
                 tokio::spawn(async move {
                     loop {
                         tokio::select! {
@@ -228,8 +240,9 @@ impl Seeder {
                                         let up = Arc::clone(&uploaded_bt);
                                         let pc = Arc::clone(&peer_count_bt);
                                         let rl = rl_bt.clone();
+                                        let srx2 = peer_stop_rx.clone();
                                         tokio::spawn(async move {
-                                            handle_peer(stream, addr, info_hash, peer_id, ti, up, pc, rl).await;
+                                            handle_peer(stream, addr, info_hash, peer_id, ti, up, pc, rl, srx2).await;
                                         });
                                     }
                                     Err(e) => {

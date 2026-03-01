@@ -177,6 +177,7 @@ async fn handle_peer_connection(
     uploaded: Arc<AtomicU64>,
     peer_count: Arc<AtomicUsize>,
     rate_limiter: Option<SharedRateLimiter>,
+    mut stop_rx: tokio::sync::watch::Receiver<bool>,
 ) {
     let peer_id_hex = hex::encode(&peer_hs[48..68]);
     let our_hs = make_handshake(&info_hash, &our_peer_id);
@@ -201,62 +202,74 @@ async fn handle_peer_connection(
         return;
     }
     loop {
-        match read_message(&mut stream).await {
-            Ok(None) => {}
-            Ok(Some((id, payload))) => {
-                match id {
-                    MSG_INTERESTED => {
-                        log::debug!(
-                            "[BT] Peer {}… interested",
-                            peer_id_hex.get(..8).unwrap_or(&peer_id_hex)
-                        );
-                    }
-                    MSG_NOT_INTERESTED => {
-                        log::debug!(
-                            "[BT] Peer {}… not interested",
-                            peer_id_hex.get(..8).unwrap_or(&peer_id_hex)
-                        );
-                    }
-                    MSG_REQUEST => {
-                        if payload.len() < 12 {
-                            log::warn!("[BT] Malformed request from {}", addr);
-                            break;
-                        }
-                        let index = u32::from_be_bytes([payload[0], payload[1], payload[2], payload[3]]);
-                        let begin = u32::from_be_bytes([payload[4], payload[5], payload[6], payload[7]]);
-                        let length = u32::from_be_bytes([payload[8], payload[9], payload[10], payload[11]]);
-                        let length = length.min(MAX_BLOCK_SIZE);
-                        log::debug!("[BT] Request: piece={} begin={} len={}", index, begin, length);
-                        match read_block(&torrent_info, index as usize, begin as u64, length as usize) {
-                            Ok(data) => {
-                                if let Some(rl) = &rate_limiter {
-                                    let n = NonZeroU32::new(data.len() as u32)
-                                        .unwrap_or(NonZeroU32::MIN);
-                                    rl.until_n_ready(n).await.ok();
-                                }
-                                let bytes_sent = data.len() as u64;
-                                if let Err(e) = send_piece_block(&mut stream, index, begin, &data).await {
-                                    log::debug!("[BT] Send error to {}: {}", addr, e);
-                                    break;
-                                }
-                                uploaded.fetch_add(bytes_sent, Ordering::Relaxed);
-                                peer_uploaded.fetch_add(bytes_sent, Ordering::Relaxed);
-                            }
-                            Err(e) => {
-                                log::warn!("[BT] Block read error: {}", e);
-                                break;
-                            }
-                        }
-                    }
-                    MSG_CANCEL | MSG_CHOKE | MSG_UNCHOKE | MSG_HAVE => {}
-                    _ => {
-                        log::debug!("[BT] Unknown message id={} from {}", id, addr);
-                    }
+        tokio::select! {
+            biased;
+            // Check stop signal first so we break immediately when the seeder shuts down.
+            _ = stop_rx.changed() => {
+                if *stop_rx.borrow() {
+                    log::debug!("[BT] Stop signal — closing connection to {}", addr);
+                    break;
                 }
             }
-            Err(e) => {
-                log::debug!("[BT] Connection closed from {}: {}", addr, e);
-                break;
+            msg = read_message(&mut stream) => {
+                match msg {
+                    Ok(None) => {}
+                    Ok(Some((id, payload))) => {
+                        match id {
+                            MSG_INTERESTED => {
+                                log::debug!(
+                                    "[BT] Peer {}… interested",
+                                    peer_id_hex.get(..8).unwrap_or(&peer_id_hex)
+                                );
+                            }
+                            MSG_NOT_INTERESTED => {
+                                log::debug!(
+                                    "[BT] Peer {}… not interested",
+                                    peer_id_hex.get(..8).unwrap_or(&peer_id_hex)
+                                );
+                            }
+                            MSG_REQUEST => {
+                                if payload.len() < 12 {
+                                    log::warn!("[BT] Malformed request from {}", addr);
+                                    break;
+                                }
+                                let index = u32::from_be_bytes([payload[0], payload[1], payload[2], payload[3]]);
+                                let begin = u32::from_be_bytes([payload[4], payload[5], payload[6], payload[7]]);
+                                let length = u32::from_be_bytes([payload[8], payload[9], payload[10], payload[11]]);
+                                let length = length.min(MAX_BLOCK_SIZE);
+                                log::debug!("[BT] Request: piece={} begin={} len={}", index, begin, length);
+                                match read_block(&torrent_info, index as usize, begin as u64, length as usize) {
+                                    Ok(data) => {
+                                        if let Some(rl) = &rate_limiter {
+                                            let n = NonZeroU32::new(data.len() as u32)
+                                                .unwrap_or(NonZeroU32::MIN);
+                                            rl.until_n_ready(n).await.ok();
+                                        }
+                                        let bytes_sent = data.len() as u64;
+                                        if let Err(e) = send_piece_block(&mut stream, index, begin, &data).await {
+                                            log::debug!("[BT] Send error to {}: {}", addr, e);
+                                            break;
+                                        }
+                                        uploaded.fetch_add(bytes_sent, Ordering::Relaxed);
+                                        peer_uploaded.fetch_add(bytes_sent, Ordering::Relaxed);
+                                    }
+                                    Err(e) => {
+                                        log::warn!("[BT] Block read error: {}", e);
+                                        break;
+                                    }
+                                }
+                            }
+                            MSG_CANCEL | MSG_CHOKE | MSG_UNCHOKE | MSG_HAVE => {}
+                            _ => {
+                                log::debug!("[BT] Unknown message id={} from {}", id, addr);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::debug!("[BT] Connection closed from {}: {}", addr, e);
+                        break;
+                    }
+                }
             }
         }
     }
@@ -279,6 +292,7 @@ pub async fn handle_peer(
     uploaded: Arc<AtomicU64>,
     peer_count: Arc<AtomicUsize>,
     rate_limiter: Option<SharedRateLimiter>,
+    stop_rx: tokio::sync::watch::Receiver<bool>,
 ) {
     let mut hs_buf = [0u8; BT_HANDSHAKE_LEN];
     if let Err(e) = stream.read_exact(&mut hs_buf).await {
@@ -293,7 +307,7 @@ pub async fn handle_peer(
         log::debug!("[BT] Info hash mismatch from {}", addr);
         return;
     }
-    handle_peer_connection(stream, addr, hs_buf, info_hash, our_peer_id, torrent_info, uploaded, peer_count, rate_limiter).await;
+    handle_peer_connection(stream, addr, hs_buf, info_hash, our_peer_id, torrent_info, uploaded, peer_count, rate_limiter, stop_rx).await;
 }
 
 pub async fn dispatch_connection(
@@ -324,6 +338,7 @@ pub async fn dispatch_connection(
                 stream, addr, hs_buf,
                 info_hash, e.our_peer_id,
                 e.torrent_info, e.uploaded, e.peer_count, e.rate_limiter,
+                e.stop_rx,
             ).await;
         }
         None => {
