@@ -1,6 +1,6 @@
 [workspace]
-members = [".", "lib/torrust-client", "lib/seeder"]
-default-members = [".", "lib/seeder"]
+members = [".", "lib/torrust-client"]
+default-members = ["."]
 resolver = "3"
 
 [package]
