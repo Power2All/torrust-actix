@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=4.2.0
+Type=Application
+Name=Torrust Actix
+Comment=A rich, fast and efficient Bittorrent Tracker
+Exec=torrust-actix
+Icon=torrust-actix
+Terminal=true
+Categories=Network;FileTransfer;P2P;
+Keywords=torrent;bittorrent;tracker;

@@ -90,3 +90,13 @@ winres = "^0.1"
 [[bench]]
 name = "tracker_benchmarks"
 harness = false
+
+[package.metadata.bundle]
+name = "Torrust Actix"
+identifier = "com.power2all.torrust-actix"
+icon = ["icon.ico"]
+version = "4.2.0"
+copyright = "Copyright (c) 2025 Jasper Lingers, Mick van Dijke"
+category = "Public Utility"
+short_description = "BitTorrent Tracker"
+long_description = "A rich, fast and efficient Bittorrent Tracker."
