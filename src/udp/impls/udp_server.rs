@@ -366,6 +366,13 @@ impl UdpServer {
             }
         };
         let self_peer_id = PeerId(request.peer_id.0);
+        debug!("[UDP ANNOUNCE] bytes_left={} effective_remote_addr={} is_ipv4={} seeds={} peers={}", request.bytes_left.0, effective_remote_addr, effective_remote_addr.is_ipv4(), torrent.seeds.len(), torrent.peers.len());
+        for (pid, tp) in torrent.seeds.iter() {
+            debug!("[UDP ANNOUNCE] seed peer_id={:?} peer_addr={} addr_is_ipv4={} self={}", pid.0, tp.peer_addr, tp.peer_addr.is_ipv4(), *pid == self_peer_id);
+        }
+        for (pid, tp) in torrent.peers.iter() {
+            debug!("[UDP ANNOUNCE] leecher peer_id={:?} peer_addr={} addr_is_ipv4={} self={}", pid.0, tp.peer_addr, tp.peer_addr.is_ipv4(), *pid == self_peer_id);
+        }
         let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::with_capacity(72);
         let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(72);
         let mut count = 0usize;
@@ -405,6 +412,7 @@ impl UdpServer {
                 }
             }
         }
+        debug!("[UDP ANNOUNCE] result: ipv4_peers={} ipv6_peers={}", peers.len(), peers6.len());
         let request_interval = config.request_interval as i32;
         let leechers = torrent.peers.len() as i32;
         let seeders = torrent.seeds.len() as i32;
