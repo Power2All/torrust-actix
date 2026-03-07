@@ -366,7 +366,7 @@ impl UdpServer {
                 return Err(ServerError::InternalServerError);
             }
         };
-        let torrent_peers = tracker.get_torrent_peers(request.info_hash, 72, TorrentPeersType::All, Some(effective_remote_addr.ip()));
+        let torrent_peers = tracker.get_torrent_peers(request.info_hash, 72, TorrentPeersType::All, Some(PeerId(request.peer_id.0)));
         let (peers, peers6) = if let Some(torrent_peers_unwrapped) = torrent_peers {
             let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::with_capacity(72);
             let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(72);
@@ -391,7 +391,7 @@ impl UdpServer {
                     }
                 }
             }
-            if remote_addr.is_ipv4() {
+            if effective_remote_addr.is_ipv4() {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv4.values().take(72 - count) {
                     if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                         peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
@@ -399,7 +399,6 @@ impl UdpServer {
                 }
             } else {
                 for torrent_peer in torrent_peers_unwrapped.peers_ipv6.values().take(72 - count) {
-                    
                     if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                         peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }

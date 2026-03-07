@@ -244,7 +244,7 @@ pub fn build_compact_announce_response(
                 let seeds = tracker.get_peers(
                     &torrent_entry.seeds,
                     TorrentPeersType::IPv4,
-                    Some(*client_ip),
+                    Some(announce.peer_id),
                     72
                 );
                 for (_, torrent_peer) in seeds.iter() {
@@ -258,7 +258,7 @@ pub fn build_compact_announce_response(
                 let peers = tracker.get_peers(
                     &torrent_entry.peers,
                     TorrentPeersType::IPv4,
-                    Some(*client_ip),
+                    Some(announce.peer_id),
                     72
                 );
                 for (_, torrent_peer) in peers.iter() {
@@ -285,7 +285,7 @@ pub fn build_compact_announce_response(
                 let seeds = tracker.get_peers(
                     &torrent_entry.seeds,
                     TorrentPeersType::IPv6,
-                    Some(*client_ip),
+                    Some(announce.peer_id),
                     72
                 );
                 for (_, torrent_peer) in seeds.iter() {
@@ -299,7 +299,7 @@ pub fn build_compact_announce_response(
                 let peers = tracker.get_peers(
                     &torrent_entry.peers,
                     TorrentPeersType::IPv6,
-                    Some(*client_ip),
+                    Some(announce.peer_id),
                     72
                 );
                 for (_, torrent_peer) in peers.iter() {
@@ -339,7 +339,7 @@ pub fn build_extended_announce_response(
                 let seeds = tracker.get_peers(
                     &torrent_entry.seeds,
                     TorrentPeersType::IPv4,
-                    Some(*client_ip),
+                    Some(announce.peer_id),
                     72
                 );
                 for (peer_id, torrent_peer) in seeds.iter() {
@@ -354,7 +354,7 @@ pub fn build_extended_announce_response(
                 let peers = tracker.get_peers(
                     &torrent_entry.peers,
                     TorrentPeersType::IPv4,
-                    Some(*client_ip),
+                    Some(announce.peer_id),
                     72
                 );
                 for (peer_id, torrent_peer) in peers.iter() {
@@ -382,7 +382,7 @@ pub fn build_extended_announce_response(
                 let seeds = tracker.get_peers(
                     &torrent_entry.seeds,
                     TorrentPeersType::IPv6,
-                    Some(*client_ip),
+                    Some(announce.peer_id),
                     72
                 );
                 for (peer_id, torrent_peer) in seeds.iter() {
@@ -397,7 +397,7 @@ pub fn build_extended_announce_response(
                 let peers = tracker.get_peers(
                     &torrent_entry.peers,
                     TorrentPeersType::IPv6,
-                    Some(*client_ip),
+                    Some(announce.peer_id),
                     72
                 );
                 for (peer_id, torrent_peer) in peers.iter() {

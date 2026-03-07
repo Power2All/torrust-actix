@@ -425,7 +425,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     let seeds = data.get_peers(
                         peers_to_use,
                         TorrentPeersType::IPv4,
-                        Some(ip),
+                        Some(announce_unwrapped.peer_id),
                         72
                     );
                     for (_, torrent_peer) in seeds.iter() {
@@ -441,7 +441,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     let peers = data.get_peers(
                         peers_to_use,
                         TorrentPeersType::IPv4,
-                        Some(ip),
+                        Some(announce_unwrapped.peer_id),
                         72
                     );
                     for (_, torrent_peer) in peers.iter() {
@@ -471,7 +471,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     let seeds = data.get_peers(
                         peers_to_use,
                         TorrentPeersType::IPv6,
-                        Some(ip),
+                        Some(announce_unwrapped.peer_id),
                         72
                     );
                     for (_, torrent_peer) in seeds.iter() {
@@ -486,7 +486,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     let peers = data.get_peers(
                         peers_to_use,
                         TorrentPeersType::IPv6,
-                        Some(ip),
+                        Some(announce_unwrapped.peer_id),
                         72
                     );
                     for (_, torrent_peer) in peers.iter() {
@@ -520,7 +520,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 let seeds = data.get_peers(
                     peers_to_use,
                     TorrentPeersType::IPv4,
-                    Some(ip),
+                    Some(announce_unwrapped.peer_id),
                     72
                 );
                 for (peer_id, torrent_peer) in seeds.iter() {
@@ -536,7 +536,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 let peers = data.get_peers(
                     peers_to_use,
                     TorrentPeersType::IPv4,
-                    Some(ip),
+                    Some(announce_unwrapped.peer_id),
                     72
                 );
                 for (peer_id, torrent_peer) in peers.iter() {
@@ -566,7 +566,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 let seeds = data.get_peers(
                     peers_to_use,
                     TorrentPeersType::IPv6,
-                    Some(ip),
+                    Some(announce_unwrapped.peer_id),
                     72
                 );
                 for (peer_id, torrent_peer) in seeds.iter() {
@@ -582,7 +582,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 let peers = data.get_peers(
                     peers_to_use,
                     TorrentPeersType::IPv6,
-                    Some(ip),
+                    Some(announce_unwrapped.peer_id),
                     72
                 );
                 for (peer_id, torrent_peer) in peers.iter() {

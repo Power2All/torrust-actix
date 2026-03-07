@@ -10,13 +10,10 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::types::ahash_map::AHashMap;
 use log::info;
 use std::collections::btree_map::Entry;
-use std::net::{
-    IpAddr,
-    SocketAddr
-};
+use std::net::SocketAddr;
 
 impl TorrentTracker {
-    pub fn get_torrent_peers(&self, info_hash: InfoHash, amount: usize, ip_type: TorrentPeersType, self_ip: Option<IpAddr>) -> Option<TorrentPeers>
+    pub fn get_torrent_peers(&self, info_hash: InfoHash, amount: usize, ip_type: TorrentPeersType, self_peer_id: Option<PeerId>) -> Option<TorrentPeers>
     {
         self.get_torrent(info_hash).map(|data| {
             let mut returned_data = TorrentPeers {
@@ -27,18 +24,18 @@ impl TorrentTracker {
             };
             match ip_type {
                 TorrentPeersType::All => {
-                    returned_data.seeds_ipv4 = self.get_peers(&data.seeds, TorrentPeersType::IPv4, self_ip, amount);
-                    returned_data.seeds_ipv6 = self.get_peers(&data.seeds, TorrentPeersType::IPv6, self_ip, amount);
-                    returned_data.peers_ipv4 = self.get_peers(&data.peers, TorrentPeersType::IPv4, self_ip, amount);
-                    returned_data.peers_ipv6 = self.get_peers(&data.peers, TorrentPeersType::IPv6, self_ip, amount);
+                    returned_data.seeds_ipv4 = self.get_peers(&data.seeds, TorrentPeersType::IPv4, self_peer_id, amount);
+                    returned_data.seeds_ipv6 = self.get_peers(&data.seeds, TorrentPeersType::IPv6, self_peer_id, amount);
+                    returned_data.peers_ipv4 = self.get_peers(&data.peers, TorrentPeersType::IPv4, self_peer_id, amount);
+                    returned_data.peers_ipv6 = self.get_peers(&data.peers, TorrentPeersType::IPv6, self_peer_id, amount);
                 }
                 TorrentPeersType::IPv4 => {
-                    returned_data.seeds_ipv4 = self.get_peers(&data.seeds, TorrentPeersType::IPv4, self_ip, amount);
-                    returned_data.peers_ipv4 = self.get_peers(&data.peers, TorrentPeersType::IPv4, self_ip, amount);
+                    returned_data.seeds_ipv4 = self.get_peers(&data.seeds, TorrentPeersType::IPv4, self_peer_id, amount);
+                    returned_data.peers_ipv4 = self.get_peers(&data.peers, TorrentPeersType::IPv4, self_peer_id, amount);
                 }
                 TorrentPeersType::IPv6 => {
-                    returned_data.seeds_ipv6 = self.get_peers(&data.seeds, TorrentPeersType::IPv6, self_ip, amount);
-                    returned_data.peers_ipv6 = self.get_peers(&data.peers, TorrentPeersType::IPv6, self_ip, amount);
+                    returned_data.seeds_ipv6 = self.get_peers(&data.seeds, TorrentPeersType::IPv6, self_peer_id, amount);
+                    returned_data.peers_ipv6 = self.get_peers(&data.peers, TorrentPeersType::IPv6, self_peer_id, amount);
                 }
             }
             returned_data
@@ -46,15 +43,15 @@ impl TorrentTracker {
     }
 
     #[inline]
-    pub fn get_peers(&self, peers: &AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_ip: Option<IpAddr>, amount: usize) -> AHashMap<PeerId, TorrentPeer>
+    pub fn get_peers(&self, peers: &AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_peer_id: Option<PeerId>, amount: usize) -> AHashMap<PeerId, TorrentPeer>
     {
-        let should_include = |peer_addr: &SocketAddr| -> bool {
+        let should_include = |peer_id: &PeerId, peer_addr: &SocketAddr| -> bool {
             let ip_type_match = match type_ip {
-                TorrentPeersType::All => return false,
+                TorrentPeersType::All => peer_addr.is_ipv4() || peer_addr.is_ipv6(),
                 TorrentPeersType::IPv4 => peer_addr.is_ipv4(),
                 TorrentPeersType::IPv6 => peer_addr.is_ipv6(),
             };
-            ip_type_match && self_ip.is_none_or(|ip| ip != peer_addr.ip())
+            ip_type_match && self_peer_id.is_none_or(|id| id != *peer_id)
         };
         let mut result = AHashMap::default();
         result.reserve(amount.min(peers.len()));
@@ -62,7 +59,7 @@ impl TorrentTracker {
             if amount != 0 && result.len() >= amount {
                 break;
             }
-            if should_include(&torrent_peer.peer_addr) {
+            if should_include(peer_id, &torrent_peer.peer_addr) {
                 result.insert(*peer_id, torrent_peer.clone());
             }
         }
