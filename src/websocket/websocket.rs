@@ -205,8 +205,8 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
     let stats = AnnounceResponseStats {
         interval: tracker_config.request_interval as i64,
         min_interval: tracker_config.request_interval_minimum as i64,
-        complete: torrent_entry.seeds.len() as i64,
-        incomplete: torrent_entry.peers.len() as i64,
+        complete: (torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64,
+        incomplete: (torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64,
         downloaded: torrent_entry.completed as i64,
     };
     let response_bytes = if announce.compact {
@@ -283,7 +283,7 @@ pub fn build_compact_announce_response(
         IpAddr::V6(_) => {
             if announce.left != 0 {
                 let seeds = tracker.get_peers(
-                    &torrent_entry.seeds,
+                    &torrent_entry.seeds_ipv6,
                     TorrentPeersType::IPv6,
                     Some(announce.peer_id),
                     72
@@ -297,7 +297,7 @@ pub fn build_compact_announce_response(
             }
             if peers_list.len() < 72 * 18 {
                 let peers = tracker.get_peers(
-                    &torrent_entry.peers,
+                    &torrent_entry.peers_ipv6,
                     TorrentPeersType::IPv6,
                     Some(announce.peer_id),
                     72
@@ -380,7 +380,7 @@ pub fn build_extended_announce_response(
         IpAddr::V6(_) => {
             if announce.left != 0 {
                 let seeds = tracker.get_peers(
-                    &torrent_entry.seeds,
+                    &torrent_entry.seeds_ipv6,
                     TorrentPeersType::IPv6,
                     Some(announce.peer_id),
                     72
@@ -395,7 +395,7 @@ pub fn build_extended_announce_response(
             }
             if peers_list_mut.len() < 72 {
                 let peers = tracker.get_peers(
-                    &torrent_entry.peers,
+                    &torrent_entry.peers_ipv6,
                     TorrentPeersType::IPv6,
                     Some(announce.peer_id),
                     72
@@ -465,9 +465,9 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
         files_map_mut.insert(
             Cow::from(info_hash.0.to_vec()),
             ben_map! {
-                "complete" => ben_int!(torrent_entry.seeds.len() as i64),
+                "complete" => ben_int!((torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64),
                 "downloaded" => ben_int!(torrent_entry.completed as i64),
-                "incomplete" => ben_int!(torrent_entry.peers.len() as i64)
+                "incomplete" => ben_int!((torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64)
             }
         );
     }

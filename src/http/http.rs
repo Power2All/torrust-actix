@@ -371,12 +371,12 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let seeds_count = if is_rtc_request {
         torrent_entry.rtc_seeds.len() as i64
     } else {
-        torrent_entry.seeds.len() as i64
+        (torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64
     };
     let peers_count = if is_rtc_request {
         torrent_entry.rtc_peers.len() as i64
     } else {
-        torrent_entry.peers.len() as i64
+        (torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64
     };
     let completed_count = torrent_entry.completed as i64;
     if is_rtc_request {
@@ -467,7 +467,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             }
             IpAddr::V6(_) => {
                 if announce_unwrapped.left != 0 {
-                    let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds };
+                    let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds_ipv6 };
                     let seeds = data.get_peers(
                         peers_to_use,
                         TorrentPeersType::IPv6,
@@ -482,7 +482,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     }
                 }
                 if peers_list.len() < 72 * 18 {
-                    let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers };
+                    let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers_ipv6 };
                     let peers = data.get_peers(
                         peers_to_use,
                         TorrentPeersType::IPv6,
@@ -562,7 +562,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         }
         IpAddr::V6(_) => {
             if announce_unwrapped.left != 0 {
-                let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds };
+                let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds_ipv6 };
                 let seeds = data.get_peers(
                     peers_to_use,
                     TorrentPeersType::IPv6,
@@ -578,7 +578,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 }
             }
             if peers_list_mut.len() < 72 {
-                let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers };
+                let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers_ipv6 };
                 let peers = data.get_peers(
                     peers_to_use,
                     TorrentPeersType::IPv6,
@@ -689,9 +689,9 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
             let scrape_list_mut = scrape_list.dict_mut().unwrap();
             for (info_hash, torrent_entry) in data_scrape.iter() {
                 scrape_list_mut.insert(Cow::from(info_hash.0.to_vec()), ben_map! {
-                    "complete" => ben_int!(torrent_entry.seeds.len() as i64),
+                    "complete" => ben_int!((torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64),
                     "downloaded" => ben_int!(torrent_entry.completed as i64),
-                    "incomplete" => ben_int!(torrent_entry.peers.len() as i64)
+                    "incomplete" => ben_int!((torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64)
                 });
             }
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {

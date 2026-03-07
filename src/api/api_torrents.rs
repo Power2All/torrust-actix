@@ -98,7 +98,9 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
     };
     let torrent_entry = TorrentEntry {
         seeds: AHashMap::default(),
+        seeds_ipv6: AHashMap::default(),
         peers: AHashMap::default(),
+        peers_ipv6: AHashMap::default(),
         rtc_seeds: AHashMap::default(),
         rtc_peers: AHashMap::default(),
         completed,
@@ -134,7 +136,9 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
                     let info_hash = InfoHash(hash);
                     let torrent_entry = TorrentEntry {
                         seeds: AHashMap::default(),
+                        seeds_ipv6: AHashMap::default(),
                         peers: AHashMap::default(),
+                        peers_ipv6: AHashMap::default(),
                         rtc_seeds: AHashMap::default(),
                         rtc_peers: AHashMap::default(),
                         completed,

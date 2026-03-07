@@ -201,7 +201,9 @@ impl DatabaseConnectorSQLite {
                     InfoHash(info_hash),
                     TorrentEntry {
                         seeds: AHashMap::default(),
+                        seeds_ipv6: AHashMap::default(),
                         peers: AHashMap::default(),
+                        peers_ipv6: AHashMap::default(),
                         rtc_seeds: AHashMap::default(),
                         rtc_peers: AHashMap::default(),
                         completed: completed_count as u64,

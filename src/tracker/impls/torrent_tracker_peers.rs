@@ -74,7 +74,9 @@ impl TorrentTracker {
             Entry::Vacant(v) => {
                 let mut torrent_entry = TorrentEntry {
                     seeds: AHashMap::default(),
+                    seeds_ipv6: AHashMap::default(),
                     peers: AHashMap::default(),
+                    peers_ipv6: AHashMap::default(),
                     rtc_seeds: AHashMap::default(),
                     rtc_peers: AHashMap::default(),
                     completed: 0,
@@ -95,10 +97,18 @@ impl TorrentTracker {
                     }
                 } else if torrent_peer.left == NumberOfBytes(0) {
                     self.update_stats(StatsEvent::Seeds, 1);
-                    torrent_entry.seeds.insert(peer_id, torrent_peer);
+                    if torrent_peer.peer_addr.is_ipv4() {
+                        torrent_entry.seeds.insert(peer_id, torrent_peer);
+                    } else {
+                        torrent_entry.seeds_ipv6.insert(peer_id, torrent_peer);
+                    }
                 } else {
                     self.update_stats(StatsEvent::Peers, 1);
-                    torrent_entry.peers.insert(peer_id, torrent_peer);
+                    if torrent_peer.peer_addr.is_ipv4() {
+                        torrent_entry.peers.insert(peer_id, torrent_peer);
+                    } else {
+                        torrent_entry.peers_ipv6.insert(peer_id, torrent_peer);
+                    }
                 }
                 let entry_clone = torrent_entry.clone();
                 v.insert(torrent_entry);
@@ -107,19 +117,21 @@ impl TorrentTracker {
             Entry::Occupied(mut o) => {
                 let previous_torrent = o.get().clone();
                 let entry = o.get_mut();
-                let was_seed = entry.seeds.remove(&peer_id).is_some();
-                let was_peer = entry.peers.remove(&peer_id).is_some();
+                let seeds_removed = entry.seeds.remove(&peer_id).is_some() as i64
+                    + entry.seeds_ipv6.remove(&peer_id).is_some() as i64;
+                let peers_removed = entry.peers.remove(&peer_id).is_some() as i64
+                    + entry.peers_ipv6.remove(&peer_id).is_some() as i64;
                 let old_rtc_pending_answers = entry.rtc_seeds.get(&peer_id)
                     .or_else(|| entry.rtc_peers.get(&peer_id))
                     .map(|p| p.rtc_pending_answers.clone())
                     .unwrap_or_default();
                 let was_rtc_seed = entry.rtc_seeds.remove(&peer_id).is_some();
                 let was_rtc_peer = entry.rtc_peers.remove(&peer_id).is_some();
-                if was_seed {
-                    self.update_stats(StatsEvent::Seeds, -1);
+                if seeds_removed > 0 {
+                    self.update_stats(StatsEvent::Seeds, -seeds_removed);
                 }
-                if was_peer {
-                    self.update_stats(StatsEvent::Peers, -1);
+                if peers_removed > 0 {
+                    self.update_stats(StatsEvent::Peers, -peers_removed);
                 }
                 if was_rtc_seed {
                     self.update_stats(StatsEvent::Seeds, -1);
@@ -150,10 +162,18 @@ impl TorrentTracker {
                     }
                 } else if torrent_peer.left == NumberOfBytes(0) {
                     self.update_stats(StatsEvent::Seeds, 1);
-                    entry.seeds.insert(peer_id, torrent_peer);
+                    if torrent_peer.peer_addr.is_ipv4() {
+                        entry.seeds.insert(peer_id, torrent_peer);
+                    } else {
+                        entry.seeds_ipv6.insert(peer_id, torrent_peer);
+                    }
                 } else {
                     self.update_stats(StatsEvent::Peers, 1);
-                    entry.peers.insert(peer_id, torrent_peer);
+                    if torrent_peer.peer_addr.is_ipv4() {
+                        entry.peers.insert(peer_id, torrent_peer);
+                    } else {
+                        entry.peers_ipv6.insert(peer_id, torrent_peer);
+                    }
                 }
                 entry.updated = std::time::Instant::now();
                 (Some(previous_torrent), entry.clone())
@@ -176,15 +196,17 @@ impl TorrentTracker {
                 }
                 let previous_torrent = o.get().clone();
                 let entry = o.get_mut();
-                let was_seed = entry.seeds.remove(&peer_id).is_some();
-                let was_peer = entry.peers.remove(&peer_id).is_some();
+                let seeds_removed = entry.seeds.remove(&peer_id).is_some() as i64
+                    + entry.seeds_ipv6.remove(&peer_id).is_some() as i64;
+                let peers_removed = entry.peers.remove(&peer_id).is_some() as i64
+                    + entry.peers_ipv6.remove(&peer_id).is_some() as i64;
                 let was_rtc_seed = entry.rtc_seeds.remove(&peer_id).is_some();
                 let was_rtc_peer = entry.rtc_peers.remove(&peer_id).is_some();
-                if was_seed {
-                    self.update_stats(StatsEvent::Seeds, -1);
+                if seeds_removed > 0 {
+                    self.update_stats(StatsEvent::Seeds, -seeds_removed);
                 }
-                if was_peer {
-                    self.update_stats(StatsEvent::Peers, -1);
+                if peers_removed > 0 {
+                    self.update_stats(StatsEvent::Peers, -peers_removed);
                 }
                 if was_rtc_seed {
                     self.update_stats(StatsEvent::Seeds, -1);
@@ -192,7 +214,7 @@ impl TorrentTracker {
                 if was_rtc_peer {
                     self.update_stats(StatsEvent::Peers, -1);
                 }
-                if !persistent && entry.seeds.is_empty() && entry.peers.is_empty() && entry.rtc_seeds.is_empty() && entry.rtc_peers.is_empty() {
+                if !persistent && entry.seeds.is_empty() && entry.seeds_ipv6.is_empty() && entry.peers.is_empty() && entry.peers_ipv6.is_empty() && entry.rtc_seeds.is_empty() && entry.rtc_peers.is_empty() {
                     o.remove();
                     self.update_stats(StatsEvent::Torrents, -1);
                     (Some(previous_torrent), None)

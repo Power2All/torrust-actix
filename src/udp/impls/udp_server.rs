@@ -366,56 +366,47 @@ impl UdpServer {
             }
         };
         let self_peer_id = PeerId(request.peer_id.0);
-        debug!("[UDP ANNOUNCE] bytes_left={} effective_remote_addr={} is_ipv4={} seeds={} peers={}", request.bytes_left.0, effective_remote_addr, effective_remote_addr.is_ipv4(), torrent.seeds.len(), torrent.peers.len());
-        for (pid, tp) in torrent.seeds.iter() {
-            debug!("[UDP ANNOUNCE] seed peer_id={:?} peer_addr={} addr_is_ipv4={} self={}", pid.0, tp.peer_addr, tp.peer_addr.is_ipv4(), *pid == self_peer_id);
-        }
-        for (pid, tp) in torrent.peers.iter() {
-            debug!("[UDP ANNOUNCE] leecher peer_id={:?} peer_addr={} addr_is_ipv4={} self={}", pid.0, tp.peer_addr, tp.peer_addr.is_ipv4(), *pid == self_peer_id);
-        }
         let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::with_capacity(72);
         let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(72);
-        let mut count = 0usize;
         if request.bytes_left.0 != 0 {
             if effective_remote_addr.is_ipv4() {
                 for (peer_id, torrent_peer) in torrent.seeds.iter() {
-                    if count >= 72 { break; }
+                    if peers.len() >= 72 { break; }
                     if *peer_id == self_peer_id { continue; }
                     if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                         peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
-                        count += 1;
                     }
                 }
             } else {
-                for (peer_id, torrent_peer) in torrent.seeds.iter() {
-                    if count >= 72 { break; }
+                for (peer_id, torrent_peer) in torrent.seeds_ipv6.iter() {
+                    if peers6.len() >= 72 { break; }
                     if *peer_id == self_peer_id { continue; }
                     if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                         peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
-                        count += 1;
                     }
                 }
             }
         }
         if effective_remote_addr.is_ipv4() {
-            for (peer_id, torrent_peer) in torrent.peers.iter().take(72 - count) {
+            for (peer_id, torrent_peer) in torrent.peers.iter() {
+                if peers.len() >= 72 { break; }
                 if *peer_id == self_peer_id { continue; }
                 if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                     peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                 }
             }
         } else {
-            for (peer_id, torrent_peer) in torrent.peers.iter().take(72 - count) {
+            for (peer_id, torrent_peer) in torrent.peers_ipv6.iter() {
+                if peers6.len() >= 72 { break; }
                 if *peer_id == self_peer_id { continue; }
                 if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                     peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                 }
             }
         }
-        debug!("[UDP ANNOUNCE] result: ipv4_peers={} ipv6_peers={}", peers.len(), peers6.len());
         let request_interval = config.request_interval as i32;
-        let leechers = torrent.peers.len() as i32;
-        let seeders = torrent.seeds.len() as i32;
+        let leechers = (torrent.peers.len() + torrent.peers_ipv6.len()) as i32;
+        let seeders = (torrent.seeds.len() + torrent.seeds_ipv6.len()) as i32;
         let response = if effective_remote_addr.is_ipv6() {
             Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,

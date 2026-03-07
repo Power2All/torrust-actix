@@ -40,7 +40,9 @@ impl TorrentTracker {
                 .expect("[IMPORT] Invalid hash length"));
             tracker.add_torrent_update(info_hash, TorrentEntry {
                 seeds: Default::default(),
+                seeds_ipv6: Default::default(),
                 peers: Default::default(),
+                peers_ipv6: Default::default(),
                 rtc_seeds: Default::default(),
                 rtc_peers: Default::default(),
                 completed,

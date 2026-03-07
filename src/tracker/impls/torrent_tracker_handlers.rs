@@ -229,7 +229,9 @@ impl TorrentTracker {
                     debug!("[PERF] Announce Started handling took: {elapsed:?}");
                     Ok((torrent_peer, TorrentEntry {
                         seeds: torrent_entry.1.seeds,
+                        seeds_ipv6: torrent_entry.1.seeds_ipv6,
                         peers: torrent_entry.1.peers,
+                        peers_ipv6: torrent_entry.1.peers_ipv6,
                         rtc_seeds: torrent_entry.1.rtc_seeds,
                         rtc_peers: torrent_entry.1.rtc_peers,
                         completed: torrent_entry.1.completed,

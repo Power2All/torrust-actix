@@ -9,7 +9,11 @@ pub struct TorrentEntry {
     #[serde(skip_serializing)]
     pub seeds: AHashMap<PeerId, TorrentPeer>,
     #[serde(skip_serializing)]
+    pub seeds_ipv6: AHashMap<PeerId, TorrentPeer>,
+    #[serde(skip_serializing)]
     pub peers: AHashMap<PeerId, TorrentPeer>,
+    #[serde(skip_serializing)]
+    pub peers_ipv6: AHashMap<PeerId, TorrentPeer>,
     #[serde(skip_serializing)]
     pub rtc_seeds: AHashMap<PeerId, TorrentPeer>,
     #[serde(skip_serializing)]
@@ -23,7 +27,9 @@ impl TorrentEntry {
     pub fn new() -> Self {
         TorrentEntry {
             seeds: AHashMap::default(),
+            seeds_ipv6: AHashMap::default(),
             peers: AHashMap::default(),
+            peers_ipv6: AHashMap::default(),
             rtc_seeds: AHashMap::default(),
             rtc_peers: AHashMap::default(),
             completed: 0,
