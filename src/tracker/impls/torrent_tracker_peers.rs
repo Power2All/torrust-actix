@@ -25,17 +25,17 @@ impl TorrentTracker {
             match ip_type {
                 TorrentPeersType::All => {
                     returned_data.seeds_ipv4 = self.get_peers(&data.seeds, TorrentPeersType::IPv4, self_peer_id, amount);
-                    returned_data.seeds_ipv6 = self.get_peers(&data.seeds, TorrentPeersType::IPv6, self_peer_id, amount);
+                    returned_data.seeds_ipv6 = self.get_peers(&data.seeds_ipv6, TorrentPeersType::IPv6, self_peer_id, amount);
                     returned_data.peers_ipv4 = self.get_peers(&data.peers, TorrentPeersType::IPv4, self_peer_id, amount);
-                    returned_data.peers_ipv6 = self.get_peers(&data.peers, TorrentPeersType::IPv6, self_peer_id, amount);
+                    returned_data.peers_ipv6 = self.get_peers(&data.peers_ipv6, TorrentPeersType::IPv6, self_peer_id, amount);
                 }
                 TorrentPeersType::IPv4 => {
                     returned_data.seeds_ipv4 = self.get_peers(&data.seeds, TorrentPeersType::IPv4, self_peer_id, amount);
                     returned_data.peers_ipv4 = self.get_peers(&data.peers, TorrentPeersType::IPv4, self_peer_id, amount);
                 }
                 TorrentPeersType::IPv6 => {
-                    returned_data.seeds_ipv6 = self.get_peers(&data.seeds, TorrentPeersType::IPv6, self_peer_id, amount);
-                    returned_data.peers_ipv6 = self.get_peers(&data.peers, TorrentPeersType::IPv6, self_peer_id, amount);
+                    returned_data.seeds_ipv6 = self.get_peers(&data.seeds_ipv6, TorrentPeersType::IPv6, self_peer_id, amount);
+                    returned_data.peers_ipv6 = self.get_peers(&data.peers_ipv6, TorrentPeersType::IPv6, self_peer_id, amount);
                 }
             }
             returned_data
@@ -117,10 +117,17 @@ impl TorrentTracker {
             Entry::Occupied(mut o) => {
                 let previous_torrent = o.get().clone();
                 let entry = o.get_mut();
-                let seeds_removed = entry.seeds.remove(&peer_id).is_some() as i64
-                    + entry.seeds_ipv6.remove(&peer_id).is_some() as i64;
-                let peers_removed = entry.peers.remove(&peer_id).is_some() as i64
-                    + entry.peers_ipv6.remove(&peer_id).is_some() as i64;
+                let (seeds_removed, peers_removed) = if torrent_peer.peer_addr.is_ipv4() {
+                    (
+                        entry.seeds.remove(&peer_id).is_some() as i64,
+                        entry.peers.remove(&peer_id).is_some() as i64,
+                    )
+                } else {
+                    (
+                        entry.seeds_ipv6.remove(&peer_id).is_some() as i64,
+                        entry.peers_ipv6.remove(&peer_id).is_some() as i64,
+                    )
+                };
                 let old_rtc_pending_answers = entry.rtc_seeds.get(&peer_id)
                     .or_else(|| entry.rtc_peers.get(&peer_id))
                     .map(|p| p.rtc_pending_answers.clone())
