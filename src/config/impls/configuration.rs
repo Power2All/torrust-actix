@@ -51,9 +51,9 @@ impl Configuration {
                 prometheus_id: String::from("torrust_actix"),
                 cluster: ClusterMode::standalone,
                 cluster_encoding: ClusterEncoding::binary,
-                cluster_token: String::from(""),
+                cluster_token: String::new(),
                 cluster_bind_address: String::from("0.0.0.0:8888"),
-                cluster_master_address: String::from(""),
+                cluster_master_address: String::new(),
                 cluster_keep_alive: 60,
                 cluster_request_timeout: 15,
                 cluster_disconnect_timeout: 15,
@@ -61,15 +61,15 @@ impl Configuration {
                 cluster_max_connections: 25000,
                 cluster_threads: available_parallelism().unwrap().get() as u64,
                 cluster_ssl: false,
-                cluster_ssl_key: String::from(""),
-                cluster_ssl_cert: String::from(""),
+                cluster_ssl_key: String::new(),
+                cluster_ssl_cert: String::new(),
                 cluster_tls_connection_rate: 256,
                 rtc_interval: 30,
                 rtc_peers_timeout: 120,
             },
             sentry_config: SentryConfig {
                 enabled: false,
-                dsn: "".to_string(),
+                dsn: String::new(),
                 debug: false,
                 sample_rate: 1.0,
                 max_breadcrumbs: 100,
@@ -139,8 +139,8 @@ impl Configuration {
                     max_connections: 25000,
                     threads: available_parallelism().unwrap().get() as u64,
                     ssl: false,
-                    ssl_key: String::from(""),
-                    ssl_cert: String::from(""),
+                    ssl_key: String::new(),
+                    ssl_cert: String::new(),
                     tls_connection_rate: 256,
                     rtctorrent: false
                 }
@@ -151,8 +151,8 @@ impl Configuration {
                     bind_address: String::from("0.0.0.0:6969"),
                     udp_threads: 2,
                     worker_threads: available_parallelism().unwrap().get(),
-                    receive_buffer_size: 134217728,
-                    send_buffer_size: 67108864,
+                    receive_buffer_size: 134_217_728,
+                    send_buffer_size: 67_108_864,
                     reuse_address: true,
                     use_payload_ip: false,
                     simple_proxy_protocol: false,
@@ -170,8 +170,8 @@ impl Configuration {
                     max_connections: 25000,
                     threads: available_parallelism().unwrap().get() as u64,
                     ssl: false,
-                    ssl_key: String::from(""),
-                    ssl_cert: String::from(""),
+                    ssl_key: String::new(),
+                    ssl_cert: String::new(),
                     tls_connection_rate: 256
                 }
             ),
@@ -182,7 +182,7 @@ impl Configuration {
         if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
         if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = value.parse::<u64>().unwrap_or(60u64); }
         if let Ok(value) = env::var("TRACKER__API_KEY") {
-            config.tracker_config.api_key = value
+            config.tracker_config.api_key = value;
         }
         if let Ok(value) = env::var("TRACKER__WHITELIST_ENABLED") {
             config.tracker_config.whitelist_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
@@ -587,10 +587,10 @@ impl Configuration {
                         block.worker_threads = value.parse::<usize>().unwrap_or(available_parallelism().unwrap().get());
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_RECEIVE_BUFFER_SIZE")) {
-                        block.receive_buffer_size = value.parse::<usize>().unwrap_or(134217728);
+                        block.receive_buffer_size = value.parse::<usize>().unwrap_or(134_217_728);
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SEND_BUFFER_SIZE")) {
-                        block.send_buffer_size = value.parse::<usize>().unwrap_or(67108864);
+                        block.send_buffer_size = value.parse::<usize>().unwrap_or(67_108_864);
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
                         block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
@@ -609,7 +609,7 @@ impl Configuration {
         match File::create(path) {
             Ok(mut file) => {
                 match file.write_all(data.as_ref()) {
-                    Ok(_) => Ok(()),
+                    Ok(()) => Ok(()),
                     Err(e) => Err(ConfigurationError::IOError(e))
                 }
             }
@@ -621,7 +621,7 @@ impl Configuration {
     {
         let config_toml = toml::to_string(&config).unwrap();
         match Self::save_file(path, config_toml) {
-            Ok(_) => { eprintln!("[CONFIG SAVE] Config file is saved"); }
+            Ok(()) => { eprintln!("[CONFIG SAVE] Config file is saved"); }
             Err(_) => { eprintln!("[CONFIG SAVE] Unable to save to {path}"); }
         }
     }
@@ -659,7 +659,7 @@ impl Configuration {
                 let config_toml = toml::to_string(&config).unwrap();
                 let save_file = Configuration::save_file("config.toml", config_toml);
                 return match save_file {
-                    Ok(_) => {
+                    Ok(()) => {
                         eprintln!("Please edit the config.TOML in the root folder, exiting now...");
                         Err(CustomError::new("create config.toml file"))
                     }
@@ -670,7 +670,7 @@ impl Configuration {
                     }
                 };
             }
-        };
+        }
         Self::env_overrides(&mut config);
         println!("[VALIDATE] Validating configuration...");
         Self::validate(config.clone());
@@ -678,11 +678,11 @@ impl Configuration {
     }
 
     pub fn validate(config: Configuration) {
-        if !validate_api_key_strength(&config.tracker_config.api_key) {
+        if validate_api_key_strength(&config.tracker_config.api_key) {
+            println!("[VALIDATE] API key strength: OK");
+        } else {
             eprintln!("[SECURITY WARNING] API key is weak! Please use a stronger API key.");
             eprintln!("[SECURITY WARNING] Generate a secure key with: 'head -c 32 /dev/urandom | base64'");
-        } else {
-            println!("[VALIDATE] API key strength: OK");
         }
         let check_map = vec![
             ("[TRACKER_CONFIG] prometheus_id", config.tracker_config.clone().prometheus_id, r"^[a-zA-Z0-9_]+$".to_string()),
@@ -714,7 +714,7 @@ impl Configuration {
         for (index, api_server) in config.api_server.iter().enumerate() {
             if api_server.enabled {
                 Self::validate_socket_address(
-                    &format!("api_server[{}].bind_address", index),
+                    &format!("api_server[{index}].bind_address"),
                     &api_server.bind_address,
                 );
             }
@@ -722,7 +722,7 @@ impl Configuration {
         for (index, http_server) in config.http_server.iter().enumerate() {
             if http_server.enabled {
                 Self::validate_socket_address(
-                    &format!("http_server[{}].bind_address", index),
+                    &format!("http_server[{index}].bind_address"),
                     &http_server.bind_address,
                 );
                 println!(
@@ -735,7 +735,7 @@ impl Configuration {
         for (index, udp_server) in config.udp_server.iter().enumerate() {
             if udp_server.enabled {
                 Self::validate_socket_address(
-                    &format!("udp_server[{}].bind_address", index),
+                    &format!("udp_server[{index}].bind_address"),
                     &udp_server.bind_address,
                 );
             }
@@ -766,23 +766,15 @@ impl Configuration {
             }
             ClusterMode::master => {
                 println!("[VALIDATE] Cluster mode: master");
-                if config.tracker_config.cluster_token.is_empty() {
-                    panic!("[VALIDATE CONFIG] Cluster mode 'master' requires 'cluster_token' to be set for authentication");
-                }
+                assert!(!config.tracker_config.cluster_token.is_empty(), "[VALIDATE CONFIG] Cluster mode 'master' requires 'cluster_token' to be set for authentication");
                 if !config.tracker_config.cluster_ssl {
                     eprintln!("[VALIDATE WARNING] Cluster SSL is disabled - cluster_token will be transmitted in plaintext!");
                 }
-                if config.tracker_config.cluster_bind_address.is_empty() {
-                    panic!("[VALIDATE CONFIG] Cluster mode 'master' requires 'cluster_bind_address' to be set");
-                }
+                assert!(!config.tracker_config.cluster_bind_address.is_empty(), "[VALIDATE CONFIG] Cluster mode 'master' requires 'cluster_bind_address' to be set");
                 Self::validate_socket_address("cluster_bind_address", &config.tracker_config.cluster_bind_address);
                 if config.tracker_config.cluster_ssl {
-                    if config.tracker_config.cluster_ssl_key.is_empty() {
-                        panic!("[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_key' is not set");
-                    }
-                    if config.tracker_config.cluster_ssl_cert.is_empty() {
-                        panic!("[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_cert' is not set");
-                    }
+                    assert!(!config.tracker_config.cluster_ssl_key.is_empty(), "[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_key' is not set");
+                    assert!(!config.tracker_config.cluster_ssl_cert.is_empty(), "[VALIDATE CONFIG] Cluster SSL enabled but 'cluster_ssl_cert' is not set");
                 }
                 println!("[VALIDATE] Cluster encoding: {:?}", config.tracker_config.cluster_encoding);
                 println!("[VALIDATE] Cluster bind address: {}", config.tracker_config.cluster_bind_address);
@@ -790,12 +782,8 @@ impl Configuration {
             }
             ClusterMode::slave => {
                 println!("[VALIDATE] Cluster mode: slave");
-                if config.tracker_config.cluster_token.is_empty() {
-                    panic!("[VALIDATE CONFIG] Cluster mode 'slave' requires 'cluster_token' to be set for authentication");
-                }
-                if config.tracker_config.cluster_master_address.is_empty() {
-                    panic!("[VALIDATE CONFIG] Cluster mode 'slave' requires 'cluster_master_address' to be set");
-                }
+                assert!(!config.tracker_config.cluster_token.is_empty(), "[VALIDATE CONFIG] Cluster mode 'slave' requires 'cluster_token' to be set for authentication");
+                assert!(!config.tracker_config.cluster_master_address.is_empty(), "[VALIDATE CONFIG] Cluster mode 'slave' requires 'cluster_master_address' to be set");
                 Self::validate_socket_address("cluster_master_address", &config.tracker_config.cluster_master_address);
                 println!("[VALIDATE] Cluster master address: {}", config.tracker_config.cluster_master_address);
                 println!("[VALIDATE] Cluster SSL: {}", if config.tracker_config.cluster_ssl { "wss" } else { "ws" });
@@ -807,14 +795,13 @@ impl Configuration {
         use std::net::SocketAddr;
         match address.parse::<SocketAddr>() {
             Ok(addr) => {
-                println!("[VALIDATE] {} is valid: {}", field_name, addr);
+                println!("[VALIDATE] {field_name} is valid: {addr}");
             }
             Err(e) => {
                 panic!(
-                    "[VALIDATE CONFIG] '{}' has invalid format: '{}'. \
+                    "[VALIDATE CONFIG] '{field_name}' has invalid format: '{address}'. \
                     Expected IPv4 format '1.2.3.4:8888' or IPv6 format '[2a00:1768:1001:0026::0183]:80'. \
-                    Error: {}",
-                    field_name, address, e
+                    Error: {e}"
                 );
             }
         }
@@ -823,8 +810,6 @@ impl Configuration {
     pub fn validate_value(name: &str, value: String, regex: String)
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();
-        if !regex_check.is_match(value.as_str()){
-            panic!("[VALIDATE CONFIG] Error checking {name} [:] Name: \"{value}\" [:] Regex: \"{regex_check}\"");
-        }
+        assert!(regex_check.is_match(value.as_str()), "[VALIDATE CONFIG] Error checking {name} [:] Name: \"{value}\" [:] Regex: \"{regex_check}\"");
     }
 }

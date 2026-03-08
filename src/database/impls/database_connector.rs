@@ -64,7 +64,7 @@ impl DatabaseConnector {
                 }
             }
             if let Some(engine) = &self.engine {
-                txn.set_tag("database_engine", format!("{:?}", engine));
+                txn.set_tag("database_engine", format!("{engine:?}"));
             }
             txn.finish();
         }
@@ -305,7 +305,7 @@ impl DatabaseConnector {
                 }
             }
             if let Some(engine) = &self.engine {
-                txn.set_tag("database_engine", format!("{:?}", engine));
+                txn.set_tag("database_engine", format!("{engine:?}"));
             }
             txn.set_extra("torrents_to_save", (torrents.len() as i64).into());
             txn.finish();

@@ -32,9 +32,10 @@ pub async fn api_service_whitelist_get(request: HttpRequest, path: web::Path<Str
         Ok(hash) => InfoHash(hash),
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
     };
-    match data.torrent_tracker.check_whitelist(info_hash) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        false => HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
+    if data.torrent_tracker.check_whitelist(info_hash) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"}))
     }
 }
 
@@ -87,9 +88,10 @@ pub async fn api_service_whitelist_post(request: HttpRequest, path: web::Path<St
     if data.torrent_tracker.config.database.persistent {
         let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Add);
     }
-    match data.torrent_tracker.add_whitelist(info_hash) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "info_hash updated"})),
+    if data.torrent_tracker.add_whitelist(info_hash) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "info_hash updated"}))
     }
 }
 
@@ -115,9 +117,10 @@ pub async fn api_service_whitelists_post(request: HttpRequest, payload: web::Pay
                     if data.torrent_tracker.config.database.persistent {
                         let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Add);
                     }
-                    let status = match data.torrent_tracker.add_whitelist(info_hash) {
-                        true => json!({"status": "ok"}),
-                        false => json!({"status": "info_hash updated"}),
+                    let status = if data.torrent_tracker.add_whitelist(info_hash) {
+                        json!({"status": "ok"})
+                    } else {
+                        json!({"status": "info_hash updated"})
                     };
                     whitelists_output.insert(info, status);
                 }
@@ -149,9 +152,10 @@ pub async fn api_service_whitelist_delete(request: HttpRequest, path: web::Path<
     if data.torrent_tracker.config.database.persistent {
         let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Remove);
     }
-    match data.torrent_tracker.remove_whitelist(info_hash) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
+    if data.torrent_tracker.remove_whitelist(info_hash) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"}))
     }
 }
 
@@ -177,9 +181,10 @@ pub async fn api_service_whitelists_delete(request: HttpRequest, payload: web::P
                     if data.torrent_tracker.config.database.persistent {
                         let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Remove);
                     }
-                    let status = match data.torrent_tracker.remove_whitelist(info_hash) {
-                        true => json!({"status": "ok"}),
-                        false => json!({"status": "unknown info_hash"}),
+                    let status = if data.torrent_tracker.remove_whitelist(info_hash) {
+                        json!({"status": "ok"})
+                    } else {
+                        json!({"status": "unknown info_hash"})
                     };
                     whitelists_output.insert(info, status);
                 }

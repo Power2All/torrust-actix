@@ -37,7 +37,7 @@ actix-web-actors = "^4"
 tokio-tungstenite = { version = "^0.28", features = ["rustls-tls-webpki-roots"] }
 rmp-serde = "^1.3"
 once_cell = "^1.21"
-uuid = { version = "^1.21", features = ["v4"] }
+uuid = { version = "^1.22", features = ["v4"] }
 async-std = "^1"
 binascii = "^0.1"
 bip_bencode = "^0.4"
@@ -83,6 +83,7 @@ tempfile = "^3.26"
 criterion = { version = "^0.8", features = ["async_tokio"] }
 mockall = "^0.14"
 proptest = "^1.10"
+reqwest = { version = "^0.13", default-features = false, features = ["rustls", "json"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"

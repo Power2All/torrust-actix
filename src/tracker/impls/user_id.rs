@@ -64,7 +64,7 @@ impl<'de> serde::de::Deserialize<'de> for UserId {
     fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
         struct UserIdVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for UserIdVisitor {
+        impl serde::de::Visitor<'_> for UserIdVisitor {
             type Value = UserId;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

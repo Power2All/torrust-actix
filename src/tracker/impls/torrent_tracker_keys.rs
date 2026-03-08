@@ -28,15 +28,12 @@ impl TorrentTracker {
 
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<(), ()>
     {
-        match self.sqlx.save_keys(tracker, keys).await {
-            Ok(keys_count) => {
-                info!("[SYNC KEYS] Synced {keys_count} keys");
-                Ok(())
-            }
-            Err(_) => {
-                error!("[SYNC KEYS] Unable to sync keys");
-                Err(())
-            }
+        if let Ok(keys_count) = self.sqlx.save_keys(tracker, keys).await {
+            info!("[SYNC KEYS] Synced {keys_count} keys");
+            Ok(())
+        } else {
+            error!("[SYNC KEYS] Unable to sync keys");
+            Err(())
         }
     }
 
@@ -87,8 +84,7 @@ impl TorrentTracker {
         lock.get(&hash).is_some_and(|&key| {
             let key_time = Utc.timestamp_opt(key, 0)
                 .single()
-                .map(SystemTime::from)
-                .unwrap_or(UNIX_EPOCH);
+                .map_or(UNIX_EPOCH, SystemTime::from);
             key_time > SystemTime::now()
         })
     }
@@ -109,8 +105,7 @@ impl TorrentTracker {
             for (&hash, &key_time) in lock.iter() {
                 let time = Utc.timestamp_opt(key_time, 0)
                     .single()
-                    .map(SystemTime::from)
-                    .unwrap_or(UNIX_EPOCH);
+                    .map_or(UNIX_EPOCH, SystemTime::from);
                 if time <= now {
                     keys_to_remove.push(hash);
                 }

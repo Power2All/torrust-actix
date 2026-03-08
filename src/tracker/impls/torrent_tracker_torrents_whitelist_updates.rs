@@ -99,30 +99,27 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, updates_action))| (*info_hash, *updates_action))
             .collect();
-        match self.save_whitelist(torrent_tracker, whitelist_updates).await {
-            Ok(_) => {
-                info!("[SYNC WHITELIST UPDATES] Synced {mapping_len} whitelists");
-                let mut lock = self.torrents_whitelist_updates.write();
-                let mut removed_count = 0i64;
-                for (_, (timestamp, _)) in mapping {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
+        if let Ok(()) = self.save_whitelist(torrent_tracker, whitelist_updates).await {
+            info!("[SYNC WHITELIST UPDATES] Synced {mapping_len} whitelists");
+            let mut lock = self.torrents_whitelist_updates.write();
+            let mut removed_count = 0i64;
+            for (_, (timestamp, _)) in mapping {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
                 }
-                for timestamp in timestamps_to_remove {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
-                }
-                if removed_count > 0 {
-                    self.update_stats(StatsEvent::WhitelistUpdates, -removed_count);
-                }
-                Ok(())
             }
-            Err(_) => {
-                error!("[SYNC WHITELIST UPDATES] Unable to sync {mapping_len} whitelists");
-                Err(())
+            for timestamp in timestamps_to_remove {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
+                }
             }
+            if removed_count > 0 {
+                self.update_stats(StatsEvent::WhitelistUpdates, -removed_count);
+            }
+            Ok(())
+        } else {
+            error!("[SYNC WHITELIST UPDATES] Unable to sync {mapping_len} whitelists");
+            Err(())
         }
     }
 }

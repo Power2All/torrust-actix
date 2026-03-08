@@ -19,15 +19,12 @@ impl TorrentTracker {
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
     {
         let hashes_len = hashes.len();
-        match self.sqlx.save_whitelist(tracker, hashes).await {
-            Ok(_) => {
-                info!("[SYNC WHITELIST] Synced {hashes_len} whitelists");
-                Ok(())
-            }
-            Err(_) => {
-                error!("[SYNC WHITELIST] Unable to sync {hashes_len} whitelists");
-                Err(())
-            }
+        if self.sqlx.save_whitelist(tracker, hashes).await.is_ok() {
+            info!("[SYNC WHITELIST] Synced {hashes_len} whitelists");
+            Ok(())
+        } else {
+            error!("[SYNC WHITELIST] Unable to sync {hashes_len} whitelists");
+            Err(())
         }
     }
 

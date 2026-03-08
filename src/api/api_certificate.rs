@@ -2,12 +2,10 @@ use crate::api::api::{
     api_service_token,
     api_validation
 };
-use crate::api::structs::api_certificate::{
-    CertificateReloadRequest,
-    CertificateStatusItem,
-    CertificateReloadResult,
-    CertificateReloadError
-};
+use crate::api::structs::certificate_reload_error::CertificateReloadError;
+use crate::api::structs::certificate_reload_request::CertificateReloadRequest;
+use crate::api::structs::certificate_reload_result::CertificateReloadResult;
+use crate::api::structs::certificate_status_item::CertificateStatusItem;
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::ssl::enums::server_identifier::ServerIdentifier;
@@ -70,9 +68,7 @@ pub async fn api_service_certificate_reload(
         match certificate_store.reload_certificate(&server_id) {
             Ok(()) => {
                 let loaded_at = certificate_store
-                    .get_certificate(&server_id)
-                    .map(|bundle| bundle.loaded_at.to_rfc3339())
-                    .unwrap_or_else(|| "unknown".to_string());
+                    .get_certificate(&server_id).map_or_else(|| "unknown".to_string(), |bundle| bundle.loaded_at.to_rfc3339());
                 reloaded.push(CertificateReloadResult {
                     server_type: server_id.server_type().to_string(),
                     bind_address: server_id.bind_address().to_string(),

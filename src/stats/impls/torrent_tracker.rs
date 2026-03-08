@@ -221,7 +221,7 @@ impl TorrentTracker {
             StatsEvent::WsAuthFailed => {
                 self.update_counter(&self.stats.ws_auth_failed, value);
             }
-        };
+        }
         self.get_stats()
     }
 
@@ -381,7 +381,7 @@ impl TorrentTracker {
             StatsEvent::WsAuthFailed => {
                 self.stats.ws_auth_failed.store(value, Ordering::Release);
             }
-        };
+        }
         self.get_stats()
     }
 

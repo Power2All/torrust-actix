@@ -6,25 +6,6 @@ use async_trait::async_trait;
 use log::debug;
 use redis::AsyncCommands;
 
-impl CacheConnectorRedis {
-    pub async fn connect(url: &str, prefix: &str) -> Result<Self, CacheError> {
-        let client = redis::Client::open(url)
-            .map_err(|e| CacheError::ConnectionError(format!("Failed to create Redis client: {}", e)))?;
-        let connection = client
-            .get_multiplexed_async_connection()
-            .await
-            .map_err(|e| CacheError::ConnectionError(format!("Failed to connect to Redis: {}", e)))?;
-        Ok(Self {
-            connection,
-            prefix: prefix.to_string(),
-        })
-    }
-    
-    fn torrent_key(&self, info_hash: &InfoHash) -> String {
-        format!("{}t:{}", self.prefix, info_hash)
-    }
-}
-
 #[async_trait]
 impl CacheBackend for CacheConnectorRedis {
     async fn ping(&self) -> Result<(), CacheError> {
@@ -54,7 +35,7 @@ impl CacheBackend for CacheConnectorRedis {
                     .await
                     .map_err(CacheError::RedisError)?;
             }
-        debug!("[Redis] Set torrent {} seeds={} peers={}", info_hash, seeds, peers);
+        debug!("[Redis] Set torrent {info_hash} seeds={seeds} peers={peers}");
         Ok(())
     }
 
@@ -84,7 +65,7 @@ impl CacheBackend for CacheConnectorRedis {
         conn.del::<_, ()>(&key)
             .await
             .map_err(CacheError::RedisError)?;
-        debug!("[Redis] Deleted torrent {}", info_hash);
+        debug!("[Redis] Deleted torrent {info_hash}");
         Ok(())
     }
 

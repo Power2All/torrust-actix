@@ -36,7 +36,7 @@ impl TorrentTracker {
                         Some(connector)
                     }
                     Err(e) => {
-                        warn!("[Cache] Failed to connect to cache: {}. Continuing without cache.", e);
+                        warn!("[Cache] Failed to connect to cache: {e}. Continuing without cache.");
                         None
                     }
                 }

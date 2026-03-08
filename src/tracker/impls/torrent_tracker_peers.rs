@@ -55,7 +55,7 @@ impl TorrentTracker {
         };
         let mut result = AHashMap::default();
         result.reserve(amount.min(peers.len()));
-        for (peer_id, torrent_peer) in peers.iter() {
+        for (peer_id, torrent_peer) in peers {
             if amount != 0 && result.len() >= amount {
                 break;
             }
@@ -119,13 +119,13 @@ impl TorrentTracker {
                 let entry = o.get_mut();
                 let (seeds_removed, peers_removed) = if torrent_peer.peer_addr.is_ipv4() {
                     (
-                        entry.seeds.remove(&peer_id).is_some() as i64,
-                        entry.peers.remove(&peer_id).is_some() as i64,
+                        i64::from(entry.seeds.remove(&peer_id).is_some()),
+                        i64::from(entry.peers.remove(&peer_id).is_some()),
                     )
                 } else {
                     (
-                        entry.seeds_ipv6.remove(&peer_id).is_some() as i64,
-                        entry.peers_ipv6.remove(&peer_id).is_some() as i64,
+                        i64::from(entry.seeds_ipv6.remove(&peer_id).is_some()),
+                        i64::from(entry.peers_ipv6.remove(&peer_id).is_some()),
                     )
                 };
                 let old_rtc_pending_answers = entry.rtc_seeds.get(&peer_id)
@@ -203,10 +203,10 @@ impl TorrentTracker {
                 }
                 let previous_torrent = o.get().clone();
                 let entry = o.get_mut();
-                let seeds_removed = entry.seeds.remove(&peer_id).is_some() as i64
-                    + entry.seeds_ipv6.remove(&peer_id).is_some() as i64;
-                let peers_removed = entry.peers.remove(&peer_id).is_some() as i64
-                    + entry.peers_ipv6.remove(&peer_id).is_some() as i64;
+                let seeds_removed = i64::from(entry.seeds.remove(&peer_id).is_some())
+                    + i64::from(entry.seeds_ipv6.remove(&peer_id).is_some());
+                let peers_removed = i64::from(entry.peers.remove(&peer_id).is_some())
+                    + i64::from(entry.peers_ipv6.remove(&peer_id).is_some());
                 let was_rtc_seed = entry.rtc_seeds.remove(&peer_id).is_some();
                 let was_rtc_peer = entry.rtc_peers.remove(&peer_id).is_some();
                 if seeds_removed > 0 {

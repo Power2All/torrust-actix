@@ -53,7 +53,7 @@ impl DynamicCertificateResolver {
 
     fn bundle_to_certified_key(bundle: &Arc<CertificateBundle>) -> Result<rustls::sign::CertifiedKey, CertificateError> {
         let signing_key = rustls::crypto::ring::sign::any_supported_type(&bundle.key)
-            .map_err(|e| CertificateError::CertifiedKeyError(format!("{}", e)))?;
+            .map_err(|e| CertificateError::CertifiedKeyError(format!("{e}")))?;
         Ok(rustls::sign::CertifiedKey::new(bundle.certs.clone(), signing_key))
     }
 }

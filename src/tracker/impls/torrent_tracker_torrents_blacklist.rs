@@ -19,15 +19,12 @@ impl TorrentTracker {
     pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
     {
         let hashes_len = hashes.len();
-        match self.sqlx.save_blacklist(tracker, hashes).await {
-            Ok(_) => {
-                info!("[SYNC BLACKLIST] Synced {hashes_len} blacklists");
-                Ok(())
-            }
-            Err(_) => {
-                error!("[SYNC BLACKLIST] Unable to sync {hashes_len} blacklists");
-                Err(())
-            }
+        if self.sqlx.save_blacklist(tracker, hashes).await.is_ok() {
+            info!("[SYNC BLACKLIST] Synced {hashes_len} blacklists");
+            Ok(())
+        } else {
+            error!("[SYNC BLACKLIST] Unable to sync {hashes_len} blacklists");
+            Err(())
         }
     }
 

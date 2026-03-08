@@ -120,7 +120,7 @@ impl ParsePool {
                 (packet.remote_addr, data)
             }
             SppParseResult::Malformed(msg) => {
-                warn!("[UDP SPP] Malformed SPP header: {}", msg);
+                warn!("[UDP SPP] Malformed SPP header: {msg}");
                 (packet.remote_addr, data)
             }
         }
@@ -145,7 +145,7 @@ impl ParsePool {
                 UdpServer::send_packet(packet.socket, &packet.remote_addr, &response.payload).await;
             }
             Err(e) => {
-                debug!("[UDP SLAVE] Failed to forward packet to master: {}", e);
+                debug!("[UDP SLAVE] Failed to forward packet to master: {e}");
             }
         }
     }

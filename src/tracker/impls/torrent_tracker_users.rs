@@ -24,15 +24,12 @@ impl TorrentTracker {
     pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), ()>
     {
         let users_len = users.len();
-        match self.sqlx.save_users(tracker, users).await {
-            Ok(_) => {
-                info!("[SYNC USERS] Synced {users_len} users");
-                Ok(())
-            }
-            Err(_) => {
-                error!("[SYNC USERS] Unable to sync {users_len} users");
-                Err(())
-            }
+        if let Ok(()) = self.sqlx.save_users(tracker, users).await {
+            info!("[SYNC USERS] Synced {users_len} users");
+            Ok(())
+        } else {
+            error!("[SYNC USERS] Unable to sync {users_len} users");
+            Err(())
         }
     }
 

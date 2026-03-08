@@ -57,7 +57,7 @@ impl TorrentSharding {
                         let tracker_clone = Arc::clone(&torrent_tracker_clone);
                         let stats_clone = Arc::clone(&stats);
                         let start_shard = thread_idx * shards_per_thread + thread_idx.min(remainder);
-                        let extra = if thread_idx < remainder { 1 } else { 0 };
+                        let extra = usize::from(thread_idx < remainder);
                         let end_shard = start_shard + shards_per_thread + extra;
                         let handle = tokio::spawn(async move {
                             for shard in start_shard..end_shard {
@@ -97,8 +97,8 @@ impl TorrentSharding {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
         if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
             let now = std::time::Instant::now();
-            let cutoff = now - peer_timeout;
-            let rtc_cutoff = now - rtc_peer_timeout;
+            let cutoff = now.checked_sub(peer_timeout).unwrap();
+            let rtc_cutoff = now.checked_sub(rtc_peer_timeout).unwrap();
             let mut expired_full: Vec<InfoHash> = Vec::new();
             #[allow(clippy::type_complexity)]
             let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
@@ -145,7 +145,7 @@ impl TorrentSharding {
             }
             if !expired_partial.is_empty() || !expired_full.is_empty() {
                 let mut shard_write = shard_arc.write();
-                for (info_hash, expired_seeds, expired_peers, expired_rtc_seeds, expired_rtc_peers) in expired_partial.iter() {
+                for (info_hash, expired_seeds, expired_peers, expired_rtc_seeds, expired_rtc_peers) in &expired_partial {
                     if let Entry::Occupied(mut entry) = shard_write.entry(*info_hash) {
                         let torrent_entry = entry.get_mut();
                         for peer_id in expired_seeds {
@@ -179,7 +179,7 @@ impl TorrentSharding {
                         }
                     }
                 }
-                for info_hash in expired_full.iter() {
+                for info_hash in &expired_full {
                     if let Entry::Occupied(entry) = shard_write.entry(*info_hash) {
                         let mut entry = entry;
                         if entry.get().updated >= cutoff { continue; }
@@ -188,12 +188,7 @@ impl TorrentSharding {
                         let peers_len = torrent_entry.peers.len() as u64;
                         let rtc_seeds_len = torrent_entry.rtc_seeds.len() as u64;
                         let rtc_peers_len = torrent_entry.rtc_peers.len() as u64;
-                        if !persistent {
-                            entry.remove();
-                            torrents_removed += 1;
-                            seeds_removed += seeds_len + rtc_seeds_len;
-                            peers_removed += peers_len + rtc_peers_len;
-                        } else {
+                        if persistent {
                             if seeds_len > 0 {
                                 torrent_entry.seeds.clear();
                                 seeds_removed += seeds_len;
@@ -210,6 +205,11 @@ impl TorrentSharding {
                                 torrent_entry.rtc_peers.clear();
                                 peers_removed += rtc_peers_len;
                             }
+                        } else {
+                            entry.remove();
+                            torrents_removed += 1;
+                            seeds_removed += seeds_len + rtc_seeds_len;
+                            peers_removed += peers_len + rtc_peers_len;
                         }
                     }
                 }
@@ -233,8 +233,7 @@ impl TorrentSharding {
     pub fn contains_torrent(&self, info_hash: InfoHash) -> bool {
         let shard_index = info_hash.0[0] as usize;
         self.shards.get(shard_index)
-            .map(|s| s.read().contains_key(&info_hash))
-            .unwrap_or(false)
+            .is_some_and(|s| s.read().contains_key(&info_hash))
     }
 
     #[inline]
@@ -307,8 +306,7 @@ impl TorrentSharding {
                 for &idx in indices {
                     let (info_hash, peer_id) = queries[idx];
                     results[idx] = shard.get(&info_hash)
-                        .map(|entry| entry.seeds.contains_key(&peer_id) || entry.peers.contains_key(&peer_id))
-                        .unwrap_or(false);
+                        .is_some_and(|entry| entry.seeds.contains_key(&peer_id) || entry.peers.contains_key(&peer_id));
                 }
             }
         }

@@ -62,8 +62,7 @@ pub fn validate_file_path(path: &str) -> Result<(), CustomError> {
 pub fn validate_peer_message(message: &str) -> Result<(), CustomError> {
     if message.len() > MAX_PEER_MESSAGE_SIZE {
         return Err(CustomError::new(&format!(
-            "Peer message exceeds maximum size of {} bytes",
-            MAX_PEER_MESSAGE_SIZE
+            "Peer message exceeds maximum size of {MAX_PEER_MESSAGE_SIZE} bytes"
         )));
     }
     let suspicious_patterns = ["<script", "javascript:", "data:", "vbscript:"];
@@ -100,8 +99,7 @@ pub fn validate_peer_id_hex(peer_id: &str) -> Result<(), CustomError> {
 pub fn validate_query_string_length(query: &str) -> Result<(), CustomError> {
     if query.len() > MAX_QUERY_STRING_LENGTH {
         return Err(CustomError::new(&format!(
-            "Query string exceeds maximum length of {} bytes",
-            MAX_QUERY_STRING_LENGTH
+            "Query string exceeds maximum length of {MAX_QUERY_STRING_LENGTH} bytes"
         )));
     }
     Ok(())

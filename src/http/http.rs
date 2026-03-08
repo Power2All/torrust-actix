@@ -129,14 +129,14 @@ pub async fn http_service(
             &http_server_object.ssl_cert,
             &http_server_object.ssl_key,
         ) {
-            panic!("[HTTPS] Failed to load SSL certificate: {}", e);
+            panic!("[HTTPS] Failed to load SSL certificate: {e}");
         }
         let resolver = match DynamicCertificateResolver::new(
             Arc::clone(&data.certificate_store),
             server_id,
         ) {
             Ok(resolver) => Arc::new(resolver),
-            Err(e) => panic!("[HTTPS] Failed to create certificate resolver: {}", e),
+            Err(e) => panic!("[HTTPS] Failed to create certificate resolver: {e}"),
         };
         let tls_config = rustls::ServerConfig::builder()
             .with_no_client_auth()
@@ -304,7 +304,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         } else {
             ProtocolType::Http
         };
-        let client_port = request.peer_addr().map(|a| a.port()).unwrap_or(0);
+        let client_port = request.peer_addr().map_or(0, |a| a.port());
         match forward_request(
             &data,
             protocol,
@@ -361,7 +361,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     };
     let request_interval = tracker_config.request_interval as i64;
     let request_interval_minimum = tracker_config.request_interval_minimum as i64;
-    let rtc_interval = tracker_config.rtc_interval as i64; // WebRTC interval
+    let rtc_interval = tracker_config.rtc_interval as i64;
     let is_rtc_request = announce_unwrapped.rtctorrent.unwrap_or(false);
     if is_rtc_request && !rtctorrent_enabled {
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -383,7 +383,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         let mut rtc_peers_list = ben_list!();
         {
             let rtc_peers_list_mut = rtc_peers_list.list_mut().unwrap();
-            for (peer_id, peer) in torrent_entry.rtc_seeds.iter() {
+            for (peer_id, peer) in &torrent_entry.rtc_seeds {
                 if *peer_id == announce_unwrapped.peer_id { continue; }
                 if let Some(ref offer) = peer.rtc_sdp_offer
                     && !offer.is_empty() {
@@ -398,7 +398,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         let mut rtc_answers_list = ben_list!();
         {
             let rtc_answers_list_mut = rtc_answers_list.list_mut().unwrap();
-            for (answerer_peer_id, sdp_answer) in pending_answers.iter() {
+            for (answerer_peer_id, sdp_answer) in &pending_answers {
                 rtc_answers_list_mut.push(ben_map! {
                     "peer_id" => ben_bytes!(answerer_peer_id.0.to_vec()),
                     "sdp_answer" => ben_bytes!(sdp_answer.as_bytes().to_vec())
@@ -428,7 +428,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         Some(announce_unwrapped.peer_id),
                         72
                     );
-                    for (_, torrent_peer) in seeds.iter() {
+                    for torrent_peer in seeds.values() {
 
                         if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                             let _ = peers_list.write(&ipv4.octets());
@@ -444,7 +444,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         Some(announce_unwrapped.peer_id),
                         72
                     );
-                    for (_, torrent_peer) in peers.iter() {
+                    for torrent_peer in peers.values() {
                         if peers_list.len() >= 72 * 6 {
                             break;
                         }
@@ -474,7 +474,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         Some(announce_unwrapped.peer_id),
                         72
                     );
-                    for (_, torrent_peer) in seeds.iter() {
+                    for torrent_peer in seeds.values() {
                         if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                             let _ = peers_list.write(&ipv6.octets());
                             let _ = peers_list.write(&port_bytes);
@@ -489,7 +489,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         Some(announce_unwrapped.peer_id),
                         72
                     );
-                    for (_, torrent_peer) in peers.iter() {
+                    for torrent_peer in peers.values() {
                         if peers_list.len() >= 72 * 18 {
                             break;
                         }
@@ -523,11 +523,11 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     Some(announce_unwrapped.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in seeds.iter() {
+                for (peer_id, torrent_peer) in &seeds {
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
@@ -539,14 +539,14 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     Some(announce_unwrapped.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in peers.iter() {
+                for (peer_id, torrent_peer) in &peers {
                     if peers_list_mut.len() >= 72 {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
@@ -569,11 +569,11 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     Some(announce_unwrapped.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in seeds.iter() {
+                for (peer_id, torrent_peer) in &seeds {
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
@@ -585,14 +585,14 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     Some(announce_unwrapped.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in peers.iter() {
+                for (peer_id, torrent_peer) in &peers {
                     if peers_list_mut.len() >= 72 {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
@@ -642,7 +642,7 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
         } else {
             ProtocolType::Http
         };
-        let client_port = request.peer_addr().map(|a| a.port()).unwrap_or(0);
+        let client_port = request.peer_addr().map_or(0, |a| a.port());
         match forward_request(
             &data,
             protocol,
@@ -687,7 +687,7 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
             let data_scrape = data.handle_scrape(data.clone(), e.clone()).await;
             let mut scrape_list = ben_map!();
             let scrape_list_mut = scrape_list.dict_mut().unwrap();
-            for (info_hash, torrent_entry) in data_scrape.iter() {
+            for (info_hash, torrent_entry) in &data_scrape {
                 scrape_list_mut.insert(Cow::from(info_hash.0.to_vec()), ben_map! {
                     "complete" => ben_int!((torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64),
                     "downloaded" => ben_int!(torrent_entry.completed as i64),
@@ -790,8 +790,7 @@ pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<Htt
             validate_remote_ip(ip_str, data.trusted_proxies).ok()?;
             IpAddr::from_str(ip_str).ok()
         })
-        .map(Ok)
-        .unwrap_or(Ok(origin_ip))
+        .map_or(Ok(origin_ip), Ok)
 }
 
 pub async fn http_validate_ip(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> Result<IpAddr, HttpResponse>
@@ -801,7 +800,7 @@ pub async fn http_validate_ip(request: HttpRequest, data: Data<Arc<HttpServiceDa
             http_service_stats_log(ip, &data.torrent_tracker);
             Ok(ip)
         }
-        Err(_) => {
+        Err(()) => {
             Err(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_ORIGIN_IP.clone()))
         }
     }

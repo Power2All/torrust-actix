@@ -22,29 +22,23 @@ impl TorrentTracker {
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), ()>
     {
         let torrents_count = torrents.len();
-        match self.sqlx.save_torrents(tracker, torrents).await {
-            Ok(_) => {
-                info!("[SYNC TORRENTS] Synced {torrents_count} torrents");
-                Ok(())
-            }
-            Err(_) => {
-                error!("[SYNC TORRENTS] Unable to sync {torrents_count} torrents");
-                Err(())
-            }
+        if let Ok(()) = self.sqlx.save_torrents(tracker, torrents).await {
+            info!("[SYNC TORRENTS] Synced {torrents_count} torrents");
+            Ok(())
+        } else {
+            error!("[SYNC TORRENTS] Unable to sync {torrents_count} torrents");
+            Err(())
         }
     }
 
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> bool
     {
-        match self.sqlx.reset_seeds_peers(tracker).await {
-            Ok(_) => {
-                info!("[RESET SEEDS PEERS] Completed");
-                true
-            }
-            Err(_) => {
-                error!("[RESET SEEDS PEERS] Unable to reset the seeds and peers");
-                false
-            }
+        if let Ok(()) = self.sqlx.reset_seeds_peers(tracker).await {
+            info!("[RESET SEEDS PEERS] Completed");
+            true
+        } else {
+            error!("[RESET SEEDS PEERS] Unable to reset the seeds and peers");
+            false
         }
     }
 

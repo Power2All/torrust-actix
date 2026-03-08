@@ -113,56 +113,53 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, torrent_entry, updates_action))| (*info_hash, (torrent_entry.clone(), *updates_action)))
             .collect();
-        match self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await {
-            Ok(_) => {
-                info!("[SYNC TORRENT UPDATES] Synced {mapping_len} torrents");
-                if let Some(ref cache) = self.cache {
-                    let cache_ttl = self.config.cache.as_ref().and_then(|c| {
-                        if c.ttl > 0 { Some(c.ttl) } else { None }
-                    });
-                    let cache_data: Vec<_> = torrents_to_save
-                        .iter()
-                        .filter(|(_, (_, action))| *action != UpdatesAction::Remove)
-                        .map(|(hash, (entry, _))| (*hash, entry.seeds.len() as u64, entry.peers.len() as u64))
-                        .collect();
-                    if !cache_data.is_empty() {
-                        match cache.set_torrent_peers_batch(&cache_data, cache_ttl).await {
-                            Ok(_) => {
-                                debug!("[Cache] Updated {} torrent peer counts", cache_data.len());
-                            }
-                            Err(e) => {
-                                warn!("[Cache] Failed to update peer counts: {}", e);
-                            }
+        if let Ok(()) = self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await {
+            info!("[SYNC TORRENT UPDATES] Synced {mapping_len} torrents");
+            if let Some(ref cache) = self.cache {
+                let cache_ttl = self.config.cache.as_ref().and_then(|c| {
+                    if c.ttl > 0 { Some(c.ttl) } else { None }
+                });
+                let cache_data: Vec<_> = torrents_to_save
+                    .iter()
+                    .filter(|(_, (_, action))| *action != UpdatesAction::Remove)
+                    .map(|(hash, (entry, _))| (*hash, entry.seeds.len() as u64, entry.peers.len() as u64))
+                    .collect();
+                if !cache_data.is_empty() {
+                    match cache.set_torrent_peers_batch(&cache_data, cache_ttl).await {
+                        Ok(()) => {
+                            debug!("[Cache] Updated {} torrent peer counts", cache_data.len());
+                        }
+                        Err(e) => {
+                            warn!("[Cache] Failed to update peer counts: {e}");
                         }
                     }
-                    for (hash, (_, action)) in &torrents_to_save {
-                        if *action == UpdatesAction::Remove
-                            && let Err(e) = cache.delete_torrent(hash).await {
-                                warn!("[Cache] Failed to delete torrent {}: {}", hash, e);
-                            }
-                    }
                 }
-                let mut lock = self.torrents_updates.write();
-                let mut removed_count = 0i64;
-                for (_, (timestamp, _, _)) in mapping {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
+                for (hash, (_, action)) in &torrents_to_save {
+                    if *action == UpdatesAction::Remove
+                        && let Err(e) = cache.delete_torrent(hash).await {
+                            warn!("[Cache] Failed to delete torrent {hash}: {e}");
+                        }
                 }
-                for timestamp in timestamps_to_remove {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
-                }
-                if removed_count > 0 {
-                    self.update_stats(StatsEvent::TorrentsUpdates, -removed_count);
-                }
-                Ok(())
             }
-            Err(_) => {
-                error!("[SYNC TORRENT UPDATES] Unable to sync {mapping_len} torrents");
-                Err(())
+            let mut lock = self.torrents_updates.write();
+            let mut removed_count = 0i64;
+            for (_, (timestamp, _, _)) in mapping {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
+                }
             }
+            for timestamp in timestamps_to_remove {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
+                }
+            }
+            if removed_count > 0 {
+                self.update_stats(StatsEvent::TorrentsUpdates, -removed_count);
+            }
+            Ok(())
+        } else {
+            error!("[SYNC TORRENT UPDATES] Unable to sync {mapping_len} torrents");
+            Err(())
         }
     }
 }

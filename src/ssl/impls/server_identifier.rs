@@ -22,13 +22,13 @@ impl std::fmt::Display for ServerIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ServerIdentifier::HttpTracker(addr) => {
-                write!(f, "HttpTracker({})", addr)
+                write!(f, "HttpTracker({addr})")
             }
             ServerIdentifier::ApiServer(addr) => {
-                write!(f, "ApiServer({})", addr)
+                write!(f, "ApiServer({addr})")
             }
             ServerIdentifier::WebSocketMaster(addr) => {
-                write!(f, "WebSocketMaster({})", addr)
+                write!(f, "WebSocketMaster({addr})")
             }
         }
     }

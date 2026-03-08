@@ -61,8 +61,7 @@ pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, d
                 Ok(hash) => {
                     let key_hash = InfoHash(hash);
                     let timeout = data.torrent_tracker.get_key(key_hash)
-                        .map(|(_, timeout)| timeout as u64)
-                        .unwrap_or(0u64);
+                        .map_or(0u64, |(_, timeout)| timeout as u64);
                     keys_output.insert(key, timeout);
                 }
                 Err(_) => {
@@ -93,9 +92,10 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
     if data.torrent_tracker.config.database.persistent {
         let _ = data.torrent_tracker.add_key_update(key_hash, timeout as i64, UpdatesAction::Add);
     }
-    match data.torrent_tracker.add_key(key_hash, timeout as i64) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "key_hash updated"})),
+    if data.torrent_tracker.add_key(key_hash, timeout as i64) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "key_hash updated"}))
     }
 }
 
@@ -121,9 +121,10 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
                     if data.torrent_tracker.config.database.persistent {
                         let _ = data.torrent_tracker.add_key_update(key_hash, timeout as i64, UpdatesAction::Add);
                     }
-                    let status = match data.torrent_tracker.add_key(key_hash, timeout as i64) {
-                        true => json!({"status": "ok"}),
-                        false => json!({"status": "key_hash updated"}),
+                    let status = if data.torrent_tracker.add_key(key_hash, timeout as i64) {
+                        json!({"status": "ok"})
+                    } else {
+                        json!({"status": "key_hash updated"})
                     };
                     keys_output.insert(key, status);
                 }
@@ -155,9 +156,10 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
     if data.torrent_tracker.config.database.persistent {
         let _ = data.torrent_tracker.add_key_update(key_hash, 0i64, UpdatesAction::Remove);
     }
-    match data.torrent_tracker.remove_key(key_hash) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown key_hash"})),
+    if data.torrent_tracker.remove_key(key_hash) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown key_hash"}))
     }
 }
 
@@ -183,9 +185,10 @@ pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload
                     if data.torrent_tracker.config.database.persistent {
                         let _ = data.torrent_tracker.add_key_update(key_hash, 0i64, UpdatesAction::Remove);
                     }
-                    let status = match data.torrent_tracker.remove_key(key_hash) {
-                        true => json!({"status": "ok"}),
-                        false => json!({"status": "unknown key_hash"}),
+                    let status = if data.torrent_tracker.remove_key(key_hash) {
+                        json!({"status": "ok"})
+                    } else {
+                        json!({"status": "unknown key_hash"})
                     };
                     keys_output.insert(key_item, status);
                 }

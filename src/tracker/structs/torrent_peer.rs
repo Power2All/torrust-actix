@@ -28,5 +28,5 @@ pub struct TorrentPeer {
     pub rtc_sdp_answer: Option<String>,
     pub rtc_connection_status: String,
     #[serde(default)]
-    pub rtc_pending_answers: Vec<(PeerId, String)>, // (answerer_peer_id, sdp_answer)
+    pub rtc_pending_answers: Vec<(PeerId, String)>,
 }

@@ -8,21 +8,21 @@ impl QueryBuilder {
 
     pub fn quote_identifier(&self, identifier: &str) -> String {
         match self.engine {
-            DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{}`", identifier),
+            DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{identifier}`"),
             DatabaseDrivers::pgsql => identifier.to_string(),
         }
     }
 
     pub fn binary_literal(&self, hex_value: &str) -> String {
         match self.engine {
-            DatabaseDrivers::sqlite3 => format!("X'{}'", hex_value),
-            DatabaseDrivers::mysql => format!("X'{}'", hex_value),
-            DatabaseDrivers::pgsql => format!("'\\x{}'::bytea", hex_value),
+            DatabaseDrivers::sqlite3 => format!("X'{hex_value}'"),
+            DatabaseDrivers::mysql => format!("X'{hex_value}'"),
+            DatabaseDrivers::pgsql => format!("'\\x{hex_value}'::bytea"),
         }
     }
 
     pub fn text_literal(&self, value: &str) -> String {
-        format!("'{}'", value)
+        format!("'{value}'")
     }
 
     pub fn upsert_conflict_clause(&self, conflict_column: &str, update_columns: &[&str]) -> String {
@@ -32,7 +32,7 @@ impl QueryBuilder {
                     .iter()
                     .map(|col| {
                         let quoted = self.quote_identifier(col);
-                        format!("{}=excluded.{}", quoted, quoted)
+                        format!("{quoted}=excluded.{quoted}")
                     })
                     .collect();
                 format!(
@@ -46,7 +46,7 @@ impl QueryBuilder {
                     .iter()
                     .map(|col| {
                         let quoted = self.quote_identifier(col);
-                        format!("{}=VALUES({})", quoted, quoted)
+                        format!("{quoted}=VALUES({quoted})")
                     })
                     .collect();
                 format!("ON DUPLICATE KEY UPDATE {}", updates.join(", "))
@@ -90,16 +90,16 @@ impl QueryBuilder {
 
     pub fn unhex(&self, hex_value: &str) -> String {
         match self.engine {
-            DatabaseDrivers::sqlite3 => format!("X'{}'", hex_value),
-            DatabaseDrivers::mysql => format!("UNHEX('{}')", hex_value),
-            DatabaseDrivers::pgsql => format!("decode('{}', 'hex')", hex_value),
+            DatabaseDrivers::sqlite3 => format!("X'{hex_value}'"),
+            DatabaseDrivers::mysql => format!("UNHEX('{hex_value}')"),
+            DatabaseDrivers::pgsql => format!("decode('{hex_value}', 'hex')"),
         }
     }
 
     pub fn limit_offset(&self, offset: u64, limit: u64) -> String {
         match self.engine {
-            DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("LIMIT {}, {}", offset, limit),
-            DatabaseDrivers::pgsql => format!("LIMIT {} OFFSET {}", limit, offset),
+            DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("LIMIT {offset}, {limit}"),
+            DatabaseDrivers::pgsql => format!("LIMIT {limit} OFFSET {offset}"),
         }
     }
 
@@ -130,7 +130,7 @@ impl QueryBuilder {
     pub fn binary_type(&self, size: usize) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 => "BLOB".to_string(),
-            DatabaseDrivers::mysql => format!("BINARY({})", size),
+            DatabaseDrivers::mysql => format!("BINARY({size})"),
             DatabaseDrivers::pgsql => "bytea".to_string(),
         }
     }

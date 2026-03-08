@@ -47,6 +47,7 @@ use crate::api::api_whitelists::{
     api_service_whitelists_post
 };
 use crate::api::structs::api_service_data::ApiServiceData;
+use crate::common::common::hex2bin;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
@@ -57,6 +58,7 @@ use crate::security::security::{
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use actix_cors::Cors;
 use actix_web::dev::ServerHandle;
@@ -109,13 +111,16 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
     Box::new(move |cfg: &mut ServiceConfig| {
         cfg.app_data(Data::new(Arc::clone(&data)));
         cfg.default_service(web::route().to(api_service_not_found));
-        cfg.service(web::resource("stats").route(web::get().to(api_service_stats_get)));
-        cfg.service(web::resource("metrics").route(web::get().to(api_service_prom_get)));
+        cfg.service(web::resource("stats")
+            .route(web::get().to(api_service_stats_get)));
+        cfg.service(web::resource("metrics")
+            .route(web::get().to(api_service_prom_get)));
         cfg.service(web::resource("api/torrent/{info_hash}")
             .route(web::get().to(api_service_torrent_get))
             .route(web::delete().to(api_service_torrent_delete))
         );
-        cfg.service(web::resource("api/torrent/{info_hash}/{completed}").route(web::post().to(api_service_torrent_post)));
+        cfg.service(web::resource("api/torrent/{info_hash}/{completed}")
+            .route(web::post().to(api_service_torrent_post)));
         cfg.service(web::resource("api/torrents")
             .route(web::get().to(api_service_torrents_get))
             .route(web::post().to(api_service_torrents_post))
@@ -172,7 +177,8 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::get().to(api_service_certificate_status))
         );
         if data.torrent_tracker.config.tracker_config.swagger {
-            cfg.service(SwaggerUi::new("/swagger-ui/{_:.*}").config(Config::new(["/api/openapi.json"])));
+            cfg.service(SwaggerUi::new("/swagger-ui/{_:.*}")
+                .config(Config::new(["/api/openapi.json"])));
             cfg.service(web::resource("/api/openapi.json")
                 .route(web::get().to(api_service_openapi_json))
             );
@@ -214,14 +220,14 @@ pub async fn api_service(
             &api_server_object.ssl_cert,
             &api_server_object.ssl_key,
         ) {
-            panic!("[APIS] Failed to load SSL certificate: {}", e);
+            panic!("[APIS] Failed to load SSL certificate: {e}");
         }
         let resolver = match DynamicCertificateResolver::new(
             Arc::clone(&data.certificate_store),
             server_id,
         ) {
             Ok(resolver) => Arc::new(resolver),
-            Err(e) => panic!("[APIS] Failed to create certificate resolver: {}", e),
+            Err(e) => panic!("[APIS] Failed to create certificate resolver: {e}"),
         };
         let tls_config = rustls::ServerConfig::builder()
             .with_no_client_auth()
@@ -291,8 +297,7 @@ pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<Api
             validate_remote_ip(ip_str, data.trusted_proxies).ok()?;
             IpAddr::from_str(ip_str).ok()
         })
-        .map(Ok)
-        .unwrap_or(Ok(origin_ip))
+        .map_or(Ok(origin_ip), Ok)
 }
 
 pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceData>>) -> Result<IpAddr, HttpResponse>
@@ -302,7 +307,7 @@ pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceDat
             api_service_stats_log(ip, Arc::clone(&data.torrent_tracker)).await;
             Ok(ip)
         }
-        Err(_) => {
+        Err(()) => {
             Err(HttpResponse::Ok().content_type(ContentType::json()).json(json!({
                 "status": "invalid ip"
             })))
@@ -365,4 +370,19 @@ pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, Custo
         body.extend_from_slice(&chunk);
     }
     Ok(body)
+}
+
+pub fn parse_info_hash(info: &str) -> Result<InfoHash, HttpResponse>
+{
+    if info.len() != 40 {
+        return Err(HttpResponse::BadRequest()
+            .content_type(ContentType::json())
+            .json(json!({"status": "bad info_hash"})));
+    }
+    match hex2bin(info.to_string()) {
+        Ok(hash) => Ok(InfoHash(hash)),
+        Err(_) => Err(HttpResponse::BadRequest()
+            .content_type(ContentType::json())
+            .json(json!({"status": "invalid info_hash"}))),
+    }
 }

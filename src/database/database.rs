@@ -3,12 +3,12 @@ use crate::database::enums::database_drivers::DatabaseDrivers;
 pub fn format_hash_value(engine: DatabaseDrivers, hex_value: &str, is_binary: bool) -> String {
     if is_binary {
         match engine {
-            DatabaseDrivers::sqlite3 => format!("X'{}'", hex_value),
-            DatabaseDrivers::mysql => format!("UNHEX('{}')", hex_value),
-            DatabaseDrivers::pgsql => format!("decode('{}', 'hex')", hex_value),
+            DatabaseDrivers::sqlite3 => format!("X'{hex_value}'"),
+            DatabaseDrivers::mysql => format!("UNHEX('{hex_value}')"),
+            DatabaseDrivers::pgsql => format!("decode('{hex_value}', 'hex')"),
         }
     } else {
-        format!("'{}'", hex_value)
+        format!("'{hex_value}'")
     }
 }
 
@@ -16,13 +16,13 @@ pub fn format_hex_select(engine: DatabaseDrivers, column: &str, is_binary: bool)
     if is_binary {
         match engine {
             DatabaseDrivers::sqlite3 => {
-                format!("hex(`{}`) AS `{}`", column, column)
+                format!("hex(`{column}`) AS `{column}`")
             }
             DatabaseDrivers::mysql => {
-                format!("HEX(`{}`) AS `{}`", column, column)
+                format!("HEX(`{column}`) AS `{column}`")
             }
             DatabaseDrivers::pgsql => {
-                format!("encode({}, 'hex') AS {}", column, column)
+                format!("encode({column}, 'hex') AS {column}")
             }
         }
     } else {
@@ -32,7 +32,7 @@ pub fn format_hex_select(engine: DatabaseDrivers, column: &str, is_binary: bool)
 
 pub fn quote_identifier(engine: DatabaseDrivers, identifier: &str) -> String {
     match engine {
-        DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{}`", identifier),
+        DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{identifier}`"),
         DatabaseDrivers::pgsql => identifier.to_string(),
     }
 }
@@ -48,7 +48,7 @@ pub fn insert_ignore_prefix(engine: DatabaseDrivers) -> &'static str {
 pub fn insert_ignore_suffix(engine: DatabaseDrivers, conflict_column: &str) -> String {
     match engine {
         DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => String::new(),
-        DatabaseDrivers::pgsql => format!(" ON CONFLICT ({}) DO NOTHING", conflict_column),
+        DatabaseDrivers::pgsql => format!(" ON CONFLICT ({conflict_column}) DO NOTHING"),
     }
 }
 
@@ -67,7 +67,7 @@ pub fn upsert_conflict_clause(engine: DatabaseDrivers, conflict_column: &str, up
                 .iter()
                 .map(|col| {
                     let quoted = quote_identifier(engine, col);
-                    format!("{}=excluded.{}", quoted, quoted)
+                    format!("{quoted}=excluded.{quoted}")
                 })
                 .collect();
             format!(
@@ -81,7 +81,7 @@ pub fn upsert_conflict_clause(engine: DatabaseDrivers, conflict_column: &str, up
                 .iter()
                 .map(|col| {
                     let quoted = quote_identifier(engine, col);
-                    format!("{}=VALUES({})", quoted, quoted)
+                    format!("{quoted}=VALUES({quoted})")
                 })
                 .collect();
             format!("ON DUPLICATE KEY UPDATE {}", updates.join(", "))
@@ -91,8 +91,8 @@ pub fn upsert_conflict_clause(engine: DatabaseDrivers, conflict_column: &str, up
 
 pub fn limit_offset(engine: DatabaseDrivers, start: u64, length: u64) -> String {
     match engine {
-        DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("LIMIT {}, {}", start, length),
-        DatabaseDrivers::pgsql => format!("LIMIT {} OFFSET {}", length, start),
+        DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("LIMIT {start}, {length}"),
+        DatabaseDrivers::pgsql => format!("LIMIT {length} OFFSET {start}"),
     }
 }
 
@@ -107,10 +107,7 @@ pub fn build_delete_hash_query(
     let quoted_column = quote_identifier(engine, column_name);
     let value = format_hash_value(engine, hash_value, is_binary);
     format!(
-        "DELETE FROM {} WHERE {}={}",
-        quoted_table,
-        quoted_column,
-        value
+        "DELETE FROM {quoted_table} WHERE {quoted_column}={value}"
     )
 }
 
@@ -127,12 +124,7 @@ pub fn build_insert_ignore_hash_query(
     let prefix = insert_ignore_prefix(engine);
     let suffix = insert_ignore_suffix(engine, column_name);
     format!(
-        "{} {} ({}) VALUES ({}){}",
-        prefix,
-        quoted_table,
-        quoted_column,
-        value,
-        suffix
+        "{prefix} {quoted_table} ({quoted_column}) VALUES ({value}){suffix}"
     )
 }
 
@@ -158,10 +150,7 @@ pub fn build_select_hash_query(
     };
     let limit = limit_offset(engine, start, length);
     format!(
-        "SELECT {} FROM {} {}",
-        columns,
-        quoted_table,
-        limit
+        "SELECT {columns} FROM {quoted_table} {limit}"
     )
 }
 

@@ -97,9 +97,8 @@ impl Request {
                 return Ok(ConnectRequest {
                     transaction_id: TransactionId(transaction_id),
                 }.into());
-            } else {
-                return Err(RequestParseError::unsendable_text("Protocol identifier missing"));
             }
+            return Err(RequestParseError::unsendable_text("Protocol identifier missing"));
         }
         let mut cursor = Cursor::new(bytes);
         cursor.set_position(16);

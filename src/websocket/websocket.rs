@@ -115,7 +115,7 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
         Err(e) => {
             return ClusterResponse::error(
                 request.request_id,
-                format!("Invalid query string encoding: {}", e),
+                format!("Invalid query string encoding: {e}"),
             );
         }
     };
@@ -167,7 +167,7 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
         let mut rtc_peers_list = ben_list!();
         {
             let rtc_peers_list_mut = rtc_peers_list.list_mut().unwrap();
-            for (peer_id, peer) in torrent_entry.rtc_seeds.iter() {
+            for (peer_id, peer) in &torrent_entry.rtc_seeds {
                 if *peer_id == announce.peer_id { continue; }
                 if let Some(ref offer) = peer.rtc_sdp_offer
                     && !offer.is_empty() {
@@ -182,7 +182,7 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
         let mut rtc_answers_list = ben_list!();
         {
             let rtc_answers_list_mut = rtc_answers_list.list_mut().unwrap();
-            for (answerer_peer_id, sdp_answer) in pending_answers.iter() {
+            for (answerer_peer_id, sdp_answer) in &pending_answers {
                 rtc_answers_list_mut.push(ben_map! {
                     "peer_id"    => ben_bytes!(answerer_peer_id.0.to_vec()),
                     "sdp_answer" => ben_bytes!(sdp_answer.as_bytes().to_vec())
@@ -247,7 +247,7 @@ pub fn build_compact_announce_response(
                     Some(announce.peer_id),
                     72
                 );
-                for (_, torrent_peer) in seeds.iter() {
+                for torrent_peer in seeds.values() {
                     if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                         let _ = peers_list.write(&ipv4.octets());
                         let _ = peers_list.write(&port_bytes);
@@ -261,7 +261,7 @@ pub fn build_compact_announce_response(
                     Some(announce.peer_id),
                     72
                 );
-                for (_, torrent_peer) in peers.iter() {
+                for torrent_peer in peers.values() {
                     if peers_list.len() >= 72 * 6 {
                         break;
                     }
@@ -288,7 +288,7 @@ pub fn build_compact_announce_response(
                     Some(announce.peer_id),
                     72
                 );
-                for (_, torrent_peer) in seeds.iter() {
+                for torrent_peer in seeds.values() {
                     if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                         let _ = peers_list.write(&ipv6.octets());
                         let _ = peers_list.write(&port_bytes);
@@ -302,7 +302,7 @@ pub fn build_compact_announce_response(
                     Some(announce.peer_id),
                     72
                 );
-                for (_, torrent_peer) in peers.iter() {
+                for torrent_peer in peers.values() {
                     if peers_list.len() >= 72 * 18 {
                         break;
                     }
@@ -342,11 +342,11 @@ pub fn build_extended_announce_response(
                     Some(announce.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in seeds.iter() {
+                for (peer_id, torrent_peer) in &seeds {
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
@@ -357,14 +357,14 @@ pub fn build_extended_announce_response(
                     Some(announce.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in peers.iter() {
+                for (peer_id, torrent_peer) in &peers {
                     if peers_list_mut.len() >= 72 {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
@@ -385,11 +385,11 @@ pub fn build_extended_announce_response(
                     Some(announce.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in seeds.iter() {
+                for (peer_id, torrent_peer) in &seeds {
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
@@ -400,14 +400,14 @@ pub fn build_extended_announce_response(
                     Some(announce.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in peers.iter() {
+                for (peer_id, torrent_peer) in &peers {
                     if peers_list_mut.len() >= 72 {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(torrent_peer.peer_addr.port() as i64)
+                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
@@ -429,7 +429,7 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
         Err(e) => {
             return ClusterResponse::error(
                 request.request_id,
-                format!("Invalid query string encoding: {}", e),
+                format!("Invalid query string encoding: {e}"),
             );
         }
     };
@@ -455,7 +455,7 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
     let data_scrape = tracker.handle_scrape(tracker.clone(), scrape.clone()).await;
     let mut files_map = ben_map!();
     let files_map_mut = files_map.dict_mut().unwrap();
-    for (info_hash, torrent_entry) in data_scrape.iter() {
+    for (info_hash, torrent_entry) in &data_scrape {
         if tracker_config.whitelist_enabled && !tracker.check_whitelist(*info_hash) {
             continue;
         }
@@ -484,8 +484,7 @@ pub async fn process_api_call(
     method: &str,
 ) -> ClusterResponse {
     error!(
-        "[WEBSOCKET MASTER] API calls through cluster not supported: {} {}",
-        method, endpoint
+        "[WEBSOCKET MASTER] API calls through cluster not supported: {method} {endpoint}"
     );
     let error_response = serde_json::json!({
         "error": "API calls through cluster not supported"
@@ -504,10 +503,10 @@ pub async fn process_udp_packet(tracker: &Arc<TorrentTracker>, request: &Cluster
     let estimated_size = response.estimated_size();
     let mut buffer = Vec::with_capacity(estimated_size);
     match response.write(&mut buffer) {
-        Ok(_) => ClusterResponse::success(request.request_id, buffer),
+        Ok(()) => ClusterResponse::success(request.request_id, buffer),
         Err(e) => {
-            error!("[WEBSOCKET MASTER] Failed to encode UDP response: {}", e);
-            ClusterResponse::error(request.request_id, format!("Failed to encode UDP response: {}", e))
+            error!("[WEBSOCKET MASTER] Failed to encode UDP response: {e}");
+            ClusterResponse::error(request.request_id, format!("Failed to encode UDP response: {e}"))
         }
     }
 }
@@ -534,14 +533,14 @@ pub async fn websocket_master_service(
     let worker_threads = config.tracker_config.cluster_threads as usize;
     let max_connections = config.tracker_config.cluster_max_connections as usize;
     let master_id = uuid::Uuid::new_v4().to_string();
-    info!("[WEBSOCKET MASTER] Master UUID: {}", master_id);
+    info!("[WEBSOCKET MASTER] Master UUID: {master_id}");
     let service_data = Arc::new(WebSocketServiceData {
         tracker: tracker.clone(),
         config: config.clone(),
         master_id,
     });
     if config.tracker_config.cluster_ssl {
-        info!("[WEBSOCKET MASTER] Starting WSS server on {}", addr);
+        info!("[WEBSOCKET MASTER] Starting WSS server on {addr}");
         let ssl_key = &config.tracker_config.cluster_ssl_key;
         let ssl_cert = &config.tracker_config.cluster_ssl_cert;
         if ssl_key.is_empty() || ssl_cert.is_empty() {
@@ -552,27 +551,27 @@ pub async fn websocket_master_service(
             Ok(data) => data,
             Err(e) => {
                 sentry::capture_error(&e);
-                panic!("[WEBSOCKET MASTER] SSL key unreadable: {}", e);
+                panic!("[WEBSOCKET MASTER] SSL key unreadable: {e}");
             }
         });
         let certs_file = &mut BufReader::new(match File::open(ssl_cert) {
             Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL cert unreadable: {}", e),
+            Err(e) => panic!("[WEBSOCKET MASTER] SSL cert unreadable: {e}"),
         });
         let tls_certs = match rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>() {
             Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL cert couldn't be extracted: {}", e),
+            Err(e) => panic!("[WEBSOCKET MASTER] SSL cert couldn't be extracted: {e}"),
         };
         let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
             Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL key couldn't be extracted: {}", e),
+            Err(e) => panic!("[WEBSOCKET MASTER] SSL key couldn't be extracted: {e}"),
         };
         let tls_config = match rustls::ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key))
         {
             Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL config couldn't be created: {}", e),
+            Err(e) => panic!("[WEBSOCKET MASTER] SSL config couldn't be created: {e}"),
         };
         let server = HttpServer::new(move || {
             App::new()
@@ -590,7 +589,7 @@ pub async fn websocket_master_service(
         .run();
         return (server.handle(), server);
     }
-    info!("[WEBSOCKET MASTER] Starting WS server on {}", addr);
+    info!("[WEBSOCKET MASTER] Starting WS server on {addr}");
     let server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(service_data.clone()))
@@ -620,11 +619,11 @@ pub async fn websocket_handler(
     ws::start(connection, &req, stream)
 }
 
-pub static SLAVE_CLIENT: once_cell::sync::Lazy<parking_lot::RwLock<SlaveClientState>> =
-    once_cell::sync::Lazy::new(|| parking_lot::RwLock::new(SlaveClientState::new()));
+pub static SLAVE_CLIENT: std::sync::LazyLock<parking_lot::RwLock<SlaveClientState>> =
+    std::sync::LazyLock::new(|| parking_lot::RwLock::new(SlaveClientState::new()));
 
-pub static SLAVE_SENDER: once_cell::sync::Lazy<SlaveSenderChannel> =
-    once_cell::sync::Lazy::new(|| parking_lot::RwLock::new(None));
+pub static SLAVE_SENDER: std::sync::LazyLock<SlaveSenderChannel> =
+    std::sync::LazyLock::new(|| parking_lot::RwLock::new(None));
 
 pub fn is_connected() -> bool {
     SLAVE_CLIENT.read().connected
@@ -667,19 +666,16 @@ pub async fn send_request(
             Err(())
         }
     };
-    match send_result {
-        Ok(_) => {
-            tracker.update_stats(StatsEvent::WsRequestsSent, 1);
+    if let Ok(()) = send_result {
+        tracker.update_stats(StatsEvent::WsRequestsSent, 1);
+    } else {
+        let mut state = SLAVE_CLIENT.write();
+        state.pending_requests.remove(&request_id);
+        let sender_guard = SLAVE_SENDER.read();
+        if sender_guard.is_none() {
+            return Err(ForwardError::NotConnected);
         }
-        Err(_) => {
-            let mut state = SLAVE_CLIENT.write();
-            state.pending_requests.remove(&request_id);
-            let sender_guard = SLAVE_SENDER.read();
-            if sender_guard.is_none() {
-                return Err(ForwardError::NotConnected);
-            }
-            return Err(ForwardError::ConnectionLost);
-        }
+        return Err(ForwardError::ConnectionLost);
     }
     let timeout_duration = std::time::Duration::from_secs(tracker.config.tracker_config.cluster_request_timeout);
     match tokio::time::timeout(timeout_duration, rx).await {
@@ -709,10 +705,10 @@ pub async fn start_slave_client(tracker: Arc<TorrentTracker>) {
     let use_ssl = config.tracker_config.cluster_ssl;
     let reconnect_interval = config.tracker_config.cluster_reconnect_interval;
     let protocol = if use_ssl { "wss" } else { "ws" };
-    let websocket_url = format!("{}://{}/cluster", protocol, master_address);
+    let websocket_url = format!("{protocol}://{master_address}/cluster");
     let slave_id = uuid::Uuid::new_v4().to_string();
-    info!("[WEBSOCKET SLAVE] Starting slave client, connecting to {}", websocket_url);
-    info!("[WEBSOCKET SLAVE] Slave UUID: {}", slave_id);
+    info!("[WEBSOCKET SLAVE] Starting slave client, connecting to {websocket_url}");
+    info!("[WEBSOCKET SLAVE] Slave UUID: {slave_id}");
     loop {
         match connect_to_master(
             &tracker,
@@ -724,7 +720,7 @@ pub async fn start_slave_client(tracker: Arc<TorrentTracker>) {
                 info!("[WEBSOCKET SLAVE] Disconnected from master");
             }
             Err(e) => {
-                error!("[WEBSOCKET SLAVE] Connection error: {}", e);
+                error!("[WEBSOCKET SLAVE] Connection error: {e}");
             }
         }
         {
@@ -742,8 +738,7 @@ pub async fn start_slave_client(tracker: Arc<TorrentTracker>) {
         tracker.update_stats(StatsEvent::WsConnectionsActive, -1);
         tracker.update_stats(StatsEvent::WsReconnects, 1);
         info!(
-            "[WEBSOCKET SLAVE] Reconnecting in {} seconds...",
-            reconnect_interval
+            "[WEBSOCKET SLAVE] Reconnecting in {reconnect_interval} seconds..."
         );
         tokio::time::sleep(std::time::Duration::from_secs(reconnect_interval)).await;
     }
@@ -755,11 +750,11 @@ async fn connect_to_master(
     token: &str,
     slave_id: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use crate::websocket::structs::handshake::{
+    use crate::websocket::structs::handshake_request::{
         HandshakeRequest,
-        HandshakeResponse,
-        CLUSTER_PROTOCOL_VERSION
+        CLUSTER_PROTOCOL_VERSION,
     };
+    use crate::websocket::structs::handshake_response::HandshakeResponse;
     use futures_util::{
         SinkExt,
         StreamExt
@@ -769,7 +764,7 @@ async fn connect_to_master(
         tungstenite::Message
     };
 
-    debug!("[WEBSOCKET SLAVE] Connecting to master: {}", websocket_url);
+    debug!("[WEBSOCKET SLAVE] Connecting to master: {websocket_url}");
     let (ws_stream, _) = connect_async(websocket_url).await?;
     let (mut write, mut read) = ws_stream.split();
     info!("[WEBSOCKET SLAVE] Connected, sending handshake...");
@@ -779,15 +774,15 @@ async fn connect_to_master(
     let handshake_response: HandshakeResponse = match read.next().await {
         Some(Ok(Message::Binary(data))) => serde_json::from_slice(&data)?,
         Some(Ok(Message::Text(text))) => serde_json::from_str(&text)?,
-        Some(Err(e)) => return Err(format!("WebSocket error during handshake: {}", e).into()),
+        Some(Err(e)) => return Err(format!("WebSocket error during handshake: {e}").into()),
         None => return Err("Connection closed during handshake".into()),
         _ => return Err("Unexpected message type during handshake".into()),
     };
     if !handshake_response.success {
         let error_msg = handshake_response.error.unwrap_or_else(|| "Unknown error".to_string());
-        error!("[WEBSOCKET SLAVE] Handshake failed: {}", error_msg);
+        error!("[WEBSOCKET SLAVE] Handshake failed: {error_msg}");
         tracker.update_stats(StatsEvent::WsAuthFailed, 1);
-        return Err(format!("Handshake failed: {}", error_msg).into());
+        return Err(format!("Handshake failed: {error_msg}").into());
     }
     if handshake_response.version != CLUSTER_PROTOCOL_VERSION {
         warn!(
@@ -798,8 +793,7 @@ async fn connect_to_master(
     let encoding = handshake_response.encoding.unwrap_or(ClusterEncoding::binary);
     let master_id = handshake_response.master_id.unwrap_or_else(|| "unknown".to_string());
     info!(
-        "[WEBSOCKET SLAVE] Handshake successful, connected to master UUID: {}, using encoding: {:?}",
-        master_id, encoding
+        "[WEBSOCKET SLAVE] Handshake successful, connected to master UUID: {master_id}, using encoding: {encoding:?}"
     );
     tracker.update_stats(StatsEvent::WsAuthSuccess, 1);
     tracker.update_stats(StatsEvent::WsConnectionsActive, 1);
@@ -839,7 +833,7 @@ async fn connect_to_master(
                 break;
             }
             Err(e) => {
-                error!("[WEBSOCKET SLAVE] WebSocket error: {}", e);
+                error!("[WEBSOCKET SLAVE] WebSocket error: {e}");
                 break;
             }
             _ => {}
@@ -853,7 +847,7 @@ fn handle_response(encoding: &ClusterEncoding, data: &[u8]) {
     let response: ClusterResponse = match decode(encoding, data) {
         Ok(r) => r,
         Err(e) => {
-            error!("[WEBSOCKET SLAVE] Failed to decode response: {}", e);
+            error!("[WEBSOCKET SLAVE] Failed to decode response: {e}");
             return;
         }
     };

@@ -76,21 +76,18 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, timeout, updates_action))| (*info_hash, (*timeout, *updates_action)))
             .collect();
-        match self.save_keys(torrent_tracker, keys_to_save).await {
-            Ok(_) => {
-                info!("[SYNC KEY UPDATES] Synced {} keys", mapping.len());
-                for (_, (timestamp, _, _)) in mapping {
-                    self.remove_key_update(&timestamp);
-                }
-                for timestamp in timestamps_to_remove {
-                    self.remove_key_update(&timestamp);
-                }
-                Ok(())
+        if let Ok(()) = self.save_keys(torrent_tracker, keys_to_save).await {
+            info!("[SYNC KEY UPDATES] Synced {} keys", mapping.len());
+            for (_, (timestamp, _, _)) in mapping {
+                self.remove_key_update(&timestamp);
             }
-            Err(_) => {
-                error!("[SYNC KEY UPDATES] Unable to sync {} keys", mapping.len());
-                Err(())
+            for timestamp in timestamps_to_remove {
+                self.remove_key_update(&timestamp);
             }
+            Ok(())
+        } else {
+            error!("[SYNC KEY UPDATES] Unable to sync {} keys", mapping.len());
+            Err(())
         }
     }
 }

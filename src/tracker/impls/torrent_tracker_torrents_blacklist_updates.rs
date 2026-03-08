@@ -99,30 +99,27 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, updates_action))| (*info_hash, *updates_action))
             .collect();
-        match self.save_blacklist(torrent_tracker, blacklist_updates).await {
-            Ok(_) => {
-                info!("[SYNC BLACKLIST UPDATES] Synced {mapping_len} blacklists");
-                let mut lock = self.torrents_blacklist_updates.write();
-                let mut removed_count = 0i64;
-                for (_, (timestamp, _)) in mapping {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
+        if let Ok(()) = self.save_blacklist(torrent_tracker, blacklist_updates).await {
+            info!("[SYNC BLACKLIST UPDATES] Synced {mapping_len} blacklists");
+            let mut lock = self.torrents_blacklist_updates.write();
+            let mut removed_count = 0i64;
+            for (_, (timestamp, _)) in mapping {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
                 }
-                for timestamp in timestamps_to_remove {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
-                }
-                if removed_count > 0 {
-                    self.update_stats(StatsEvent::BlacklistUpdates, -removed_count);
-                }
-                Ok(())
             }
-            Err(_) => {
-                error!("[SYNC BLACKLIST UPDATES] Unable to sync {mapping_len} blacklists");
-                Err(())
+            for timestamp in timestamps_to_remove {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
+                }
             }
+            if removed_count > 0 {
+                self.update_stats(StatsEvent::BlacklistUpdates, -removed_count);
+            }
+            Ok(())
+        } else {
+            error!("[SYNC BLACKLIST UPDATES] Unable to sync {mapping_len} blacklists");
+            Err(())
         }
     }
 }

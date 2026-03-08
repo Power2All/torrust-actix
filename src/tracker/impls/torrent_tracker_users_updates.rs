@@ -84,30 +84,27 @@ impl TorrentTracker {
             .iter()
             .map(|(user_id, (_, user_entry_item, updates_action))| (*user_id, (user_entry_item.clone(), *updates_action)))
             .collect();
-        match self.save_users(torrent_tracker, users_to_save).await {
-            Ok(_) => {
-                info!("[SYNC USER UPDATES] Synced {mapping_len} users");
-                let mut lock = self.users_updates.write();
-                let mut removed_count = 0i64;
-                for (_, (timestamp, _, _)) in mapping {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
+        if let Ok(()) = self.save_users(torrent_tracker, users_to_save).await {
+            info!("[SYNC USER UPDATES] Synced {mapping_len} users");
+            let mut lock = self.users_updates.write();
+            let mut removed_count = 0i64;
+            for (_, (timestamp, _, _)) in mapping {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
                 }
-                for timestamp in timestamps_to_remove {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
-                }
-                if removed_count > 0 {
-                    self.update_stats(StatsEvent::UsersUpdates, -removed_count);
-                }
-                Ok(())
             }
-            Err(_) => {
-                error!("[SYNC USER UPDATES] Unable to sync {mapping_len} users");
-                Err(())
+            for timestamp in timestamps_to_remove {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
+                }
             }
+            if removed_count > 0 {
+                self.update_stats(StatsEvent::UsersUpdates, -removed_count);
+            }
+            Ok(())
+        } else {
+            error!("[SYNC USER UPDATES] Unable to sync {mapping_len} users");
+            Err(())
         }
     }
 }

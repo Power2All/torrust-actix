@@ -64,7 +64,7 @@ impl<'de> serde::de::Deserialize<'de> for InfoHash {
     fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
         struct InfoHashVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for InfoHashVisitor {
+        impl serde::de::Visitor<'_> for InfoHashVisitor {
             type Value = InfoHash;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

@@ -1,11 +1,11 @@
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::websocket::structs::cluster_connection::ClusterConnection;
 use crate::websocket::structs::cluster_request::ClusterRequest;
-use crate::websocket::structs::handshake::{
+use crate::websocket::structs::handshake_request::{
     HandshakeRequest,
-    HandshakeResponse,
-    CLUSTER_PROTOCOL_VERSION
+    CLUSTER_PROTOCOL_VERSION,
 };
+use crate::websocket::structs::handshake_response::HandshakeResponse;
 use crate::websocket::websocket::{
     decode,
     encode,
@@ -49,7 +49,7 @@ impl ClusterConnection {
         let handshake: HandshakeRequest = match serde_json::from_slice(data) {
             Ok(req) => req,
             Err(e) => {
-                warn!("[WEBSOCKET MASTER] Failed to decode handshake request: {}", e);
+                warn!("[WEBSOCKET MASTER] Failed to decode handshake request: {e}");
                 let response = HandshakeResponse::failure("Invalid handshake format".to_string());
                 if let Ok(encoded) = serde_json::to_vec(&response) {
                     ctx.binary(encoded);
@@ -107,7 +107,7 @@ impl ClusterConnection {
         let request: ClusterRequest = match decode(&self.encoding, &data) {
             Ok(req) => req,
             Err(e) => {
-                error!("[WEBSOCKET MASTER] Failed to decode cluster request: {}", e);
+                error!("[WEBSOCKET MASTER] Failed to decode cluster request: {e}");
                 return;
             }
         };
@@ -126,7 +126,7 @@ impl ClusterConnection {
                     act.data.tracker.update_stats(StatsEvent::WsResponsesSent, 1);
                 }
                 Err(e) => {
-                    error!("[WEBSOCKET MASTER] Failed to encode response for request {}: {}", request_id, e);
+                    error!("[WEBSOCKET MASTER] Failed to encode response for request {request_id}: {e}");
                 }
             }
         });
@@ -144,7 +144,7 @@ impl Actor for ClusterConnection {
     fn stopped(&mut self, _ctx: &mut Self::Context) {
         if self.authenticated {
             if let Some(ref slave_id) = self.slave_id {
-                info!("[WEBSOCKET MASTER] Slave disconnected with UUID: {}", slave_id);
+                info!("[WEBSOCKET MASTER] Slave disconnected with UUID: {slave_id}");
             }
             self.data.tracker.update_stats(StatsEvent::WsConnectionsActive, -1);
         }
@@ -163,18 +163,18 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ClusterConnection
                 self.handle_binary(ctx, data.to_vec());
             }
             Ok(ws::Message::Text(text)) => {
-                if !self.authenticated {
-                    self.handle_handshake(ctx, text.as_bytes());
-                } else {
+                if self.authenticated {
                     warn!("[WEBSOCKET MASTER] Unexpected text message received");
+                } else {
+                    self.handle_handshake(ctx, text.as_bytes());
                 }
             }
             Ok(ws::Message::Close(reason)) => {
-                debug!("[WEBSOCKET MASTER] Close received: {:?}", reason);
+                debug!("[WEBSOCKET MASTER] Close received: {reason:?}");
                 ctx.stop();
             }
             Err(e) => {
-                error!("[WEBSOCKET MASTER] WebSocket error: {}", e);
+                error!("[WEBSOCKET MASTER] WebSocket error: {e}");
                 ctx.stop();
             }
             _ => {}

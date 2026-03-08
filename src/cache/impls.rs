@@ -1,4 +1,8 @@
-pub mod cache_connector;
-pub mod cache_connector_redis;
-pub mod cache_connector_memcache;
+pub mod cache_connector_cache_backend;
+pub mod cache_connector_connect;
+pub mod cache_connector_memcache_cache_backend;
+pub mod cache_connector_memcache_connect;
+pub mod cache_connector_memcache_debug;
+pub mod cache_connector_redis_cache_backend;
+pub mod cache_connector_redis_connect;
 pub mod cache_engine;

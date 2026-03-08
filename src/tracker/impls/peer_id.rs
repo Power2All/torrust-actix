@@ -150,7 +150,7 @@ impl<'de> serde::de::Deserialize<'de> for PeerId {
     fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
         struct PeerIdVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for PeerIdVisitor {
+        impl serde::de::Visitor<'_> for PeerIdVisitor {
             type Value = PeerId;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

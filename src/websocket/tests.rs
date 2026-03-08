@@ -7,11 +7,11 @@ mod websocket_tests {
     use crate::websocket::enums::request_type::RequestType;
     use crate::websocket::structs::cluster_request::ClusterRequest;
     use crate::websocket::structs::cluster_response::ClusterResponse;
-    use crate::websocket::structs::handshake::{
+    use crate::websocket::structs::handshake_request::{
         HandshakeRequest,
-        HandshakeResponse,
-        CLUSTER_PROTOCOL_VERSION
+        CLUSTER_PROTOCOL_VERSION,
     };
+    use crate::websocket::structs::handshake_response::HandshakeResponse;
     use crate::websocket::websocket::{
         create_cluster_error_response,
         create_cluster_error_response_json,
@@ -543,7 +543,7 @@ mod websocket_tests {
         let request = HandshakeRequest::new("my_token".to_string(), "slave_001".to_string());
         assert_eq!(request.token, "my_token");
         assert_eq!(request.slave_id, "slave_001");
-        assert_eq!(request.version, crate::websocket::structs::handshake::CLUSTER_PROTOCOL_VERSION);
+        assert_eq!(request.version, crate::websocket::structs::handshake_request::CLUSTER_PROTOCOL_VERSION);
     }
 
     #[test]

@@ -19,7 +19,6 @@ mod udp_tests {
         header.extend_from_slice(&SPP_MAGIC.to_be_bytes());
         match client_ip {
             IpAddr::V4(ipv4) => {
-                // IPv4-mapped IPv6: ::ffff:x.x.x.x
                 header.extend_from_slice(&[0u8; 10]);
                 header.extend_from_slice(&[0xff, 0xff]);
                 header.extend_from_slice(&ipv4.octets());

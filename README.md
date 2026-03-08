@@ -236,6 +236,200 @@ UDP_0_REUSE_ADDRESS <true | false>
 UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 ```
 
+---
+
+## RtcTorrent — WebRTC BitTorrent in the Browser
+
+RtcTorrent is the built-in WebRTC peer-to-peer library that lets a browser (or Node.js process) act as a BitTorrent seeder or leecher **without any browser plugin or native binary**. It uses the standard HTTP announce endpoint with additional query parameters for WebRTC signalling.
+
+A full protocol white paper is available in [RtcTorrent.md](./RtcTorrent.md).
+
+### How It Works
+
+```
+Browser (leecher) ──announce + rtctorrent=1──► Tracker (Torrust-Actix)
+                   ◄── SDP offer from seeder ──
+Browser ──answer + rtcanswerfor=<peer_id>────► Tracker
+Seeder  ──poll (announce) ───────────────────► Tracker
+        ◄── SDP answer ──
+WebRTC Data Channel established directly between Browser ↔ Seeder
+```
+
+### Building the Browser Bundle
+
+```bash
+cd lib/rtctorrent
+npm install
+npm run build          # produces dist/rtctorrent.browser.js (minified)
+npm run dev            # watch mode for development
+```
+
+The build outputs two bundles:
+
+| File | Target | Use |
+|------|--------|-----|
+| `dist/rtctorrent.browser.js` | Browser (`<script>`) | Website player/downloader |
+| `dist/rtctorrent.node.js` | Node.js (`require`) | CLI seeder, server-side |
+
+### Using the Library on a Website
+
+Copy `dist/rtctorrent.browser.js` to your web server's static assets, then include it in your HTML:
+
+```html
+<script src="/assets/rtctorrent.browser.js"></script>
+```
+
+#### Downloading a Torrent (Leecher)
+
+```html
+<!DOCTYPE html>
+<html>
+<head><title>RtcTorrent Demo</title></head>
+<body>
+  <video id="player" controls autoplay style="width:100%"></video>
+  <script src="/assets/rtctorrent.browser.js"></script>
+  <script>
+    const client = new RtcTorrent({
+      trackerUrl: 'http://your-tracker.example.com/announce',
+      // Optional: override ICE/STUN servers
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+      ]
+    });
+
+    // Download via .torrent URL, magnet URI, or parsed torrent object
+    client.download('magnet:?xt=urn:btih:INFOHASH&dn=MyVideo&tr=http://your-tracker.example.com/announce')
+      .then(torrent => {
+        console.log('Started downloading:', torrent.name);
+      });
+
+    // Stream a video file directly into a <video> element
+    client.streamVideo('INFOHASH_HEX', 0, document.getElementById('player'));
+  </script>
+</body>
+</html>
+```
+
+#### Seeding a File from the Browser
+
+```html
+<input type="file" id="filePicker">
+<script src="/assets/rtctorrent.browser.js"></script>
+<script>
+  const client = new RtcTorrent({
+    trackerUrl: 'http://your-tracker.example.com/announce'
+  });
+
+  document.getElementById('filePicker').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+
+    // Create a torrent from the selected file
+    const { torrent, magnetUri, infoHash } = await client.create([file], {
+      version: 'v1',   // or 'v2' / 'hybrid'
+      name: file.name
+    });
+
+    console.log('Magnet URI:', magnetUri);
+    console.log('Info Hash:', infoHash);
+
+    // Start seeding — the tracker handles WebRTC signalling
+    await client.seed(torrent, [file]);
+  });
+</script>
+```
+
+#### Constructor Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `trackerUrl` | `''` | HTTP announce URL of the Torrust-Actix tracker |
+| `announceInterval` | `30000` | Re-announce interval in milliseconds |
+| `rtcInterval` | `10000` | WebRTC signalling poll interval in milliseconds |
+| `maxPeers` | `50` | Maximum simultaneous WebRTC peers |
+| `iceServers` | Google STUN | Array of ICE server objects |
+
+#### Key Methods
+
+| Method | Description |
+|--------|-------------|
+| `create(files, options)` | Create a torrent from File objects (browser) or file paths (Node) |
+| `download(torrentData)` | Download via magnet URI, `.torrent` URL, or parsed torrent object |
+| `seed(torrentData, files)` | Seed an existing torrent |
+| `streamVideo(infoHash, fileIndex, videoEl)` | Stream a video piece-by-piece into a `<video>` element |
+| `stop()` | Stop all torrents and close connections |
+| `parseMagnet(uri)` | Parse a magnet URI into a torrent object |
+| `parseTorrentFile(buffer)` | Parse a `.torrent` file buffer |
+| `calculateInfoHash(info)` | Calculate the SHA-1 info hash of a torrent info dictionary |
+
+### Tracker Configuration for RtcTorrent
+
+Enable RtcTorrent support on the HTTP listener in `config.toml`:
+
+```toml
+[[http_trackers]]
+enabled = true
+bind_address = "0.0.0.0:6969"
+rtctorrent = true          # Enable WebRTC signalling endpoint
+```
+
+Or via environment variable:
+```
+HTTP_0_RTCTORRENT=true
+```
+
+### CLI Seeder (Node.js)
+
+The `bin/seed.js` script seeds files from the command line:
+
+```bash
+# Install dependencies
+cd lib/rtctorrent && npm install
+
+# Single file
+node bin/seed.js --tracker http://your-tracker.example.com/announce \
+                 --name "My Movie" \
+                 --out movie.torrent \
+                 /path/to/movie.mp4
+
+# Re-seed from an existing .torrent (no re-hashing)
+node bin/seed.js --torrent-file movie.torrent /path/to/movie.mp4
+
+# Seed from a magnet URI
+node bin/seed.js --magnet "magnet:?xt=urn:btih:..." /path/to/movie.mp4
+
+# Multi-torrent mode via YAML config
+node bin/seed.js --torrents torrents.yaml
+```
+
+**YAML multi-torrent config example:**
+
+```yaml
+torrents:
+  - name: "My Movie"
+    file:
+      - "/data/movie.mp4"
+    trackers:
+      - "http://your-tracker.example.com/announce"
+    out: "/data/movie.torrent"
+    version: v1          # v1 | v2 | hybrid
+    webseed:
+      - "https://cdn.example.com/movie.mp4"
+```
+
+Reload the YAML config without restarting by sending `SIGHUP` (Linux/macOS) or simply saving the file (polled every 2 seconds on all platforms).
+
+### Demo
+
+Run the built-in demo server to test locally:
+
+```bash
+cd lib/rtctorrent
+npm install && npm run build
+npm run serve    # serves demo at http://localhost:8080/demo/
+```
+
+---
+
 ### ChangeLog
 
 #### v4.2.0

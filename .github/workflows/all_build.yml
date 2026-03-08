@@ -25,38 +25,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get version from previous branch or tag
+      - name: Get version from Cargo.toml
         id: get_version
         shell: bash
         run: |
-          # Try to get version from the previous branch name (when merging from release branches)
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          echo "Commit message: $COMMIT_MSG"
-
-          # Extract branch name from merge commit
-          if echo "$COMMIT_MSG" | grep -q "Merge branch"; then
-            PREV_BRANCH=$(echo "$COMMIT_MSG" | sed -n "s/Merge branch '\([^']*\)'.*/\1/p" | head -1)
-            echo "Previous branch: $PREV_BRANCH"
-          fi
-
-          if [[ "$PREV_BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            VERSION=$PREV_BRANCH
-            echo "Using version from branch name"
-          else
-            # Try to get from git tags (latest tag)
-            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-            if [[ -n "$VERSION" ]]; then
-              echo "Using version from git tag"
-            else
-              # Fallback to Cargo.toml version
-              VERSION=$(grep "^version = " Cargo.toml | head -1 | awk '{print $3}' | tr -d '"')
-              echo "Using version from Cargo.toml"
-            fi
-          fi
-
+          VERSION="v$(grep "^version = " Cargo.toml | head -1 | awk '{print $3}' | tr -d '"')"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Final version: $VERSION"
+          echo "Version: $VERSION"
 
       - name: Get latest UPX version
         id: get_upx_version
@@ -192,8 +167,8 @@ jobs:
       - name: Create Draft Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ needs.get_version.outputs.version }}
-          name: Release v${{ needs.get_version.outputs.version }}
+          tag_name: ${{ needs.get_version.outputs.version }}
+          name: Release ${{ needs.get_version.outputs.version }}
           draft: true
           prerelease: false
           generate_release_notes: true

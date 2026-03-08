@@ -58,7 +58,7 @@ mod security_tests {
 
     #[test]
     fn test_validate_peer_message_size() {
-        let large_message = "A".repeat(300000); // Exceeds MAX_PEER_MESSAGE_SIZE
+        let large_message = "A".repeat(300_000);
         assert!(validate_peer_message(&large_message).is_err());
     }
 

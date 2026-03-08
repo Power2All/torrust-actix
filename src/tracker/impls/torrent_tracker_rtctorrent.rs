@@ -1,4 +1,4 @@
-use crate::rtctorrent_bridge::RtcTorrentBridge;
+use crate::rtctorrent_bridge::structs::rtc_torrent_bridge::RtcTorrentBridge;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
@@ -10,10 +10,10 @@ impl TorrentTracker {
     pub fn init_rtctorrent_bridge(&self) -> RtcTorrentBridge {
         let tracker_url = if let Some(http_server_config) = self.config.http_server.first() {
             let bind_address = &http_server_config.bind_address;
-            if bind_address.contains(":") {
-                format!("http://{}/announce", bind_address)
+            if bind_address.contains(':') {
+                format!("http://{bind_address}/announce")
             } else {
-                format!("http://{}:6969/announce", bind_address)
+                format!("http://{bind_address}:6969/announce")
             }
         } else {
             "http://127.0.0.1:6969/announce".to_string()
@@ -25,11 +25,11 @@ impl TorrentTracker {
         let bridge = self.init_rtctorrent_bridge();
         match bridge.create_torrent(file_path, torrent_name) {
             Ok(result) => {
-                info!("Successfully created RtcTorrent for file: {}", file_path);
+                info!("Successfully created RtcTorrent for file: {file_path}");
                 Ok(result)
             },
             Err(e) => {
-                warn!("Failed to create RtcTorrent: {}", e);
+                warn!("Failed to create RtcTorrent: {e}");
                 Err(Box::new(e))
             }
         }

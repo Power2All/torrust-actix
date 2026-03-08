@@ -63,24 +63,21 @@ impl TorrentTracker {
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .and_then(|s| s.parse::<u8>().ok())
-            .map(|v| v == 1)
-            .unwrap_or(false);
+            .is_some_and(|v| v == 1);
         let event_integer = query.get("event")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .map(|s| match s.to_lowercase().as_str() {
+            .map_or(AnnounceEvent::Started, |s| match s.to_lowercase().as_str() {
                 "stopped" => AnnounceEvent::Stopped,
                 "completed" => AnnounceEvent::Completed,
                 _ => AnnounceEvent::Started,
-            })
-            .unwrap_or(AnnounceEvent::Started);
+            });
         let no_peer_id_bool = query.contains_key("no_peer_id");
         let numwant_integer = query.get("numwant")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .and_then(|s| s.parse::<u64>().ok())
-            .map(|v| if v == 0 || v > 72 { 72 } else { v })
-            .unwrap_or(72);
+            .map_or(72, |v| if v == 0 || v > 72 { 72 } else { v });
         let rtctorrent_bool = query.get("rtctorrent")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
@@ -89,7 +86,7 @@ impl TorrentTracker {
         let rtcoffer_string = query.get("rtcoffer")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
         let rtcrequest_bool = query.get("rtcrequest")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
@@ -98,17 +95,17 @@ impl TorrentTracker {
         let rtcanswer_string = query.get("rtcanswer")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
         let rtcanswerfor_string = query.get("rtcanswerfor")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
         let elapsed = now.elapsed();
-        debug!("[PERF] Announce validation took: {:?}", elapsed);
+        debug!("[PERF] Announce validation took: {elapsed:?}");
 
         if let Some(txn) = transaction {
             txn.set_tag("remote_addr", remote_addr.to_string());
-            txn.set_tag("info_hash_length", query.get("info_hash").map(|v| v.len()).unwrap_or(0).to_string());
+            txn.set_tag("info_hash_length", query.get("info_hash").map_or(0, smallvec::SmallVec::len).to_string());
             txn.finish();
         }
 
@@ -351,7 +348,7 @@ impl TorrentTracker {
                     return Err(CustomError::new("no info_hash given"));
                 }
                 let mut info_hash_vec = Vec::with_capacity(result.len());
-                for hash in result.iter() {
+                for hash in result {
                     if hash.len() != 20 {
                         return Err(CustomError::new("an invalid info_hash was given"));
                     }
@@ -376,7 +373,7 @@ impl TorrentTracker {
             })
             .collect();
         let elapsed = now.elapsed();
-        debug!("[PERF] Scrape handling took: {:?}", elapsed);
+        debug!("[PERF] Scrape handling took: {elapsed:?}");
 
         if let Some(txn) = transaction {
             txn.set_tag("num_info_hashes", scrape_query.info_hash.len().to_string());

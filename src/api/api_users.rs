@@ -116,9 +116,10 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
     if data.torrent_tracker.config.database.persistent {
         let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
     }
-    match data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "user_hash added"})),
-        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "user_hash updated"})),
+    if data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "user_hash added"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "user_hash updated"}))
     }
 }
 
@@ -171,9 +172,10 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
             if data.torrent_tracker.config.database.persistent {
                 let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
             }
-            let status = match data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
-                true => json!({"status": "user_hash added"}),
-                false => json!({"status": "user_hash updated"}),
+            let status = if data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
+                json!({"status": "user_hash added"})
+            } else {
+                json!({"status": "user_hash updated"})
             };
             users_output.insert(id, status);
         }

@@ -139,10 +139,10 @@ impl CertificateStore {
         validate_file_path(key_path)
             .map_err(|e: CustomError| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(e.to_string()))?;
         let key_file = File::open(key_path)
-            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{}: {}", key_path, e)))?;
+            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{key_path}: {e}")))?;
         let mut key_reader = BufReader::new(key_file);
         let certs_file = File::open(cert_path)
-            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::CertFileNotFound(format!("{}: {}", cert_path, e)))?;
+            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::CertFileNotFound(format!("{cert_path}: {e}")))?;
         let mut certs_reader = BufReader::new(certs_file);
         let tls_certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut certs_reader)
             .collect::<Result<Vec<_>, _>>()
@@ -172,7 +172,7 @@ impl CertificateStore {
                 .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyParseError(e.to_string()));
         }
         let key_file = File::open(key_path)
-            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{}: {}", key_path, e)))?;
+            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{key_path}: {e}")))?;
         let mut reader = BufReader::new(key_file);
         if let Some(key_result) = rustls_pemfile::rsa_private_keys(&mut reader).next() {
             return key_result
@@ -180,7 +180,7 @@ impl CertificateStore {
                 .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyParseError(e.to_string()));
         }
         let key_file = File::open(key_path)
-            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{}: {}", key_path, e)))?;
+            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{key_path}: {e}")))?;
         let mut reader = BufReader::new(key_file);
         if let Some(key_result) = rustls_pemfile::ec_private_keys(&mut reader).next() {
             return key_result

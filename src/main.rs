@@ -90,7 +90,7 @@ fn main() -> std::io::Result<()>
                     panic!("[RESET SEEDS PEERS] Unable to continue loading");
                 }
             } else {
-                tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
+                tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
             }
 
             if args.create_selfsigned { tracker.cert_gen(&args).await; }
@@ -266,17 +266,17 @@ fn main() -> std::io::Result<()>
 
                     let master_address = &tracker_config.cluster_master_address;
                     if !master_address.is_empty() {
-                        info!("[CLUSTER] Starting WebSocket slave client connecting to {}", master_address);
+                        info!("[CLUSTER] Starting WebSocket slave client connecting to {master_address}");
 
 
                         let tracker_slave = tracker.clone();
                         let shutdown_handler = tokio_shutdown.clone();
                         tokio_core.spawn(async move {
                             tokio::select! {
-                                _ = start_slave_client(tracker_slave) => {
+                                () = start_slave_client(tracker_slave) => {
                                     info!("[CLUSTER] Slave client stopped");
                                 }
-                                _ = shutdown_handler.handle() => {
+                                () = shutdown_handler.handle() => {
                                     info!("[CLUSTER] Shutting down slave client...");
                                 }
                             }
@@ -368,7 +368,7 @@ fn main() -> std::io::Result<()>
                                 );
                             }
                         }
-                        _ = stats_handler.handle() => {
+                        () = stats_handler.handle() => {
                             info!("[BOOT] Shutting down thread for console updates...");
                             return;
                         }
@@ -408,12 +408,12 @@ fn main() -> std::io::Result<()>
                         tokio::select! {
                             _ = interval.tick() => {
                                 tracker_spawn_cleanup_keys.set_stats(StatsEvent::TimestampKeysTimeout,
-                                    chrono::Utc::now().timestamp() + keys_interval as i64);
+                                    chrono::Utc::now().timestamp() + keys_interval.cast_signed());
                                 info!("[KEYS] Checking now for outdated keys.");
                                 tracker_spawn_cleanup_keys.clean_keys();
                                 info!("[KEYS] Keys cleaned up.");
                             }
-                            _ = cleanup_keys_handler.handle() => {
+                            () = cleanup_keys_handler.handle() => {
                                 info!("[BOOT] Shutting down thread for keys cleanup...");
                                 return;
                             }
@@ -434,7 +434,7 @@ fn main() -> std::io::Result<()>
                         tokio::select! {
                             _ = interval.tick() => {
                                 tracker_spawn_updates.set_stats(StatsEvent::TimestampSave,
-                                    chrono::Utc::now().timestamp() + update_interval as i64);
+                                    chrono::Utc::now().timestamp() + update_interval.cast_signed());
 
                                 info!("[DATABASE UPDATES] Starting batch updates...");
 
@@ -490,7 +490,7 @@ fn main() -> std::io::Result<()>
 
                                 info!("[DATABASE UPDATES] Batch updates completed");
                             }
-                            _ = updates_handler.handle() => {
+                            () = updates_handler.handle() => {
                                 info!("[BOOT] Shutting down thread for updates...");
                                 return;
                             }
@@ -517,7 +517,7 @@ fn main() -> std::io::Result<()>
                     task::sleep(Duration::from_secs(1)).await;
 
                     if db_config.persistent {
-                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
+                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
                         Configuration::save_from_config(tracker.config.clone(), "config.toml");
 
                         info!("Saving final data to database...");
@@ -572,7 +572,7 @@ fn main() -> std::io::Result<()>
                             let _ = task.await;
                         }
                     } else {
-                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
+                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
                         Configuration::save_from_config(tracker.config.clone(), "config.toml");
                         info!("Saving completed data to config...");
                     }
