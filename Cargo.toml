@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "lib/torrust-client"]
+members = ["."]
 default-members = ["."]
 resolver = "3"
 
