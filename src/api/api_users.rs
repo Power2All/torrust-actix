@@ -1,25 +1,40 @@
-use crate::api::api::{api_parse_body, api_service_token, api_validation};
+use crate::api::api::{
+    api_parse_body,
+    api_service_token,
+    api_validation
+};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
-use crate::common::common::hex2bin;
+use crate::common::common::{
+    hash_id,
+    hex2bin
+};
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::web::Data;
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{
+    web,
+    HttpRequest,
+    HttpResponse
+};
 use regex::Regex;
-use serde_json::{json, Value};
-use sha1::{Digest, Sha1};
-use std::collections::{BTreeMap, HashMap};
+use serde_json::{
+    json,
+    Value
+};
+use std::collections::{
+    BTreeMap,
+    HashMap
+};
 use std::sync::Arc;
 
 lazy_static::lazy_static! {
     static ref UUID_REGEX: Regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -33,7 +48,6 @@ pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>,
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -60,7 +74,6 @@ pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, 
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String, String, u64, u64, u64, u64, u8)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -103,13 +116,13 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
     if data.torrent_tracker.config.database.persistent {
         let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
     }
-    match data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "user_hash added"})),
-        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "user_hash updated"})),
+    if data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "user_hash added"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "user_hash updated"}))
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -159,9 +172,10 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
             if data.torrent_tracker.config.database.persistent {
                 let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
             }
-            let status = match data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
-                true => json!({"status": "user_hash added"}),
-                false => json!({"status": "user_hash updated"}),
+            let status = if data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
+                json!({"status": "user_hash added"})
+            } else {
+                json!({"status": "user_hash updated"})
             };
             users_output.insert(id, status);
         }
@@ -172,7 +186,6 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -206,7 +219,6 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -254,7 +266,6 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>) -> (StatusCode, Value)
 {
     let id_hash = hash_id(&id);
@@ -290,10 +301,4 @@ pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>
             (StatusCode::OK, response)
         }
     }
-}
-
-fn hash_id(id: &str) -> [u8; 20] {
-    let mut hasher = Sha1::new();
-    hasher.update(id.as_bytes());
-    <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
 }

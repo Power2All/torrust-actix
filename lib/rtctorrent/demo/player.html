@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RtcTorrent Player</title>
+  <link href="https://vjs.zencdn.net/8.23.4/video-js.css" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+
+    #wrap { position: relative; width: 100%; height: 100%; }
+
+    /* Force video.js to fill the wrapper completely */
+    #v { width: 100% !important; height: 100% !important; }
+
+    /* ── Download progress bar (at the very bottom, above controls) ─────────── */
+    #dl-bar-wrap {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 4px;
+      background: rgba(255,255,255,0.08); pointer-events: none; z-index: 15;
+    }
+    #dl-bar { height: 100%; width: 0; background: #58a6ff; transition: width 0.4s linear; }
+
+    /* ── Loading / status overlay ──────────────────────────────────────────── */
+    #overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.75); color: #eee; gap: 14px; text-align: center; padding: 20px;
+      z-index: 20;
+    }
+    #overlay.hidden { display: none; }
+    #overlay-title  { font-size: 1rem; font-weight: 600; color: #fff; max-width: 480px; word-break: break-all; }
+    #overlay-status { font-size: 0.82rem; color: #aaa; }
+    .spinner {
+      width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Dimmer shade when error — repurposes overlay */
+    #overlay.error { background: rgba(0,0,0,0.88); }
+    #overlay.error #overlay-title  { color: #f88; font-size: 1.1rem; }
+    #overlay.error #overlay-status { color: #ccc; white-space: pre-wrap; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <!-- video.js player — no data-setup so we init manually with full options -->
+  <video id="v" class="video-js vjs-default-skin" preload="none" playsinline muted></video>
+
+  <div id="dl-bar-wrap"><div id="dl-bar"></div></div>
+
+  <div id="overlay">
+    <div class="spinner"></div>
+    <div id="overlay-title">Loading torrent…</div>
+    <div id="overlay-status">Connecting to tracker</div>
+  </div>
+</div>
+
+<script src="https://vjs.zencdn.net/8.23.4/video.min.js"></script>
+<script src="../dist/rtctorrent.browser.js?v=25"></script>
+<script>
+'use strict';
+
+// ── Service Worker registration (enables seamless SW streaming) ───────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(e =>
+    console.warn('[SW] Registration failed — blob fallback will be used:', e.message)
+  );
+}
+
+// ── Query params ──────────────────────────────────────────────────────────────
+const params     = new URLSearchParams(window.location.search);
+const torrentUrl = params.get('torrent');   // URL to a .torrent file
+const magnetUri  = params.get('magnet');    // magnet: URI
+const trackerUrl = params.get('tracker') || 'http://127.0.0.1:6969/announce';
+const fileIndex  = parseInt(params.get('file') || '0', 10);
+
+// ── DOM references ────────────────────────────────────────────────────────────
+const overlay  = document.getElementById('overlay');
+const ovTitle  = document.getElementById('overlay-title');
+const ovStatus = document.getElementById('overlay-status');
+const dlBar    = document.getElementById('dl-bar');
+
+function setStatus(msg) { ovStatus.textContent = msg; }
+
+function showError(msg) {
+  const s = overlay.querySelector('.spinner');
+  if (s) s.remove();
+  overlay.classList.add('error');
+  overlay.classList.remove('hidden');
+  ovTitle.textContent  = 'Error';
+  ovStatus.textContent = msg;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getMimeType(filename) {
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  return { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg' }[ext] || 'video/mp4';
+}
+
+// ── Init video.js ─────────────────────────────────────────────────────────────
+const player = videojs('v', {
+  fill:           true,
+  controls:       true,
+  preload:        'none',
+  bigPlayButton:  true,       // shown when autoplay is blocked (no prior user gesture)
+  loadingSpinner: true,       // shown when video stalls after the overlay has hidden
+  errorDisplay:   false,
+});
+
+// ── Main (runs after video.js is ready) ───────────────────────────────────────
+player.ready(async function () {
+  const RtcTorrent = window.RtcTorrent;
+  if (!RtcTorrent) { showError('RtcTorrent library failed to load.'); return; }
+
+  if (!torrentUrl && !magnetUri) {
+    showError(
+      'No torrent provided.\n\n' +
+      'Use:  player.html?torrent=https://example.com/file.torrent\n' +
+      'or:   player.html?magnet=magnet:?xt=urn:btih:...\n\n' +
+      'Optional:  &tracker=http://tracker:6969/announce  &file=0'
+    );
+    return;
+  }
+
+  const client = new RtcTorrent({
+    trackerUrl,
+    rtcInterval: 5000,
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  });
+
+  let source;
+  if (torrentUrl) {
+    setStatus('Fetching .torrent file…');
+    try {
+      const resp = await fetch(torrentUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      source = new Uint8Array(await resp.arrayBuffer());
+    } catch (e) {
+      showError(`Failed to fetch torrent: ${e.message}`);
+      return;
+    }
+  } else {
+    source = magnetUri;
+  }
+
+  setStatus('Parsing torrent…');
+  let torrent;
+  try {
+    torrent = await client.download(source);
+  } catch (e) {
+    showError(`Failed to load torrent: ${e.message}`);
+    return;
+  }
+
+  const file = torrent.files[fileIndex];
+  if (!file) {
+    showError(`File index ${fileIndex} not found (${torrent.files.length} file(s)).`);
+    return;
+  }
+
+  ovTitle.textContent = file.name.split('/').pop();
+  setStatus('Connecting to peers…');
+
+  // Download progress bar
+  const progressInterval = setInterval(() => {
+    if (torrent.totalSize > 0) {
+      dlBar.style.width = Math.floor(torrent.downloaded / torrent.totalSize * 100) + '%';
+    }
+  }, 500);
+  torrent.onDownloadComplete = () => {
+    clearInterval(progressInterval);
+    dlBar.style.width = '100%';
+    // If no SW is active (fallback path), enable seekbar immediately.
+    // SW path: onSeekReady enables it after the buffer is stored.
+    if (!navigator.serviceWorker?.controller) {
+      player.controlBar.progressControl.enable();
+    }
+  };
+  torrent.onSeekReady = () => {
+    player.controlBar.progressControl.enable();
+  };
+
+  // Get the underlying native <video> element that video.js manages
+  const videoEl = player.el().querySelector('video');
+
+  // Autoplay strategy:
+  //  - Browsers allow muted autoplay without a user gesture, but pause the
+  //    video if you unmute programmatically (without a gesture).
+  //  - We track `userMuted` (starts true) and restore it after every loadstart
+  //    because VJS resets the muted property to defaultMuted_ on each src change.
+  //    Our loadstart listener is registered after VJS's (runs last) so it wins.
+  //  - When the user clicks the VJS mute button that IS a user gesture; we sync
+  //    userMuted from the volumechange event so blob rebuilds preserve their choice.
+  let userMuted = true;
+
+  videoEl.addEventListener('loadstart', () => {
+    videoEl.muted = userMuted; // restore intended state after VJS's reset
+  });
+
+  player.on('volumechange', () => {
+    userMuted = player.muted(); // keep in sync with user's mute-button clicks
+  });
+
+  videoEl.addEventListener('canplay', () => {
+    overlay.classList.add('hidden');
+    if (videoEl.paused) {
+      videoEl.play().catch(() => {});
+    }
+  }, { once: true });
+
+  // Belt-and-suspenders: hide overlay when playback actually starts.
+  videoEl.addEventListener('playing', () => overlay.classList.add('hidden'), { once: true });
+
+  // Disable seekbar while pieces are still downloading; re-enabled when complete.
+  player.controlBar.progressControl.disable();
+
+  try {
+    await torrent.streamVideo(fileIndex, videoEl, {
+      onProgress: pct => {
+        if (!overlay.classList.contains('hidden')) {
+          setStatus(`Buffering… ${pct}%`);
+        }
+      }
+    });
+  } catch (e) {
+    clearInterval(progressInterval);
+    showError(`Streaming error: ${e.message}`);
+  }
+});
+</script>
+</body>
+</html>

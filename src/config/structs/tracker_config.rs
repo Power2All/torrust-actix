@@ -1,6 +1,9 @@
 use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::config::enums::cluster_mode::ClusterMode;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackerConfig {
@@ -33,4 +36,6 @@ pub struct TrackerConfig {
     pub cluster_ssl_key: String,
     pub cluster_ssl_cert: String,
     pub cluster_tls_connection_rate: u64,
+    pub rtc_interval: u64,
+    pub rtc_peers_timeout: u64,
 }

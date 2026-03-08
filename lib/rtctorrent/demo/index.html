@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RtcTorrent</title>
+  <link href="https://vjs.zencdn.net/8.23.4/video-js.css" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 20px;
+      font-family: system-ui, sans-serif;
+      background: #111; color: #eee;
+      min-height: 100vh;
+    }
+    h1 { margin: 0 0 16px; font-size: 1.4rem; color: #58a6ff; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid #333; }
+    .tab-btn {
+      padding: 8px 22px; border: none; border-radius: 6px 6px 0 0;
+      background: transparent; color: #888; cursor: pointer; font-size: 0.9rem;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .tab-btn.active { color: #58a6ff; border-bottom-color: #58a6ff; background: #1c1c1c; }
+    .tab-btn:hover:not(.active) { color: #ccc; }
+
+    /* ── Cards ── */
+    .card {
+      background: #1c1c1c; border: 1px solid #333; border-radius: 8px;
+      padding: 16px; margin-bottom: 14px;
+    }
+    label { display: block; font-size: 0.82rem; color: #999; margin-bottom: 4px; }
+    input[type=text], input[type=url] {
+      width: 100%; padding: 8px 10px;
+      background: #0d0d0d; border: 1px solid #444; border-radius: 4px;
+      color: #eee; font-size: 0.88rem; margin-bottom: 10px;
+    }
+    input[type=text]:focus, input[type=url]:focus { outline: none; border-color: #58a6ff; }
+    input[readonly] { color: #aaa; cursor: text; }
+
+    /* ── Buttons ── */
+    .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .row input { flex: 1; margin-bottom: 0; min-width: 0; }
+    button {
+      padding: 8px 16px; border: none; border-radius: 4px;
+      background: #238636; color: #fff; cursor: pointer; font-size: 0.88rem;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    button:disabled { background: #2a2a2a; color: #555; cursor: not-allowed; }
+    button:hover:not(:disabled) { background: #2ea043; }
+    .btn-stop { background: #6e1b1b; }
+    .btn-stop:hover:not(:disabled) { background: #8b2323; }
+    .btn-secondary { background: #1f6feb; }
+    .btn-secondary:hover:not(:disabled) { background: #388bfd; }
+    .btn-save { background: #1f6feb; padding: 4px 10px; font-size: 0.78rem; }
+    .btn-save:hover:not(:disabled) { background: #388bfd; }
+    .btn-play { background: #238636; padding: 4px 10px; font-size: 0.78rem; }
+    .btn-play:hover:not(:disabled) { background: #2ea043; }
+
+    /* ── Dropzones ── */
+    #dropzone, #seed-dropzone {
+      border: 2px dashed #444; border-radius: 6px;
+      padding: 12px; text-align: center;
+      color: #666; font-size: 0.85rem; cursor: pointer;
+      margin-top: 4px; margin-bottom: 10px; transition: border-color .2s, color .2s;
+    }
+    #dropzone.over, #seed-dropzone.over { border-color: #58a6ff; color: #58a6ff; }
+    #seed-dropzone.loaded { border-color: #238636; color: #2ea043; }
+
+    /* ── Progress ── */
+    .progress-wrap { height: 8px; background: #222; border-radius: 4px; overflow: hidden; margin: 10px 0 4px; }
+    #progress-bar  { height: 100%; width: 0%; background: #238636; transition: width 0.3s ease; border-radius: 4px; }
+    #progress-bar.streaming { background: #58a6ff; }
+    #progress-label { font-size: 0.8rem; color: #888; }
+
+    /* ── Logs ── */
+    .log-box {
+      background: #0d0d0d; border: 1px solid #333; border-radius: 4px;
+      padding: 10px; height: 110px; overflow-y: auto;
+      font-family: monospace; font-size: 0.76rem; color: #aaa;
+      margin-top: 8px; white-space: pre-wrap; word-break: break-all;
+    }
+
+    /* ── File lists ── */
+    .file-list { margin-top: 6px; }
+    .file-item {
+      display: flex; align-items: center; gap: 8px; justify-content: space-between;
+      padding: 5px 2px; border-bottom: 1px solid #222; font-size: 0.82rem;
+    }
+    .file-item:last-child { border-bottom: none; }
+    .file-item-name { flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-item-size { color: #666; font-size: 0.78rem; white-space: nowrap; flex-shrink: 0; }
+    .file-item-btns { display: flex; gap: 5px; flex-shrink: 0; }
+    .seed-file-preview { color: #888; font-size: 0.78rem; padding: 2px 0; }
+    .seed-file-more   { color: #555; font-size: 0.78rem; }
+
+    /* ── Seed validation ── */
+    .validation-box { margin-top: 10px; border-radius: 4px; border: 1px solid; padding: 8px 10px; font-size: 0.8rem; }
+    .validation-box.ok   { border-color: #238636; background: #0a1f0f; }
+    .validation-box.warn { border-color: #e6c84b; background: #1e1a00; }
+    .validation-box.err  { border-color: #f85149; background: #1f0a0a; }
+    .validation-summary  { font-weight: bold; margin-bottom: 4px; }
+    .vf-row { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; font-size: 0.77rem; }
+    .vf-icon { flex-shrink: 0; width: 14px; }
+    .vf-expected { color: #aaa; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vf-size-ok  { color: #666; }
+    .vf-arrow    { color: #555; flex-shrink: 0; }
+    .vf-actual   { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vf-actual.ok   { color: #2ea043; }
+    .vf-actual.warn { color: #e6c84b; }
+    .vf-actual.err  { color: #f85149; }
+
+    /* ── Media player ── */
+    #vjs-wrap { position: relative; width: 100%; aspect-ratio: 16/9; max-height: 60vh; border-radius: 6px; overflow: hidden; }
+    .video-js  { border-radius: 6px; }
+    audio { width: 100%; border-radius: 6px; display: block; margin-top: 4px; }
+    .now-playing { font-size: 0.8rem; color: #888; margin-bottom: 8px; }
+
+    /* ── Video loading overlay ── */
+    #vjs-overlay {
+      position: absolute; inset: 0; z-index: 20;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.80); color: #eee; gap: 14px; text-align: center; padding: 20px;
+      border-radius: 6px;
+    }
+    #vjs-overlay.hidden { display: none; }
+    #vjs-overlay-title  { font-size: 1rem; font-weight: 600; color: #fff; max-width: 480px; word-break: break-all; }
+    #vjs-overlay-status { font-size: 0.82rem; color: #aaa; }
+    .vjs-spinner {
+      width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #58a6ff; border-radius: 50%; animation: vjs-spin 0.8s linear infinite;
+    }
+    @keyframes vjs-spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<h1>RtcTorrent</h1>
+
+<!-- Tab nav -->
+<div class="tabs">
+  <button class="tab-btn active" id="tab-seed-btn"     onclick="switchTab('seed')">Seed</button>
+  <button class="tab-btn"        id="tab-download-btn" onclick="switchTab('download')">Download</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     SEED TAB
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="tab-seed">
+
+  <div class="card">
+    <label>Tracker announce URL</label>
+    <input type="url" id="seed-tracker" value="http://localhost:6969/announce"
+           placeholder="http://yourtracker:6969/announce">
+
+    <!-- Existing .torrent dropzone -->
+    <label style="margin-top:4px">Existing .torrent (optional — drop or click to load)</label>
+    <div id="seed-dropzone">Drop a <strong>.torrent</strong> file here, or click to browse</div>
+    <div id="existing-torrent-info" style="display:none; font-size:0.78rem; color:#aaa; margin-bottom:8px"></div>
+
+    <!-- New torrent: name + file pickers -->
+    <div id="new-torrent-section">
+      <label>Torrent name (for new torrent — defaults to first filename)</label>
+      <input type="text" id="seed-name" placeholder="MyTorrent">
+    </div>
+
+    <div class="row" style="margin-top:4px">
+      <button class="btn-secondary" onclick="pickSeedFiles(false)">Select Files</button>
+      <button class="btn-secondary" onclick="pickSeedFiles(true)">Select Folder</button>
+      <button id="seed-btn"      disabled onclick="startSeeding()">Create &amp; Seed</button>
+      <button id="stop-seed-btn" disabled class="btn-stop" onclick="stopSeeding()">Stop</button>
+    </div>
+
+    <div id="seed-file-list" style="display:none; margin-top:10px"></div>
+  </div>
+
+  <!-- Seeding status: magnet URI + log -->
+  <div id="seed-status" class="card" style="display:none">
+    <label>Magnet URI</label>
+    <div class="row" style="margin-bottom:0">
+      <input type="text" id="magnet-out" readonly
+             style="flex:1; font-family:monospace; font-size:0.74rem; margin-bottom:0">
+      <button onclick="copyMagnet()">Copy</button>
+    </div>
+    <div id="seed-log" class="log-box"></div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     DOWNLOAD TAB
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="tab-download" style="display:none">
+
+  <div class="card">
+    <label>Tracker announce URL</label>
+    <input type="url" id="tracker-url" value="http://localhost:6969/announce"
+           placeholder="http://yourtracker:6969/announce">
+
+    <label>Magnet URI or .torrent URL</label>
+    <div class="row">
+      <input type="text" id="torrent-input" placeholder="magnet:?xt=urn:btih:...">
+      <button id="start-btn">Download</button>
+      <button id="stop-btn" disabled class="btn-stop">Stop</button>
+    </div>
+
+    <div id="dropzone">Drop a <strong>.torrent</strong> file here</div>
+  </div>
+
+  <!-- Progress + log -->
+  <div id="status-section" class="card" style="display:none">
+    <div class="progress-wrap"><div id="progress-bar"></div></div>
+    <div id="progress-label">Waiting for peers…</div>
+    <div id="log" class="log-box"></div>
+  </div>
+
+  <!-- File list (shown as soon as metadata is known) -->
+  <div id="file-section" class="card" style="display:none">
+    <div id="file-list-dl" class="file-list"></div>
+  </div>
+
+  <!-- Media player -->
+  <div id="media-section" class="card" style="display:none">
+    <div id="now-playing" class="now-playing"></div>
+    <div id="vjs-wrap" style="display:none">
+      <video id="player" class="video-js vjs-default-skin vjs-big-play-centered"
+             preload="none" playsinline muted></video>
+      <div id="vjs-overlay" class="hidden">
+        <div class="vjs-spinner"></div>
+        <div id="vjs-overlay-title"></div>
+        <div id="vjs-overlay-status">Connecting to peers…</div>
+      </div>
+    </div>
+    <audio id="audio-player" controls style="display:none; width:100%; margin-top:4px"></audio>
+  </div>
+
+</div>
+
+<!-- Browser bundle -->
+<script src="https://vjs.zencdn.net/8.23.4/video.min.js"></script>
+<script src="../dist/rtctorrent.browser.js?v=25"></script>
+<script>
+'use strict';
+
+// Register Service Worker for seamless video streaming (no reload on append)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+        console.log('[SW] Registered, scope:', reg.scope);
+    }).catch(e => console.warn('[SW] Registration failed (blob fallback will be used):', e.message));
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let client        = null;
+let torrentInst   = null;
+let progressInterval = null;
+
+let vjsPlayer          = null;
+let vjsUserMuted       = true;   // tracks intended muted state across src changes
+let vjsListenersReady  = false;  // loadstart / volumechange set up once
+let seedClient         = null;
+let seedTorrentInst    = null;
+let selectedFiles      = [];
+let existingTorrentBytes = null;  // Uint8Array when user loads an existing .torrent
+let existingTorrentInfo  = null;  // { name, files:[{name,size}], totalSize } parsed from .torrent
+let validationResult     = null;  // { valid, orderedFiles, issues, matches }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const $   = id => document.getElementById(id);
+
+const log = (...a) => {
+  const line = a.join(' ');
+  console.log(line);
+  const el = $('log');
+  el.textContent += line + '\n';
+  el.scrollTop = el.scrollHeight;
+};
+
+const seedLog = (...a) => {
+  const line = a.join(' ');
+  console.log(line);
+  const el = $('seed-log');
+  el.textContent += line + '\n';
+  el.scrollTop = el.scrollHeight;
+};
+
+function fmt(bytes) {
+  if (bytes == null) return '?';
+  if (bytes < 1024)        return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 ** 3)   return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+// ── Tab switching ──────────────────────────────────────────────────────────────
+function switchTab(name) {
+  const tabs = { seed: $('tab-seed'), download: $('tab-download') };
+  const btns = { seed: $('tab-seed-btn'), download: $('tab-download-btn') };
+  for (const [k, el] of Object.entries(tabs)) el.style.display = k === name ? '' : 'none';
+  for (const [k, el] of Object.entries(btns)) el.classList.toggle('active', k === name);
+}
+
+// ── Media type helpers ─────────────────────────────────────────────────────────
+function isPlayable(filename) {
+  const ext = ((filename || '').split('/').pop()?.split('.').pop() || '').toLowerCase();
+  const map = {
+    mp4: 'video/mp4',  m4v: 'video/mp4',  mov: 'video/quicktime',
+    webm: 'video/webm', ogv: 'video/ogg',
+    mp3: 'audio/mpeg', m4a: 'audio/mp4',  ogg: 'audio/ogg',
+    wav: 'audio/wav',  flac: 'audio/flac', aac: 'audio/aac',
+    opus: 'audio/ogg; codecs=opus',
+  };
+  const mime = map[ext];
+  if (!mime) return false;
+  const tag = mime.startsWith('audio/') ? 'audio' : 'video';
+  return document.createElement(tag).canPlayType(mime) !== '';
+}
+
+function isAudioFile(filename) {
+  const ext = ((filename || '').split('/').pop()?.split('.').pop() || '').toLowerCase();
+  return ['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'opus'].includes(ext);
+}
+
+// ── URL params / auto-start ────────────────────────────────────────────────────
+(function () {
+  const p = new URLSearchParams(location.search);
+  if (p.get('tracker')) $('tracker-url').value = p.get('tracker');
+  if (p.get('torrent')) $('torrent-input').value = decodeURIComponent(p.get('torrent'));
+  if (p.get('magnet'))  $('torrent-input').value = decodeURIComponent(p.get('magnet'));
+  if (p.get('autostart') || p.get('torrent') || p.get('magnet')) {
+    switchTab('download');
+    window.addEventListener('load', () => setTimeout(startDownload, 500));
+  }
+})();
+
+// ── Drag-and-drop .torrent (download tab) ─────────────────────────────────────
+const dropzone = $('dropzone');
+dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('over'); });
+dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    $('torrent-input').value = file.name;
+    $('torrent-input').dataset.bytes = ev.target.result;
+    log(`Loaded .torrent: ${file.name} (${file.size} bytes)`);
+  };
+  reader.readAsDataURL(file);
+});
+dropzone.addEventListener('click', () => {
+  const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.torrent' });
+  inp.onchange = () => {
+    if (!inp.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      $('torrent-input').value = inp.files[0].name;
+      $('torrent-input').dataset.bytes = ev.target.result;
+      log(`Loaded .torrent: ${inp.files[0].name}`);
+    };
+    reader.readAsDataURL(inp.files[0]);
+  };
+  inp.click();
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DOWNLOAD TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+$('start-btn').addEventListener('click', startDownload);
+$('stop-btn' ).addEventListener('click', stopDownload);
+
+async function startDownload() {
+  const trackerUrl   = $('tracker-url').value.trim();
+  const torrentInput = $('torrent-input').value.trim();
+  const torrentBytes = $('torrent-input').dataset.bytes;
+
+  if (!trackerUrl)   { alert('Enter a tracker URL'); return; }
+  if (!torrentInput) { alert('Enter a magnet URI, .torrent URL, or drop a .torrent file'); return; }
+
+  $('start-btn').disabled = true;
+  $('stop-btn').disabled  = false;
+  $('status-section').style.display = 'block';
+  $('file-section').style.display   = 'none';
+  $('media-section').style.display  = 'none';
+  $('log').textContent = '';
+  $('progress-bar').style.width = '0%';
+  $('progress-label').textContent = 'Connecting to tracker…';
+
+  const RtcTorrent = window.RtcTorrent;
+  if (!RtcTorrent) { log('ERROR: RtcTorrent library not loaded'); return; }
+
+  client = new RtcTorrent({
+    trackerUrl,
+    rtcInterval: 5000,
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  });
+
+  try {
+    let torrentData;
+    if (torrentBytes) {
+      if (torrentBytes instanceof ArrayBuffer) {
+        torrentData = new Uint8Array(torrentBytes);
+      } else {
+        // base64 data URL from FileReader.readAsDataURL
+        const b64 = torrentBytes.split(',')[1] || torrentBytes;
+        const bin = atob(b64);
+        torrentData = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) torrentData[i] = bin.charCodeAt(i);
+      }
+    } else {
+      torrentData = torrentInput; // magnet: or http: URL
+    }
+
+    log('Parsing torrent…');
+    torrentInst = await client.download(torrentData);
+    log(`Info hash: ${torrentInst.data.infoHash}`);
+    log(`Total size: ${fmt(torrentInst.totalSize)}`);
+    log(`Pieces: ${torrentInst.pieceCount} × ${fmt(torrentInst.pieceLength)}`);
+    log(`Files: ${torrentInst.files.length}`);
+
+    // Render file list with per-file Play / Save buttons
+    renderFileList(torrentInst);
+
+    // Progress polling — skip the label while faststart streaming controls it
+    progressInterval = setInterval(() => {
+      const pct = torrentInst.totalSize > 0
+        ? Math.floor(torrentInst.downloaded / torrentInst.totalSize * 100) : 0;
+      // Always keep the bar in sync with download progress
+      if (!$('progress-bar').classList.contains('streaming')) {
+        $('progress-bar').style.width = pct + '%';
+        $('progress-label').textContent =
+          `${fmt(torrentInst.downloaded)} / ${fmt(torrentInst.totalSize)}  (${pct}%)` +
+          `  peers: ${torrentInst.peers.size}`;
+      }
+    }, 500);
+
+    // Auto-play the first playable file
+    const firstPlayable = torrentInst.files.findIndex(f => isPlayable(f.name));
+    if (firstPlayable >= 0) playFile(firstPlayable);
+
+    // Download complete
+    torrentInst.onDownloadComplete = () => {
+      clearInterval(progressInterval);
+      $('progress-bar').style.width = '100%';
+      $('progress-bar').classList.remove('streaming');
+      $('progress-label').textContent = 'Download complete!';
+      log('Download complete!');
+      // If no SW is active (fallback path), enable seekbar immediately.
+      // SW path: onSeekReady enables it after the buffer is stored in the SW.
+      if (!navigator.serviceWorker?.controller) {
+        if (vjsPlayer) vjsPlayer.controlBar.progressControl.enable();
+      }
+    };
+    torrentInst.onSeekReady = () => {
+      if (vjsPlayer) vjsPlayer.controlBar.progressControl.enable();
+    };
+
+  } catch (e) {
+    log('ERROR:', e.message);
+    $('start-btn').disabled = false;
+    $('stop-btn').disabled  = true;
+  }
+}
+
+function renderFileList(inst) {
+  const ul = $('file-list-dl');
+  ul.innerHTML = '';
+  $('file-section').style.display = 'block';
+
+  inst.files.forEach((f, i) => {
+    const li = document.createElement('div');
+    li.className = 'file-item';
+
+    const nameEl = document.createElement('span');
+    nameEl.className   = 'file-item-name';
+    nameEl.title       = f.name;
+    nameEl.textContent = f.name.split('/').pop(); // show just filename, not path
+    li.appendChild(nameEl);
+
+    const sizeEl = document.createElement('span');
+    sizeEl.className   = 'file-item-size';
+    sizeEl.textContent = fmt(f.length);
+    li.appendChild(sizeEl);
+
+    const btns = document.createElement('div');
+    btns.className = 'file-item-btns';
+
+    if (isPlayable(f.name)) {
+      const playBtn = document.createElement('button');
+      playBtn.textContent = '▶ Play';
+      playBtn.className   = 'btn-play';
+      playBtn.onclick     = () => playFile(i);
+      btns.appendChild(playBtn);
+    }
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = '↓ Save';
+    saveBtn.className   = 'btn-save';
+    saveBtn.onclick     = () => saveFile(i);
+    btns.appendChild(saveBtn);
+
+    li.appendChild(btns);
+    ul.appendChild(li);
+  });
+}
+
+async function playFile(fileIndex) {
+  if (!torrentInst) return;
+  const file = torrentInst.files[fileIndex];
+  if (!file) return;
+
+  $('media-section').style.display = 'block';
+
+  const audio = isAudioFile(file.name);
+  $('audio-player').style.display = audio ? 'block' : 'none';
+  if (audio) $('vjs-wrap').style.display = 'none';
+
+  $('now-playing').textContent = `Now playing: ${file.name.split('/').pop()}`;
+  log(`Playing: ${file.name}`);
+
+  const fileName = file.name.split('/').pop();
+
+  const onProgress = pct => {
+    $('vjs-overlay-status').textContent = `Buffering… ${pct}%`;
+    if (!torrentInst?._downloadCompleted) {
+      $('progress-bar').style.width = pct + '%';
+      $('progress-label').textContent = `Buffering ${fileName}… ${pct}%`;
+      $('progress-bar').classList.add('streaming');
+    }
+  };
+
+  if (audio) {
+    const audioEl = $('audio-player');
+    audioEl.src = '';
+    audioEl.addEventListener('canplay', () => {
+      log(`Ready — press ▶ if playback hasn't started automatically.`);
+    }, { once: true });
+    try {
+      await torrentInst.streamVideo(fileIndex, audioEl, { onProgress });
+    } catch (e) {
+      log('streamVideo error:', e.message);
+    }
+  } else {
+    // Show wrap + overlay before anything plays
+    $('vjs-wrap').style.display = 'block';
+    $('vjs-overlay-title').textContent  = fileName;
+    $('vjs-overlay-status').textContent = 'Connecting to peers…';
+    $('vjs-overlay').classList.remove('hidden');
+
+    // Lazy-init video.js on first video play
+    if (!vjsPlayer) {
+      vjsPlayer = videojs('player', {
+        fill:           true,
+        controls:       true,
+        preload:        'none',
+        bigPlayButton:  false,   // overlay replaces this
+        loadingSpinner: true,
+        errorDisplay:   false,
+      });
+    }
+    await new Promise(resolve => vjsPlayer.ready(resolve));
+
+    const videoEl = vjsPlayer.el().querySelector('video');
+
+    // Set up muted-autoplay listeners once (persist across playFile calls)
+    if (!vjsListenersReady) {
+      vjsListenersReady = true;
+      // VJS resets muted to its default on every loadstart — override it
+      videoEl.addEventListener('loadstart', () => {
+        videoEl.muted = vjsUserMuted;
+      });
+      // Keep vjsUserMuted in sync when the user clicks the VJS mute button
+      vjsPlayer.on('volumechange', () => {
+        vjsUserMuted = vjsPlayer.muted();
+      });
+    }
+    videoEl.muted = true;
+
+    // Hide overlay and autoplay as soon as the browser can play
+    videoEl.addEventListener('canplay', () => {
+      $('vjs-overlay').classList.add('hidden');
+      if (videoEl.paused) videoEl.play().catch(() => {});
+    }, { once: true });
+    // Belt-and-suspenders: hide overlay when playback actually starts
+    videoEl.addEventListener('playing', () => {
+      $('vjs-overlay').classList.add('hidden');
+    }, { once: true });
+
+    // Disable seekbar while pieces are still downloading; re-enabled in onDownloadComplete
+    if (!torrentInst._downloadCompleted) {
+      vjsPlayer.controlBar.progressControl.disable();
+    }
+
+    try {
+      await torrentInst.streamVideo(fileIndex, videoEl, { onProgress });
+    } catch (e) {
+      log('streamVideo error:', e.message);
+    }
+  }
+}
+
+async function saveFile(fileIndex) {
+  if (!torrentInst) return;
+  const file = torrentInst.files[fileIndex];
+  if (!file) return;
+  const name = file.name.split('/').pop();
+  log(`Saving ${name}…`);
+  try {
+    await torrentInst.saveFile(fileIndex);
+    log(`Saved ${name}`);
+  } catch (e) {
+    log(`Save error (${name}): ${e.message}`);
+  }
+}
+
+async function stopDownload() {
+  clearInterval(progressInterval);
+  if (torrentInst) { torrentInst.active = false; torrentInst = null; }
+  if (client)      { await client.stop(); client = null; }
+  $('start-btn').disabled = false;
+  $('stop-btn').disabled  = true;
+  $('progress-label').textContent = 'Stopped.';
+  log('Stopped.');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SEED TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Existing .torrent dropzone ─────────────────────────────────────────────
+const seedDropzone = $('seed-dropzone');
+seedDropzone.addEventListener('dragover',  e => { e.preventDefault(); seedDropzone.classList.add('over'); });
+seedDropzone.addEventListener('dragleave', ()  => seedDropzone.classList.remove('over'));
+seedDropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  seedDropzone.classList.remove('over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadExistingTorrentFile(file);
+});
+seedDropzone.addEventListener('click', () => {
+  const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.torrent' });
+  inp.onchange = () => { if (inp.files[0]) loadExistingTorrentFile(inp.files[0]); };
+  inp.click();
+});
+
+// ── Torrent parsing helpers ────────────────────────────────────────────────
+
+/** Decode a bencode value (Buffer / Uint8Array / string) to a JS string. */
+function decodeTorrentStr(v) {
+  if (!v) return '';
+  if (typeof v === 'string') return v;
+  try { return new TextDecoder('utf-8').decode(v instanceof Uint8Array ? v : new Uint8Array(v)); }
+  catch (_) { return '?'; }
+}
+
+/**
+ * Extract a flat [{name, size}] list from a parsed torrent's info dict.
+ * Handles both single-file (info.length) and multi-file (info.files) torrents.
+ */
+function getTorrentExpectedFiles(info, torrentName) {
+  if (info.files && info.files.length) {
+    return info.files.map(f => {
+      const pathParts = (f.path || []).map(decodeTorrentStr).filter(Boolean);
+      // Strip leading component if it matches the torrent name (common convention)
+      if (pathParts.length > 1 && pathParts[0] === torrentName) pathParts.shift();
+      return { name: pathParts.join('/') || torrentName, size: f.length || 0 };
+    });
+  }
+  return [{ name: torrentName, size: info.length || 0 }];
+}
+
+/**
+ * Match each selected File to its counterpart in the torrent's file list.
+ * Matching priority: exact (name+size) → name only (size warning) → size only (name warning).
+ * Returns { valid, orderedFiles, issues, matches } where orderedFiles has the
+ * selected files reordered to match the torrent's expected file order.
+ */
+function validateAndOrderFiles(selectedFiles, torrentInfo) {
+  if (!torrentInfo) return { valid: true, orderedFiles: selectedFiles, issues: [], matches: [] };
+
+  const expected = torrentInfo.files;
+  const issues   = [];
+  const matches  = [];
+  let   valid    = true;
+
+  if (selectedFiles.length !== expected.length) {
+    valid = false;
+    issues.push(
+      `File count: torrent expects ${expected.length} file(s) but ${selectedFiles.length} were selected`
+    );
+  }
+
+  // Build lookup maps keyed by normalised filename and by size
+  const byName = new Map(); // lc-basename → [File, ...]
+  const bySize = new Map(); // size → [File, ...]
+  for (const f of selectedFiles) {
+    const key = (f.webkitRelativePath || f.name).split('/').pop().toLowerCase();
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(f);
+    if (!bySize.has(f.size)) bySize.set(f.size, []);
+    bySize.get(f.size).push(f);
+  }
+
+  const used       = new Set();
+  const orderedFiles = [];
+
+  for (const tf of expected) {
+    const tName = tf.name.split('/').pop().toLowerCase();
+    const tSize = tf.size;
+    let matched = null, matchType = 'none';
+
+    // 1. Exact: name AND size
+    for (const f of (byName.get(tName) || [])) {
+      if (f.size === tSize && !used.has(f)) { matched = f; matchType = 'exact'; break; }
+    }
+    // 2. Name only (size differs)
+    if (!matched) {
+      for (const f of (byName.get(tName) || [])) {
+        if (!used.has(f)) {
+          matched = f; matchType = 'name-only';
+          issues.push(`"${tf.name}": name matches but size differs (expected ${fmt(tSize)}, got ${fmt(f.size)})`);
+          valid = false; break;
+        }
+      }
+    }
+    // 3. Size only (name differs)
+    if (!matched) {
+      for (const f of (bySize.get(tSize) || [])) {
+        if (!used.has(f)) {
+          matched = f; matchType = 'size-only';
+          issues.push(`"${tf.name}": matched by size (${fmt(tSize)}) — file is named "${f.webkitRelativePath || f.name}"`);
+          break;
+        }
+      }
+    }
+    // 4. No match
+    if (!matched) {
+      issues.push(`"${tf.name}" (${fmt(tSize)}): no matching file found in selection`);
+      valid = false;
+    } else {
+      used.add(matched);
+    }
+
+    matches.push({ torrentFile: tf, selectedFile: matched || null, matchType });
+    orderedFiles.push(matched);
+  }
+
+  // Flag selected files that weren't consumed
+  for (const f of selectedFiles) {
+    if (!used.has(f)) {
+      issues.push(`Selected "${f.webkitRelativePath || f.name}" (${fmt(f.size)}) does not match any torrent file`);
+      valid = false;
+    }
+  }
+
+  return { valid, orderedFiles: orderedFiles.filter(Boolean), issues, matches };
+}
+
+// ── Load existing .torrent ─────────────────────────────────────────────────
+
+function loadExistingTorrentFile(file) {
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    existingTorrentBytes = new Uint8Array(ev.target.result);
+    existingTorrentInfo  = null;
+    validationResult     = null;
+
+    seedDropzone.textContent = `✓ ${file.name} loaded`;
+    seedDropzone.classList.add('loaded');
+
+    // Parse the torrent to show expected files
+    const RtcTorrent = window.RtcTorrent;
+    if (RtcTorrent) {
+      try {
+        const tmp    = new RtcTorrent({ trackerUrl: 'http://localhost' });
+        const parsed = await tmp.parseTorrentFile(existingTorrentBytes);
+        const name   = parsed.name || decodeTorrentStr(parsed.info?.name) || file.name;
+        const files  = getTorrentExpectedFiles(parsed.info, name);
+        existingTorrentInfo = {
+          name,
+          files,
+          totalSize: files.reduce((s, f) => s + f.size, 0),
+          infoHash: parsed.infoHash
+        };
+      } catch (e) {
+        console.warn('Could not parse torrent for validation:', e.message);
+      }
+    }
+
+    // Build the info panel
+    const infoEl = $('existing-torrent-info');
+    infoEl.style.display = 'block';
+    if (existingTorrentInfo) {
+      const { name, files, totalSize } = existingTorrentInfo;
+      let html = `<div style="margin-bottom:6px">
+        <strong style="color:#e6c84b">Step 2 — Select the matching data file(s)</strong><br>
+        <span style="color:#888">Torrent: <strong style="color:#ccc">${escHtml(name)}</strong> &nbsp;·&nbsp;
+        ${files.length} file(s) &nbsp;·&nbsp; ${fmt(totalSize)}</span>
+      </div>
+      <div style="font-size:0.77rem; color:#777; margin-bottom:4px">Expected files:</div>`;
+      for (const f of files) {
+        html += `<div class="vf-row">
+          <span class="vf-icon" style="color:#555">·</span>
+          <span class="vf-expected">${escHtml(f.name)}</span>
+          <span class="vf-size-ok">${fmt(f.size)}</span>
+        </div>`;
+      }
+      infoEl.innerHTML = html;
+    } else {
+      infoEl.innerHTML =
+        `<strong style="color:#e6c84b">Step 2:</strong> Select the actual data file(s) that match this torrent.`;
+    }
+
+    // Highlight the file picker buttons
+    document.querySelectorAll('#tab-seed .btn-secondary').forEach(b => {
+      b.style.boxShadow = '0 0 0 2px #e6c84b';
+    });
+    $('new-torrent-section').style.display = 'none';
+    $('seed-btn').innerHTML = 'Seed';
+
+    // Re-run validation if files were already selected
+    if (selectedFiles.length) {
+      validationResult = validateAndOrderFiles(selectedFiles, existingTorrentInfo);
+      renderSeedFileList();
+    }
+    updateSeedBtnState();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function clearExistingTorrent() {
+  existingTorrentBytes = null;
+  existingTorrentInfo  = null;
+  validationResult     = null;
+  seedDropzone.textContent = 'Drop a .torrent file here, or click to browse';
+  seedDropzone.classList.remove('loaded');
+  $('existing-torrent-info').style.display = 'none';
+  $('new-torrent-section').style.display = '';
+  $('seed-btn').innerHTML = 'Create &amp; Seed';
+  if (selectedFiles.length) renderSeedFileList(); // re-render without validation
+  updateSeedBtnState();
+}
+
+function updateSeedBtnState() {
+  // Disabled when: no files, OR existing torrent loaded but validation failed
+  const noFiles   = selectedFiles.length === 0;
+  const badValidation = existingTorrentBytes && validationResult && !validationResult.valid;
+  $('seed-btn').disabled = noFiles || badValidation;
+}
+
+/** Minimal HTML escaping for display */
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function pickSeedFiles(folder) {
+  const inp = document.createElement('input');
+  inp.type     = 'file';
+  inp.multiple = !folder;
+  if (folder) inp.setAttribute('webkitdirectory', '');
+  inp.onchange = () => {
+    if (!inp.files.length) return;
+    selectedFiles = Array.from(inp.files);
+    // Clear highlight on file picker buttons once files are chosen
+    document.querySelectorAll('#tab-seed .btn-secondary').forEach(b => {
+      b.style.boxShadow = '';
+    });
+    // Run validation against loaded torrent (if any)
+    validationResult = existingTorrentBytes
+      ? validateAndOrderFiles(selectedFiles, existingTorrentInfo)
+      : null;
+    renderSeedFileList();
+  };
+  inp.click();
+}
+
+function renderSeedFileList() {
+  const total  = selectedFiles.reduce((s, f) => s + f.size, 0);
+  const listEl = $('seed-file-list');
+  listEl.style.display = 'block';
+  listEl.innerHTML = '';
+
+  // ── Selected-files summary ──────────────────────────────────────────────
+  const header = document.createElement('div');
+  header.style.cssText = 'color:#aaa; font-size:0.8rem; margin-bottom:6px';
+  header.textContent =
+    `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''} selected — ${fmt(total)} total`;
+  listEl.appendChild(header);
+
+  selectedFiles.slice(0, 20).forEach(f => {
+    const row = document.createElement('div');
+    row.className   = 'seed-file-preview';
+    row.textContent = `${f.webkitRelativePath || f.name}  (${fmt(f.size)})`;
+    listEl.appendChild(row);
+  });
+  if (selectedFiles.length > 20) {
+    const more = document.createElement('div');
+    more.className   = 'seed-file-more';
+    more.textContent = `…and ${selectedFiles.length - 20} more`;
+    listEl.appendChild(more);
+  }
+
+  // ── Validation panel (only when an existing .torrent is loaded) ─────────
+  if (existingTorrentBytes && validationResult) {
+    const vr  = validationResult;
+    const box = document.createElement('div');
+
+    // Determine box severity
+    const hasErr  = !vr.valid;
+    const hasWarn = vr.issues.some(i => i.includes('matched by size'));
+    box.className = `validation-box ${hasErr ? 'err' : hasWarn ? 'warn' : 'ok'}`;
+
+    // Summary line
+    const matched = vr.matches.filter(m => m.selectedFile).length;
+    const total2  = vr.matches.length;
+    const icon    = hasErr ? '✗' : hasWarn ? '⚠' : '✓';
+    const summaryColor = hasErr ? '#f85149' : hasWarn ? '#e6c84b' : '#2ea043';
+    const summaryText  = hasErr
+      ? `${icon} ${matched}/${total2} files matched — issues found`
+      : hasWarn
+        ? `${icon} ${matched}/${total2} files matched (by size — names differ)`
+        : `${icon} All ${total2} file${total2 !== 1 ? 's' : ''} matched — ready to seed`;
+
+    const summary = document.createElement('div');
+    summary.className = 'validation-summary';
+    summary.style.color = summaryColor;
+    summary.textContent = summaryText;
+    box.appendChild(summary);
+
+    // Per-file rows
+    for (const m of vr.matches) {
+      const row = document.createElement('div');
+      row.className = 'vf-row';
+
+      const iconEl = document.createElement('span');
+      iconEl.className = 'vf-icon';
+      iconEl.textContent = m.matchType === 'exact' ? '✓'
+        : m.matchType === 'size-only' ? '⚠'
+        : m.matchType === 'none' || !m.selectedFile ? '✗' : '⚠';
+      iconEl.style.color = m.matchType === 'exact' ? '#2ea043'
+        : m.matchType === 'size-only' ? '#e6c84b' : '#f85149';
+      row.appendChild(iconEl);
+
+      const expectedEl = document.createElement('span');
+      expectedEl.className = 'vf-expected';
+      expectedEl.title     = m.torrentFile.name;
+      expectedEl.textContent = m.torrentFile.name.split('/').pop();
+      row.appendChild(expectedEl);
+
+      const sizeEl = document.createElement('span');
+      sizeEl.className   = 'vf-size-ok';
+      sizeEl.textContent = fmt(m.torrentFile.size);
+      row.appendChild(sizeEl);
+
+      const arrowEl = document.createElement('span');
+      arrowEl.className   = 'vf-arrow';
+      arrowEl.textContent = '←';
+      row.appendChild(arrowEl);
+
+      const actualEl = document.createElement('span');
+      actualEl.className = 'vf-actual ' + (
+        m.matchType === 'exact'     ? 'ok' :
+        m.matchType === 'size-only' ? 'warn' : 'err'
+      );
+      if (m.selectedFile) {
+        const selName = (m.selectedFile.webkitRelativePath || m.selectedFile.name).split('/').pop();
+        const sizeOk  = m.selectedFile.size === m.torrentFile.size;
+        actualEl.textContent = selName + (sizeOk ? '' : ` (${fmt(m.selectedFile.size)})`);
+        actualEl.title = m.selectedFile.webkitRelativePath || m.selectedFile.name;
+      } else {
+        actualEl.textContent = 'not found';
+      }
+      row.appendChild(actualEl);
+      box.appendChild(row);
+    }
+
+    // Show any extra issue lines not covered by per-file rows
+    const extraIssues = vr.issues.filter(i => i.startsWith('File count') || i.startsWith('Selected "'));
+    for (const issue of extraIssues) {
+      const p = document.createElement('div');
+      p.style.cssText = 'color:#f85149; font-size:0.76rem; margin-top:4px';
+      p.textContent = '✗ ' + issue;
+      box.appendChild(p);
+    }
+
+    listEl.appendChild(box);
+  }
+
+  updateSeedBtnState();
+}
+
+async function startSeeding() {
+  const trackerUrl = $('seed-tracker').value.trim();
+  if (!trackerUrl)           { alert('Enter a tracker URL'); return; }
+  if (!selectedFiles.length) { alert('Select files to seed first'); return; }
+
+  $('seed-btn').disabled      = true;
+  $('stop-seed-btn').disabled = false;
+  $('seed-status').style.display = 'block';
+  $('seed-log').textContent   = '';
+
+  const RtcTorrent = window.RtcTorrent;
+  if (!RtcTorrent) { seedLog('ERROR: RtcTorrent library not loaded'); return; }
+
+  seedClient = new RtcTorrent({
+    trackerUrl,
+    rtcInterval: 5000,
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  });
+
+  try {
+    if (existingTorrentBytes) {
+      // ── MODE A: Seed an existing .torrent ──────────────────────────────
+      seedLog('Parsing existing .torrent…');
+      const parsed = await seedClient.parseTorrentFile(existingTorrentBytes);
+      const magnet = seedClient.createMagnetURI(
+        { info: parsed.info, announce: trackerUrl },
+        parsed.infoHash
+      );
+      $('magnet-out').value = magnet;
+      seedLog(`Info hash: ${parsed.infoHash}`);
+      seedLog(`Name: ${parsed.name || parsed.info?.name}`);
+
+      // Use the validated, torrent-order-matched file list when available
+      const filesToSeed = (validationResult?.orderedFiles?.length === (existingTorrentInfo?.files?.length || 0))
+        ? validationResult.orderedFiles
+        : selectedFiles;
+      if (validationResult?.issues?.length) {
+        for (const issue of validationResult.issues) seedLog(`⚠ ${issue}`);
+      }
+
+      seedLog('Starting seeder…');
+      seedTorrentInst = await seedClient.seed(existingTorrentBytes, filesToSeed);
+      seedLog('Seeding! Share the magnet URI.');
+
+    } else {
+      // ── MODE B: Create a new torrent from selected files ───────────────
+      const name = $('seed-name').value.trim()
+        || (selectedFiles[0]?.webkitRelativePath?.split('/')[0])
+        || selectedFiles[0]?.name
+        || 'MyTorrent';
+
+      const totalMB = (selectedFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1);
+      seedLog(`Computing SHA-1 hashes for ${selectedFiles.length} file(s) (${totalMB} MB)…`);
+      seedLog('Note: all files are read into memory for hashing.');
+
+      const result = await seedClient.create(selectedFiles, { name, trackerUrl });
+      const pl = result.torrent?.info?.['piece length'] || 0;
+      seedLog(`Torrent created — ${Math.ceil(result.torrent.info.pieces.length / 20)} pieces × ${fmt(pl)}`);
+      seedLog(`Info hash: ${result.infoHash}`);
+
+      // Download the .torrent file automatically
+      const torrentBlob = new Blob([result.encodedTorrent], { type: 'application/x-bittorrent' });
+      const dlA = Object.assign(document.createElement('a'), {
+        href: URL.createObjectURL(torrentBlob),
+        download: `${name}.torrent`
+      });
+      document.body.appendChild(dlA);
+      dlA.click();
+      document.body.removeChild(dlA);
+      seedLog(`Saved ${name}.torrent`);
+
+      $('magnet-out').value = result.magnetUri;
+
+      seedLog('Starting seeder…');
+      // Pass encodedTorrent (Buffer) so seed() normalises correctly
+      seedTorrentInst = await seedClient.seed(result.encodedTorrent, selectedFiles);
+      seedLog('Seeding! Share the magnet URI or the .torrent file.');
+    }
+
+  } catch (e) {
+    seedLog('ERROR: ' + e.message);
+    console.error(e);
+    $('seed-btn').disabled      = selectedFiles.length === 0;
+    $('stop-seed-btn').disabled = true;
+  }
+}
+
+async function stopSeeding() {
+  if (seedTorrentInst) { seedTorrentInst.active = false; seedTorrentInst = null; }
+  if (seedClient)      { await seedClient.stop(); seedClient = null; }
+  updateSeedBtnState();
+  $('stop-seed-btn').disabled = true;
+  seedLog('Stopped seeding.');
+}
+
+function copyMagnet() {
+  const val = $('magnet-out').value;
+  if (!val) return;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(val)
+      .then(() => seedLog('Magnet URI copied to clipboard.'))
+      .catch(() => fallbackCopy());
+  } else {
+    fallbackCopy();
+  }
+  function fallbackCopy() {
+    $('magnet-out').select();
+    document.execCommand('copy');
+    seedLog('Magnet URI copied (fallback).');
+  }
+}
+</script>
+</body>
+</html>

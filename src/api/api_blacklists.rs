@@ -1,4 +1,8 @@
-use crate::api::api::{api_parse_body, api_service_token, api_validation};
+use crate::api::api::{
+    api_parse_body,
+    api_service_token,
+    api_validation
+};
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
@@ -6,12 +10,15 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{
+    web,
+    HttpRequest,
+    HttpResponse
+};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -25,13 +32,13 @@ pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<Str
         Ok(hash) => InfoHash(hash),
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
     };
-    match data.torrent_tracker.check_blacklist(info_hash) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        false => HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
+    if data.torrent_tracker.check_blacklist(info_hash) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotFound().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"}))
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -65,7 +72,6 @@ pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payl
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -82,13 +88,13 @@ pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<St
     if data.torrent_tracker.config.database.persistent {
         let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
     }
-    match data.torrent_tracker.add_blacklist(info_hash) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "info_hash updated"})),
+    if data.torrent_tracker.add_blacklist(info_hash) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "info_hash updated"}))
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -111,10 +117,8 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
                     if data.torrent_tracker.config.database.persistent {
                         let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
                     }
-                    let status = match data.torrent_tracker.add_blacklist(info_hash) {
-                        true => json!({"status": "ok"}),
-                        false => json!({"status": "info_hash updated"}),
-                    };
+                    let status = if data.torrent_tracker.add_blacklist(info_hash) {
+                        json!({"status": "ok"}) } else { json!({"status": "info_hash updated"}) };
                     blacklists_output.insert(info, status);
                 }
                 Err(_) => {
@@ -129,7 +133,6 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
     }))
 }
 
-#[tracing::instrument(level = "debug")]
 pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -146,13 +149,13 @@ pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<
     if data.torrent_tracker.config.database.persistent {
         let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
     }
-    match data.torrent_tracker.remove_blacklist(info_hash) {
-        true => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        false => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
+    if data.torrent_tracker.remove_blacklist(info_hash) {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"}))
     }
 }
 
-#[tracing::instrument(skip(payload), level = "debug")]
 pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -175,9 +178,10 @@ pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::P
                     if data.torrent_tracker.config.database.persistent {
                         let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
                     }
-                    let status = match data.torrent_tracker.remove_blacklist(info_hash) {
-                        true => json!({"status": "ok"}),
-                        false => json!({"status": "unknown info_hash"}),
+                    let status = if data.torrent_tracker.remove_blacklist(info_hash) {
+                        json!({"status": "ok"})
+                    } else {
+                        json!({"status": "unknown info_hash"})
                     };
                     blacklists_output.insert(info, status);
                 }

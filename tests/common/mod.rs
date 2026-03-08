@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use rand::RngExt;
 use std::sync::Arc;
 use tempfile::TempDir;
 use torrust_actix::config::structs::api_trackers_config::ApiTrackersConfig;
@@ -17,10 +18,15 @@ pub async fn create_test_config() -> TestConfig {
 }
 
 pub fn create_test_http_config() -> Arc<HttpTrackersConfig> {
+    create_test_http_config_with_rtctorrent(false)
+}
+
+pub fn create_test_http_config_with_rtctorrent(rtctorrent: bool) -> Arc<HttpTrackersConfig> {
     Arc::new(HttpTrackersConfig {
         enabled: true,
         bind_address: "127.0.0.1:8080".to_string(),
         real_ip: String::new(),
+        trusted_proxies: false,
         keep_alive: 5,
         request_timeout: 10,
         disconnect_timeout: 5,
@@ -30,6 +36,7 @@ pub fn create_test_http_config() -> Arc<HttpTrackersConfig> {
         ssl_key: String::new(),
         ssl_cert: String::new(),
         tls_connection_rate: 100,
+        rtctorrent,
     })
 }
 
@@ -38,6 +45,7 @@ pub fn create_test_api_config() -> Arc<ApiTrackersConfig> {
         enabled: true,
         bind_address: "127.0.0.1:8081".to_string(),
         real_ip: String::new(),
+        trusted_proxies: false,
         keep_alive: 5,
         request_timeout: 10,
         disconnect_timeout: 5,
@@ -60,16 +68,12 @@ pub fn create_temp_dir() -> TempDir {
 }
 
 pub fn random_info_hash() -> torrust_actix::tracker::structs::info_hash::InfoHash {
-    use rand::Rng;
-
     let mut rng = rand::rng();
     let bytes: [u8; 20] = rng.random();
     torrust_actix::tracker::structs::info_hash::InfoHash(bytes)
 }
 
 pub fn random_peer_id() -> torrust_actix::tracker::structs::peer_id::PeerId {
-    use rand::Rng;
-
     let mut rng = rand::rng();
     let bytes: [u8; 20] = rng.random();
     torrust_actix::tracker::structs::peer_id::PeerId(bytes)
@@ -91,5 +95,40 @@ pub fn create_test_peer(
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(1000),
         event: torrust_actix::tracker::enums::announce_event::AnnounceEvent::Started,
+        is_rtctorrent: false,
+        rtc_sdp_offer: None,
+        rtc_sdp_answer: None,
+        rtc_connection_status: "pending".to_string(),
+        rtc_pending_answers: Vec::new(),
     }
+}
+
+pub fn create_rtc_peer(
+    peer_id: torrust_actix::tracker::structs::peer_id::PeerId,
+    ip: std::net::IpAddr,
+    port: u16,
+    sdp_offer: Option<String>,
+    left: i64,
+) -> torrust_actix::tracker::structs::torrent_peer::TorrentPeer {
+    use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
+    use torrust_actix::tracker::structs::torrent_peer::TorrentPeer;
+    TorrentPeer {
+        peer_id,
+        peer_addr: std::net::SocketAddr::new(ip, port),
+        updated: std::time::Instant::now(),
+        uploaded: NumberOfBytes(0),
+        downloaded: NumberOfBytes(0),
+        left: NumberOfBytes(left),
+        event: torrust_actix::tracker::enums::announce_event::AnnounceEvent::Started,
+        is_rtctorrent: true,
+        rtc_sdp_offer: sdp_offer,
+        rtc_sdp_answer: None,
+        rtc_connection_status: "pending".to_string(),
+        rtc_pending_answers: Vec::new(),
+    }
+}
+
+/// Percent-encodes raw bytes for use in query strings (e.g. info_hash, peer_id).
+pub fn percent_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("%{:02x}", b)).collect()
 }

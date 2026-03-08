@@ -1,5 +1,7 @@
 pub mod enums;
 pub mod structs;
-pub mod encoding;
-pub mod master;
-pub mod slave;
+pub mod impls;
+pub mod tests;
+pub mod types;
+#[allow(clippy::module_inception)]
+pub mod websocket;

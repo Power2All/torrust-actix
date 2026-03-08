@@ -1,28 +1,48 @@
 use crate::config::structs::configuration::Configuration;
-use crate::database::enums::database_drivers::DatabaseDrivers;
-use crate::database::helpers::{
-    build_delete_hash_query, build_insert_ignore_hash_query, build_select_hash_query,
-    build_update_ignore_torrent_query, build_upsert_torrent_query,
-    limit_offset, upsert_conflict_clause,
+use crate::database::database::{
+    build_delete_hash_query,
+    build_insert_ignore_hash_query,
+    build_select_hash_query,
+    build_update_ignore_torrent_query,
+    build_upsert_torrent_query,
+    limit_offset,
+    upsert_conflict_clause
 };
+use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
 use crate::database::traits::database_backend::DatabaseBackend;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
-use crate::tracker::structs::torrent_entry::AHashMap;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use crate::tracker::types::ahash_map::AHashMap;
 use async_std::task;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
-use log::{error, info};
-use sha1::{Digest, Sha1};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{ConnectOptions, Error, Pool, Row, Sqlite, Transaction};
+use log::{
+    error,
+    info
+};
+use sha1::{
+    Digest,
+    Sha1
+};
+use sqlx::sqlite::{
+    SqliteConnectOptions,
+    SqlitePoolOptions
+};
+use sqlx::{
+    ConnectOptions,
+    Error,
+    Pool,
+    Row,
+    Sqlite,
+    Transaction
+};
 use std::collections::BTreeMap;
 use std::process::exit;
 use std::str::FromStr;
@@ -33,7 +53,6 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::sqlite3;
 const LOG_PREFIX: &str = "[SQLite]";
 
 impl DatabaseConnectorSQLite {
-    #[tracing::instrument(level = "debug")]
     pub async fn create(dsl: &str) -> Result<Pool<Sqlite>, Error> {
         let options = SqliteConnectOptions::from_str(dsl)?
             .log_statements(log::LevelFilter::Debug)
@@ -43,7 +62,6 @@ impl DatabaseConnectorSQLite {
             .await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn database_connector(
         config: Arc<Configuration>,
         create_database: bool,
@@ -97,7 +115,7 @@ impl DatabaseConnectorSQLite {
                 ts.table_name, ts.column_infohash, hash_type, ts.column_seeds, ts.column_peers, ts.column_completed
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             let ws = &config.database_structure.whitelist;
             let hash_type = if ws.bin_type_infohash { "BLOB" } else { "TEXT" };
@@ -107,7 +125,7 @@ impl DatabaseConnectorSQLite {
                 ws.table_name, ws.column_infohash, hash_type
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             let bs = &config.database_structure.blacklist;
             let hash_type = if bs.bin_type_infohash { "BLOB" } else { "TEXT" };
@@ -117,7 +135,7 @@ impl DatabaseConnectorSQLite {
                 bs.table_name, bs.column_infohash, hash_type
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             let ks = &config.database_structure.keys;
             let hash_type = if ks.bin_type_hash { "BLOB" } else { "TEXT" };
@@ -127,7 +145,7 @@ impl DatabaseConnectorSQLite {
                 ks.table_name, ks.column_hash, hash_type, ks.column_timeout
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             let us = &config.database_structure.users;
             let key_type = if us.bin_type_key { "BLOB" } else { "TEXT" };
@@ -144,7 +162,7 @@ impl DatabaseConnectorSQLite {
                 )
             };
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
             task::sleep(Duration::from_secs(1)).await;
@@ -153,10 +171,11 @@ impl DatabaseConnectorSQLite {
         structure
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error> {
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("load_torrents", "database");
+
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut torrents = 0u64;
         let mut completed = 0u64;
         let structure = &tracker.config.database_structure.torrents;
@@ -182,40 +201,49 @@ impl DatabaseConnectorSQLite {
                     InfoHash(info_hash),
                     TorrentEntry {
                         seeds: AHashMap::default(),
+                        seeds_ipv6: AHashMap::default(),
                         peers: AHashMap::default(),
-                        completed: completed_count as u64,
+                        peers_ipv6: AHashMap::default(),
+                        rtc_seeds: AHashMap::default(),
+                        rtc_peers: AHashMap::default(),
+                        completed: u64::from(completed_count),
                         updated: std::time::Instant::now(),
                     },
                 );
                 torrents += 1;
-                completed += completed_count as u64;
+                completed += u64::from(completed_count);
             }
             start += length;
             if torrents < start {
                 break;
             }
-            info!("{} Handled {} torrents", LOG_PREFIX, torrents);
+            info!("{LOG_PREFIX} Handled {torrents} torrents");
         }
         tracker.set_stats(StatsEvent::Completed, completed as i64);
         info!(
-            "{} Loaded {} torrents with {} completed",
-            LOG_PREFIX, torrents, completed
+            "{LOG_PREFIX} Loaded {torrents} torrents with {completed} completed"
         );
+        if let Some(txn) = transaction {
+            txn.set_extra("torrents_loaded", (torrents as i64).into());
+            txn.set_extra("completed_count", (completed as i64).into());
+            txn.set_tag("database_type", "sqlite");
+            txn.finish();
+        }
         Ok((torrents, completed))
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
         torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>,
     ) -> Result<(), Error> {
-        let mut transaction = self.pool.begin().await?;
+        let transaction = crate::utils::sentry_tracing::start_trace_transaction("save_torrents", "database");
+        let mut transaction_db = self.pool.begin().await?;
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.torrents;
         let db_config = &tracker.config.database;
         let is_binary = structure.bin_type_infohash;
-        for (info_hash, (torrent_entry, updates_action)) in torrents.iter() {
+        for (info_hash, (torrent_entry, updates_action)) in &torrents {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -228,8 +256,8 @@ impl DatabaseConnectorSQLite {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -249,8 +277,8 @@ impl DatabaseConnectorSQLite {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                                error!("{} Error: {}", LOG_PREFIX, e);
+                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
+                                error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -264,8 +292,8 @@ impl DatabaseConnectorSQLite {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                                error!("{} Error: {}", LOG_PREFIX, e);
+                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
+                                error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -282,8 +310,8 @@ impl DatabaseConnectorSQLite {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                                error!("{} Error: {}", LOG_PREFIX, e);
+                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
+                                error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -296,8 +324,8 @@ impl DatabaseConnectorSQLite {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                                error!("{} Error: {}", LOG_PREFIX, e);
+                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction_db).await {
+                                error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -305,17 +333,21 @@ impl DatabaseConnectorSQLite {
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == handled {
-                info!("{} Handled {} torrents", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} torrents");
             }
         }
-        info!("{} Handled {} torrents", LOG_PREFIX, handled);
-        self.commit(transaction).await
+        info!("{LOG_PREFIX} Handled {handled} torrents");
+        if let Some(txn) = transaction {
+            txn.set_extra("torrents_saved", (handled as i64).into());
+            txn.set_tag("database_type", "sqlite");
+            txn.finish();
+        }
+        self.commit(transaction_db).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut hashes = 0u64;
         let structure = &tracker.config.database_structure.whitelist;
         let is_binary = structure.bin_type_infohash;
@@ -342,13 +374,12 @@ impl DatabaseConnectorSQLite {
             if hashes < start {
                 break;
             }
-            info!("{} Handled {} whitelisted torrents", LOG_PREFIX, hashes);
+            info!("{LOG_PREFIX} Handled {hashes} whitelisted torrents");
         }
-        info!("{} Handled {} whitelisted torrents", LOG_PREFIX, hashes);
+        info!("{LOG_PREFIX} Handled {hashes} whitelisted torrents");
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -358,7 +389,7 @@ impl DatabaseConnectorSQLite {
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.whitelist;
         let is_binary = structure.bin_type_infohash;
-        for (info_hash, updates_action) in whitelists.iter() {
+        for (info_hash, updates_action) in &whitelists {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -372,7 +403,7 @@ impl DatabaseConnectorSQLite {
                             is_binary,
                         );
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -386,24 +417,23 @@ impl DatabaseConnectorSQLite {
                         is_binary,
                     );
                     if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                        error!("{} Error: {}", LOG_PREFIX, e);
+                        error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 {
-                info!("{} Handled {} whitelisted torrents", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} whitelisted torrents");
             }
         }
-        info!("{} Handled {} whitelisted torrents", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} whitelisted torrents");
         let _ = self.commit(transaction).await;
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut hashes = 0u64;
         let structure = &tracker.config.database_structure.blacklist;
         let is_binary = structure.bin_type_infohash;
@@ -430,13 +460,12 @@ impl DatabaseConnectorSQLite {
             if hashes < start {
                 break;
             }
-            info!("{} Handled {} blacklisted torrents", LOG_PREFIX, hashes);
+            info!("{LOG_PREFIX} Handled {hashes} blacklisted torrents");
         }
-        info!("{} Handled {} blacklisted torrents", LOG_PREFIX, hashes);
+        info!("{LOG_PREFIX} Handled {hashes} blacklisted torrents");
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_blacklist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -446,7 +475,7 @@ impl DatabaseConnectorSQLite {
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.blacklist;
         let is_binary = structure.bin_type_infohash;
-        for (info_hash, updates_action) in blacklists.iter() {
+        for (info_hash, updates_action) in &blacklists {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -460,7 +489,7 @@ impl DatabaseConnectorSQLite {
                             is_binary,
                         );
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -474,24 +503,23 @@ impl DatabaseConnectorSQLite {
                         is_binary,
                     );
                     if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                        error!("{} Error: {}", LOG_PREFIX, e);
+                        error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 {
-                info!("{} Handled {} blacklisted torrents", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} blacklisted torrents");
             }
         }
-        info!("{} Handled {} blacklisted torrents", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} blacklisted torrents");
         let _ = self.commit(transaction).await;
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut hashes = 0u64;
         let structure = &tracker.config.database_structure.keys;
         let is_binary = structure.bin_type_hash;
@@ -518,13 +546,12 @@ impl DatabaseConnectorSQLite {
             if hashes < start {
                 break;
             }
-            info!("{} Handled {} keys", LOG_PREFIX, hashes);
+            info!("{LOG_PREFIX} Handled {hashes} keys");
         }
-        info!("{} Handled {} keys", LOG_PREFIX, hashes);
+        info!("{LOG_PREFIX} Handled {hashes} keys");
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_keys(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -534,7 +561,7 @@ impl DatabaseConnectorSQLite {
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.keys;
         let is_binary = structure.bin_type_hash;
-        for (hash, (timeout, update_action)) in keys.iter() {
+        for (hash, (timeout, update_action)) in &keys {
             handled += 1;
             let hash_str = hash.to_string();
             match update_action {
@@ -548,7 +575,7 @@ impl DatabaseConnectorSQLite {
                             is_binary,
                         );
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -564,24 +591,23 @@ impl DatabaseConnectorSQLite {
                         is_binary,
                     );
                     if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                        error!("{} Error: {}", LOG_PREFIX, e);
+                        error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 {
-                info!("{} Handled {} keys", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} keys");
             }
         }
-        info!("{} Handled {} keys", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} keys");
         let _ = self.commit(transaction).await;
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut hashes = 0u64;
         let structure = &tracker.config.database_structure.users;
         let is_uuid = structure.id_uuid;
@@ -625,19 +651,17 @@ impl DatabaseConnectorSQLite {
                         user_id: if is_uuid {
                             None
                         } else {
-                            Some(result.get::<u32, &str>(structure.column_id.as_str()) as u64)
+                            Some(u64::from(result.get::<u32, &str>(structure.column_id.as_str())))
                         },
                         user_uuid: if is_uuid {
                             Some(result.get(structure.column_uuid.as_str()))
                         } else {
                             None
                         },
-                        uploaded: result.get::<u32, &str>(structure.column_uploaded.as_str()) as u64,
-                        downloaded: result.get::<u32, &str>(structure.column_downloaded.as_str())
-                            as u64,
-                        completed: result.get::<u32, &str>(structure.column_completed.as_str())
-                            as u64,
-                        updated: result.get::<u32, &str>(structure.column_updated.as_str()) as u64,
+                        uploaded: u64::from(result.get::<u32, &str>(structure.column_uploaded.as_str())),
+                        downloaded: u64::from(result.get::<u32, &str>(structure.column_downloaded.as_str())),
+                        completed: u64::from(result.get::<u32, &str>(structure.column_completed.as_str())),
+                        updated: u64::from(result.get::<u32, &str>(structure.column_updated.as_str())),
                         active: result.get::<i8, &str>(structure.column_active.as_str()) as u8,
                         torrents_active: Default::default(),
                     },
@@ -648,13 +672,12 @@ impl DatabaseConnectorSQLite {
             if hashes < start {
                 break;
             }
-            info!("{} Handled {} users", LOG_PREFIX, hashes);
+            info!("{LOG_PREFIX} Handled {hashes} users");
         }
-        info!("{} Handled {} users", LOG_PREFIX, hashes);
+        info!("{LOG_PREFIX} Handled {hashes} users");
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_users(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -666,7 +689,7 @@ impl DatabaseConnectorSQLite {
         let db_config = &tracker.config.database;
         let is_uuid = structure.id_uuid;
         let is_binary_key = structure.bin_type_key;
-        for (_, (user_entry_item, updates_action)) in users.iter() {
+        for (user_entry_item, updates_action) in users.values() {
             handled += 1;
             match updates_action {
                 UpdatesAction::Remove => {
@@ -687,7 +710,7 @@ impl DatabaseConnectorSQLite {
                             )
                         };
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -774,20 +797,19 @@ impl DatabaseConnectorSQLite {
                         )
                     };
                     if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                        error!("{} Error: {}", LOG_PREFIX, e);
+                        error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == handled {
-                info!("{} Handled {} users", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} users");
             }
         }
-        info!("{} Handled {} users", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} users");
         self.commit(transaction).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
         let structure = &tracker.config.database_structure.torrents;
@@ -796,19 +818,18 @@ impl DatabaseConnectorSQLite {
             structure.table_name, structure.column_seeds, structure.column_peers
         );
         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-            error!("{} Error: {}", LOG_PREFIX, e);
+            error!("{LOG_PREFIX} Error: {e}");
             return Err(e);
         }
         let _ = self.commit(transaction).await;
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn commit(&self, transaction: Transaction<'_, Sqlite>) -> Result<(), Error> {
         match transaction.commit().await {
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
             Err(e) => {
-                error!("{} Error: {}", LOG_PREFIX, e);
+                error!("{LOG_PREFIX} Error: {e}");
                 Err(e)
             }
         }

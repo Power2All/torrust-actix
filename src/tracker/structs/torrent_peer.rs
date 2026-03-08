@@ -1,12 +1,15 @@
-use std::net::SocketAddr;
-use serde::Serialize;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::common::structs::number_of_bytes_def::NumberOfBytesDef;
 use crate::tracker::enums::announce_event::AnnounceEvent;
 use crate::tracker::enums::announce_event_def::AnnounceEventDef;
 use crate::tracker::structs::peer_id::PeerId;
+use serde::{
+    Deserialize,
+    Serialize
+};
+use std::net::SocketAddr;
 
-#[derive(PartialEq, Eq, Debug, Clone, Serialize)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct TorrentPeer {
     pub peer_id: PeerId,
     pub peer_addr: SocketAddr,
@@ -20,4 +23,10 @@ pub struct TorrentPeer {
     pub left: NumberOfBytes,
     #[serde(with = "AnnounceEventDef")]
     pub event: AnnounceEvent,
+    pub is_rtctorrent: bool,
+    pub rtc_sdp_offer: Option<String>,
+    pub rtc_sdp_answer: Option<String>,
+    pub rtc_connection_status: String,
+    #[serde(default)]
+    pub rtc_pending_answers: Vec<(PeerId, String)>,
 }

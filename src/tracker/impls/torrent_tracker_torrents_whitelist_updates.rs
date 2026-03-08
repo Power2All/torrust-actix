@@ -2,14 +2,16 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub fn add_whitelist_update(&self, info_hash: InfoHash, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.torrents_whitelist_updates.write();
@@ -22,7 +24,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn add_whitelist_updates(&self, hashes: Vec<(InfoHash, UpdatesAction)>) -> Vec<(InfoHash, bool)>
     {
         let mut lock = self.torrents_whitelist_updates.write();
@@ -42,14 +43,12 @@ impl TorrentTracker {
         returned_data
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_whitelist_updates(&self) -> HashMap<u128, (InfoHash, UpdatesAction)>
     {
         let lock = self.torrents_whitelist_updates.read_recursive();
         lock.clone()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_whitelist_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.torrents_whitelist_updates.write();
@@ -61,7 +60,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn clear_whitelist_updates(&self)
     {
         let mut lock = self.torrents_whitelist_updates.write();
@@ -69,7 +67,6 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::WhitelistUpdates, 0);
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = {
@@ -102,30 +99,27 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, updates_action))| (*info_hash, *updates_action))
             .collect();
-        match self.save_whitelist(torrent_tracker, whitelist_updates).await {
-            Ok(_) => {
-                info!("[SYNC WHITELIST UPDATES] Synced {mapping_len} whitelists");
-                let mut lock = self.torrents_whitelist_updates.write();
-                let mut removed_count = 0i64;
-                for (_, (timestamp, _)) in mapping {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
+        if let Ok(()) = self.save_whitelist(torrent_tracker, whitelist_updates).await {
+            info!("[SYNC WHITELIST UPDATES] Synced {mapping_len} whitelists");
+            let mut lock = self.torrents_whitelist_updates.write();
+            let mut removed_count = 0i64;
+            for (_, (timestamp, _)) in mapping {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
                 }
-                for timestamp in timestamps_to_remove {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
-                }
-                if removed_count > 0 {
-                    self.update_stats(StatsEvent::WhitelistUpdates, -removed_count);
-                }
-                Ok(())
             }
-            Err(_) => {
-                error!("[SYNC WHITELIST UPDATES] Unable to sync {mapping_len} whitelists");
-                Err(())
+            for timestamp in timestamps_to_remove {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
+                }
             }
+            if removed_count > 0 {
+                self.update_stats(StatsEvent::WhitelistUpdates, -removed_count);
+            }
+            Ok(())
+        } else {
+            error!("[SYNC WHITELIST UPDATES] Unable to sync {mapping_len} whitelists");
+            Err(())
         }
     }
 }

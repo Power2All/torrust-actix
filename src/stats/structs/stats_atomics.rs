@@ -1,5 +1,11 @@
-use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, AtomicI64};
+use serde::{
+    Deserialize,
+    Serialize
+};
+use std::sync::atomic::{
+    AtomicBool,
+    AtomicI64
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StatsAtomics {

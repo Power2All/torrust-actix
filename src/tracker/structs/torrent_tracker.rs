@@ -1,7 +1,7 @@
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
-use crate::ssl::certificate_store::CertificateStore;
+use crate::ssl::structs::certificate_store::CertificateStore;
 use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -12,7 +12,11 @@ use crate::tracker::types::keys_updates::KeysUpdates;
 use crate::tracker::types::torrents_updates::TorrentsUpdates;
 use crate::tracker::types::users_updates::UsersUpdates;
 use parking_lot::RwLock;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{
+    BTreeMap,
+    HashMap,
+    HashSet
+};
 use std::sync::Arc;
 
 #[derive(Debug)]

@@ -1,28 +1,48 @@
 use crate::config::structs::configuration::Configuration;
-use crate::database::enums::database_drivers::DatabaseDrivers;
-use crate::database::helpers::{
-    build_delete_hash_query, build_insert_ignore_hash_query, build_select_hash_query,
-    build_update_ignore_torrent_query, build_upsert_torrent_query,
-    limit_offset, upsert_conflict_clause,
+use crate::database::database::{
+    build_delete_hash_query,
+    build_insert_ignore_hash_query,
+    build_select_hash_query,
+    build_update_ignore_torrent_query,
+    build_upsert_torrent_query,
+    limit_offset,
+    upsert_conflict_clause
 };
+use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
 use crate::database::traits::database_backend::DatabaseBackend;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
-use crate::tracker::structs::torrent_entry::AHashMap;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use crate::tracker::types::ahash_map::AHashMap;
 use async_std::task;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
-use log::{error, info};
-use sha1::{Digest, Sha1};
-use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
-use sqlx::{ConnectOptions, Error, MySql, Pool, Row, Transaction};
+use log::{
+    error,
+    info
+};
+use sha1::{
+    Digest,
+    Sha1
+};
+use sqlx::mysql::{
+    MySqlConnectOptions,
+    MySqlPoolOptions
+};
+use sqlx::{
+    ConnectOptions,
+    Error,
+    MySql,
+    Pool,
+    Row,
+    Transaction
+};
 use std::collections::BTreeMap;
 use std::process::exit;
 use std::str::FromStr;
@@ -33,7 +53,6 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::mysql;
 const LOG_PREFIX: &str = "[MySQL]";
 
 impl DatabaseConnectorMySQL {
-    #[tracing::instrument(level = "debug")]
     pub async fn create(dsl: &str) -> Result<Pool<MySql>, Error> {
         MySqlPoolOptions::new()
             .connect_with(
@@ -44,7 +63,6 @@ impl DatabaseConnectorMySQL {
             .await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn database_connector(
         config: Arc<Configuration>,
         create_database: bool,
@@ -85,7 +103,7 @@ impl DatabaseConnectorMySQL {
                 ts.table_name, ts.column_infohash, hash_type, ts.column_seeds, ts.column_peers, ts.column_completed, ts.column_infohash
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             let ws = &config.database_structure.whitelist;
             let hash_type = if ws.bin_type_infohash { "BINARY(20)" } else { "VARCHAR(40)" };
@@ -95,7 +113,7 @@ impl DatabaseConnectorMySQL {
                 ws.table_name, ws.column_infohash, hash_type, ws.column_infohash
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             let bs = &config.database_structure.blacklist;
             let hash_type = if bs.bin_type_infohash { "BINARY(20)" } else { "VARCHAR(40)" };
@@ -105,7 +123,7 @@ impl DatabaseConnectorMySQL {
                 bs.table_name, bs.column_infohash, hash_type, bs.column_infohash
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             let ks = &config.database_structure.keys;
             let hash_type = if ks.bin_type_hash { "BINARY(20)" } else { "VARCHAR(40)" };
@@ -115,7 +133,7 @@ impl DatabaseConnectorMySQL {
                 ks.table_name, ks.column_hash, hash_type, ks.column_timeout, ks.column_hash
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             let us = &config.database_structure.users;
             let key_type = if us.bin_type_key { "BINARY(20)" } else { "VARCHAR(40)" };
@@ -132,7 +150,7 @@ impl DatabaseConnectorMySQL {
                 )
             };
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{} Error: {}", LOG_PREFIX, e);
+                panic!("{LOG_PREFIX} Error: {e}");
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
             task::sleep(Duration::from_secs(1)).await;
@@ -141,10 +159,9 @@ impl DatabaseConnectorMySQL {
         structure
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut torrents = 0u64;
         let mut completed = 0u64;
         let structure = &tracker.config.database_structure.torrents;
@@ -170,7 +187,11 @@ impl DatabaseConnectorMySQL {
                     InfoHash(info_hash),
                     TorrentEntry {
                         seeds: AHashMap::default(),
+                        seeds_ipv6: AHashMap::default(),
                         peers: AHashMap::default(),
+                        peers_ipv6: AHashMap::default(),
+                        rtc_seeds: AHashMap::default(),
+                        rtc_peers: AHashMap::default(),
                         completed: completed_count,
                         updated: std::time::Instant::now(),
                     },
@@ -182,17 +203,15 @@ impl DatabaseConnectorMySQL {
             if torrents < start {
                 break;
             }
-            info!("{} Handled {} torrents", LOG_PREFIX, torrents);
+            info!("{LOG_PREFIX} Handled {torrents} torrents");
         }
         tracker.set_stats(StatsEvent::Completed, completed as i64);
         info!(
-            "{} Loaded {} torrents with {} completed",
-            LOG_PREFIX, torrents, completed
+            "{LOG_PREFIX} Loaded {torrents} torrents with {completed} completed"
         );
         Ok((torrents, completed))
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -203,7 +222,7 @@ impl DatabaseConnectorMySQL {
         let structure = &tracker.config.database_structure.torrents;
         let db_config = &tracker.config.database;
         let is_binary = structure.bin_type_infohash;
-        for (info_hash, (torrent_entry, updates_action)) in torrents.iter() {
+        for (info_hash, (torrent_entry, updates_action)) in &torrents {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -217,7 +236,7 @@ impl DatabaseConnectorMySQL {
                             is_binary,
                         );
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -238,7 +257,7 @@ impl DatabaseConnectorMySQL {
                                 is_binary,
                             );
                             if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                                error!("{} Error: {}", LOG_PREFIX, e);
+                                error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -253,7 +272,7 @@ impl DatabaseConnectorMySQL {
                                 is_binary,
                             );
                             if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                                error!("{} Error: {}", LOG_PREFIX, e);
+                                error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -271,7 +290,7 @@ impl DatabaseConnectorMySQL {
                                 is_binary,
                             );
                             if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                                error!("{} Error: {}", LOG_PREFIX, e);
+                                error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -285,7 +304,7 @@ impl DatabaseConnectorMySQL {
                                 is_binary,
                             );
                             if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                                error!("{} Error: {}", LOG_PREFIX, e);
+                                error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
                         }
@@ -293,17 +312,16 @@ impl DatabaseConnectorMySQL {
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == handled {
-                info!("{} Handled {} torrents", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} torrents");
             }
         }
-        info!("{} Handled {} torrents", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} torrents");
         self.commit(transaction).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut hashes = 0u64;
         let structure = &tracker.config.database_structure.whitelist;
         let is_binary = structure.bin_type_infohash;
@@ -330,13 +348,12 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
-            info!("{} Handled {} whitelisted torrents", LOG_PREFIX, hashes);
+            info!("{LOG_PREFIX} Handled {hashes} whitelisted torrents");
         }
-        info!("{} Handled {} whitelisted torrents", LOG_PREFIX, hashes);
+        info!("{LOG_PREFIX} Handled {hashes} whitelisted torrents");
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_whitelist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -346,7 +363,7 @@ impl DatabaseConnectorMySQL {
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.whitelist;
         let is_binary = structure.bin_type_infohash;
-        for (info_hash, updates_action) in whitelists.iter() {
+        for (info_hash, updates_action) in &whitelists {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -360,7 +377,7 @@ impl DatabaseConnectorMySQL {
                             is_binary,
                         );
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -374,24 +391,23 @@ impl DatabaseConnectorMySQL {
                         is_binary,
                     );
                     if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                        error!("{} Error: {}", LOG_PREFIX, e);
+                        error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 {
-                info!("{} Handled {} whitelisted torrents", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} whitelisted torrents");
             }
         }
-        info!("{} Handled {} whitelisted torrents", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} whitelisted torrents");
         let _ = self.commit(transaction).await;
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut hashes = 0u64;
         let structure = &tracker.config.database_structure.blacklist;
         let is_binary = structure.bin_type_infohash;
@@ -418,13 +434,12 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
-            info!("{} Handled {} blacklisted torrents", LOG_PREFIX, hashes);
+            info!("{LOG_PREFIX} Handled {hashes} blacklisted torrents");
         }
-        info!("{} Handled {} blacklisted torrents", LOG_PREFIX, hashes);
+        info!("{LOG_PREFIX} Handled {hashes} blacklisted torrents");
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_blacklist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -434,7 +449,7 @@ impl DatabaseConnectorMySQL {
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.blacklist;
         let is_binary = structure.bin_type_infohash;
-        for (info_hash, updates_action) in blacklists.iter() {
+        for (info_hash, updates_action) in &blacklists {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -448,7 +463,7 @@ impl DatabaseConnectorMySQL {
                             is_binary,
                         );
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -462,24 +477,23 @@ impl DatabaseConnectorMySQL {
                         is_binary,
                     );
                     if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                        error!("{} Error: {}", LOG_PREFIX, e);
+                        error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 {
-                info!("{} Handled {} blacklisted torrents", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} blacklisted torrents");
             }
         }
-        info!("{} Handled {} blacklisted torrents", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} blacklisted torrents");
         let _ = self.commit(transaction).await;
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut hashes = 0u64;
         let structure = &tracker.config.database_structure.keys;
         let is_binary = structure.bin_type_hash;
@@ -506,13 +520,12 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
-            info!("{} Handled {} keys", LOG_PREFIX, hashes);
+            info!("{LOG_PREFIX} Handled {hashes} keys");
         }
-        info!("{} Handled {} keys", LOG_PREFIX, hashes);
+        info!("{LOG_PREFIX} Handled {hashes} keys");
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_keys(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -522,7 +535,7 @@ impl DatabaseConnectorMySQL {
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.keys;
         let is_binary = structure.bin_type_hash;
-        for (hash, (timeout, update_action)) in keys.iter() {
+        for (hash, (timeout, update_action)) in &keys {
             handled += 1;
             let hash_str = hash.to_string();
             match update_action {
@@ -536,7 +549,7 @@ impl DatabaseConnectorMySQL {
                             is_binary,
                         );
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -552,24 +565,23 @@ impl DatabaseConnectorMySQL {
                         is_binary,
                     );
                     if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                        error!("{} Error: {}", LOG_PREFIX, e);
+                        error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 {
-                info!("{} Handled {} keys", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} keys");
             }
         }
-        info!("{} Handled {} keys", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} keys");
         let _ = self.commit(transaction).await;
         Ok(handled)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
-        let length = 100000u64;
+        let length = 100_000_u64;
         let mut hashes = 0u64;
         let structure = &tracker.config.database_structure.users;
         let is_uuid = structure.id_uuid;
@@ -636,13 +648,12 @@ impl DatabaseConnectorMySQL {
             if hashes < start {
                 break;
             }
-            info!("{} Loaded {} users", LOG_PREFIX, hashes);
+            info!("{LOG_PREFIX} Loaded {hashes} users");
         }
-        info!("{} Loaded {} users", LOG_PREFIX, hashes);
+        info!("{LOG_PREFIX} Loaded {hashes} users");
         Ok(hashes)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_users(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -654,7 +665,7 @@ impl DatabaseConnectorMySQL {
         let db_config = &tracker.config.database;
         let is_uuid = structure.id_uuid;
         let is_binary_key = structure.bin_type_key;
-        for (_, (user_entry_item, updates_action)) in users.iter() {
+        for (user_entry_item, updates_action) in users.values() {
             handled += 1;
             match updates_action {
                 UpdatesAction::Remove => {
@@ -675,7 +686,7 @@ impl DatabaseConnectorMySQL {
                             )
                         };
                         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                            error!("{} Error: {}", LOG_PREFIX, e);
+                            error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
@@ -761,20 +772,19 @@ impl DatabaseConnectorMySQL {
                         )
                     };
                     if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-                        error!("{} Error: {}", LOG_PREFIX, e);
+                        error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
                 }
             }
             if (handled as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == handled {
-                info!("{} Handled {} users", LOG_PREFIX, handled);
+                info!("{LOG_PREFIX} Handled {handled} users");
             }
         }
-        info!("{} Handled {} users", LOG_PREFIX, handled);
+        info!("{LOG_PREFIX} Handled {handled} users");
         self.commit(transaction).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
         let structure = &tracker.config.database_structure.torrents;
@@ -783,7 +793,7 @@ impl DatabaseConnectorMySQL {
             structure.table_name, structure.column_seeds, structure.column_peers
         );
         if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
-            error!("{} Error: {}", LOG_PREFIX, e);
+            error!("{LOG_PREFIX} Error: {e}");
             return Err(e);
         }
         let _ = self.commit(transaction).await;
@@ -792,9 +802,9 @@ impl DatabaseConnectorMySQL {
 
     pub async fn commit(&self, transaction: Transaction<'_, MySql>) -> Result<(), Error> {
         match transaction.commit().await {
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
             Err(e) => {
-                error!("{} Error: {}", LOG_PREFIX, e);
+                error!("{LOG_PREFIX} Error: {e}");
                 Err(e)
             }
         }

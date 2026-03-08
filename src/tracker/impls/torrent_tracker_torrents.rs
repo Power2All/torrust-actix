@@ -3,13 +3,15 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker).await {
@@ -17,38 +19,29 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), ()>
     {
         let torrents_count = torrents.len();
-        match self.sqlx.save_torrents(tracker, torrents).await {
-            Ok(_) => {
-                info!("[SYNC TORRENTS] Synced {torrents_count} torrents");
-                Ok(())
-            }
-            Err(_) => {
-                error!("[SYNC TORRENTS] Unable to sync {torrents_count} torrents");
-                Err(())
-            }
+        if let Ok(()) = self.sqlx.save_torrents(tracker, torrents).await {
+            info!("[SYNC TORRENTS] Synced {torrents_count} torrents");
+            Ok(())
+        } else {
+            error!("[SYNC TORRENTS] Unable to sync {torrents_count} torrents");
+            Err(())
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> bool
     {
-        match self.sqlx.reset_seeds_peers(tracker).await {
-            Ok(_) => {
-                info!("[RESET SEEDS PEERS] Completed");
-                true
-            }
-            Err(_) => {
-                error!("[RESET SEEDS PEERS] Unable to reset the seeds and peers");
-                false
-            }
+        if let Ok(()) = self.sqlx.reset_seeds_peers(tracker).await {
+            info!("[RESET SEEDS PEERS] Completed");
+            true
+        } else {
+            error!("[RESET SEEDS PEERS] Unable to reset the seeds and peers");
+            false
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
@@ -86,7 +79,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn add_torrents(&self, hashes: BTreeMap<InfoHash, TorrentEntry>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
     {
         hashes.into_iter()
@@ -97,7 +89,6 @@ impl TorrentTracker {
             .collect()
     }
 
-    #[tracing::instrument(level = "debug")]
     #[inline]
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
@@ -106,7 +97,6 @@ impl TorrentTracker {
         lock.get(&info_hash).cloned()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         hashes.into_iter()
@@ -117,7 +107,6 @@ impl TorrentTracker {
             .collect()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         if !self.torrents_sharding.contains_torrent(info_hash) {
@@ -135,7 +124,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         hashes.into_iter()

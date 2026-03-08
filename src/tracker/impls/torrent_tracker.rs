@@ -1,18 +1,27 @@
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::config::structs::configuration::Configuration;
 use crate::database::structs::database_connector::DatabaseConnector;
-use crate::ssl::certificate_store::CertificateStore;
+use crate::ssl::structs::certificate_store::CertificateStore;
 use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use chrono::Utc;
-use log::{info, warn};
+use log::{
+    info,
+    warn
+};
 use parking_lot::RwLock;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, AtomicI64};
+use std::collections::{
+    BTreeMap,
+    HashMap,
+    HashSet
+};
+use std::sync::atomic::{
+    AtomicBool,
+    AtomicI64
+};
 use std::sync::Arc;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
         let tracker_config = &config.tracker_config;
@@ -27,7 +36,7 @@ impl TorrentTracker {
                         Some(connector)
                     }
                     Err(e) => {
-                        warn!("[Cache] Failed to connect to cache: {}. Continuing without cache.", e);
+                        warn!("[Cache] Failed to connect to cache: {e}. Continuing without cache.");
                         None
                     }
                 }

@@ -5,7 +5,10 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs;
@@ -13,7 +16,6 @@ use std::process::exit;
 use std::sync::Arc;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn import(&self, args: &Cli, tracker: Arc<TorrentTracker>)
     {
         info!("[IMPORT] Requesting to import data");
@@ -38,7 +40,11 @@ impl TorrentTracker {
                 .expect("[IMPORT] Invalid hash length"));
             tracker.add_torrent_update(info_hash, TorrentEntry {
                 seeds: Default::default(),
+                seeds_ipv6: Default::default(),
                 peers: Default::default(),
+                peers_ipv6: Default::default(),
+                rtc_seeds: Default::default(),
+                rtc_peers: Default::default(),
                 completed,
                 updated: std::time::Instant::now(),
             }, UpdatesAction::Add);

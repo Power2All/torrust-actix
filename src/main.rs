@@ -1,7 +1,11 @@
 use async_std::task;
 use clap::Parser;
 use futures_util::future::try_join_all;
-use log::{error, info, warn};
+use log::{
+    error,
+    info,
+    warn
+};
 use parking_lot::deadlock;
 use sentry::ClientInitGuard;
 use std::mem;
@@ -12,18 +16,25 @@ use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
-use torrust_actix::common::common::{setup_logging, udp_check_host_and_port_used};
+use torrust_actix::common::common::{
+    setup_logging,
+    udp_check_host_and_port_used
+};
 use torrust_actix::config::enums::cluster_mode::ClusterMode;
 use torrust_actix::config::structs::configuration::Configuration;
-use torrust_actix::http::http::{http_check_host_and_port_used, http_service};
+use torrust_actix::http::http::{
+    http_check_host_and_port_used,
+    http_service
+};
 use torrust_actix::stats::enums::stats_event::StatsEvent;
 use torrust_actix::structs::Cli;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
 use torrust_actix::udp::udp::udp_service;
-use torrust_actix::websocket::master::server::websocket_master_service;
-use torrust_actix::websocket::slave::client::start_slave_client;
+use torrust_actix::websocket::websocket::{
+    start_slave_client,
+    websocket_master_service
+};
 
-#[tracing::instrument(level = "debug")]
 fn main() -> std::io::Result<()>
 {
     let args = Cli::parse();
@@ -79,7 +90,7 @@ fn main() -> std::io::Result<()>
                     panic!("[RESET SEEDS PEERS] Unable to continue loading");
                 }
             } else {
-                tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
+                tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
             }
 
             if args.create_selfsigned { tracker.cert_gen(&args).await; }
@@ -228,13 +239,12 @@ fn main() -> std::io::Result<()>
                 }
             }
 
-            
             let cluster_mode = tracker_config.cluster.clone();
             let mut ws_futures = Vec::new();
 
             match cluster_mode {
                 ClusterMode::master => {
-                    
+
                     let bind_address = &tracker_config.cluster_bind_address;
                     if !bind_address.is_empty() {
                         http_check_host_and_port_used(bind_address.clone());
@@ -253,20 +263,20 @@ fn main() -> std::io::Result<()>
                     }
                 }
                 ClusterMode::slave => {
-                    
+
                     let master_address = &tracker_config.cluster_master_address;
                     if !master_address.is_empty() {
-                        info!("[CLUSTER] Starting WebSocket slave client connecting to {}", master_address);
+                        info!("[CLUSTER] Starting WebSocket slave client connecting to {master_address}");
 
-                        
+
                         let tracker_slave = tracker.clone();
                         let shutdown_handler = tokio_shutdown.clone();
                         tokio_core.spawn(async move {
                             tokio::select! {
-                                _ = start_slave_client(tracker_slave) => {
+                                () = start_slave_client(tracker_slave) => {
                                     info!("[CLUSTER] Slave client stopped");
                                 }
-                                _ = shutdown_handler.handle() => {
+                                () = shutdown_handler.handle() => {
                                     info!("[CLUSTER] Shutting down slave client...");
                                 }
                             }
@@ -277,7 +287,7 @@ fn main() -> std::io::Result<()>
                     }
                 }
                 ClusterMode::standalone => {
-                    
+
                     info!("[CLUSTER] Running in standalone mode");
                 }
             }
@@ -347,7 +357,6 @@ fn main() -> std::io::Result<()>
                                 stats.udp_queue_len
                             );
 
-                            
                             if tracker_spawn_stats.config.tracker_config.cluster != ClusterMode::standalone {
                                 info!(
                                     "[STATS WS] Conn:{} | Req: Sent:{} Recv:{} | Resp: Sent:{} Recv:{} | TO:{} Recon:{} | Auth: OK:{} Fail:{}",
@@ -359,7 +368,7 @@ fn main() -> std::io::Result<()>
                                 );
                             }
                         }
-                        _ = stats_handler.handle() => {
+                        () = stats_handler.handle() => {
                             info!("[BOOT] Shutting down thread for console updates...");
                             return;
                         }
@@ -373,6 +382,7 @@ fn main() -> std::io::Result<()>
             info!("[BOOT] Starting thread for peers cleanup with {cleanup_interval} seconds delay...");
 
             let peers_timeout = tracker_cleanup_clone.config.tracker_config.peers_timeout;
+            let rtc_peers_timeout = tracker_cleanup_clone.config.tracker_config.rtc_peers_timeout;
             let persistent = tracker_cleanup_clone.config.database.persistent;
             let torrents_sharding = tracker_cleanup_clone.torrents_sharding.clone();
 
@@ -381,6 +391,7 @@ fn main() -> std::io::Result<()>
                     tracker_cleanup_clone,
                     cleanup_handler,
                     Duration::from_secs(peers_timeout),
+                    Duration::from_secs(rtc_peers_timeout),
                     persistent
                 ).await;
             });
@@ -397,12 +408,12 @@ fn main() -> std::io::Result<()>
                         tokio::select! {
                             _ = interval.tick() => {
                                 tracker_spawn_cleanup_keys.set_stats(StatsEvent::TimestampKeysTimeout,
-                                    chrono::Utc::now().timestamp() + keys_interval as i64);
+                                    chrono::Utc::now().timestamp() + keys_interval.cast_signed());
                                 info!("[KEYS] Checking now for outdated keys.");
                                 tracker_spawn_cleanup_keys.clean_keys();
                                 info!("[KEYS] Keys cleaned up.");
                             }
-                            _ = cleanup_keys_handler.handle() => {
+                            () = cleanup_keys_handler.handle() => {
                                 info!("[BOOT] Shutting down thread for keys cleanup...");
                                 return;
                             }
@@ -423,7 +434,7 @@ fn main() -> std::io::Result<()>
                         tokio::select! {
                             _ = interval.tick() => {
                                 tracker_spawn_updates.set_stats(StatsEvent::TimestampSave,
-                                    chrono::Utc::now().timestamp() + update_interval as i64);
+                                    chrono::Utc::now().timestamp() + update_interval.cast_signed());
 
                                 info!("[DATABASE UPDATES] Starting batch updates...");
 
@@ -479,7 +490,7 @@ fn main() -> std::io::Result<()>
 
                                 info!("[DATABASE UPDATES] Batch updates completed");
                             }
-                            _ = updates_handler.handle() => {
+                            () = updates_handler.handle() => {
                                 info!("[BOOT] Shutting down thread for updates...");
                                 return;
                             }
@@ -506,7 +517,7 @@ fn main() -> std::io::Result<()>
                     task::sleep(Duration::from_secs(1)).await;
 
                     if db_config.persistent {
-                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
+                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
                         Configuration::save_from_config(tracker.config.clone(), "config.toml");
 
                         info!("Saving final data to database...");
@@ -561,7 +572,7 @@ fn main() -> std::io::Result<()>
                             let _ = task.await;
                         }
                     } else {
-                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads as i64);
+                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
                         Configuration::save_from_config(tracker.config.clone(), "config.toml");
                         info!("Saving completed data to config...");
                     }

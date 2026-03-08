@@ -2,14 +2,19 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{
+    BTreeMap,
+    HashMap
+};
 use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub fn add_key_update(&self, info_hash: InfoHash, timeout: i64, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.keys_updates.write();
@@ -22,14 +27,12 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_key_updates(&self) -> HashMap<u128, (InfoHash, i64, UpdatesAction)>
     {
         let lock = self.keys_updates.read_recursive();
         lock.clone()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_key_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.keys_updates.write();
@@ -41,7 +44,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn clear_key_updates(&self)
     {
         let mut lock = self.keys_updates.write();
@@ -49,7 +51,6 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::KeyUpdates, 0);
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_key_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = self.get_key_updates();
@@ -75,21 +76,18 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, timeout, updates_action))| (*info_hash, (*timeout, *updates_action)))
             .collect();
-        match self.save_keys(torrent_tracker, keys_to_save).await {
-            Ok(_) => {
-                info!("[SYNC KEY UPDATES] Synced {} keys", mapping.len());
-                for (_, (timestamp, _, _)) in mapping {
-                    self.remove_key_update(&timestamp);
-                }
-                for timestamp in timestamps_to_remove {
-                    self.remove_key_update(&timestamp);
-                }
-                Ok(())
+        if let Ok(()) = self.save_keys(torrent_tracker, keys_to_save).await {
+            info!("[SYNC KEY UPDATES] Synced {} keys", mapping.len());
+            for (_, (timestamp, _, _)) in mapping {
+                self.remove_key_update(&timestamp);
             }
-            Err(_) => {
-                error!("[SYNC KEY UPDATES] Unable to sync {} keys", mapping.len());
-                Err(())
+            for timestamp in timestamps_to_remove {
+                self.remove_key_update(&timestamp);
             }
+            Ok(())
+        } else {
+            error!("[SYNC KEY UPDATES] Unable to sync {} keys", mapping.len());
+            Err(())
         }
     }
 }

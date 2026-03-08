@@ -3,14 +3,19 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
-use log::{error, info};
+use log::{
+    error,
+    info
+};
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{
+    BTreeMap,
+    HashMap
+};
 use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub fn add_user_update(&self, user_id: UserId, user_entry_item: UserEntryItem, updates_action: UpdatesAction) -> (UserEntryItem, bool)
     {
         let mut lock = self.users_updates.write();
@@ -23,14 +28,12 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn get_user_updates(&self) -> HashMap<u128, (UserId, UserEntryItem, UpdatesAction)>
     {
         let lock = self.users_updates.read_recursive();
         lock.clone()
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn remove_user_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.users_updates.write();
@@ -42,7 +45,6 @@ impl TorrentTracker {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub fn clear_user_updates(&self)
     {
         let mut lock = self.users_updates.write();
@@ -50,7 +52,6 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::UsersUpdates, 0);
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn save_user_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = {
@@ -83,30 +84,27 @@ impl TorrentTracker {
             .iter()
             .map(|(user_id, (_, user_entry_item, updates_action))| (*user_id, (user_entry_item.clone(), *updates_action)))
             .collect();
-        match self.save_users(torrent_tracker, users_to_save).await {
-            Ok(_) => {
-                info!("[SYNC USER UPDATES] Synced {mapping_len} users");
-                let mut lock = self.users_updates.write();
-                let mut removed_count = 0i64;
-                for (_, (timestamp, _, _)) in mapping {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
+        if let Ok(()) = self.save_users(torrent_tracker, users_to_save).await {
+            info!("[SYNC USER UPDATES] Synced {mapping_len} users");
+            let mut lock = self.users_updates.write();
+            let mut removed_count = 0i64;
+            for (_, (timestamp, _, _)) in mapping {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
                 }
-                for timestamp in timestamps_to_remove {
-                    if lock.remove(&timestamp).is_some() {
-                        removed_count += 1;
-                    }
-                }
-                if removed_count > 0 {
-                    self.update_stats(StatsEvent::UsersUpdates, -removed_count);
-                }
-                Ok(())
             }
-            Err(_) => {
-                error!("[SYNC USER UPDATES] Unable to sync {mapping_len} users");
-                Err(())
+            for timestamp in timestamps_to_remove {
+                if lock.remove(&timestamp).is_some() {
+                    removed_count += 1;
+                }
             }
+            if removed_count > 0 {
+                self.update_stats(StatsEvent::UsersUpdates, -removed_count);
+            }
+            Ok(())
+        } else {
+            error!("[SYNC USER UPDATES] Unable to sync {mapping_len} users");
+            Err(())
         }
     }
 }

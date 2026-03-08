@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 use crate::common::common::bin2hex;
+use crate::common::common::hex_to_nibble;
 use crate::tracker::structs::info_hash::InfoHash;
 
 impl fmt::Display for InfoHash {
@@ -63,7 +64,7 @@ impl<'de> serde::de::Deserialize<'de> for InfoHash {
     fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
         struct InfoHashVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for InfoHashVisitor {
+        impl serde::de::Visitor<'_> for InfoHashVisitor {
             type Value = InfoHash;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -110,15 +111,5 @@ impl<'de> serde::de::Deserialize<'de> for InfoHash {
             }
         }
         des.deserialize_str(InfoHashVisitor)
-    }
-}
-
-#[inline(always)]
-fn hex_to_nibble(c: u8) -> u8 {
-    match c {
-        b'0'..=b'9' => c - b'0',
-        b'a'..=b'f' => c - b'a' + 10,
-        b'A'..=b'F' => c - b'A' + 10,
-        _ => 0xFF,
     }
 }

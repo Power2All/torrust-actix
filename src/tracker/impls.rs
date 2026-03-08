@@ -5,6 +5,7 @@ pub mod torrent_peer;
 pub mod torrent_tracker;
 pub mod torrent_tracker_keys;
 pub mod torrent_tracker_peers;
+pub mod torrent_tracker_rtctorrent;
 pub mod torrent_tracker_torrents;
 pub mod torrent_tracker_handlers;
 pub mod torrent_tracker_torrents_blacklist;

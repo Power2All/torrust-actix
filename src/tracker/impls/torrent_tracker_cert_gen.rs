@@ -1,12 +1,17 @@
 use crate::structs::Cli;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use log::{error, info};
-use rcgen::{generate_simple_self_signed, CertifiedKey};
+use log::{
+    error,
+    info
+};
+use rcgen::{
+    generate_simple_self_signed,
+    CertifiedKey
+};
 use std::fs;
 use std::process::exit;
 
 impl TorrentTracker {
-    #[tracing::instrument(level = "debug")]
     pub async fn cert_gen(&self, args: &Cli)
     {
         info!("[CERTGEN] Requesting to generate a self-signed key and certificate file");

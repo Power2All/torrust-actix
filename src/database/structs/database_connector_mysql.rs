@@ -1,4 +1,7 @@
-use sqlx::{MySql, Pool};
+use sqlx::{
+    MySql,
+    Pool
+};
 
 #[derive(Debug, Clone)]
 pub struct DatabaseConnectorMySQL {

@@ -2,6 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use serde::Serialize;
 use crate::common::common::bin2hex;
+use crate::common::common::hex_char_to_nibble;
 use crate::tracker::structs::peer_id::PeerId;
 
 impl fmt::Display for PeerId {
@@ -76,7 +77,6 @@ impl PeerId {
                 b"VG" => "Vagaa",
                 b"WD" => "WebTorrent Desktop",
                 b"WT" => "BitLet",
-                b"WW" => "WebTorrent",
                 b"WY" => "FireTorrent",
                 b"XL" => "Xunlei",
                 b"XT" => "XanTorrent",
@@ -150,7 +150,7 @@ impl<'de> serde::de::Deserialize<'de> for PeerId {
     fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
         struct PeerIdVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for PeerIdVisitor {
+        impl serde::de::Visitor<'_> for PeerIdVisitor {
             type Value = PeerId;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -184,15 +184,5 @@ impl<'de> serde::de::Deserialize<'de> for PeerId {
             }
         }
         des.deserialize_str(PeerIdVisitor)
-    }
-}
-
-#[inline(always)]
-fn hex_char_to_nibble(c: u8) -> u8 {
-    match c {
-        b'0'..=b'9' => c - b'0',
-        b'a'..=b'f' => c - b'a' + 10,
-        b'A'..=b'F' => c - b'A' + 10,
-        _ => 0xFF,
     }
 }

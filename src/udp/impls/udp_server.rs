@@ -1,5 +1,4 @@
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
@@ -27,16 +26,27 @@ use crate::udp::structs::transaction_id::TransactionId;
 use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
 use crate::udp::udp::MAX_SCRAPE_TORRENTS;
-use log::{debug, info};
-use socket2::{Domain, Protocol, Socket, Type};
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use log::{
+    debug,
+    info
+};
+use socket2::{
+    Domain,
+    Protocol,
+    Socket,
+    Type
+};
+use std::net::{
+    Ipv4Addr,
+    Ipv6Addr,
+    SocketAddr
+};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::runtime::Builder;
 
 impl UdpServer {
-    #[tracing::instrument(level = "debug")]
     #[allow(clippy::too_many_arguments)]
     pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool) -> tokio::io::Result<UdpServer>
     {
@@ -59,9 +69,8 @@ impl UdpServer {
         })
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
-        let parse_pool = Arc::new(ParsePool::new(1000000, self.worker_threads));
+        let parse_pool = Arc::new(ParsePool::new(1_000_000, self.worker_threads));
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone(), self.use_payload_ip, self.simple_proxy_protocol).await;
         let payload = parse_pool.payload.clone();
         let tracker_queue = self.tracker.clone();
@@ -127,13 +136,12 @@ impl UdpServer {
         });
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
         debug!("sending response to: {:?}", &remote_addr);
         let estimated_size = response.estimated_size();
         let mut buffer = Vec::with_capacity(estimated_size);
         match response.write(&mut buffer) {
-            Ok(_) => {
+            Ok(()) => {
                 UdpServer::send_packet(socket, &remote_addr, &buffer).await;
             }
             Err(error) => {
@@ -146,15 +154,20 @@ impl UdpServer {
         }
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn send_packet(socket: Arc<UdpSocket>, remote_addr: &SocketAddr, payload: &[u8]) {
         let _ = socket.send_to(payload, remote_addr).await;
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
-        use std::hash::{DefaultHasher, Hasher};
-        use std::time::{SystemTime, UNIX_EPOCH};
+        use std::hash::{
+            DefaultHasher,
+            Hasher
+        };
+        use std::time::{
+            SystemTime,
+            UNIX_EPOCH
+        };
+
         let mut hasher = DefaultHasher::new();
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -170,7 +183,6 @@ impl UdpServer {
         ConnectionId(hasher.finish() as i64)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Response {
         if payload.len() == 16 && let [_, _, _, _, action1, action2, action3, action4, ..] = payload && *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 && let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
             return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
@@ -178,55 +190,69 @@ impl UdpServer {
                 Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
             }
         }
-        let transaction_id = match Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
-            Ok(request) => {
-                let tid = match &request {
-                    Request::Connect(connect_request) => connect_request.transaction_id,
-                    Request::Announce(announce_request) => announce_request.transaction_id,
-                    Request::Scrape(scrape_request) => scrape_request.transaction_id,
-                };
-                match UdpServer::handle_request(request, remote_addr, tracker.clone(), use_payload_ip).await {
-                    Ok(response) => return response,
-                    Err(_e) => {
-                        match remote_addr {
-                            SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4InvalidRequest, 1); }
-                            SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6InvalidRequest, 1); }
-                        }
-                        tid
+        let transaction_id = if let Ok(request) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
+            let tid = match &request {
+                Request::Connect(connect_request) => connect_request.transaction_id,
+                Request::Announce(announce_request) => announce_request.transaction_id,
+                Request::Scrape(scrape_request) => scrape_request.transaction_id,
+            };
+            match UdpServer::handle_request(request, remote_addr, tracker.clone(), use_payload_ip).await {
+                Ok(response) => return response,
+                Err(_e) => {
+                    match remote_addr {
+                        SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4InvalidRequest, 1); }
+                        SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6InvalidRequest, 1); }
                     }
+                    tid
                 }
             }
-            Err(_) => {
-                match remote_addr {
-                    SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4BadRequest, 1); }
-                    SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6BadRequest, 1); }
-                }
-                TransactionId(0)
+        } else {
+            match remote_addr {
+                SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4BadRequest, 1); }
+                SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6BadRequest, 1); }
             }
+            TransactionId(0)
         };
         UdpServer::handle_udp_error(ServerError::BadRequest, transaction_id).await
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn handle_request(request: Request, remote_addr: SocketAddr, tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Result<Response, ServerError> {
-        let sentry = sentry::TransactionContext::new("udp server", "handle packet");
-        let transaction = sentry::start_transaction(sentry);
-        let result = match request {
+        let transaction = sentry::TransactionContext::new("udp server", "handle packet");
+        let transaction_guard = sentry::start_transaction(transaction);
+        let result = match &request {
             Request::Connect(connect_request) => {
-                UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await
+                UdpServer::handle_udp_connect(remote_addr, connect_request, tracker).await
             }
             Request::Announce(announce_request) => {
-                UdpServer::handle_udp_announce(remote_addr, &announce_request, tracker, use_payload_ip).await
+                UdpServer::handle_udp_announce(remote_addr, announce_request, tracker, use_payload_ip).await
             }
             Request::Scrape(scrape_request) => {
-                UdpServer::handle_udp_scrape(remote_addr, &scrape_request, tracker).await
+                UdpServer::handle_udp_scrape(remote_addr, scrape_request, tracker).await
             }
         };
-        transaction.finish();
+        match &request {
+            Request::Connect(_) => {
+                transaction_guard.set_tag("request_type", "connect");
+            }
+            Request::Announce(announce_request) => {
+                transaction_guard.set_tag("request_type", "announce");
+                transaction_guard.set_tag("info_hash", hex::encode(announce_request.info_hash.0));
+            }
+            Request::Scrape(scrape_request) => {
+                transaction_guard.set_tag("request_type", "scrape");
+                transaction_guard.set_tag("num_info_hashes", scrape_request.info_hashes.len().to_string());
+            }
+        }
+        transaction_guard.set_tag("remote_addr", remote_addr.to_string());
+        transaction_guard.set_tag("use_payload_ip", use_payload_ip.to_string());
+        match &result {
+            Ok(_) => transaction_guard.set_tag("result", "success"),
+            Err(e) => transaction_guard.set_tag("result", format!("error: {e:?}")),
+        }
+        transaction_guard.finish();
         result
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn handle_udp_connect(remote_addr: SocketAddr, request: &ConnectRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let connection_id = UdpServer::get_connection_id(&remote_addr).await;
         let response = Response::from(ConnectResponse {
@@ -242,7 +268,6 @@ impl UdpServer {
         Ok(response)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Result<Response, ServerError> {
         let config = &tracker.config.tracker_config;
         let effective_remote_addr = if use_payload_ip {
@@ -325,6 +350,11 @@ impl UdpServer {
             event: request.event,
             remote_addr: effective_remote_addr.ip(),
             numwant: request.peers_wanted.0 as u64,
+            rtctorrent: None,
+            rtcoffer: None,
+            rtcrequest: None,
+            rtcanswer: None,
+            rtcanswerfor: None,
         }, user_key).await {
             Ok(result) => result.1,
             Err(error) => {
@@ -332,52 +362,48 @@ impl UdpServer {
                 return Err(ServerError::InternalServerError);
             }
         };
-        let torrent_peers = tracker.get_torrent_peers(request.info_hash, 72, TorrentPeersType::All, Some(effective_remote_addr.ip()));
-        let (peers, peers6) = if let Some(torrent_peers_unwrapped) = torrent_peers {
-            let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::with_capacity(72);
-            let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(72);
-            let mut count = 0;
-            if request.bytes_left.0 != 0 {
-                if effective_remote_addr.is_ipv4() {
-                    for torrent_peer in torrent_peers_unwrapped.seeds_ipv4.values().take(72) {
-                        if count >= 72 { break; }
-                        if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
-                            peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
-                            count += 1;
-                        }
-                    }
-                } else {
-                    for torrent_peer in torrent_peers_unwrapped.seeds_ipv6.values().take(72) {
-                        if count >= 72 { break; }
-                        
-                        if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
-                            peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
-                            count += 1;
-                        }
-                    }
-                }
-            }
-            if remote_addr.is_ipv4() {
-                for torrent_peer in torrent_peers_unwrapped.peers_ipv4.values().take(72 - count) {
+        let self_peer_id = PeerId(request.peer_id.0);
+        let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::with_capacity(72);
+        let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(72);
+        if request.bytes_left.0 != 0 {
+            if effective_remote_addr.is_ipv4() {
+                for (peer_id, torrent_peer) in &torrent.seeds {
+                    if peers.len() >= 72 { break; }
+                    if *peer_id == self_peer_id { continue; }
                     if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                         peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }
             } else {
-                for torrent_peer in torrent_peers_unwrapped.peers_ipv6.values().take(72 - count) {
-                    
+                for (peer_id, torrent_peer) in &torrent.seeds_ipv6 {
+                    if peers6.len() >= 72 { break; }
+                    if *peer_id == self_peer_id { continue; }
                     if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                         peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }
             }
-            (peers, peers6)
+        }
+        if effective_remote_addr.is_ipv4() {
+            for (peer_id, torrent_peer) in &torrent.peers {
+                if peers.len() >= 72 { break; }
+                if *peer_id == self_peer_id { continue; }
+                if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
+                    peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
+                }
+            }
         } else {
-            (Vec::new(), Vec::new())
-        };
+            for (peer_id, torrent_peer) in &torrent.peers_ipv6 {
+                if peers6.len() >= 72 { break; }
+                if *peer_id == self_peer_id { continue; }
+                if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
+                    peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
+                }
+            }
+        }
         let request_interval = config.request_interval as i32;
-        let leechers = torrent.peers.len() as i32;
-        let seeders = torrent.seeds.len() as i32;
+        let leechers = (torrent.peers.len() + torrent.peers_ipv6.len()) as i32;
+        let seeders = (torrent.seeds.len() + torrent.seeds_ipv6.len()) as i32;
         let response = if effective_remote_addr.is_ipv6() {
             Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
@@ -404,7 +430,6 @@ impl UdpServer {
         Ok(response)
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let mut torrent_stats = Vec::with_capacity(request.info_hashes.len());
         for info_hash in &request.info_hashes {
@@ -434,7 +459,6 @@ impl UdpServer {
         }))
     }
 
-    #[tracing::instrument(level = "debug")]
     pub async fn handle_udp_error(e: ServerError, transaction_id: TransactionId) -> Response {
         Response::from(ErrorResponse {
             transaction_id,

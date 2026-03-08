@@ -1,0 +1,57 @@
+{
+  "name": "rtctorrent",
+  "version": "4.2.0",
+  "description": "WebRTC-enabled BitTorrent client library",
+  "main": "src/rtctorrent.js",
+  "module": "src/rtctorrent.js",
+  "browser": "dist/rtctorrent.min.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "serve": "node bin/serve.js",
+    "test": "jest",
+    "test:transfer": "node test/test_webrtc_transfer.js",
+    "test:signaling": "node test/test_signaling_flow.js",
+    "test:create": "node test/create_torrent.js -- <file>",
+    "test:seed": "node test/seed_torrent.js",
+    "test:leech": "node test/leech_torrent.js"
+  },
+  "keywords": [
+    "bittorrent",
+    "webrtc",
+    "p2p",
+    "torrent",
+    "webtorrent",
+    "rtctorrent"
+  ],
+  "author": "Torrust Team",
+  "license": "MIT",
+  "dependencies": {
+    "bencode": "^2.0",
+    "graceful-fs": "^4.2",
+    "js-yaml": "^4.1",
+    "simple-sha1": "^3.1"
+  },
+  "optionalDependencies": {
+    "@roamhq/wrtc": "^0.9"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24",
+    "@babel/preset-env": "^7.24",
+    "babel-loader": "^9.1",
+    "crypto-browserify": "^3.12",
+    "jest": "^29.7",
+    "node-polyfill-webpack-plugin": "^4.1",
+    "path-browserify": "^1.0",
+    "stream-browserify": "^3.0",
+    "webpack": "^5.94",
+    "webpack-cli": "^5.1"
+  },
+  "engines": {
+    "node": ">=12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/torrust/torrust-actix.git"
+  }
+}

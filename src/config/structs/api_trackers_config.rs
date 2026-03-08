@@ -1,10 +1,15 @@
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ApiTrackersConfig {
     pub enabled: bool,
     pub bind_address: String,
     pub real_ip: String,
+    #[serde(default)]
+    pub trusted_proxies: bool,
     pub keep_alive: u64,
     pub request_timeout: u64,
     pub disconnect_timeout: u64,

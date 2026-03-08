@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::cache::errors::CacheError;
+use crate::cache::enums::cache_error::CacheError;
 use crate::tracker::structs::info_hash::InfoHash;
 
 #[async_trait]
