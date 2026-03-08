@@ -207,6 +207,7 @@ cluster_ssl_key = ""
 cluster_ssl_cert = ""
 cluster_tls_connection_rate = 64
 rtc_interval = 10
+rtc_peers_timeout = 120
 
 [sentry_config]
 enabled = false
@@ -329,6 +330,7 @@ cluster_ssl_key = ""
 cluster_ssl_cert = ""
 cluster_tls_connection_rate = 64
 rtc_interval = 10
+rtc_peers_timeout = 120
 
 [sentry_config]
 enabled = false
