@@ -1,5 +1,6 @@
 use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::config::enums::cluster_mode::ClusterMode;
+use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 use serde::{
     Deserialize,
     Serialize
@@ -38,4 +39,10 @@ pub struct TrackerConfig {
     pub cluster_tls_connection_rate: u64,
     pub rtc_interval: u64,
     pub rtc_peers_timeout: u64,
+    #[serde(default = "crate::config::impls::tracker_config::default_true")]
+    pub rtc_compression_enabled: bool,
+    #[serde(default)]
+    pub rtc_compression_algorithm: CompressionAlgorithm,
+    #[serde(default = "crate::config::impls::tracker_config::default_compression_level")]
+    pub rtc_compression_level: u32,
 }

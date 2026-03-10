@@ -1,10 +1,14 @@
+use crate::common::structs::compressed_bytes::CompressedBytes;
 use crate::rtctorrent_bridge::structs::rtc_torrent_bridge::RtcTorrentBridge;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::types::ahash_map::AHashMap;
-use log::{info, warn};
+use log::{
+    info,
+    warn
+};
 
 impl TorrentTracker {
     pub fn init_rtctorrent_bridge(&self) -> RtcTorrentBridge {
@@ -45,7 +49,6 @@ impl TorrentTracker {
                 filtered_entry.rtc_seeds.retain(|&peer_id, _| peer_id != requester_peer_id);
                 filtered_entry.rtc_peers.clear();
             }
-
             filtered_entry
         } else {
             TorrentEntry {
@@ -67,8 +70,9 @@ impl TorrentTracker {
         if let Some(torrent_entry) = lock.get_mut(&info_hash) {
             let peer = torrent_entry.rtc_seeds.get_mut(&seeder_peer_id)
                 .or_else(|| torrent_entry.rtc_peers.get_mut(&seeder_peer_id));
-            if let Some(seeder) = peer {
-                seeder.rtc_pending_answers.push((answerer_peer_id, sdp_answer));
+            if let Some(seeder) = peer
+                && let Some(ref mut rtc) = seeder.rtc_data {
+                rtc.pending_answers.push((answerer_peer_id, CompressedBytes::compress(&sdp_answer)));
                 return true;
             }
         }
@@ -81,8 +85,12 @@ impl TorrentTracker {
         if let Some(torrent_entry) = lock.get_mut(&info_hash) {
             let peer = torrent_entry.rtc_seeds.get_mut(&peer_id)
                 .or_else(|| torrent_entry.rtc_peers.get_mut(&peer_id));
-            if let Some(p) = peer {
-                return std::mem::take(&mut p.rtc_pending_answers);
+            if let Some(p) = peer
+                && let Some(ref mut rtc) = p.rtc_data {
+                return std::mem::take(&mut rtc.pending_answers)
+                    .into_iter()
+                    .map(|(id, cb)| (id, cb.decompress()))
+                    .collect();
             }
         }
         Vec::new()
@@ -92,57 +100,46 @@ impl TorrentTracker {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
         if let Some(torrent_entry) = lock.get_mut(&info_hash) {
-            if let Some(torrent_peer) = torrent_entry.rtc_seeds.get_mut(&peer_id) {
-                torrent_peer.rtc_sdp_answer = Some(sdp_answer);
-                torrent_peer.rtc_connection_status = "connected".to_string();
-                true
-            } else if let Some(torrent_peer) = torrent_entry.rtc_peers.get_mut(&peer_id) {
-                torrent_peer.rtc_sdp_answer = Some(sdp_answer);
-                torrent_peer.rtc_connection_status = "connected".to_string();
-                true
-            } else {
-                false
+            let peer = torrent_entry.rtc_seeds.get_mut(&peer_id)
+                .or_else(|| torrent_entry.rtc_peers.get_mut(&peer_id));
+            if let Some(torrent_peer) = peer
+                && let Some(ref mut rtc) = torrent_peer.rtc_data {
+                rtc.sdp_answer = Some(CompressedBytes::compress(&sdp_answer));
+                rtc.connection_status = "connected".to_string();
+                return true;
             }
-        } else {
-            false
         }
+        false
     }
 
     pub fn update_rtc_sdp_offer(&self, info_hash: InfoHash, peer_id: PeerId, sdp_offer: String) -> bool {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
         if let Some(torrent_entry) = lock.get_mut(&info_hash) {
-            if let Some(torrent_peer) = torrent_entry.rtc_seeds.get_mut(&peer_id) {
-                torrent_peer.rtc_sdp_offer = Some(sdp_offer);
-                torrent_peer.rtc_connection_status = "offered".to_string();
-                true
-            } else if let Some(torrent_peer) = torrent_entry.rtc_peers.get_mut(&peer_id) {
-                torrent_peer.rtc_sdp_offer = Some(sdp_offer);
-                torrent_peer.rtc_connection_status = "offered".to_string();
-                true
-            } else {
-                false
+            let peer = torrent_entry.rtc_seeds.get_mut(&peer_id)
+                .or_else(|| torrent_entry.rtc_peers.get_mut(&peer_id));
+            if let Some(torrent_peer) = peer
+                && let Some(ref mut rtc) = torrent_peer.rtc_data {
+                rtc.sdp_offer = Some(CompressedBytes::compress(&sdp_offer));
+                rtc.connection_status = "offered".to_string();
+                return true;
             }
-        } else {
-            false
         }
+        false
     }
 
     pub fn update_rtc_connection_status(&self, info_hash: InfoHash, peer_id: PeerId, status: String) -> bool {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
         if let Some(torrent_entry) = lock.get_mut(&info_hash) {
-            if let Some(torrent_peer) = torrent_entry.rtc_seeds.get_mut(&peer_id) {
-                torrent_peer.rtc_connection_status = status;
-                true
-            } else if let Some(torrent_peer) = torrent_entry.rtc_peers.get_mut(&peer_id) {
-                torrent_peer.rtc_connection_status = status;
-                true
-            } else {
-                false
+            let peer = torrent_entry.rtc_seeds.get_mut(&peer_id)
+                .or_else(|| torrent_entry.rtc_peers.get_mut(&peer_id));
+            if let Some(torrent_peer) = peer
+                && let Some(ref mut rtc) = torrent_peer.rtc_data {
+                rtc.connection_status = status;
+                return true;
             }
-        } else {
-            false
         }
+        false
     }
 }

@@ -17,6 +17,7 @@ use tokio::runtime::Builder;
 use tokio_shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{
+    init_compression,
     setup_logging,
     udp_check_host_and_port_used
 };
@@ -44,6 +45,11 @@ fn main() -> std::io::Result<()>
     };
     setup_logging(&config);
     info!("{} - Version: {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+    init_compression(
+        config.tracker_config.rtc_compression_enabled,
+        config.tracker_config.rtc_compression_algorithm.clone(),
+        config.tracker_config.rtc_compression_level,
+    );
 
     #[warn(unused_variables)]
     let _sentry_guard: ClientInitGuard;

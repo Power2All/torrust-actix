@@ -6,6 +6,7 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
+use crate::tracker::structs::rtc_data::RtcData;
 use crate::tracker::structs::scrape_query_request::ScrapeQueryRequest;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
@@ -142,11 +143,11 @@ impl TorrentTracker {
             downloaded: NumberOfBytes(announce_query.downloaded as i64),
             left: NumberOfBytes(announce_query.left as i64),
             event: AnnounceEvent::None,
-            is_rtctorrent: announce_query.rtctorrent.unwrap_or(false),
-            rtc_sdp_offer: announce_query.rtcoffer.clone(),
-            rtc_sdp_answer: None,
-            rtc_connection_status: "pending".to_string(),
-            rtc_pending_answers: Vec::new(),
+            rtc_data: if announce_query.rtctorrent.unwrap_or(false) {
+                Some(Box::new(RtcData::new(announce_query.rtcoffer.as_deref())))
+            } else {
+                None
+            },
         };
         if let Some(ref sdp_answer) = announce_query.rtcanswer
             && let Some(ref target_hex) = announce_query.rtcanswerfor

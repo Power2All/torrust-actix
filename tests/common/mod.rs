@@ -95,11 +95,7 @@ pub fn create_test_peer(
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(1000),
         event: torrust_actix::tracker::enums::announce_event::AnnounceEvent::Started,
-        is_rtctorrent: false,
-        rtc_sdp_offer: None,
-        rtc_sdp_answer: None,
-        rtc_connection_status: "pending".to_string(),
-        rtc_pending_answers: Vec::new(),
+        rtc_data: None,
     }
 }
 
@@ -110,7 +106,9 @@ pub fn create_rtc_peer(
     sdp_offer: Option<String>,
     left: i64,
 ) -> torrust_actix::tracker::structs::torrent_peer::TorrentPeer {
+    use torrust_actix::common::structs::compressed_bytes::CompressedBytes;
     use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
+    use torrust_actix::tracker::structs::rtc_data::RtcData;
     use torrust_actix::tracker::structs::torrent_peer::TorrentPeer;
     TorrentPeer {
         peer_id,
@@ -120,11 +118,12 @@ pub fn create_rtc_peer(
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(left),
         event: torrust_actix::tracker::enums::announce_event::AnnounceEvent::Started,
-        is_rtctorrent: true,
-        rtc_sdp_offer: sdp_offer,
-        rtc_sdp_answer: None,
-        rtc_connection_status: "pending".to_string(),
-        rtc_pending_answers: Vec::new(),
+        rtc_data: Some(Box::new(RtcData {
+            sdp_offer: sdp_offer.as_deref().map(CompressedBytes::compress),
+            sdp_answer: None,
+            connection_status: "pending".to_string(),
+            pending_answers: Vec::new(),
+        })),
     }
 }
 

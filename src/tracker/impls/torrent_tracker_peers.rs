@@ -87,7 +87,7 @@ impl TorrentTracker {
                     torrent_entry.completed = 1;
                 }
                 self.update_stats(StatsEvent::Torrents, 1);
-                if torrent_peer.is_rtctorrent {
+                if torrent_peer.is_rtctorrent() {
                     if torrent_peer.left == NumberOfBytes(0) {
                         self.update_stats(StatsEvent::Seeds, 1);
                         torrent_entry.rtc_seeds.insert(peer_id, torrent_peer);
@@ -130,7 +130,8 @@ impl TorrentTracker {
                 };
                 let old_rtc_pending_answers = entry.rtc_seeds.get(&peer_id)
                     .or_else(|| entry.rtc_peers.get(&peer_id))
-                    .map(|p| p.rtc_pending_answers.clone())
+                    .and_then(|p| p.rtc_data.as_ref())
+                    .map(|rtc| rtc.pending_answers.clone())
                     .unwrap_or_default();
                 let was_rtc_seed = entry.rtc_seeds.remove(&peer_id).is_some();
                 let was_rtc_peer = entry.rtc_peers.remove(&peer_id).is_some();
@@ -150,20 +151,21 @@ impl TorrentTracker {
                     self.update_stats(StatsEvent::Completed, 1);
                     entry.completed += 1;
                 }
-
-                if torrent_peer.is_rtctorrent {
+                if torrent_peer.is_rtctorrent() {
                     if torrent_peer.left == NumberOfBytes(0) {
                         self.update_stats(StatsEvent::Seeds, 1);
                         let mut new_peer = torrent_peer;
-                        if !old_rtc_pending_answers.is_empty() {
-                            new_peer.rtc_pending_answers = old_rtc_pending_answers;
+                        if !old_rtc_pending_answers.is_empty()
+                            && let Some(ref mut rtc) = new_peer.rtc_data {
+                            rtc.pending_answers = old_rtc_pending_answers;
                         }
                         entry.rtc_seeds.insert(peer_id, new_peer);
                     } else {
                         self.update_stats(StatsEvent::Peers, 1);
                         let mut new_peer = torrent_peer;
-                        if !old_rtc_pending_answers.is_empty() {
-                            new_peer.rtc_pending_answers = old_rtc_pending_answers;
+                        if !old_rtc_pending_answers.is_empty()
+                            && let Some(ref mut rtc) = new_peer.rtc_data {
+                            rtc.pending_answers = old_rtc_pending_answers;
                         }
                         entry.rtc_peers.insert(peer_id, new_peer);
                     }
