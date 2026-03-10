@@ -3,6 +3,7 @@ use crate::common::structs::number_of_bytes_def::NumberOfBytesDef;
 use crate::tracker::enums::announce_event::AnnounceEvent;
 use crate::tracker::enums::announce_event_def::AnnounceEventDef;
 use crate::tracker::structs::peer_id::PeerId;
+use crate::tracker::structs::rtc_data::RtcData;
 use serde::{
     Deserialize,
     Serialize
@@ -23,10 +24,6 @@ pub struct TorrentPeer {
     pub left: NumberOfBytes,
     #[serde(with = "AnnounceEventDef")]
     pub event: AnnounceEvent,
-    pub is_rtctorrent: bool,
-    pub rtc_sdp_offer: Option<String>,
-    pub rtc_sdp_answer: Option<String>,
-    pub rtc_connection_status: String,
-    #[serde(default)]
-    pub rtc_pending_answers: Vec<(PeerId, String)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rtc_data: Option<Box<RtcData>>,
 }

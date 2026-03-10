@@ -258,7 +258,7 @@ async fn test_rtc_update_sdp_offer() {
     let entry = tracker.get_torrent(info_hash).expect("Torrent should exist");
     let stored_peer = entry.rtc_seeds.get(&peer_id).expect("Seeder should be in rtc_seeds");
     assert_eq!(
-        stored_peer.rtc_sdp_offer.as_deref(),
+        stored_peer.rtc_sdp_offer().as_deref(),
         Some(offer.as_str()),
         "Stored SDP offer should match"
     );
@@ -283,7 +283,7 @@ async fn test_rtc_get_peers_leecher_sees_seeders() {
     let entry = tracker.get_rtctorrent_peers(info_hash, false, leecher_id);
     assert!(!entry.rtc_seeds.is_empty(), "Leecher should see at least one seeder");
     let peer = entry.rtc_seeds.get(&seeder_id).expect("Seeder should appear in rtc_seeds");
-    assert_eq!(peer.rtc_sdp_offer.as_deref(), Some(offer.as_str()));
+    assert_eq!(peer.rtc_sdp_offer().as_deref(), Some(offer.as_str()));
 }
 
 #[tokio::test]

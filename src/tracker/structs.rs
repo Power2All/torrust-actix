@@ -2,6 +2,7 @@ pub mod torrent_tracker;
 pub mod announce_query_request;
 pub mod info_hash;
 pub mod peer_id;
+pub mod rtc_data;
 pub mod scrape_query_request;
 pub mod torrent_entry;
 pub mod torrent_peer;

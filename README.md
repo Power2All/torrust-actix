@@ -25,6 +25,7 @@ This project originated from Torrust-Tracker code originally developed by Mick v
 * [X] Optional Redis/Memcache Caching for peers data (can be used to show on a website for instance, to less burden SQL)
 * [X] Cloudflare's "Simple Proxy Protocol" support added (https://developers.cloudflare.com/spectrum/how-to/enable-proxy-protocol/#enable-simple-proxy-protocol-for-udp)
 * [X] RtcTorrent implementation (as alternative/replacement for WebTorrent)
+* [X] Configurable LZ4/Zstd compression for RTC SDP data (lz4 default, enabled by default)
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -126,6 +127,10 @@ TRACKER__PEERS_CLEANUP_THREADS <UINT64>
 TRACKER__PROMETHEUS_ID <STRING>
 TRACKER__RTC_INTERVAL <UINT64>
 TRACKER__RTC_PEERS_TIMEOUT <UINT64>
+TRACKER__TOTAL_DOWNLOADS <UINT64>
+TRACKER__RTC_COMPRESSION_ENABLED <true | false>
+TRACKER__RTC_COMPRESSION_ALGORITHM <lz4 | zstd>
+TRACKER__RTC_COMPRESSION_LEVEL <UINT64>
 
 TRACKER__CLUSTER <standalone | master | slave>
 TRACKER__CLUSTER_ENCODING <binary | json | msgpack>
@@ -233,6 +238,7 @@ UDP_0_WORKER_THREADS <UINT64>
 UDP_0_RECEIVE_BUFFER_SIZE <UINT64>
 UDP_0_SEND_BUFFER_SIZE <UINT64>
 UDP_0_REUSE_ADDRESS <true | false>
+UDP_0_USE_PAYLOAD_IP <true | false>
 UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 ```
 
@@ -431,6 +437,11 @@ npm run serve    # serves demo at http://localhost:8080/demo/
 ---
 
 ### ChangeLog
+
+#### v4.2.1
+* Adding LZ4/ZSTD compression for memory objects for the RtcTorrent peer data, enabled by default, disablable through config
+* Memory optimization for the peer data
+* Some small bug fixes
 
 #### v4.2.0
 * Refactoring the whole project structure

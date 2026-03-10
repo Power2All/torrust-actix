@@ -2,6 +2,7 @@ use crate::cache::enums::cache_engine::CacheEngine;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::config::enums::cluster_mode::ClusterMode;
+use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 use crate::config::enums::configuration_error::ConfigurationError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::cache_config::CacheConfig;
@@ -66,6 +67,9 @@ impl Configuration {
                 cluster_tls_connection_rate: 256,
                 rtc_interval: 30,
                 rtc_peers_timeout: 120,
+                rtc_compression_enabled: true,
+                rtc_compression_algorithm: CompressionAlgorithm::Lz4,
+                rtc_compression_level: 1,
             },
             sentry_config: SentryConfig {
                 enabled: false,
@@ -280,6 +284,21 @@ impl Configuration {
         }
         if let Ok(value) = env::var("TRACKER__RTC_PEERS_TIMEOUT") {
             config.tracker_config.rtc_peers_timeout = value.parse::<u64>().unwrap_or(120u64);
+        }
+        if let Ok(value) = env::var("TRACKER__TOTAL_DOWNLOADS") {
+            config.tracker_config.total_downloads = value.parse::<u64>().unwrap_or(0u64);
+        }
+        if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_ENABLED") {
+            config.tracker_config.rtc_compression_enabled = match value.as_str() { "true" => true, "false" => false, _ => true };
+        }
+        if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_ALGORITHM") {
+            config.tracker_config.rtc_compression_algorithm = match value.to_lowercase().as_str() {
+                "zstd" => CompressionAlgorithm::Zstd,
+                _ => CompressionAlgorithm::Lz4,
+            };
+        }
+        if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_LEVEL") {
+            config.tracker_config.rtc_compression_level = value.parse::<u32>().unwrap_or(1u32);
         }
         if let Ok(value) = env::var("SENTRY__ENABLED") {
             config.sentry_config.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
@@ -595,8 +614,11 @@ impl Configuration {
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
                         block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
                     }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_USE_PAYLOAD_IP")) {
+                        block.use_payload_ip = match value.as_str() { "true" => true, "false" => false, _ => false };
+                    }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL")) {
-                        block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+                        block.simple_proxy_protocol = match value.as_str() { "true" => true, "false" => false, _ => false };
                     }
                 }
             }
@@ -717,6 +739,10 @@ impl Configuration {
                     &format!("api_server[{index}].bind_address"),
                     &api_server.bind_address,
                 );
+                if api_server.ssl {
+                    assert!(!api_server.ssl_key.is_empty(), "[VALIDATE CONFIG] api_server[{index}] ssl=true but ssl_key is not set");
+                    assert!(!api_server.ssl_cert.is_empty(), "[VALIDATE CONFIG] api_server[{index}] ssl=true but ssl_cert is not set");
+                }
             }
         }
         for (index, http_server) in config.http_server.iter().enumerate() {
@@ -730,6 +756,10 @@ impl Configuration {
                     index,
                     if http_server.rtctorrent { "enabled" } else { "disabled" }
                 );
+                if http_server.ssl {
+                    assert!(!http_server.ssl_key.is_empty(), "[VALIDATE CONFIG] http_server[{index}] ssl=true but ssl_key is not set");
+                    assert!(!http_server.ssl_cert.is_empty(), "[VALIDATE CONFIG] http_server[{index}] ssl=true but ssl_cert is not set");
+                }
             }
         }
         for (index, udp_server) in config.udp_server.iter().enumerate() {
@@ -738,10 +768,42 @@ impl Configuration {
                     &format!("udp_server[{index}].bind_address"),
                     &udp_server.bind_address,
                 );
+                assert!(udp_server.udp_threads > 0, "[VALIDATE CONFIG] udp_server[{index}] udp_threads must be > 0");
+                assert!(udp_server.worker_threads > 0, "[VALIDATE CONFIG] udp_server[{index}] worker_threads must be > 0");
             }
         }
+        Self::validate_tracker(&config);
+        Self::validate_sentry(&config);
         Self::validate_cluster(&config);
         Self::validate_cache(&config);
+        Self::validate_compression(&config);
+    }
+
+    pub fn validate_tracker(config: &Configuration) {
+        let tc = &config.tracker_config;
+        assert!(tc.request_interval > 0, "[VALIDATE CONFIG] request_interval must be > 0");
+        assert!(tc.request_interval_minimum > 0, "[VALIDATE CONFIG] request_interval_minimum must be > 0");
+        assert!(tc.request_interval_minimum <= tc.request_interval, "[VALIDATE CONFIG] request_interval_minimum ({}) must be <= request_interval ({})", tc.request_interval_minimum, tc.request_interval);
+        assert!(tc.peers_timeout > 0, "[VALIDATE CONFIG] peers_timeout must be > 0");
+        assert!(tc.peers_cleanup_interval > 0, "[VALIDATE CONFIG] peers_cleanup_interval must be > 0");
+        assert!(tc.peers_cleanup_threads > 0, "[VALIDATE CONFIG] peers_cleanup_threads must be > 0");
+        assert!(tc.keys_cleanup_interval > 0, "[VALIDATE CONFIG] keys_cleanup_interval must be > 0");
+        assert!(tc.cluster_threads > 0, "[VALIDATE CONFIG] cluster_threads must be > 0");
+        assert!(tc.rtc_interval > 0, "[VALIDATE CONFIG] rtc_interval must be > 0");
+        assert!(tc.rtc_peers_timeout > 0, "[VALIDATE CONFIG] rtc_peers_timeout must be > 0");
+        println!("[VALIDATE] request_interval: {}s (min: {}s)", tc.request_interval, tc.request_interval_minimum);
+        println!("[VALIDATE] peers_timeout: {}s, cleanup_interval: {}s, cleanup_threads: {}", tc.peers_timeout, tc.peers_cleanup_interval, tc.peers_cleanup_threads);
+        println!("[VALIDATE] rtc_interval: {}s, rtc_peers_timeout: {}s", tc.rtc_interval, tc.rtc_peers_timeout);
+    }
+
+    pub fn validate_sentry(config: &Configuration) {
+        let sc = &config.sentry_config;
+        if sc.enabled {
+            assert!(!sc.dsn.is_empty(), "[VALIDATE CONFIG] sentry.enabled=true but sentry.dsn is not set");
+            println!("[VALIDATE] Sentry enabled: dsn configured, sample_rate={}, traces_sample_rate={}", sc.sample_rate, sc.traces_sample_rate);
+        } else {
+            println!("[VALIDATE] Sentry: disabled");
+        }
     }
 
     pub fn validate_cache(config: &Configuration) {
@@ -756,6 +818,22 @@ impl Configuration {
             }
         } else {
             println!("[VALIDATE] Cache: not configured");
+        }
+    }
+
+    pub fn validate_compression(config: &Configuration) {
+        let tc = &config.tracker_config;
+        if tc.rtc_compression_enabled {
+            println!("[VALIDATE] RTC compression enabled: algorithm={:?}, level={}", tc.rtc_compression_algorithm, tc.rtc_compression_level);
+            if let CompressionAlgorithm::Zstd = tc.rtc_compression_algorithm {
+                assert!(
+                    tc.rtc_compression_level >= 1 && tc.rtc_compression_level <= 22,
+                    "[VALIDATE CONFIG] rtc_compression_level must be between 1 and 22 for zstd (got {})",
+                    tc.rtc_compression_level
+                );
+            }
+        } else {
+            println!("[VALIDATE] RTC compression: disabled");
         }
     }
 

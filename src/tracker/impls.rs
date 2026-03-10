@@ -1,4 +1,5 @@
 pub mod info_hash;
+pub mod rtc_data;
 pub mod peer_id;
 pub mod torrent_entry;
 pub mod torrent_peer;

@@ -385,11 +385,11 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             let rtc_peers_list_mut = rtc_peers_list.list_mut().unwrap();
             for (peer_id, peer) in &torrent_entry.rtc_seeds {
                 if *peer_id == announce_unwrapped.peer_id { continue; }
-                if let Some(ref offer) = peer.rtc_sdp_offer
+                if let Some(offer) = peer.rtc_sdp_offer()
                     && !offer.is_empty() {
                     rtc_peers_list_mut.push(ben_map! {
                         "peer_id" => ben_bytes!(peer_id.0.to_vec()),
-                        "sdp_offer" => ben_bytes!(offer.as_bytes().to_vec())
+                        "sdp_offer" => ben_bytes!(offer.into_bytes())
                     });
                 }
             }

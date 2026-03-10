@@ -1,5 +1,8 @@
+use crate::common::structs::compressed_bytes::COMPRESSION;
+use crate::common::structs::compression_state::CompressionState;
 use crate::common::structs::custom_error::CustomError;
 use crate::common::types::QueryValues;
+use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 use crate::config::structs::configuration::Configuration;
 use crate::security::security::MAX_PERCENT_DECODED_SIZE;
 use async_std::future;
@@ -204,4 +207,8 @@ pub fn hex_char_to_nibble(c: u8) -> u8 {
         b'A'..=b'F' => c - b'A' + 10,
         _ => 0xFF,
     }
+}
+
+pub fn init_compression(enabled: bool, algorithm: CompressionAlgorithm, level: u32) {
+    let _ = COMPRESSION.set(CompressionState { enabled, algorithm, level });
 }
