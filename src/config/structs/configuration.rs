@@ -29,11 +29,17 @@ pub struct Configuration {
     pub log_console_interval: u64,
     /// Core tracker behaviour (announce intervals, peer timeouts, cluster, …).
     pub tracker_config: TrackerConfig,
-    /// Sentry error-tracking integration settings.
+    /// Sentry error-tracking integration settings.  The entire section is
+    /// optional — omit `[sentry_config]` from `config.toml` to keep Sentry
+    /// disabled with all other fields at their defaults.
+    #[serde(default)]
     pub sentry_config: SentryConfig,
     /// Database connection and persistence settings.
     pub database: DatabaseConfig,
-    /// Column/table name overrides for the database schema.
+    /// Column/table name overrides for the database schema.  The entire
+    /// section (and each of its five sub-sections) is optional — omit any or
+    /// all of them to use the built-in default table and column names.
+    #[serde(default)]
     pub database_structure: DatabaseStructureConfig,
     /// Optional Redis or Memcache peer-data cache.  Omit section to disable.
     #[serde(default)]

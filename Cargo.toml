@@ -5,7 +5,7 @@ resolver = "3"
 
 [package]
 name = "torrust-actix"
-version = "4.2.1"
+version = "4.2.2"
 edition = "2024"
 license = "MIT"
 authors = [
@@ -98,8 +98,8 @@ harness = false
 name = "Torrust Actix"
 identifier = "com.power2all.torrust-actix"
 icon = ["icon.ico"]
-version = "4.2.1"
-copyright = "Copyright (c) 2025 Jasper Lingers, Mick van Dijke"
+version = "4.2.2"
+copyright = "Copyright (c) 2024-2026 Power2All"
 category = "Public Utility"
 short_description = "BitTorrent Tracker"
 long_description = "A rich, fast and efficient Bittorrent Tracker."

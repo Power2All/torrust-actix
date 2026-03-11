@@ -678,7 +678,7 @@ impl Configuration {
                     return Err(CustomError::new("will not create automatically config.toml file"));
                 }
                 eprintln!("Creating config file..");
-                let config_toml = toml::to_string(&config).unwrap();
+                let config_toml = Self::generate_annotated_config(&config);
                 let save_file = Configuration::save_file("config.toml", config_toml);
                 return match save_file {
                     Ok(()) => {
@@ -889,5 +889,114 @@ impl Configuration {
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();
         assert!(regex_check.is_match(value.as_str()), "[VALIDATE CONFIG] Error checking {name} [:] Name: \"{value}\" [:] Regex: \"{regex_check}\"");
+    }
+
+    /// Generate a `config.toml` string with `# Optional:` remarks injected
+    /// above every key that may be omitted from the file.  Called by
+    /// `--create-config` so new users know which fields are required.
+    pub fn generate_annotated_config(config: &Configuration) -> String {
+        let raw = toml::to_string(config).unwrap();
+        Self::annotate_config_toml(&raw)
+    }
+
+    fn annotate_config_toml(toml: &str) -> String {
+        type Remarks<'a> = std::collections::HashMap<(&'a str, &'a str), &'a str>;
+        let mut remarks: Remarks = Remarks::new();
+        remarks.insert(("tracker_config", "whitelist_enabled"), "# Optional: defaults to false -- enable whitelist-only tracking");
+        remarks.insert(("tracker_config", "blacklist_enabled"), "# Optional: defaults to false -- enable blacklist filtering");
+        remarks.insert(("tracker_config", "keys_enabled"), "# Optional: defaults to false -- require announce keys");
+        remarks.insert(("tracker_config", "keys_cleanup_interval"), "# Optional: defaults to 60 -- expired-key cleanup interval (seconds)");
+        remarks.insert(("tracker_config", "users_enabled"), "# Optional: defaults to false -- enable per-user statistics");
+        remarks.insert(("tracker_config", "swagger"), "# Optional: defaults to false -- expose Swagger UI at <api>/swagger-ui/");
+        remarks.insert(("tracker_config", "prometheus_id"), "# Optional: defaults to \"torrust_actix\" -- Prometheus metric label");
+        remarks.insert(("tracker_config", "cluster"), "# Optional: defaults to \"standalone\" -- cluster mode: standalone | master | slave");
+        remarks.insert(("tracker_config", "cluster_encoding"), "# Optional: defaults to \"binary\" -- cluster wire format: binary | json | msgpack");
+        remarks.insert(("tracker_config", "cluster_token"), "# Optional: defaults to \"\" -- required for master/slave modes");
+        remarks.insert(("tracker_config", "cluster_bind_address"), "# Optional: defaults to \"0.0.0.0:8888\" -- required for master mode");
+        remarks.insert(("tracker_config", "cluster_master_address"), "# Optional: defaults to \"\" -- required for slave mode");
+        remarks.insert(("tracker_config", "cluster_keep_alive"), "# Optional: defaults to 60 -- WebSocket keep-alive interval (seconds)");
+        remarks.insert(("tracker_config", "cluster_request_timeout"), "# Optional: defaults to 15 -- cluster request timeout (seconds)");
+        remarks.insert(("tracker_config", "cluster_disconnect_timeout"), "# Optional: defaults to 15 -- cluster disconnect timeout (seconds)");
+        remarks.insert(("tracker_config", "cluster_reconnect_interval"), "# Optional: defaults to 5 -- slave reconnect interval (seconds)");
+        remarks.insert(("tracker_config", "cluster_max_connections"), "# Optional: defaults to 25000 -- max simultaneous cluster connections");
+        remarks.insert(("tracker_config", "cluster_threads"), "# Optional: defaults to CPU core count -- cluster I/O worker threads");
+        remarks.insert(("tracker_config", "cluster_ssl"), "# Optional: defaults to false -- enable TLS for cluster WebSocket");
+        remarks.insert(("tracker_config", "cluster_ssl_key"), "# Optional: defaults to \"\" -- required when cluster_ssl = true");
+        remarks.insert(("tracker_config", "cluster_ssl_cert"), "# Optional: defaults to \"\" -- required when cluster_ssl = true");
+        remarks.insert(("tracker_config", "cluster_tls_connection_rate"), "# Optional: defaults to 256 -- max new TLS cluster connections per second");
+        remarks.insert(("tracker_config", "rtc_interval"), "# Optional: defaults to 30 -- RtcTorrent signalling poll interval (seconds)");
+        remarks.insert(("tracker_config", "rtc_peers_timeout"), "# Optional: defaults to 120 -- RtcTorrent peer inactivity timeout (seconds)");
+        remarks.insert(("tracker_config", "rtc_compression_enabled"), "# Optional: defaults to true -- compress RTC SDP strings in memory");
+        remarks.insert(("tracker_config", "rtc_compression_algorithm"), "# Optional: defaults to \"lz4\" -- RTC compression algorithm: lz4 | zstd");
+        remarks.insert(("tracker_config", "rtc_compression_level"), "# Optional: defaults to 1 -- compression level (Zstd: 1-22; LZ4: ignored)");
+        remarks.insert(("sentry_config", "enabled"), "# Optional: defaults to false -- enable Sentry error tracking");
+        remarks.insert(("sentry_config", "dsn"), "# Optional: required when enabled = true");
+        remarks.insert(("sentry_config", "debug"), "# Optional: defaults to false");
+        remarks.insert(("sentry_config", "sample_rate"), "# Optional: defaults to 1.0");
+        remarks.insert(("sentry_config", "max_breadcrumbs"), "# Optional: defaults to 100");
+        remarks.insert(("sentry_config", "attach_stacktrace"), "# Optional: defaults to true");
+        remarks.insert(("sentry_config", "send_default_pii"), "# Optional: defaults to false");
+        remarks.insert(("sentry_config", "traces_sample_rate"), "# Optional: defaults to 1.0");
+        remarks.insert(("database_structure.torrents", "table_name"), "# Optional: defaults to \"torrents\"");
+        remarks.insert(("database_structure.torrents", "column_infohash"), "# Optional: defaults to \"infohash\"");
+        remarks.insert(("database_structure.torrents", "bin_type_infohash"), "# Optional: defaults to true");
+        remarks.insert(("database_structure.torrents", "column_seeds"), "# Optional: defaults to \"seeds\"");
+        remarks.insert(("database_structure.torrents", "column_peers"), "# Optional: defaults to \"peers\"");
+        remarks.insert(("database_structure.torrents", "column_completed"), "# Optional: defaults to \"completed\"");
+        remarks.insert(("database_structure.whitelist", "table_name"), "# Optional: defaults to \"whitelist\"");
+        remarks.insert(("database_structure.whitelist", "column_infohash"), "# Optional: defaults to \"infohash\"");
+        remarks.insert(("database_structure.whitelist", "bin_type_infohash"), "# Optional: defaults to true");
+        remarks.insert(("database_structure.blacklist", "table_name"), "# Optional: defaults to \"blacklist\"");
+        remarks.insert(("database_structure.blacklist", "column_infohash"), "# Optional: defaults to \"infohash\"");
+        remarks.insert(("database_structure.blacklist", "bin_type_infohash"), "# Optional: defaults to true");
+        remarks.insert(("database_structure.keys", "table_name"), "# Optional: defaults to \"keys\"");
+        remarks.insert(("database_structure.keys", "column_hash"), "# Optional: defaults to \"hash\"");
+        remarks.insert(("database_structure.keys", "bin_type_hash"), "# Optional: defaults to true");
+        remarks.insert(("database_structure.keys", "column_timeout"), "# Optional: defaults to \"timeout\"");
+        remarks.insert(("database_structure.users", "table_name"), "# Optional: defaults to \"users\"");
+        remarks.insert(("database_structure.users", "id_uuid"), "# Optional: defaults to true");
+        remarks.insert(("database_structure.users", "column_uuid"), "# Optional: defaults to \"uuid\"");
+        remarks.insert(("database_structure.users", "column_id"), "# Optional: defaults to \"id\"");
+        remarks.insert(("database_structure.users", "column_key"), "# Optional: defaults to \"key\"");
+        remarks.insert(("database_structure.users", "bin_type_key"), "# Optional: defaults to true");
+        remarks.insert(("database_structure.users", "column_uploaded"), "# Optional: defaults to \"uploaded\"");
+        remarks.insert(("database_structure.users", "column_downloaded"), "# Optional: defaults to \"downloaded\"");
+        remarks.insert(("database_structure.users", "column_completed"), "# Optional: defaults to \"completed\"");
+        remarks.insert(("database_structure.users", "column_updated"), "# Optional: defaults to \"updated\"");
+        remarks.insert(("database_structure.users", "column_active"), "# Optional: defaults to \"active\"");
+        let mut section_remarks: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+        section_remarks.insert("sentry_config", "# Optional section: the entire [sentry_config] block can be omitted (defaults to disabled)");
+        section_remarks.insert("database_structure.torrents", "# Optional section: omit to use default table/column names for torrents");
+        section_remarks.insert("database_structure.whitelist", "# Optional section: omit to use default table/column names for whitelist");
+        section_remarks.insert("database_structure.blacklist", "# Optional section: omit to use default table/column names for blacklist");
+        section_remarks.insert("database_structure.keys", "# Optional section: omit to use default table/column names for keys");
+        section_remarks.insert("database_structure.users", "# Optional section: omit to use default table/column names for users");
+        let mut result = String::with_capacity(toml.len() + 4096);
+        let mut current_section = String::new();
+        for line in toml.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') && !trimmed.starts_with("[[") {
+                let inner = trimmed.trim_start_matches('[').trim_end_matches(']');
+                current_section = inner.to_string();
+                if let Some(remark) = section_remarks.get(inner) {
+                    result.push_str(remark);
+                    result.push('\n');
+                }
+                result.push_str(line);
+                result.push('\n');
+                continue;
+            }
+            if let Some(eq_pos) = line.find('=') {
+                let key = line[..eq_pos].trim();
+                if !key.is_empty() && !key.starts_with('#')
+                    && let Some(remark) = remarks.get(&(current_section.as_str(), key)) {
+                    result.push_str(remark);
+                    result.push('\n');
+                }
+            }
+            result.push_str(line);
+            result.push('\n');
+        }
+        result
     }
 }

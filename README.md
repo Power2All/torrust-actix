@@ -438,6 +438,16 @@ npm run serve    # serves demo at http://localhost:8080/demo/
 
 ### ChangeLog
 
+#### v4.2.2
+* Fixing versioning, added back healthcheck for Docker and fixed some other small bugs
+* Added `///` / `//!` doc comments throughout the codebase for docs.rs / crates.io publishing
+* Made a large set of `[tracker_config]`, `[sentry_config]`, and `[database_structure.*]` keys optional in `config.toml` — sensible defaults are applied automatically when the keys are absent
+  * Optional tracker fields: `whitelist_enabled`, `blacklist_enabled`, `keys_enabled`, `keys_cleanup_interval`, `users_enabled`, `swagger`, `prometheus_id`, all `cluster_*` fields, and all `rtc_*` fields
+  * The entire `[sentry_config]` section can now be omitted (defaults to disabled)
+  * All `[database_structure.*]` sub-sections can be omitted (default table/column names are used)
+* `--create-config` now annotates every optional key with an inline `# Optional: defaults to …` comment so new users can see at a glance what can be left out
+* Refactored `impl RtcData` out of the struct file into `src/tracker/impls/rtc_data.rs`, consistent with the rest of the project structure
+
 #### v4.2.1
 * Adding LZ4/ZSTD compression for memory objects for the RtcTorrent peer data, enabled by default, disablable through config
 * Memory optimization for the peer data

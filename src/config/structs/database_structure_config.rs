@@ -8,11 +8,16 @@ use serde::{
     Serialize
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DatabaseStructureConfig {
+    #[serde(default)]
     pub torrents: DatabaseStructureConfigTorrents,
+    #[serde(default)]
     pub whitelist: DatabaseStructureConfigWhitelist,
+    #[serde(default)]
     pub blacklist: DatabaseStructureConfigBlacklist,
+    #[serde(default)]
     pub keys: DatabaseStructureConfigKeys,
+    #[serde(default)]
     pub users: DatabaseStructureConfigUsers
 }
