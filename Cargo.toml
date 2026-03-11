@@ -5,7 +5,7 @@ resolver = "3"
 
 [package]
 name = "torrust-actix"
-version = "4.2.1"
+version = "4.2.2"
 edition = "2024"
 license = "MIT"
 authors = [
@@ -54,8 +54,8 @@ rcgen = "^0.14"
 regex = "^1.12"
 rustls = { version = "^0.23", default-features = false, features = ["std", "ring"] }
 rustls-pemfile = "^2.2"
-sentry = { version = "^0.46", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
-sentry-actix = "^0.46"
+sentry = { version = "^0.47", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
+sentry-actix = "^0.47"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = { version = "^1.0", features = ["preserve_order"] }
 serde_millis = "^0.1"
@@ -98,8 +98,8 @@ harness = false
 name = "Torrust Actix"
 identifier = "com.power2all.torrust-actix"
 icon = ["icon.ico"]
-version = "4.2.1"
-copyright = "Copyright (c) 2025 Jasper Lingers, Mick van Dijke"
+version = "4.2.2"
+copyright = "Copyright (c) 2024-2026 Power2All"
 category = "Public Utility"
 short_description = "BitTorrent Tracker"
 long_description = "A rich, fast and efficient Bittorrent Tracker."
