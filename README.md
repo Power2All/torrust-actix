@@ -438,6 +438,10 @@ npm run serve    # serves demo at http://localhost:8080/demo/
 
 ### ChangeLog
 
+#### v4.2.3
+* Changed some informative data
+* Bug-fix needed for the peer/torrent cleanup thread
+
 #### v4.2.2
 * Fixing versioning, added back healthcheck for Docker and fixed some other small bugs
 * Added `///` / `//!` doc comments throughout the codebase for docs.rs / crates.io publishing

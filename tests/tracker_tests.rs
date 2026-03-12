@@ -1,10 +1,13 @@
 mod common;
 use std::net::{
     IpAddr,
-    Ipv4Addr
+    Ipv4Addr,
+    Ipv6Addr,
 };
+use std::time::Duration;
 use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
 use torrust_actix::tracker::enums::torrent_peers_type::TorrentPeersType;
+use torrust_actix::tracker::structs::torrent_sharding::TorrentSharding;
 
 #[tokio::test]
 async fn test_add_peer_to_new_torrent() {
@@ -317,4 +320,135 @@ async fn test_rtc_store_answer_for_nonexistent_peer_returns_false() {
         "v=0\r\ns=answer\r\n".to_string(),
     );
     assert!(!stored, "store_rtc_answer should fail when seeder does not exist");
+}
+
+// --- Peer reaper tests ---
+
+const TIMEOUT: Duration = Duration::from_secs(300);
+const AGED: Duration = Duration::from_secs(600); // older than TIMEOUT → should be reaped
+
+#[tokio::test]
+async fn test_reaper_removes_expired_ipv4_peer() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_aged_peer(peer_id, IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 6881, AGED), false);
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let entry = tracker.get_torrent(info_hash);
+    assert!(entry.is_none(), "Torrent should be gone after all IPv4 peers expire (non-persistent)");
+}
+
+#[tokio::test]
+async fn test_reaper_removes_expired_ipv6_peer() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_aged_peer(peer_id, IpAddr::V6(Ipv6Addr::new(0x20, 1, 0, 0, 0, 0, 0, 1)), 6881, AGED), false);
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let entry = tracker.get_torrent(info_hash);
+    assert!(entry.is_none(), "Torrent should be gone after all IPv6 peers expire (non-persistent)");
+}
+
+#[tokio::test]
+async fn test_reaper_removes_expired_ipv4_seed() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_aged_seed(peer_id, IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 6881, AGED), false);
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let entry = tracker.get_torrent(info_hash);
+    assert!(entry.is_none(), "Torrent should be gone after all IPv4 seeds expire (non-persistent)");
+}
+
+#[tokio::test]
+async fn test_reaper_removes_expired_ipv6_seed() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_aged_seed(peer_id, IpAddr::V6(Ipv6Addr::new(0x20, 1, 0, 0, 0, 0, 0, 1)), 6881, AGED), false);
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let entry = tracker.get_torrent(info_hash);
+    assert!(entry.is_none(), "Torrent should be gone after all IPv6 seeds expire (non-persistent)");
+}
+
+#[tokio::test]
+async fn test_reaper_stats_decremented_for_ipv4_peer() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_aged_peer(peer_id, IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 6881, AGED), false);
+    let before = tracker.get_stats();
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let after = tracker.get_stats();
+    assert_eq!(after.peers, before.peers - 1, "Peers stat should decrement by 1 after IPv4 peer reap");
+    assert_eq!(after.torrents, before.torrents - 1, "Torrents stat should decrement after torrent removed");
+}
+
+#[tokio::test]
+async fn test_reaper_stats_decremented_for_ipv6_peer() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_aged_peer(peer_id, IpAddr::V6(Ipv6Addr::new(0x20, 1, 0, 0, 0, 0, 0, 1)), 6881, AGED), false);
+    let before = tracker.get_stats();
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let after = tracker.get_stats();
+    assert_eq!(after.peers, before.peers - 1, "Peers stat should decrement by 1 after IPv6 peer reap");
+    assert_eq!(after.torrents, before.torrents - 1, "Torrents stat should decrement after torrent removed");
+}
+
+#[tokio::test]
+async fn test_reaper_stats_decremented_for_ipv6_seed() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_aged_seed(peer_id, IpAddr::V6(Ipv6Addr::new(0x20, 1, 0, 0, 0, 0, 0, 1)), 6881, AGED), false);
+    let before = tracker.get_stats();
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let after = tracker.get_stats();
+    assert_eq!(after.seeds, before.seeds - 1, "Seeds stat should decrement by 1 after IPv6 seed reap");
+    assert_eq!(after.torrents, before.torrents - 1, "Torrents stat should decrement after torrent removed");
+}
+
+#[tokio::test]
+async fn test_reaper_keeps_fresh_peers() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    // Fresh peer — not aged, should survive the reap
+    let fresh = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 6881);
+    tracker.add_torrent_peer(info_hash, peer_id, fresh, false);
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let entry = tracker.get_torrent(info_hash);
+    assert!(entry.is_some(), "Torrent should still exist when peer is still fresh");
+    assert_eq!(entry.unwrap().peers.len(), 1, "Fresh IPv4 peer should not be reaped");
+}
+
+#[tokio::test]
+async fn test_reaper_only_removes_expired_peers_mixed() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let aged_id = common::random_peer_id();
+    let fresh_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, aged_id,  common::create_aged_peer(aged_id,  IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 6881, AGED), false);
+    tracker.add_torrent_peer(info_hash, fresh_id, common::create_test_peer(fresh_id, IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8)), 6882), false);
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
+    let entry = tracker.get_torrent(info_hash).expect("Torrent should still exist (has a fresh peer)");
+    assert_eq!(entry.peers.len(), 1, "Only the fresh peer should remain");
+    assert!(!entry.peers.contains_key(&aged_id), "Aged peer should have been removed");
+    assert!(entry.peers.contains_key(&fresh_id), "Fresh peer should still be present");
+}
+
+#[tokio::test]
+async fn test_reaper_persistent_clears_maps_but_keeps_torrent() {
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_aged_peer(peer_id, IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 6881, AGED), false);
+    // Use persistent=true so the torrent entry itself is retained even when empty
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, true).await;
+    let entry = tracker.get_torrent(info_hash);
+    assert!(entry.is_some(), "Torrent entry should be kept in persistent mode");
+    let entry = entry.unwrap();
+    assert!(entry.peers.is_empty(), "Expired peers should be cleared even in persistent mode");
 }
