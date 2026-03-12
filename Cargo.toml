@@ -5,14 +5,17 @@ resolver = "3"
 
 [package]
 name = "torrust-actix"
-version = "4.2.2"
+version = "4.2.3"
 edition = "2024"
 license = "MIT"
-authors = [
-    "Jasper Lingers <info@power2all.com>",
-    "Mick van Dijke <mick@dutchbits.nl>"
-]
+authors = ["Power2All <info@power2all.com>"]
 description = "A rich, fast and efficient Bittorrent Tracker."
+homepage = "https://www.torrust-actix.com"
+repository = "https://github.com/Power2All/torrust-actix"
+documentation = "https://docs.rs/torrust-actix"
+readme = "README.md"
+keywords = ["bittorrent", "tracker", "actix", "rtctorrent", "webrtc"]
+categories = ["network-programming", "web-programming::http-server"]
 
 [profile.release]
 opt-level = 3
@@ -98,7 +101,7 @@ harness = false
 name = "Torrust Actix"
 identifier = "com.power2all.torrust-actix"
 icon = ["icon.ico"]
-version = "4.2.2"
+version = "4.2.3"
 copyright = "Copyright (c) 2024-2026 Power2All"
 category = "Public Utility"
 short_description = "BitTorrent Tracker"

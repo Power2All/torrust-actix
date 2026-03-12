@@ -101,7 +101,7 @@ impl TorrentSharding {
             let rtc_cutoff = now.checked_sub(rtc_peer_timeout).unwrap();
             let mut expired_full: Vec<InfoHash> = Vec::new();
             #[allow(clippy::type_complexity)]
-            let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
+            let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
             {
                 let shard_read = shard_arc.read();
                 for (info_hash, torrent_entry) in shard_read.iter() {
@@ -111,7 +111,9 @@ impl TorrentSharding {
                     }
                     let mut has_expired = false;
                     let mut expired_seeds = Vec::new();
+                    let mut expired_seeds_ipv6 = Vec::new();
                     let mut expired_peers = Vec::new();
+                    let mut expired_peers_ipv6 = Vec::new();
                     let mut expired_rtc_seeds = Vec::new();
                     let mut expired_rtc_peers = Vec::new();
                     for (peer_id, torrent_peer) in &torrent_entry.seeds {
@@ -120,9 +122,21 @@ impl TorrentSharding {
                             has_expired = true;
                         }
                     }
+                    for (peer_id, torrent_peer) in &torrent_entry.seeds_ipv6 {
+                        if torrent_peer.updated < cutoff {
+                            expired_seeds_ipv6.push(*peer_id);
+                            has_expired = true;
+                        }
+                    }
                     for (peer_id, torrent_peer) in &torrent_entry.peers {
                         if torrent_peer.updated < cutoff {
                             expired_peers.push(*peer_id);
+                            has_expired = true;
+                        }
+                    }
+                    for (peer_id, torrent_peer) in &torrent_entry.peers_ipv6 {
+                        if torrent_peer.updated < cutoff {
+                            expired_peers_ipv6.push(*peer_id);
                             has_expired = true;
                         }
                     }
@@ -139,13 +153,13 @@ impl TorrentSharding {
                         }
                     }
                     if has_expired {
-                        expired_partial.push((*info_hash, expired_seeds, expired_peers, expired_rtc_seeds, expired_rtc_peers));
+                        expired_partial.push((*info_hash, expired_seeds, expired_seeds_ipv6, expired_peers, expired_peers_ipv6, expired_rtc_seeds, expired_rtc_peers));
                     }
                 }
             }
             if !expired_partial.is_empty() || !expired_full.is_empty() {
                 let mut shard_write = shard_arc.write();
-                for (info_hash, expired_seeds, expired_peers, expired_rtc_seeds, expired_rtc_peers) in &expired_partial {
+                for (info_hash, expired_seeds, expired_seeds_ipv6, expired_peers, expired_peers_ipv6, expired_rtc_seeds, expired_rtc_peers) in &expired_partial {
                     if let Entry::Occupied(mut entry) = shard_write.entry(*info_hash) {
                         let torrent_entry = entry.get_mut();
                         for peer_id in expired_seeds {
@@ -153,8 +167,18 @@ impl TorrentSharding {
                                 seeds_removed += 1;
                             }
                         }
+                        for peer_id in expired_seeds_ipv6 {
+                            if torrent_entry.seeds_ipv6.remove(peer_id).is_some() {
+                                seeds_removed += 1;
+                            }
+                        }
                         for peer_id in expired_peers {
                             if torrent_entry.peers.remove(peer_id).is_some() {
+                                peers_removed += 1;
+                            }
+                        }
+                        for peer_id in expired_peers_ipv6 {
+                            if torrent_entry.peers_ipv6.remove(peer_id).is_some() {
                                 peers_removed += 1;
                             }
                         }
@@ -170,7 +194,9 @@ impl TorrentSharding {
                         }
                         if !persistent
                             && torrent_entry.seeds.is_empty()
+                            && torrent_entry.seeds_ipv6.is_empty()
                             && torrent_entry.peers.is_empty()
+                            && torrent_entry.peers_ipv6.is_empty()
                             && torrent_entry.rtc_seeds.is_empty()
                             && torrent_entry.rtc_peers.is_empty()
                         {
@@ -185,7 +211,9 @@ impl TorrentSharding {
                         if entry.get().updated >= cutoff { continue; }
                         let torrent_entry = entry.get_mut();
                         let seeds_len = torrent_entry.seeds.len() as u64;
+                        let seeds_ipv6_len = torrent_entry.seeds_ipv6.len() as u64;
                         let peers_len = torrent_entry.peers.len() as u64;
+                        let peers_ipv6_len = torrent_entry.peers_ipv6.len() as u64;
                         let rtc_seeds_len = torrent_entry.rtc_seeds.len() as u64;
                         let rtc_peers_len = torrent_entry.rtc_peers.len() as u64;
                         if persistent {
@@ -193,9 +221,17 @@ impl TorrentSharding {
                                 torrent_entry.seeds.clear();
                                 seeds_removed += seeds_len;
                             }
+                            if seeds_ipv6_len > 0 {
+                                torrent_entry.seeds_ipv6.clear();
+                                seeds_removed += seeds_ipv6_len;
+                            }
                             if peers_len > 0 {
                                 torrent_entry.peers.clear();
                                 peers_removed += peers_len;
+                            }
+                            if peers_ipv6_len > 0 {
+                                torrent_entry.peers_ipv6.clear();
+                                peers_removed += peers_ipv6_len;
                             }
                             if rtc_seeds_len > 0 {
                                 torrent_entry.rtc_seeds.clear();
@@ -208,8 +244,8 @@ impl TorrentSharding {
                         } else {
                             entry.remove();
                             torrents_removed += 1;
-                            seeds_removed += seeds_len + rtc_seeds_len;
-                            peers_removed += peers_len + rtc_peers_len;
+                            seeds_removed += seeds_len + seeds_ipv6_len + rtc_seeds_len;
+                            peers_removed += peers_len + peers_ipv6_len + rtc_peers_len;
                         }
                     }
                 }
@@ -243,7 +279,12 @@ impl TorrentSharding {
             .and_then(|s| {
                 let shard = s.read();
                 shard.get(&info_hash).map(|entry| {
-                    entry.seeds.contains_key(&peer_id) || entry.peers.contains_key(&peer_id)
+                    entry.seeds.contains_key(&peer_id)
+                        || entry.seeds_ipv6.contains_key(&peer_id)
+                        || entry.peers.contains_key(&peer_id)
+                        || entry.peers_ipv6.contains_key(&peer_id)
+                        || entry.rtc_seeds.contains_key(&peer_id)
+                        || entry.rtc_peers.contains_key(&peer_id)
                 })
             })
             .unwrap_or(false)
@@ -306,7 +347,14 @@ impl TorrentSharding {
                 for &idx in indices {
                     let (info_hash, peer_id) = queries[idx];
                     results[idx] = shard.get(&info_hash)
-                        .is_some_and(|entry| entry.seeds.contains_key(&peer_id) || entry.peers.contains_key(&peer_id));
+                        .is_some_and(|entry| {
+                            entry.seeds.contains_key(&peer_id)
+                                || entry.seeds_ipv6.contains_key(&peer_id)
+                                || entry.peers.contains_key(&peer_id)
+                                || entry.peers_ipv6.contains_key(&peer_id)
+                                || entry.rtc_seeds.contains_key(&peer_id)
+                                || entry.rtc_peers.contains_key(&peer_id)
+                        });
                 }
             }
         }
