@@ -127,6 +127,32 @@ pub fn create_rtc_peer(
     }
 }
 
+/// Create a peer whose `updated` timestamp is `age` in the past, so cleanup will treat it as timed-out.
+pub fn create_aged_peer(
+    peer_id: torrust_actix::tracker::structs::peer_id::PeerId,
+    ip: std::net::IpAddr,
+    port: u16,
+    age: std::time::Duration,
+) -> torrust_actix::tracker::structs::torrent_peer::TorrentPeer {
+    let mut peer = create_test_peer(peer_id, ip, port);
+    peer.updated = std::time::Instant::now() - age;
+    peer
+}
+
+/// Create a seed (left=0) whose `updated` timestamp is `age` in the past.
+pub fn create_aged_seed(
+    peer_id: torrust_actix::tracker::structs::peer_id::PeerId,
+    ip: std::net::IpAddr,
+    port: u16,
+    age: std::time::Duration,
+) -> torrust_actix::tracker::structs::torrent_peer::TorrentPeer {
+    use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
+    let mut peer = create_test_peer(peer_id, ip, port);
+    peer.left = NumberOfBytes(0);
+    peer.updated = std::time::Instant::now() - age;
+    peer
+}
+
 /// Percent-encodes raw bytes for use in query strings (e.g. info_hash, peer_id).
 pub fn percent_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("%{:02x}", b)).collect()

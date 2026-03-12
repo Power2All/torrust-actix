@@ -85,7 +85,16 @@ impl TorrentSharding {
         let _ = timer_handle.await;
         cleanup_pool.shutdown_background();
     }
-    
+
+    /// Run a single cleanup pass over all shards synchronously. Intended for tests.
+    pub async fn cleanup_once(torrent_tracker: Arc<TorrentTracker>, peer_timeout: Duration, rtc_peer_timeout: Duration, persistent: bool) {
+        let stats = Arc::new(CleanupStats::new());
+        for shard in 0u8..=255 {
+            Self::cleanup_shard_optimized(torrent_tracker.clone(), shard, peer_timeout, rtc_peer_timeout, persistent, stats.clone()).await;
+        }
+        stats.apply_to_tracker(&torrent_tracker);
+    }
+
     async fn cleanup_shard_optimized(
         torrent_tracker: Arc<TorrentTracker>,
         shard: u8,
