@@ -5,7 +5,7 @@ resolver = "3"
 
 [package]
 name = "torrust-actix"
-version = "4.2.3"
+version = "4.2.4"
 edition = "2024"
 license = "MIT"
 authors = ["Power2All <info@power2all.com>"]
@@ -101,7 +101,7 @@ harness = false
 name = "Torrust Actix"
 identifier = "com.power2all.torrust-actix"
 icon = ["icon.ico"]
-version = "4.2.3"
+version = "4.2.4"
 copyright = "Copyright (c) 2024-2026 Power2All"
 category = "Public Utility"
 short_description = "BitTorrent Tracker"
