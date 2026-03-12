@@ -7,6 +7,7 @@ use log::{
     warn
 };
 use parking_lot::deadlock;
+use rustls;
 use sentry::ClientInitGuard;
 use std::mem;
 use std::net::SocketAddr;
@@ -38,6 +39,9 @@ use torrust_actix::websocket::websocket::{
 
 fn main() -> std::io::Result<()>
 {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install ring CryptoProvider");
     let args = Cli::parse();
     let config = match Configuration::load_from_file(args.create_config) {
         Ok(config) => Arc::new(config),
