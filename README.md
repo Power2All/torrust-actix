@@ -153,6 +153,7 @@ CACHE__ENGINE <redis | memcache>
 CACHE__ADDRESS <STRING>
 CACHE__PREFIX <STRING>
 CACHE__TTL <UINT64>
+CACHE__SPLIT_PEERS <true | false>
 
 SENTRY__ENABLED <true | false>
 SENTRY__DEBUG <true | false>
@@ -437,6 +438,13 @@ npm run serve    # serves demo at http://localhost:8080/demo/
 ---
 
 ### ChangeLog
+
+#### v4.2.5
+* Fixing the caching mechanism, it wasn't working as expected
+* Added an option (it's optional, so it won't break anything) to either split up the seeds/peers list as 2 numbers or as separate numbers in BitTorrent IPv4, IPv6 and RtcTorrent.
+
+#### v4.2.4
+* Fixing a TLS/SSL bug where more than 1 provider was available, and server didn't know what to use
 
 #### v4.2.3
 * Changed some informative data

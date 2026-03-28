@@ -1,3 +1,4 @@
+use crate::cache::structs::torrent_peer_counts::TorrentPeerCounts;
 use crate::cache::traits::cache_backend::CacheBackend;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
@@ -113,16 +114,35 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, torrent_entry, updates_action))| (*info_hash, (torrent_entry.clone(), *updates_action)))
             .collect();
-        if let Ok(()) = self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await {
-            info!("[SYNC TORRENT UPDATES] Synced {mapping_len} torrents");
+        let is_persistent = torrent_tracker.config.database.persistent;
+        let db_result = if is_persistent {
+            self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await
+        } else {
+            Ok(())
+        };
+        if let Ok(()) = db_result {
+            if is_persistent {
+                info!("[SYNC TORRENT UPDATES] Synced {mapping_len} torrents");
+            }
             if let Some(ref cache) = self.cache {
                 let cache_ttl = self.config.cache.as_ref().and_then(|c| {
                     if c.ttl > 0 { Some(c.ttl) } else { None }
                 });
-                let cache_data: Vec<_> = torrents_to_save
+                let cache_data: Vec<(InfoHash, TorrentPeerCounts)> = torrents_to_save
                     .iter()
                     .filter(|(_, (_, action))| *action != UpdatesAction::Remove)
-                    .map(|(hash, (entry, _))| (*hash, entry.seeds.len() as u64, entry.peers.len() as u64))
+                    .map(|(hash, (entry, _))| {
+                        let counts = TorrentPeerCounts {
+                            bt_seeds_ipv4: entry.seeds.len() as u64,
+                            bt_seeds_ipv6: entry.seeds_ipv6.len() as u64,
+                            rtc_seeds:     entry.rtc_seeds.len() as u64,
+                            bt_peers_ipv4: entry.peers.len() as u64,
+                            bt_peers_ipv6: entry.peers_ipv6.len() as u64,
+                            rtc_peers:     entry.rtc_peers.len() as u64,
+                            completed:     entry.completed,
+                        };
+                        (*hash, counts)
+                    })
                     .collect();
                 if !cache_data.is_empty() {
                     match cache.set_torrent_peers_batch(&cache_data, cache_ttl).await {

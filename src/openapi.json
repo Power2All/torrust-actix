@@ -3,7 +3,7 @@
   "info": {
     "title": "Torrust-Actix API Debugger",
     "description": "This swagger debugger page, is used for documentation and testing of the Torrust-Actix API service. Use this page to test and see how the API responses on requests, which can be used for your website or application.",
-    "version": "v4.2.4"
+    "version": "v4.2.5"
   },
   "servers": [
     {

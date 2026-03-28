@@ -170,6 +170,8 @@ impl TorrentTracker {
             );
         }
         let is_persistent = data.config.database.persistent;
+        let cache_enabled = data.config.cache.as_ref().is_some_and(|c| c.enabled);
+        let needs_update = is_persistent || cache_enabled;
         let users_enabled = data.config.tracker_config.users_enabled;
         let result = match announce_query.event {
             AnnounceEvent::Started | AnnounceEvent::None => {
@@ -187,7 +189,7 @@ impl TorrentTracker {
                         announce_query.left == 0,
                         announce_query.peer_id
                     );
-                    if is_persistent {
+                    if needs_update {
                         let _ = data.add_torrent_update(
                             announce_query.info_hash,
                             rtc_entry.clone(),
@@ -207,7 +209,7 @@ impl TorrentTracker {
                     debug!("[PERF] Announce Started handling took: {elapsed:?}");
                     Ok((torrent_peer, rtc_entry))
                 } else {
-                    if is_persistent {
+                    if needs_update {
                         let _ = data.add_torrent_update(
                             announce_query.info_hash,
                             torrent_entry.1.clone(),
@@ -261,7 +263,7 @@ impl TorrentTracker {
                     }
                     _ => TorrentEntry::new()
                 };
-                if is_persistent {
+                if needs_update {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
                         torrent_entry.clone(),

@@ -7,7 +7,6 @@ use log::{
     warn
 };
 use parking_lot::deadlock;
-use rustls;
 use sentry::ClientInitGuard;
 use std::mem;
 use std::net::SocketAddr;
@@ -432,11 +431,12 @@ fn main() -> std::io::Result<()>
                 });
             }
 
-            if db_config.persistent {
+            let cache_enabled = config.cache.as_ref().is_some_and(|c| c.enabled);
+            if db_config.persistent || cache_enabled {
                 let updates_handler = tokio_shutdown.clone();
                 let tracker_spawn_updates = tracker.clone();
                 let update_interval = tracker_spawn_updates.config.database.persistent_interval;
-                info!("[BOOT] Starting thread for database updates with {update_interval} seconds delay...");
+                info!("[BOOT] Starting thread for database/cache updates with {update_interval} seconds delay...");
 
                 tokio_core.spawn(async move {
                     let mut interval = tokio::time::interval(Duration::from_secs(update_interval));

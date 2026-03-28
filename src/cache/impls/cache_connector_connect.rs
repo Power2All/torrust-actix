@@ -13,8 +13,8 @@ impl CacheConnector {
         let connection_url = format!("{}{}", config.engine.url_scheme(), config.address);
         let result: Result<CacheConnector, CacheError> = match config.engine {
             CacheEngine::redis => {
-                let redis_connector = CacheConnectorRedis::connect(&connection_url, &config.prefix).await?;
-                info!("[Cache] Connected to Redis at {}", config.address);
+                let redis_connector = CacheConnectorRedis::connect(&connection_url, &config.prefix, config.split_peers).await?;
+                info!("[Cache] Connected to Redis at {} (split_peers={})", config.address, config.split_peers);
                 Ok(CacheConnector {
                     redis: Some(redis_connector),
                     memcache: None,
@@ -22,8 +22,8 @@ impl CacheConnector {
                 })
             }
             CacheEngine::memcache => {
-                let memcache_connector = CacheConnectorMemcache::connect(&connection_url, &config.prefix)?;
-                info!("[Cache] Connected to Memcache at {}", config.address);
+                let memcache_connector = CacheConnectorMemcache::connect(&connection_url, &config.prefix, config.split_peers)?;
+                info!("[Cache] Connected to Memcache at {} (split_peers={})", config.address, config.split_peers);
                 Ok(CacheConnector {
                     redis: None,
                     memcache: Some(memcache_connector),

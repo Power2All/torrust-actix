@@ -4,4 +4,5 @@ use redis::aio::MultiplexedConnection;
 pub struct CacheConnectorRedis {
     pub(crate) connection: MultiplexedConnection,
     pub(crate) prefix: String,
+    pub(crate) split_peers: bool,
 }
