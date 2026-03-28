@@ -127,6 +127,23 @@ pub fn create_rtc_peer(
     }
 }
 
+/// Subtract `duration` from `instant` without panicking on underflow.
+///
+/// `Instant::now() - large_duration` panics on Windows when the system uptime
+/// is shorter than `large_duration`.  This helper halves the duration until
+/// `checked_sub` succeeds, returning the oldest reachable instant.
+fn saturating_instant_sub(instant: std::time::Instant, mut duration: std::time::Duration) -> std::time::Instant {
+    loop {
+        if let Some(t) = instant.checked_sub(duration) {
+            return t;
+        }
+        if duration.is_zero() {
+            return instant;
+        }
+        duration /= 2;
+    }
+}
+
 /// Create a peer whose `updated` timestamp is `age` in the past, so cleanup will treat it as timed-out.
 pub fn create_aged_peer(
     peer_id: torrust_actix::tracker::structs::peer_id::PeerId,
@@ -135,7 +152,7 @@ pub fn create_aged_peer(
     age: std::time::Duration,
 ) -> torrust_actix::tracker::structs::torrent_peer::TorrentPeer {
     let mut peer = create_test_peer(peer_id, ip, port);
-    peer.updated = std::time::Instant::now() - age;
+    peer.updated = saturating_instant_sub(std::time::Instant::now(), age);
     peer
 }
 
@@ -149,7 +166,7 @@ pub fn create_aged_seed(
     use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
     let mut peer = create_test_peer(peer_id, ip, port);
     peer.left = NumberOfBytes(0);
-    peer.updated = std::time::Instant::now() - age;
+    peer.updated = saturating_instant_sub(std::time::Instant::now(), age);
     peer
 }
 
