@@ -439,6 +439,9 @@ npm run serve    # serves demo at http://localhost:8080/demo/
 
 ### ChangeLog
 
+#### v4.2.6
+* Hot Fix for the redis/memcache system, instead of having a persistent connection, only connect when needed
+
 #### v4.2.5
 * Fixing the caching mechanism, it wasn't working as expected
 * Added an option (it's optional, so it won't break anything) to either split up the seeds/peers list as 2 numbers or as separate numbers in BitTorrent IPv4, IPv6 and RtcTorrent.
