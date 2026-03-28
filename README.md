@@ -437,7 +437,133 @@ npm run serve    # serves demo at http://localhost:8080/demo/
 
 ---
 
+## Caching — Redis & Memcache
+
+The tracker can optionally push live torrent peer statistics to a Redis or Memcache instance after every database sync cycle.  This lets websites and dashboards read seeder/leecher counts at high speed without querying the SQL database directly.
+
+### Configuration
+
+Add a `[cache]` section to `config.toml`:
+
+```toml
+[cache]
+enabled     = true
+engine      = "redis"       # "redis" or "memcache"
+address     = "127.0.0.1:6379"
+prefix      = "tracker:"    # key namespace prefix
+ttl         = 300           # seconds until a key expires (0 = no expiry)
+split_peers = false         # see "Key format" below
+```
+
+The tracker connects to Redis/Memcache **only when it writes** (once per `persistent_interval` seconds).  No persistent connection is kept open between sync cycles.
+
+> The cache is updated independently of `database.persistent`.  Setting `persistent = false` disables SQL writes but the cache is still updated on every sync cycle.
+
+### Key Format
+
+Every torrent is stored under the key:
+
+```
+<prefix>t:<info_hash_hex>
+```
+
+For example, with the default prefix `tracker:` and a 40-character hex info hash:
+
+```
+tracker:t:a1b2c3d4e5f6...
+```
+
+#### Aggregated mode (`split_peers = false`, default)
+
+The key is a Redis hash (or colon-delimited string in Memcache) with **three fields**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `s`   | u64  | Total seeders (BitTorrent IPv4 + IPv6 + WebRTC) |
+| `p`   | u64  | Total leechers (BitTorrent IPv4 + IPv6 + WebRTC) |
+| `c`   | u64  | Total completed downloads |
+
+**Redis — reading aggregated data:**
+```bash
+HMGET tracker:t:<info_hash_hex> s p c
+# returns: [seeds, peers, completed]
+```
+
+**Memcache — reading aggregated data:**
+```
+GET tracker:t:<info_hash_hex>
+# returns: "seeds:peers:completed"  e.g. "42:100:500"
+```
+
+#### Split mode (`split_peers = true`)
+
+Each pool and IP version is stored as a separate field, giving a full breakdown:
+
+| Field          | Type | Description |
+|----------------|------|-------------|
+| `bt_seeds_ipv4` | u64 | BitTorrent IPv4 seeders |
+| `bt_seeds_ipv6` | u64 | BitTorrent IPv6 seeders |
+| `rtc_seeds`     | u64 | WebRTC seeders |
+| `bt_peers_ipv4` | u64 | BitTorrent IPv4 leechers |
+| `bt_peers_ipv6` | u64 | BitTorrent IPv6 leechers |
+| `rtc_peers`     | u64 | WebRTC leechers |
+| `c`             | u64 | Total completed downloads |
+
+**Redis — reading split data:**
+```bash
+HGETALL tracker:t:<info_hash_hex>
+# returns all seven fields as a flat key/value list
+
+# Or fetch specific fields:
+HMGET tracker:t:<info_hash_hex> bt_seeds_ipv4 bt_seeds_ipv6 rtc_seeds bt_peers_ipv4 bt_peers_ipv6 rtc_peers c
+```
+
+**Memcache — reading split data:**
+```
+GET tracker:t:<info_hash_hex>
+# returns: "bt_seeds_ipv4:bt_seeds_ipv6:rtc_seeds:bt_peers_ipv4:bt_peers_ipv6:rtc_peers:completed"
+# e.g.  "30:5:7:80:15:5:500"
+#        bt4   bt6 rtc bt4  bt6 rtc completed
+```
+
+### PHP example (Redis, aggregated mode)
+
+```php
+$redis = new Redis();
+$redis->connect('127.0.0.1', 6379);
+
+$infoHash = bin2hex($rawInfoHashBytes); // 40-char hex
+$key      = 'tracker:t:' . $infoHash;
+
+[$seeds, $peers, $completed] = $redis->hMGet($key, ['s', 'p', 'c']);
+
+echo "Seeders: $seeds, Leechers: $peers, Completed: $completed";
+```
+
+### PHP example (Redis, split mode)
+
+```php
+$redis = new Redis();
+$redis->connect('127.0.0.1', 6379);
+
+$key  = 'tracker:t:' . $infoHash;
+$data = $redis->hGetAll($key);
+
+$totalSeeders  = $data['bt_seeds_ipv4'] + $data['bt_seeds_ipv6'] + $data['rtc_seeds'];
+$totalLeechers = $data['bt_peers_ipv4'] + $data['bt_peers_ipv6'] + $data['rtc_peers'];
+
+echo "BT IPv4 seeds: {$data['bt_seeds_ipv4']}";
+echo "BT IPv6 seeds: {$data['bt_seeds_ipv6']}";
+echo "WebRTC seeds:  {$data['rtc_seeds']}";
+```
+
+---
+
 ### ChangeLog
+
+#### v4.2.6
+* Hot Fix for the redis/memcache system, instead of having a persistent connection, only connect when needed
+* Updated the readme for some information how to use the Cache system
 
 #### v4.2.5
 * Fixing the caching mechanism, it wasn't working as expected

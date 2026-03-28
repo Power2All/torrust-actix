@@ -7,10 +7,19 @@ use async_trait::async_trait;
 use log::debug;
 use redis::AsyncCommands;
 
+impl CacheConnectorRedis {
+    async fn conn(&self) -> Result<redis::aio::MultiplexedConnection, CacheError> {
+        self.client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| CacheError::ConnectionError(format!("Redis connect failed: {e}")))
+    }
+}
+
 #[async_trait]
 impl CacheBackend for CacheConnectorRedis {
     async fn ping(&self) -> Result<(), CacheError> {
-        let mut conn = self.connection.clone();
+        let mut conn = self.conn().await?;
         redis::cmd("PING")
             .query_async::<String>(&mut conn)
             .await
@@ -24,7 +33,7 @@ impl CacheBackend for CacheConnectorRedis {
         counts: &TorrentPeerCounts,
         ttl: Option<u64>,
     ) -> Result<(), CacheError> {
-        let mut conn = self.connection.clone();
+        let mut conn = self.conn().await?;
         let key = self.torrent_key(info_hash);
         if self.split_peers {
             conn.hset_multiple::<_, _, _, ()>(&key, &[
@@ -57,7 +66,7 @@ impl CacheBackend for CacheConnectorRedis {
         &self,
         info_hash: &InfoHash,
     ) -> Result<Option<TorrentPeerCounts>, CacheError> {
-        let mut conn = self.connection.clone();
+        let mut conn = self.conn().await?;
         let key = self.torrent_key(info_hash);
         if self.split_peers {
             let (bt_s4, bt_s6, rtc_s, bt_p4, bt_p6, rtc_p, c): (
@@ -112,7 +121,7 @@ impl CacheBackend for CacheConnectorRedis {
     }
 
     async fn delete_torrent(&self, info_hash: &InfoHash) -> Result<(), CacheError> {
-        let mut conn = self.connection.clone();
+        let mut conn = self.conn().await?;
         let key = self.torrent_key(info_hash);
         conn.del::<_, ()>(&key)
             .await
@@ -129,7 +138,7 @@ impl CacheBackend for CacheConnectorRedis {
         if data.is_empty() {
             return Ok(());
         }
-        let mut conn = self.connection.clone();
+        let mut conn = self.conn().await?;
         let mut pipe = redis::pipe();
         for (info_hash, counts) in data {
             let key = self.torrent_key(info_hash);
