@@ -5,4 +5,5 @@ use std::sync::Arc;
 pub struct CacheConnectorMemcache {
     pub(crate) client: Arc<Mutex<memcache::Client>>,
     pub(crate) prefix: String,
+    pub(crate) split_peers: bool,
 }

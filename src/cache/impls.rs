@@ -1,4 +1,5 @@
 pub mod cache_connector_cache_backend;
+pub mod torrent_peer_counts;
 pub mod cache_connector_connect;
 pub mod cache_connector_memcache_cache_backend;
 pub mod cache_connector_memcache_connect;

@@ -9,6 +9,7 @@ impl Default for CacheConfig {
             address: "127.0.0.1:6379".to_string(),
             prefix: "tracker:".to_string(),
             ttl: 300,
+            split_peers: false,
         }
     }
 }

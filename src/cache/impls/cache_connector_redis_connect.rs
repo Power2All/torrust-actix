@@ -3,7 +3,7 @@ use crate::cache::structs::cache_connector_redis::CacheConnectorRedis;
 use crate::tracker::structs::info_hash::InfoHash;
 
 impl CacheConnectorRedis {
-    pub async fn connect(url: &str, prefix: &str) -> Result<Self, CacheError> {
+    pub async fn connect(url: &str, prefix: &str, split_peers: bool) -> Result<Self, CacheError> {
         let client = redis::Client::open(url)
             .map_err(|e| CacheError::ConnectionError(format!("Failed to create Redis client: {e}")))?;
         let connection = client
@@ -13,6 +13,7 @@ impl CacheConnectorRedis {
         Ok(Self {
             connection,
             prefix: prefix.to_string(),
+            split_peers,
         })
     }
 

@@ -11,4 +11,5 @@ pub struct CacheConfig {
     pub address: String,
     pub prefix: String,
     pub ttl: u64,
+    pub split_peers: bool,
 }

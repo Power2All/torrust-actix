@@ -1,6 +1,7 @@
 use crate::cache::enums::cache_engine::CacheEngine;
 use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector::CacheConnector;
+use crate::cache::structs::torrent_peer_counts::TorrentPeerCounts;
 use crate::cache::traits::cache_backend::CacheBackend;
 use crate::tracker::structs::info_hash::InfoHash;
 use async_trait::async_trait;
@@ -42,21 +43,20 @@ impl CacheBackend for CacheConnector {
     async fn set_torrent_peers(
         &self,
         info_hash: &InfoHash,
-        seeds: u64,
-        peers: u64,
+        counts: &TorrentPeerCounts,
         ttl: Option<u64>,
     ) -> Result<(), CacheError> {
         match self.engine.as_ref() {
             Some(CacheEngine::redis) => {
                 if let Some(ref redis) = self.redis {
-                    redis.set_torrent_peers(info_hash, seeds, peers, ttl).await
+                    redis.set_torrent_peers(info_hash, counts, ttl).await
                 } else {
                     Err(CacheError::ConnectionError("Redis not connected".to_string()))
                 }
             }
             Some(CacheEngine::memcache) => {
                 if let Some(ref memcache) = self.memcache {
-                    memcache.set_torrent_peers(info_hash, seeds, peers, ttl).await
+                    memcache.set_torrent_peers(info_hash, counts, ttl).await
                 } else {
                     Err(CacheError::ConnectionError("Memcache not connected".to_string()))
                 }
@@ -68,7 +68,7 @@ impl CacheBackend for CacheConnector {
     async fn get_torrent_peers(
         &self,
         info_hash: &InfoHash,
-    ) -> Result<Option<(u64, u64)>, CacheError> {
+    ) -> Result<Option<TorrentPeerCounts>, CacheError> {
         match self.engine.as_ref() {
             Some(CacheEngine::redis) => {
                 if let Some(ref redis) = self.redis {
@@ -110,7 +110,7 @@ impl CacheBackend for CacheConnector {
 
     async fn set_torrent_peers_batch(
         &self,
-        data: &[(InfoHash, u64, u64)],
+        data: &[(InfoHash, TorrentPeerCounts)],
         ttl: Option<u64>,
     ) -> Result<(), CacheError> {
         match self.engine.as_ref() {

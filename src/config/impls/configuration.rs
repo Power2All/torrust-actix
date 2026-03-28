@@ -408,6 +408,17 @@ impl Configuration {
                 });
             }
         }
+        if let Ok(value) = env::var("CACHE__SPLIT_PEERS") {
+            let split_peers = matches!(value.as_str(), "true");
+            if let Some(ref mut cache) = config.cache {
+                cache.split_peers = split_peers;
+            } else {
+                config.cache = Some(CacheConfig {
+                    split_peers,
+                    ..Default::default()
+                });
+            }
+        }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH") {
             config.database_structure.torrents.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -813,6 +824,7 @@ impl Configuration {
                 Self::validate_socket_address("cache.address", &cache.address);
                 println!("[VALIDATE] Cache prefix: {}", cache.prefix);
                 println!("[VALIDATE] Cache TTL: {} seconds", cache.ttl);
+                println!("[VALIDATE] Cache split_peers: {}", cache.split_peers);
             } else {
                 println!("[VALIDATE] Cache: disabled");
             }
