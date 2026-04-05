@@ -4575,7 +4575,7 @@ checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
 
 [[package]]
 name = "torrust-actix"
-version = "4.2.7"
+version = "4.2.8"
 dependencies = [
  "actix",
  "actix-cors",

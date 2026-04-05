@@ -566,6 +566,9 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 ### ChangeLog
 
+#### v4.2.8
+* Hotfix for the loading of data in memory, a SQL query issue
+
 #### v4.2.7
 * Added optional "persistent" override for each table
 * Did another full audit scan and fixed possible issues
