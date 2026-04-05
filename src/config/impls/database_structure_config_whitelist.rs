@@ -6,6 +6,7 @@ impl Default for DatabaseStructureConfigWhitelist {
             table_name: String::from("whitelist"),
             column_infohash: String::from("infohash"),
             bin_type_infohash: true,
+            persistent: None,
         }
     }
 }

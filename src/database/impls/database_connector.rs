@@ -1,4 +1,5 @@
 use crate::config::structs::configuration::Configuration;
+use crate::database::database::quote_identifier;
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
@@ -333,6 +334,38 @@ impl DatabaseConnector {
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
                     pgsql.save_users(tracker, users).await
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            None => Err(Error::RowNotFound)
+        }
+    }
+
+    pub async fn clear_table(&self, table_name: &str) -> Result<(), Error>
+    {
+        let query = match self.engine.as_ref() {
+            Some(engine) => format!("DELETE FROM {}", quote_identifier(*engine, table_name)),
+            None => return Err(Error::RowNotFound),
+        };
+        match self.engine.as_ref() {
+            Some(DatabaseDrivers::sqlite3) => {
+                if let Some(ref sqlite) = self.sqlite {
+                    sqlx::query(&query).execute(&sqlite.pool).await.map(|_| ())
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::mysql) => {
+                if let Some(ref mysql) = self.mysql {
+                    sqlx::query(&query).execute(&mysql.pool).await.map(|_| ())
+                } else {
+                    Err(Error::RowNotFound)
+                }
+            }
+            Some(DatabaseDrivers::pgsql) => {
+                if let Some(ref pgsql) = self.pgsql {
+                    sqlx::query(&query).execute(&pgsql.pool).await.map(|_| ())
                 } else {
                     Err(Error::RowNotFound)
                 }

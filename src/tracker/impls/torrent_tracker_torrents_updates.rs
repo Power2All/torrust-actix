@@ -114,7 +114,7 @@ impl TorrentTracker {
             .iter()
             .map(|(info_hash, (_, torrent_entry, updates_action))| (*info_hash, (torrent_entry.clone(), *updates_action)))
             .collect();
-        let is_persistent = torrent_tracker.config.database.persistent;
+        let is_persistent = torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(torrent_tracker.config.database.persistent);
         let db_result = if is_persistent {
             self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await
         } else {

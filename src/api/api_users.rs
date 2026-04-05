@@ -113,7 +113,7 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
             Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid id"})),
         }
     };
-    if data.torrent_tracker.config.database.persistent {
+    if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
     }
     if data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
@@ -169,7 +169,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
                     Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid id"})),
                 }
             };
-            if data.torrent_tracker.config.database.persistent {
+            if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
                 let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
             }
             let status = if data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
@@ -199,7 +199,7 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
         Ok(hash) => UserId(hash),
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid user_hash"})),
     };
-    if data.torrent_tracker.config.database.persistent {
+    if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let empty_user = UserEntryItem {
             key: UserId([0u8; 20]),
             user_id: None,
@@ -239,7 +239,7 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
                 Ok(hash) => UserId(hash),
                 Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid user_hash"})),
             };
-            if data.torrent_tracker.config.database.persistent {
+            if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
                 let empty_user = UserEntryItem {
                     key: UserId([0u8; 20]),
                     user_id: None,
@@ -301,4 +301,22 @@ pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>
             (StatusCode::OK, response)
         }
     }
+}
+pub async fn api_service_users_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+{
+    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
+    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if !data.torrent_tracker.config.tracker_config.users_enabled {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "users not enabled"}));
+    }
+    if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
+        let table = data.torrent_tracker.config.database_structure.users.table_name.clone();
+        if data.torrent_tracker.sqlx.clear_table(&table).await.is_err() {
+            return HttpResponse::InternalServerError().content_type(ContentType::json()).json(json!({"status": "database error"}));
+        }
+    }
+    data.torrent_tracker.clear_users();
+    data.torrent_tracker.clear_user_updates();
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
 }

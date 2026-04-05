@@ -99,23 +99,27 @@ impl Configuration {
                     bin_type_infohash: true,
                     column_seeds: String::from("seeds"),
                     column_peers: String::from("peers"),
-                    column_completed: String::from("completed")
+                    column_completed: String::from("completed"),
+                    persistent: None
                 },
                 whitelist: DatabaseStructureConfigWhitelist {
                     table_name: String::from("whitelist"),
                     column_infohash: String::from("infohash"),
                     bin_type_infohash: true,
+                    persistent: None
                 },
                 blacklist: DatabaseStructureConfigBlacklist {
                     table_name: String::from("blacklist"),
                     column_infohash: String::from("infohash"),
                     bin_type_infohash: true,
+                    persistent: None
                 },
                 keys: DatabaseStructureConfigKeys {
                     table_name: String::from("keys"),
                     column_hash: String::from("hash"),
                     bin_type_hash: true,
-                    column_timeout: String::from("timeout")
+                    column_timeout: String::from("timeout"),
+                    persistent: None
                 },
                 users: DatabaseStructureConfigUsers {
                     table_name: String::from("users"),
@@ -129,6 +133,7 @@ impl Configuration {
                     column_downloaded: String::from("downloaded"),
                     column_completed: String::from("completed"),
                     column_updated: String::from("updated"),
+                    persistent: None
                 }
             },
             http_server: vec!(
@@ -437,6 +442,9 @@ impl Configuration {
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_COMPLETED") {
             config.database_structure.torrents.column_completed = value;
         }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__PERSISTENT") {
+            config.database_structure.torrents.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
+        }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH") {
             config.database_structure.whitelist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -446,6 +454,9 @@ impl Configuration {
         if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__COLUMN_INFOHASH") {
             config.database_structure.whitelist.column_infohash = value;
         }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__PERSISTENT") {
+            config.database_structure.whitelist.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
+        }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH") {
             config.database_structure.blacklist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
         }
@@ -454,6 +465,9 @@ impl Configuration {
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__COLUMN_INFOHASH") {
             config.database_structure.blacklist.column_infohash = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__PERSISTENT") {
+            config.database_structure.blacklist.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH") {
             config.database_structure.keys.bin_type_hash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
@@ -466,6 +480,9 @@ impl Configuration {
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__COLUMN_TIMEOUT") {
             config.database_structure.keys.column_timeout = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__PERSISTENT") {
+            config.database_structure.keys.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__ID_UUID") {
             config.database_structure.users.id_uuid = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
@@ -499,6 +516,9 @@ impl Configuration {
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_UPDATED") {
             config.database_structure.users.column_updated = value;
+        }
+        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__PERSISTENT") {
+            config.database_structure.users.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
         }
         let mut api_iteration = 0;
         loop {

@@ -169,9 +169,11 @@ impl TorrentTracker {
                 sdp_offer.clone()
             );
         }
-        let is_persistent = data.config.database.persistent;
+        let is_torrents_persistent = data.config.database_structure.torrents.persistent.unwrap_or(data.config.database.persistent);
+        let is_users_persistent = data.config.database_structure.users.persistent.unwrap_or(data.config.database.persistent);
+        let is_persistent = is_torrents_persistent;
         let cache_enabled = data.config.cache.as_ref().is_some_and(|c| c.enabled);
-        let needs_update = is_persistent || cache_enabled;
+        let needs_update = is_torrents_persistent || cache_enabled;
         let users_enabled = data.config.tracker_config.users_enabled;
         let result = match announce_query.event {
             AnnounceEvent::Started | AnnounceEvent::None => {
@@ -201,7 +203,7 @@ impl TorrentTracker {
                         user.updated = now;
                         user.torrents_active.insert(announce_query.info_hash, now);
                         data.add_user(user_id, user.clone());
-                        if is_persistent {
+                        if is_users_persistent {
                             data.add_user_update(user_id, user, UpdatesAction::Add);
                         }
                     }
@@ -221,7 +223,7 @@ impl TorrentTracker {
                         user.updated = now;
                         user.torrents_active.insert(announce_query.info_hash, now);
                         data.add_user(user_id, user.clone());
-                        if is_persistent {
+                        if is_users_persistent {
                             data.add_user_update(user_id, user, UpdatesAction::Add);
                         }
                     }
@@ -255,7 +257,7 @@ impl TorrentTracker {
                             user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                             user.torrents_active.remove(&announce_query.info_hash);
                             data.add_user(user_id, user.clone());
-                            if is_persistent {
+                            if is_users_persistent {
                                 data.add_user_update(user_id, user, UpdatesAction::Add);
                             }
                         }
@@ -300,7 +302,7 @@ impl TorrentTracker {
                         user.completed += 1;
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                         data.add_user(user_id, user.clone());
-                        if is_persistent {
+                        if is_users_persistent {
                             data.add_user_update(user_id, user, UpdatesAction::Add);
                         }
                     }
@@ -319,7 +321,7 @@ impl TorrentTracker {
                         user.completed += 1;
                         user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                         data.add_user(user_id, user.clone());
-                        if is_persistent {
+                        if is_users_persistent {
                             data.add_user_update(user_id, user, UpdatesAction::Add);
                         }
                     }

@@ -7,5 +7,7 @@ use serde::{
 pub struct DatabaseStructureConfigBlacklist {
     pub table_name: String,
     pub column_infohash: String,
-    pub bin_type_infohash: bool
+    pub bin_type_infohash: bool,
+    #[serde(default)]
+    pub persistent: Option<bool>
 }

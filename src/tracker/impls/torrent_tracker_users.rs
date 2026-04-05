@@ -87,6 +87,13 @@ impl TorrentTracker {
         }
     }
 
+    pub fn clear_users(&self)
+    {
+        let mut lock = self.users.write();
+        lock.clear();
+        self.set_stats(StatsEvent::Users, 0);
+    }
+
     pub fn remove_user_active_torrent(&self, user_id: UserId, info_hash: InfoHash) -> bool
     {
         let mut lock = self.users.write();

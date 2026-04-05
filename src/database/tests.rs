@@ -53,7 +53,7 @@ mod database_tests {
             );
             assert_eq!(
                 database::upsert_conflict_clause(DatabaseDrivers::pgsql, "info_hash", columns),
-                "ON CONFLICT (info_hash) DO UPDATE SET seeds=excluded.seeds, peers=excluded.peers"
+                "ON CONFLICT (\"info_hash\") DO UPDATE SET \"seeds\"=excluded.\"seeds\", \"peers\"=excluded.\"peers\""
             );
         }
 

@@ -85,7 +85,7 @@ pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<St
         Ok(hash) => InfoHash(hash),
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
     };
-    if data.torrent_tracker.config.database.persistent {
+    if data.torrent_tracker.config.database_structure.blacklist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
     }
     if data.torrent_tracker.add_blacklist(info_hash) {
@@ -114,7 +114,7 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
             match hex2bin(info.clone()) {
                 Ok(hash) => {
                     let info_hash = InfoHash(hash);
-                    if data.torrent_tracker.config.database.persistent {
+                    if data.torrent_tracker.config.database_structure.blacklist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
                         let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Add);
                     }
                     let status = if data.torrent_tracker.add_blacklist(info_hash) {
@@ -146,7 +146,7 @@ pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<
         Ok(hash) => InfoHash(hash),
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"})),
     };
-    if data.torrent_tracker.config.database.persistent {
+    if data.torrent_tracker.config.database_structure.blacklist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
     }
     if data.torrent_tracker.remove_blacklist(info_hash) {
@@ -175,7 +175,7 @@ pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::P
             match hex2bin(info.clone()) {
                 Ok(hash) => {
                     let info_hash = InfoHash(hash);
-                    if data.torrent_tracker.config.database.persistent {
+                    if data.torrent_tracker.config.database_structure.blacklist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
                         let _ = data.torrent_tracker.add_blacklist_update(info_hash, UpdatesAction::Remove);
                     }
                     let status = if data.torrent_tracker.remove_blacklist(info_hash) {
@@ -195,4 +195,22 @@ pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::P
         "status": "ok",
         "blacklists": blacklists_output
     }))
+}
+pub async fn api_service_blacklist_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+{
+    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
+    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if !data.torrent_tracker.config.tracker_config.blacklist_enabled {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "blacklist not enabled"}));
+    }
+    if data.torrent_tracker.config.database_structure.blacklist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
+        let table = data.torrent_tracker.config.database_structure.blacklist.table_name.clone();
+        if data.torrent_tracker.sqlx.clear_table(&table).await.is_err() {
+            return HttpResponse::InternalServerError().content_type(ContentType::json()).json(json!({"status": "database error"}));
+        }
+    }
+    data.torrent_tracker.clear_blacklist();
+    data.torrent_tracker.clear_blacklist_updates();
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
 }

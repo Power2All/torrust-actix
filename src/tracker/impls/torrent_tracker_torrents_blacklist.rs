@@ -68,5 +68,6 @@ impl TorrentTracker {
     {
         let mut lock = self.torrents_blacklist.write();
         lock.clear();
+        self.set_stats(StatsEvent::Blacklist, 0);
     }
 }

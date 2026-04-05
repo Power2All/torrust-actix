@@ -15,5 +15,7 @@ pub struct DatabaseStructureConfigUsers {
     pub column_downloaded: String,
     pub column_completed: String,
     pub column_updated: String,
-    pub column_active: String
+    pub column_active: String,
+    #[serde(default)]
+    pub persistent: Option<bool>
 }

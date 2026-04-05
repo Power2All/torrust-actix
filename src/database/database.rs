@@ -33,7 +33,7 @@ pub fn format_hex_select(engine: DatabaseDrivers, column: &str, is_binary: bool)
 pub fn quote_identifier(engine: DatabaseDrivers, identifier: &str) -> String {
     match engine {
         DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{identifier}`"),
-        DatabaseDrivers::pgsql => identifier.to_string(),
+        DatabaseDrivers::pgsql => format!("\"{}\"", identifier.replace('"', "\"\"")),
     }
 }
 

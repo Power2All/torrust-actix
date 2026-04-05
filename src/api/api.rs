@@ -1,4 +1,5 @@
 use crate::api::api_blacklists::{
+    api_service_blacklist_clear,
     api_service_blacklist_delete,
     api_service_blacklist_get,
     api_service_blacklist_post,
@@ -14,6 +15,7 @@ use crate::api::api_keys::{
     api_service_key_delete,
     api_service_key_get,
     api_service_key_post,
+    api_service_keys_clear,
     api_service_keys_delete,
     api_service_keys_get,
     api_service_keys_post
@@ -34,11 +36,13 @@ use crate::api::api_users::{
     api_service_user_delete,
     api_service_user_get,
     api_service_user_post,
+    api_service_users_clear,
     api_service_users_delete,
     api_service_users_get,
     api_service_users_post
 };
 use crate::api::api_whitelists::{
+    api_service_whitelist_clear,
     api_service_whitelist_delete,
     api_service_whitelist_get,
     api_service_whitelist_post,
@@ -126,6 +130,9 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::post().to(api_service_torrents_post))
             .route(web::delete().to(api_service_torrents_delete))
         );
+        cfg.service(web::resource("api/whitelist/clear")
+            .route(web::delete().to(api_service_whitelist_clear))
+        );
         cfg.service(web::resource("api/whitelist/{info_hash}")
             .route(web::get().to(api_service_whitelist_get))
             .route(web::post().to(api_service_whitelist_post))
@@ -135,6 +142,9 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::get().to(api_service_whitelists_get))
             .route(web::post().to(api_service_whitelists_post))
             .route(web::delete().to(api_service_whitelists_delete))
+        );
+        cfg.service(web::resource("api/blacklist/clear")
+            .route(web::delete().to(api_service_blacklist_clear))
         );
         cfg.service(web::resource("api/blacklist/{info_hash}")
             .route(web::get().to(api_service_blacklist_get))
@@ -158,6 +168,9 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::post().to(api_service_keys_post))
             .route(web::delete().to(api_service_keys_delete))
         );
+        cfg.service(web::resource("api/keys/clear")
+            .route(web::delete().to(api_service_keys_clear))
+        );
         cfg.service(web::resource("api/user/{id}")
             .route(web::get().to(api_service_user_get))
             .route(web::delete().to(api_service_user_delete))
@@ -169,6 +182,9 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
             .route(web::get().to(api_service_users_get))
             .route(web::post().to(api_service_users_post))
             .route(web::delete().to(api_service_users_delete))
+        );
+        cfg.service(web::resource("api/users/clear")
+            .route(web::delete().to(api_service_users_clear))
         );
         cfg.service(web::resource("api/certificate/reload")
             .route(web::post().to(api_service_certificate_reload))
