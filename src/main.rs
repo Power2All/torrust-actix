@@ -79,27 +79,33 @@ fn main() -> std::io::Result<()>
 
             let tracker_config = tracker.config.tracker_config.clone();
             let db_config = tracker.config.database.clone();
+            let db_structure = tracker.config.database_structure.clone();
+            let torrents_persistent = db_structure.torrents.persistent.unwrap_or(db_config.persistent);
+            let whitelist_persistent = db_structure.whitelist.persistent.unwrap_or(db_config.persistent);
+            let blacklist_persistent = db_structure.blacklist.persistent.unwrap_or(db_config.persistent);
+            let keys_persistent = db_structure.keys.persistent.unwrap_or(db_config.persistent);
+            let users_persistent = db_structure.users.persistent.unwrap_or(db_config.persistent);
+            let any_persistent = torrents_persistent || whitelist_persistent || blacklist_persistent || keys_persistent || users_persistent;
 
-            if db_config.persistent {
+            if torrents_persistent {
                 tracker.load_torrents(tracker.clone()).await;
-
-                if tracker_config.whitelist_enabled {
-                    tracker.load_whitelist(tracker.clone()).await;
-                }
-                if tracker_config.blacklist_enabled {
-                    tracker.load_blacklist(tracker.clone()).await;
-                }
-                if tracker_config.keys_enabled {
-                    tracker.load_keys(tracker.clone()).await;
-                }
-                if tracker_config.users_enabled {
-                    tracker.load_users(tracker.clone()).await;
-                }
                 if db_config.update_peers && !tracker.reset_seeds_peers(tracker.clone()).await {
                     panic!("[RESET SEEDS PEERS] Unable to continue loading");
                 }
             } else {
                 tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
+            }
+            if whitelist_persistent && tracker_config.whitelist_enabled {
+                tracker.load_whitelist(tracker.clone()).await;
+            }
+            if blacklist_persistent && tracker_config.blacklist_enabled {
+                tracker.load_blacklist(tracker.clone()).await;
+            }
+            if keys_persistent && tracker_config.keys_enabled {
+                tracker.load_keys(tracker.clone()).await;
+            }
+            if users_persistent && tracker_config.users_enabled {
+                tracker.load_users(tracker.clone()).await;
             }
 
             if args.create_selfsigned { tracker.cert_gen(&args).await; }
@@ -392,7 +398,7 @@ fn main() -> std::io::Result<()>
 
             let peers_timeout = tracker_cleanup_clone.config.tracker_config.peers_timeout;
             let rtc_peers_timeout = tracker_cleanup_clone.config.tracker_config.rtc_peers_timeout;
-            let persistent = tracker_cleanup_clone.config.database.persistent;
+            let persistent = torrents_persistent;
             let torrents_sharding = tracker_cleanup_clone.torrents_sharding.clone();
 
             tokio_core.spawn(async move {
@@ -432,7 +438,7 @@ fn main() -> std::io::Result<()>
             }
 
             let cache_enabled = config.cache.as_ref().is_some_and(|c| c.enabled);
-            if db_config.persistent || cache_enabled {
+            if any_persistent || cache_enabled {
                 let updates_handler = tokio_shutdown.clone();
                 let tracker_spawn_updates = tracker.clone();
                 let update_interval = tracker_spawn_updates.config.database.persistent_interval;
@@ -458,7 +464,7 @@ fn main() -> std::io::Result<()>
                                     })
                                 ];
 
-                                if tracker_spawn_updates.config.tracker_config.whitelist_enabled {
+                                if whitelist_persistent && tracker_spawn_updates.config.tracker_config.whitelist_enabled {
                                     tasks.push(tokio::spawn({
                                         let tracker = tracker_spawn_updates.clone();
                                         async move {
@@ -467,7 +473,7 @@ fn main() -> std::io::Result<()>
                                     }));
                                 }
 
-                                if tracker_spawn_updates.config.tracker_config.blacklist_enabled {
+                                if blacklist_persistent && tracker_spawn_updates.config.tracker_config.blacklist_enabled {
                                     tasks.push(tokio::spawn({
                                         let tracker = tracker_spawn_updates.clone();
                                         async move {
@@ -476,7 +482,7 @@ fn main() -> std::io::Result<()>
                                     }));
                                 }
 
-                                if tracker_spawn_updates.config.tracker_config.keys_enabled {
+                                if keys_persistent && tracker_spawn_updates.config.tracker_config.keys_enabled {
                                     tasks.push(tokio::spawn({
                                         let tracker = tracker_spawn_updates.clone();
                                         async move {
@@ -485,7 +491,7 @@ fn main() -> std::io::Result<()>
                                     }));
                                 }
 
-                                if tracker_spawn_updates.config.tracker_config.users_enabled {
+                                if users_persistent && tracker_spawn_updates.config.tracker_config.users_enabled {
                                     tasks.push(tokio::spawn({
                                         let tracker = tracker_spawn_updates.clone();
                                         async move {
@@ -526,10 +532,10 @@ fn main() -> std::io::Result<()>
                     tokio_shutdown.handle().await;
                     task::sleep(Duration::from_secs(1)).await;
 
-                    if db_config.persistent {
-                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
-                        Configuration::save_from_config(tracker.config.clone(), "config.toml");
+                    tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
+                    Configuration::save_from_config(tracker.config.clone(), "config.toml");
 
+                    if any_persistent {
                         info!("Saving final data to database...");
 
                         let mut tasks = vec![
@@ -541,7 +547,7 @@ fn main() -> std::io::Result<()>
                             })
                         ];
 
-                        if tracker_config.whitelist_enabled {
+                        if whitelist_persistent && tracker_config.whitelist_enabled {
                             tasks.push(tokio::spawn({
                                 let tracker_clone = tracker.clone();
                                 async move {
@@ -550,7 +556,7 @@ fn main() -> std::io::Result<()>
                             }));
                         }
 
-                        if tracker_config.blacklist_enabled {
+                        if blacklist_persistent && tracker_config.blacklist_enabled {
                             tasks.push(tokio::spawn({
                                 let tracker_clone = tracker.clone();
                                 async move {
@@ -559,7 +565,7 @@ fn main() -> std::io::Result<()>
                             }));
                         }
 
-                        if tracker_config.keys_enabled {
+                        if keys_persistent && tracker_config.keys_enabled {
                             tasks.push(tokio::spawn({
                                 let tracker_clone = tracker.clone();
                                 async move {
@@ -568,7 +574,7 @@ fn main() -> std::io::Result<()>
                             }));
                         }
 
-                        if tracker_config.users_enabled {
+                        if users_persistent && tracker_config.users_enabled {
                             tasks.push(tokio::spawn({
                                 let tracker_clone = tracker.clone();
                                 async move {
@@ -577,13 +583,10 @@ fn main() -> std::io::Result<()>
                             }));
                         }
 
-                        
                         for task in tasks {
                             let _ = task.await;
                         }
                     } else {
-                        tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
-                        Configuration::save_from_config(tracker.config.clone(), "config.toml");
                         info!("Saving completed data to config...");
                     }
 

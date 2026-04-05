@@ -98,7 +98,7 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
         completed,
         updated: std::time::Instant::now(),
     };
-    if data.torrent_tracker.config.database.persistent {
+    if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
     }
     match data.torrent_tracker.add_torrent(info_hash, torrent_entry) {
@@ -135,7 +135,7 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
                         completed,
                         updated: std::time::Instant::now(),
                     };
-                    if data.torrent_tracker.config.database.persistent {
+                    if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
                         let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
                     }
                     let status = match data.torrent_tracker.add_torrent(info_hash, torrent_entry) {
@@ -166,7 +166,7 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
         Ok(h) => h,
         Err(r) => return r,
     };
-    if data.torrent_tracker.config.database.persistent {
+    if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
     }
     match data.torrent_tracker.remove_torrent(info_hash) {
@@ -193,7 +193,7 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
         if info.len() == 40 {
             match parse_info_hash(&info) {
                 Ok(info_hash) => {
-                    if data.torrent_tracker.config.database.persistent {
+                    if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
                         let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
                     }
                     let status = match data.torrent_tracker.remove_torrent(info_hash) {

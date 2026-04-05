@@ -9,6 +9,7 @@ impl Default for DatabaseStructureConfigTorrents {
             column_seeds: String::from("seeds"),
             column_peers: String::from("peers"),
             column_completed: String::from("completed"),
+            persistent: None,
         }
     }
 }

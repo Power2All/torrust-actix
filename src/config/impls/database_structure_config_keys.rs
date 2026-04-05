@@ -7,6 +7,7 @@ impl Default for DatabaseStructureConfigKeys {
             column_hash: String::from("hash"),
             bin_type_hash: true,
             column_timeout: String::from("timeout"),
+            persistent: None,
         }
     }
 }

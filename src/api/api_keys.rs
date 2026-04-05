@@ -89,7 +89,7 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
         Ok(hash) => InfoHash(hash),
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key_hash"})),
     };
-    if data.torrent_tracker.config.database.persistent {
+    if data.torrent_tracker.config.database_structure.keys.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let _ = data.torrent_tracker.add_key_update(key_hash, timeout as i64, UpdatesAction::Add);
     }
     if data.torrent_tracker.add_key(key_hash, timeout as i64) {
@@ -118,7 +118,7 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
             match hex2bin(key.clone()) {
                 Ok(hash) => {
                     let key_hash = InfoHash(hash);
-                    if data.torrent_tracker.config.database.persistent {
+                    if data.torrent_tracker.config.database_structure.keys.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
                         let _ = data.torrent_tracker.add_key_update(key_hash, timeout as i64, UpdatesAction::Add);
                     }
                     let status = if data.torrent_tracker.add_key(key_hash, timeout as i64) {
@@ -153,7 +153,7 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
         Ok(hash) => InfoHash(hash),
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key"})),
     };
-    if data.torrent_tracker.config.database.persistent {
+    if data.torrent_tracker.config.database_structure.keys.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let _ = data.torrent_tracker.add_key_update(key_hash, 0i64, UpdatesAction::Remove);
     }
     if data.torrent_tracker.remove_key(key_hash) {
@@ -182,7 +182,7 @@ pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload
             match hex2bin(key_item.clone()) {
                 Ok(hash) => {
                     let key_hash = InfoHash(hash);
-                    if data.torrent_tracker.config.database.persistent {
+                    if data.torrent_tracker.config.database_structure.keys.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
                         let _ = data.torrent_tracker.add_key_update(key_hash, 0i64, UpdatesAction::Remove);
                     }
                     let status = if data.torrent_tracker.remove_key(key_hash) {
@@ -202,4 +202,22 @@ pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload
         "status": "ok",
         "keys": keys_output
     }))
+}
+pub async fn api_service_keys_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
+{
+    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
+    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
+    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if !data.torrent_tracker.config.tracker_config.keys_enabled {
+        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "keys not enabled"}));
+    }
+    if data.torrent_tracker.config.database_structure.keys.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
+        let table = data.torrent_tracker.config.database_structure.keys.table_name.clone();
+        if data.torrent_tracker.sqlx.clear_table(&table).await.is_err() {
+            return HttpResponse::InternalServerError().content_type(ContentType::json()).json(json!({"status": "database error"}));
+        }
+    }
+    data.torrent_tracker.clear_keys();
+    data.torrent_tracker.clear_key_updates();
+    HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
 }

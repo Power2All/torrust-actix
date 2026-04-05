@@ -14,6 +14,7 @@ impl Default for DatabaseStructureConfigUsers {
             column_completed: String::from("completed"),
             column_updated: String::from("updated"),
             column_active: String::from("active"),
+            persistent: None,
         }
     }
 }
