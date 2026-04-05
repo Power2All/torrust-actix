@@ -177,7 +177,7 @@ impl DatabaseConnectorPgSQL {
                 let info_hash: [u8; 20] =
                     <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref())
                         .unwrap();
-                let completed_count: i64 = result.get(structure.column_completed.as_str());
+                let completed_count: i64 = result.get::<Option<i64>, _>(structure.column_completed.as_str()).unwrap_or(0);
                 tracker.add_torrent(
                     InfoHash(info_hash),
                     TorrentEntry {
