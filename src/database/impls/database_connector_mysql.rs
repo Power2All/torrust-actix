@@ -20,7 +20,6 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use crate::tracker::types::ahash_map::AHashMap;
-use async_std::task;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use log::{
@@ -153,8 +152,6 @@ impl DatabaseConnectorMySQL {
                 panic!("{LOG_PREFIX} Error: {e}");
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
-            task::sleep(Duration::from_secs(1)).await;
-            exit(0);
         }
         structure
     }
