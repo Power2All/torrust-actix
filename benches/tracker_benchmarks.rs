@@ -32,7 +32,7 @@ fn random_peer_id() -> PeerId {
 }
 
 fn create_test_peer(ip: IpAddr, port: u16, peer_id: PeerId) -> TorrentPeer {
-    ..TorrentPeer {
+    TorrentPeer {
         peer_id,
         peer_addr: std::net::SocketAddr::new(ip, port),
         updated: std::time::Instant::now(),
@@ -40,6 +40,7 @@ fn create_test_peer(ip: IpAddr, port: u16, peer_id: PeerId) -> TorrentPeer {
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(1000),
         event: AnnounceEvent::Started,
+        rtc_data: None,
     }
 }
 
@@ -153,7 +154,7 @@ fn bench_peer_filtering_ipv4_vs_ipv6(c: &mut Criterion) {
         let peer = if i % 2 == 0 {
             create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881, peer_id)
         } else {
-            create_test_peer(IpAddr::V6(format!("2001:db8::{:x}::{:x}", i / 256, i % 256).parse().unwrap()), 6881, peer_id)
+            create_test_peer(IpAddr::V6(format!("2001:db8::{:x}:{:x}", i / 256, i % 256).parse().unwrap()), 6881, peer_id)
         };
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }

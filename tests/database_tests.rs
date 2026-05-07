@@ -100,12 +100,21 @@ async fn test_database_update_action_add() {
 
 #[tokio::test]
 async fn test_database_update_action_remove() {
-    let config: Arc<Configuration> = create_sqlite_test_config().await;
+    let mut config: Configuration = Configuration::init();
+    config.database.engine = DatabaseDrivers::sqlite3;
+    config.database.persistent = true;
+    config.database.path = ":memory:".to_string();
+    // Required so save_whitelist actually issues a DELETE on UpdatesAction::Remove.
+    config.database.remove_action = true;
+    let config: Arc<Configuration> = Arc::new(config);
     let tracker: Arc<TorrentTracker> = Arc::new(TorrentTracker::new(config, true).await);
     let info_hash = common::random_info_hash();
     let _: u64 = tracker.sqlx.save_whitelist(tracker.clone(), vec![(info_hash, UpdatesAction::Add)]).await.unwrap();
     let _: u64 = tracker.sqlx.load_whitelist(tracker.clone()).await.unwrap();
     let _: u64 = tracker.sqlx.save_whitelist(tracker.clone(), vec![(info_hash, UpdatesAction::Remove)]).await.unwrap();
+    // load_whitelist only adds rows it sees; clear the in-memory state first
+    // so the post-remove load reflects only what's actually in the database.
+    tracker.clear_whitelist();
     let _: u64 = tracker.sqlx.load_whitelist(tracker.clone()).await.unwrap();
     let is_whitelisted = tracker.check_whitelist(info_hash);
     assert!(!is_whitelisted, "InfoHash should not be in whitelist after Remove action");
@@ -119,9 +128,17 @@ async fn test_reset_seeds_peers() {
     assert!(result.is_ok(), "Reset should complete successfully");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_concurrent_database_writes() {
-    let config: Arc<Configuration> = create_sqlite_test_config().await;
+    // Concurrent SQLite writes need a shared database file across pool
+    // connections; `:memory:` gives each connection its own private DB.
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("concurrent_writes.db");
+    let mut config: Configuration = Configuration::init();
+    config.database.engine = DatabaseDrivers::sqlite3;
+    config.database.persistent = true;
+    config.database.path = db_path.to_str().expect("Invalid temp path").to_string();
+    let config: Arc<Configuration> = Arc::new(config);
     let tracker: Arc<TorrentTracker> = Arc::new(TorrentTracker::new(config, true).await);
     let mut handles = vec![];
     for _i in 0..10 {

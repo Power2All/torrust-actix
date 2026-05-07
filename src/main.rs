@@ -77,6 +77,11 @@ fn main() -> std::io::Result<()>
         .block_on(async {
             let tracker = Arc::new(TorrentTracker::new(config.clone(), args.create_database).await);
 
+            if args.create_database {
+                task::sleep(Duration::from_secs(1)).await;
+                exit(0);
+            }
+
             let tracker_config = tracker.config.tracker_config.clone();
             let db_config = tracker.config.database.clone();
             let db_structure = tracker.config.database_structure.clone();
