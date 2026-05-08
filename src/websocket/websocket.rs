@@ -455,7 +455,7 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
     let data_scrape = tracker.handle_scrape(tracker.clone(), scrape.clone()).await;
     let mut files_map = ben_map!();
     let files_map_mut = files_map.dict_mut().unwrap();
-    for (info_hash, torrent_entry) in &data_scrape {
+    for (info_hash, counts) in &data_scrape {
         if tracker_config.whitelist_enabled && !tracker.check_whitelist(*info_hash) {
             continue;
         }
@@ -465,9 +465,9 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
         files_map_mut.insert(
             Cow::from(info_hash.0.to_vec()),
             ben_map! {
-                "complete" => ben_int!((torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64),
-                "downloaded" => ben_int!(torrent_entry.completed as i64),
-                "incomplete" => ben_int!((torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64)
+                "complete" => ben_int!(counts.total_seeds() as i64),
+                "downloaded" => ben_int!(counts.completed as i64),
+                "incomplete" => ben_int!(counts.total_peers() as i64)
             }
         );
     }
@@ -562,9 +562,10 @@ pub async fn websocket_master_service(
             Ok(data) => data,
             Err(e) => panic!("[WEBSOCKET MASTER] SSL cert couldn't be extracted: {e}"),
         };
-        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next().unwrap() {
-            Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL key couldn't be extracted: {e}"),
+        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next() {
+            Some(Ok(data)) => data,
+            Some(Err(e)) => panic!("[WEBSOCKET MASTER] SSL key couldn't be extracted: {e}"),
+            None => panic!("[WEBSOCKET MASTER] No PKCS#8 private key found in {ssl_key}; expected a PEM-encoded PKCS#8 key (RSA / EC keys are not supported here)"),
         };
         let tls_config = match rustls::ServerConfig::builder()
             .with_no_client_auth()

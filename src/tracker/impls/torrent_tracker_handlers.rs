@@ -229,16 +229,7 @@ impl TorrentTracker {
                     }
                     let elapsed = now.elapsed();
                     debug!("[PERF] Announce Started handling took: {elapsed:?}");
-                    Ok((torrent_peer, TorrentEntry {
-                        seeds: torrent_entry.1.seeds,
-                        seeds_ipv6: torrent_entry.1.seeds_ipv6,
-                        peers: torrent_entry.1.peers,
-                        peers_ipv6: torrent_entry.1.peers_ipv6,
-                        rtc_seeds: torrent_entry.1.rtc_seeds,
-                        rtc_peers: torrent_entry.1.rtc_peers,
-                        completed: torrent_entry.1.completed,
-                        updated: torrent_entry.1.updated
-                    }))
+                    Ok((torrent_peer, torrent_entry.1))
                 }
             }
             AnnounceEvent::Stopped => {
@@ -366,15 +357,17 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, TorrentEntry>
+    pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, crate::tracker::structs::torrent_counts::TorrentCounts>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("handle_scrape", "tracker");
 
         let now = std::time::Instant::now();
         let result = scrape_query.info_hash.iter()
             .map(|&info_hash| {
-                let entry = data.get_torrent(info_hash).unwrap_or_default();
-                (info_hash, entry)
+                let counts = data.get_torrent_counts(info_hash).unwrap_or(crate::tracker::structs::torrent_counts::TorrentCounts {
+                    seeds_ipv4: 0, seeds_ipv6: 0, peers_ipv4: 0, peers_ipv6: 0, completed: 0,
+                });
+                (info_hash, counts)
             })
             .collect();
         let elapsed = now.elapsed();

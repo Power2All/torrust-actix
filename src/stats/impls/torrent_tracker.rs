@@ -193,7 +193,7 @@ impl TorrentTracker {
             StatsEvent::UdpQueueLen => {
                 self.stats.udp_queue_len.store(value, Ordering::Release);
             }
-            
+
             StatsEvent::WsConnectionsActive => {
                 self.update_counter(&self.stats.ws_connections_active, value);
             }

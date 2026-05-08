@@ -153,7 +153,7 @@ fn main() -> std::io::Result<()>
 
             for api_server_object in &config.api_server {
                 if api_server_object.enabled {
-                    http_check_host_and_port_used(api_server_object.bind_address.clone());
+                    http_check_host_and_port_used(&api_server_object.bind_address)?;
                     let address: SocketAddr = api_server_object.bind_address.parse().unwrap();
 
                     let (handle, future) = api_service(
@@ -190,7 +190,7 @@ fn main() -> std::io::Result<()>
 
             for http_server_object in &config.http_server {
                 if http_server_object.enabled {
-                    http_check_host_and_port_used(http_server_object.bind_address.clone());
+                    http_check_host_and_port_used(&http_server_object.bind_address)?;
                     let address: SocketAddr = http_server_object.bind_address.parse().unwrap();
 
                     let (handle, future) = http_service(
@@ -228,7 +228,7 @@ fn main() -> std::io::Result<()>
 
             for udp_server_object in &config.udp_server {
                 if udp_server_object.enabled {
-                    udp_check_host_and_port_used(udp_server_object.bind_address.clone());
+                    udp_check_host_and_port_used(&udp_server_object.bind_address)?;
                     let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
 
                     let udp_threads: usize = udp_server_object.udp_threads;
@@ -267,7 +267,7 @@ fn main() -> std::io::Result<()>
 
                     let bind_address = &tracker_config.cluster_bind_address;
                     if !bind_address.is_empty() {
-                        http_check_host_and_port_used(bind_address.clone());
+                        http_check_host_and_port_used(bind_address)?;
                         let address: SocketAddr = bind_address.parse().expect("Invalid cluster_bind_address");
 
                         info!("[CLUSTER] Starting WebSocket master server on {}", address);
@@ -312,7 +312,7 @@ fn main() -> std::io::Result<()>
                 }
             }
 
-            
+
             if !ws_futures.is_empty() {
                 let (handles, futures): (Vec<_>, Vec<_>) = ws_futures.into_iter().unzip();
                 tokio_core.spawn(async move {
@@ -328,8 +328,8 @@ fn main() -> std::io::Result<()>
 
             tokio_core.spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(console_interval));
-                
-                let mut last_udp: Option<(i64,i64,i64,i64,i64,i64,i64)> = None; 
+
+                let mut last_udp: Option<(i64,i64,i64,i64,i64,i64,i64)> = None;
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
@@ -352,7 +352,7 @@ fn main() -> std::io::Result<()>
                                 stats.tcp6_scrapes_handled, stats.tcp6_failure, stats.tcp6_not_found
                             );
 
-                            
+
                             let now = chrono::Utc::now().timestamp();
                             let (udp_c4_ps, udp_a4_ps, udp_s4_ps, udp_c6_ps, udp_a6_ps, udp_s6_ps) = if let Some((t,c4,a4,s4,c6,a6,s6)) = last_udp {
                                 let dt = (now - t).max(1);
@@ -459,7 +459,7 @@ fn main() -> std::io::Result<()>
 
                                 info!("[DATABASE UPDATES] Starting batch updates...");
 
-                                
+
                                 let mut tasks = vec![
                                     tokio::spawn({
                                         let tracker = tracker_spawn_updates.clone();
@@ -504,7 +504,7 @@ fn main() -> std::io::Result<()>
                                         }
                                     }));
                                 }
-                                
+
                                 for task in tasks {
                                     let _ = task.await;
                                 }

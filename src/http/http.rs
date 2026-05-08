@@ -159,7 +159,10 @@ pub async fn http_service(
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
                 .workers(worker_threads)
                 .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                .unwrap()
+                .unwrap_or_else(|e| {
+                    error!("[HTTPS] Unable to bind to {addr}: {e}");
+                    exit(1);
+                })
                 .disable_signals()
                 .run()
         } else {
@@ -174,7 +177,10 @@ pub async fn http_service(
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
                 .workers(worker_threads)
                 .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                .unwrap()
+                .unwrap_or_else(|e| {
+                    error!("[HTTPS] Unable to bind to {addr}: {e}");
+                    exit(1);
+                })
                 .disable_signals()
                 .run()
         };
@@ -199,7 +205,10 @@ pub async fn http_service(
             .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
             .workers(worker_threads)
             .bind((addr.ip(), addr.port()))
-            .unwrap()
+            .unwrap_or_else(|e| {
+                error!("[HTTP] Unable to bind to {addr}: {e}");
+                exit(1);
+            })
             .disable_signals()
             .run()
     } else {
@@ -214,7 +223,10 @@ pub async fn http_service(
             .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
             .workers(worker_threads)
             .bind((addr.ip(), addr.port()))
-            .unwrap()
+            .unwrap_or_else(|e| {
+                error!("[HTTP] Unable to bind to {addr}: {e}");
+                exit(1);
+            })
             .disable_signals()
             .run()
     };
@@ -687,11 +699,11 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
             let data_scrape = data.handle_scrape(data.clone(), e.clone()).await;
             let mut scrape_list = ben_map!();
             let scrape_list_mut = scrape_list.dict_mut().unwrap();
-            for (info_hash, torrent_entry) in &data_scrape {
+            for (info_hash, counts) in &data_scrape {
                 scrape_list_mut.insert(Cow::from(info_hash.0.to_vec()), ben_map! {
-                    "complete" => ben_int!((torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64),
-                    "downloaded" => ben_int!(torrent_entry.completed as i64),
-                    "incomplete" => ben_int!((torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64)
+                    "complete" => ben_int!(counts.total_seeds() as i64),
+                    "downloaded" => ben_int!(counts.completed as i64),
+                    "incomplete" => ben_int!(counts.total_peers() as i64)
                 });
             }
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
@@ -848,13 +860,14 @@ pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, u
     None
 }
 
-pub fn http_check_host_and_port_used(bind_address: String) {
-    if cfg!(target_os = "windows") {
-        match std::net::TcpListener::bind(&bind_address) {
-            Ok(e) => e,
-            Err(_) => { panic!("Unable to bind to {} ! Exiting...", &bind_address); }
-        };
+pub fn http_check_host_and_port_used(bind_address: &str) -> std::io::Result<()> {
+    if cfg!(target_os = "windows")
+        && let Err(e) = std::net::TcpListener::bind(bind_address)
+    {
+        log::error!("Unable to bind TCP listener to {bind_address}: {e}");
+        return Err(e);
     }
+    Ok(())
 }
 
 #[inline]

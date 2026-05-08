@@ -122,7 +122,7 @@ impl UdpServer {
                                             socket: socket_clone.clone(),
                                         };
                                         if parse_pool_clone.payload.push(packet).is_err() {
-                                            
+
                                             debug!("Parse pool queue full, dropping packet");
                                         }
                                     }
@@ -433,11 +433,11 @@ impl UdpServer {
     pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let mut torrent_stats = Vec::with_capacity(request.info_hashes.len());
         for info_hash in &request.info_hashes {
-            let scrape_entry = match tracker.get_torrent(InfoHash(info_hash.0)) {
-                Some(torrent_info) => TorrentScrapeStatistics {
-                    seeders: NumberOfPeers(torrent_info.seeds.len() as i32),
-                    completed: NumberOfDownloads(torrent_info.completed as i32),
-                    leechers: NumberOfPeers(torrent_info.peers.len() as i32),
+            let scrape_entry = match tracker.get_torrent_counts(InfoHash(info_hash.0)) {
+                Some(counts) => TorrentScrapeStatistics {
+                    seeders: NumberOfPeers(counts.seeds_ipv4 as i32),
+                    completed: NumberOfDownloads(counts.completed as i32),
+                    leechers: NumberOfPeers(counts.peers_ipv4 as i32),
                 },
                 None => TorrentScrapeStatistics {
                     seeders: NumberOfPeers(0),

@@ -97,6 +97,14 @@ impl TorrentTracker {
         lock.get(&info_hash).cloned()
     }
 
+    #[inline]
+    pub fn get_torrent_counts(&self, info_hash: InfoHash) -> Option<crate::tracker::structs::torrent_counts::TorrentCounts>
+    {
+        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let lock = shard.read_recursive();
+        lock.get(&info_hash).map(crate::tracker::structs::torrent_counts::TorrentCounts::from_entry)
+    }
+
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         hashes.into_iter()
