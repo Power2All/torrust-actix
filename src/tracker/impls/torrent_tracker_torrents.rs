@@ -50,8 +50,8 @@ impl TorrentTracker {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Torrents, 1);
                 self.update_stats(StatsEvent::Completed, torrent_entry.completed as i64);
-                self.update_stats(StatsEvent::Seeds, torrent_entry.seeds.len() as i64);
-                self.update_stats(StatsEvent::Peers, torrent_entry.peers.len() as i64);
+                self.update_stats(StatsEvent::Seeds, (torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64);
+                self.update_stats(StatsEvent::Peers, (torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64);
                 let entry_clone = torrent_entry.clone();
                 v.insert(torrent_entry);
                 (entry_clone, true)
@@ -59,8 +59,10 @@ impl TorrentTracker {
             Entry::Occupied(mut o) => {
                 let current = o.get_mut();
                 let completed_delta = torrent_entry.completed as i64 - current.completed as i64;
-                let seeds_delta = torrent_entry.seeds.len() as i64 - current.seeds.len() as i64;
-                let peers_delta = torrent_entry.peers.len() as i64 - current.peers.len() as i64;
+                let seeds_delta = (torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64
+                    - (current.seeds.len() + current.seeds_ipv6.len()) as i64;
+                let peers_delta = (torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64
+                    - (current.peers.len() + current.peers_ipv6.len()) as i64;
                 if completed_delta != 0 {
                     self.update_stats(StatsEvent::Completed, completed_delta);
                 }
@@ -72,7 +74,11 @@ impl TorrentTracker {
                 }
                 current.completed = torrent_entry.completed;
                 current.seeds = torrent_entry.seeds;
+                current.seeds_ipv6 = torrent_entry.seeds_ipv6;
                 current.peers = torrent_entry.peers;
+                current.peers_ipv6 = torrent_entry.peers_ipv6;
+                current.rtc_seeds = torrent_entry.rtc_seeds;
+                current.rtc_peers = torrent_entry.rtc_peers;
                 current.updated = torrent_entry.updated;
                 (current.clone(), false)
             }
@@ -124,8 +130,8 @@ impl TorrentTracker {
         let mut lock = shard.write();
         if let Some(data) = lock.remove(&info_hash) {
             self.update_stats(StatsEvent::Torrents, -1);
-            self.update_stats(StatsEvent::Seeds, -(data.seeds.len() as i64));
-            self.update_stats(StatsEvent::Peers, -(data.peers.len() as i64));
+            self.update_stats(StatsEvent::Seeds, -((data.seeds.len() + data.seeds_ipv6.len()) as i64));
+            self.update_stats(StatsEvent::Peers, -((data.peers.len() + data.peers_ipv6.len()) as i64));
             Some(data)
         } else {
             None

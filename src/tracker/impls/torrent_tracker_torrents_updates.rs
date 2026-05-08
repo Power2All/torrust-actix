@@ -17,13 +17,24 @@ use std::collections::{
     HashMap
 };
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Monotonic, process-local sequence number used as the dedupe ordering
+/// key for queued torrent updates.  Replaces wall-clock nanoseconds
+/// (`SystemTime::now()`), which can jump backwards on NTP corrections /
+/// leap seconds and would let an older update win the dedupe.
+static UPDATE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+#[inline]
+fn next_seq() -> u128 {
+    u128::from(UPDATE_SEQ.fetch_add(1, Ordering::Relaxed))
+}
 
 impl TorrentTracker {
     pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_entry: TorrentEntry, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.torrents_updates.write();
-        let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
+        let timestamp = next_seq();
         if lock.insert(timestamp, (info_hash, torrent_entry, updates_action)).is_none() {
             self.update_stats(StatsEvent::TorrentsUpdates, 1);
             true
@@ -39,7 +50,7 @@ impl TorrentTracker {
         let mut success_count = 0i64;
         let mut remove_count = 0i64;
         for (timestamp, (info_hash, torrent_entry, updates_action)) in hashes {
-            let new_timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
+            let new_timestamp = next_seq();
             let success = lock.insert(new_timestamp, (info_hash, torrent_entry, updates_action)).is_none();
             if success {
                 success_count += 1;

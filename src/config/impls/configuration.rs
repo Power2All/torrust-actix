@@ -284,7 +284,7 @@ impl Configuration {
             config.tracker_config.cluster_tls_connection_rate = parse_env_num::<u64>("TRACKER__CLUSTER_TLS_CONNECTION_RATE", &value, 256);
         }
         if let Ok(value) = env::var("TRACKER__RTC_INTERVAL") {
-            config.tracker_config.rtc_interval = parse_env_num::<u64>("TRACKER__RTC_INTERVAL", &value, 10);
+            config.tracker_config.rtc_interval = parse_env_num::<u64>("TRACKER__RTC_INTERVAL", &value, 30);
         }
         if let Ok(value) = env::var("TRACKER__RTC_PEERS_TIMEOUT") {
             config.tracker_config.rtc_peers_timeout = parse_env_num::<u64>("TRACKER__RTC_PEERS_TIMEOUT", &value, 120);
@@ -595,10 +595,10 @@ impl Configuration {
                         block.keep_alive = parse_env_num::<u64>(format!("HTTP_{http_iteration}_KEEP_ALIVE"), &value, 60);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT")) {
-                        block.request_timeout = parse_env_num::<u64>(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT"), &value, 30);
+                        block.request_timeout = parse_env_num::<u64>(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT"), &value, 15);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT")) {
-                        block.disconnect_timeout = parse_env_num::<u64>(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT"), &value, 30);
+                        block.disconnect_timeout = parse_env_num::<u64>(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT"), &value, 15);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_MAX_CONNECTIONS")) {
                         block.max_connections = parse_env_num::<u64>(format!("HTTP_{http_iteration}_MAX_CONNECTIONS"), &value, 25000);

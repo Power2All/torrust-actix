@@ -42,18 +42,18 @@ pub struct Cli {
     #[arg(long)]
     pub import: bool,
 
-    #[arg(long, requires("export"), default_value = "torrents.json")]
+    #[arg(long, requires("import"), default_value = "torrents.json")]
     pub import_file_torrents: String,
 
-    #[arg(long, requires("export"), default_value = "whitelists.json")]
+    #[arg(long, requires("import"), default_value = "whitelists.json")]
     pub import_file_whitelists: String,
 
-    #[arg(long, requires("export"), default_value = "blacklists.json")]
+    #[arg(long, requires("import"), default_value = "blacklists.json")]
     pub import_file_blacklists: String,
 
-    #[arg(long, requires("export"), default_value = "keys.json")]
+    #[arg(long, requires("import"), default_value = "keys.json")]
     pub import_file_keys: String,
 
-    #[arg(long, requires("export"), default_value = "users.json")]
+    #[arg(long, requires("import"), default_value = "users.json")]
     pub import_file_users: String,
 }
