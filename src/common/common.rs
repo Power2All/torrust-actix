@@ -91,7 +91,7 @@ pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
 }
 
-ub struct Hex20(pub [u8; 40]);
+pub struct Hex20(pub [u8; 40]);
 
 impl Hex20 {
     #[inline]

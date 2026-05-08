@@ -435,9 +435,9 @@ impl UdpServer {
         for info_hash in &request.info_hashes {
             let scrape_entry = match tracker.get_torrent_counts(InfoHash(info_hash.0)) {
                 Some(counts) => TorrentScrapeStatistics {
-                    seeders: NumberOfPeers(counts.seeds_ipv4 as i32),
+                    seeders: NumberOfPeers(counts.total_seeds() as i32),
                     completed: NumberOfDownloads(counts.completed as i32),
-                    leechers: NumberOfPeers(counts.peers_ipv4 as i32),
+                    leechers: NumberOfPeers(counts.total_peers() as i32),
                 },
                 None => TorrentScrapeStatistics {
                     seeders: NumberOfPeers(0),
