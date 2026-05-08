@@ -186,45 +186,44 @@ impl Configuration {
             ),
         }
     }
-
     pub fn env_overrides(config: &mut Configuration) -> &mut Configuration {
         if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
-        if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = value.parse::<u64>().unwrap_or(60u64); }
+        if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = parse_env_num::<u64>("LOG_CONSOLE_INTERVAL", &value, 60); }
         if let Ok(value) = env::var("TRACKER__API_KEY") {
             config.tracker_config.api_key = value;
         }
         if let Ok(value) = env::var("TRACKER__WHITELIST_ENABLED") {
-            config.tracker_config.whitelist_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.tracker_config.whitelist_enabled = parse_env_bool("TRACKER__WHITELIST_ENABLED", &value, false);
         }
         if let Ok(value) = env::var("TRACKER__BLACKLIST_ENABLED") {
-            config.tracker_config.blacklist_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.tracker_config.blacklist_enabled = parse_env_bool("TRACKER__BLACKLIST_ENABLED", &value, false);
         }
         if let Ok(value) = env::var("TRACKER__KEYS_ENABLED") {
-            config.tracker_config.keys_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.tracker_config.keys_enabled = parse_env_bool("TRACKER__KEYS_ENABLED", &value, false);
         }
         if let Ok(value) = env::var("TRACKER__USERS_ENABLED") {
-            config.tracker_config.users_enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.tracker_config.users_enabled = parse_env_bool("TRACKER__USERS_ENABLED", &value, false);
         }
         if let Ok(value) = env::var("TRACKER__SWAGGER") {
-            config.tracker_config.swagger = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.tracker_config.swagger = parse_env_bool("TRACKER__SWAGGER", &value, false);
         }
         if let Ok(value) = env::var("TRACKER__KEYS_CLEANUP_INTERVAL") {
-            config.tracker_config.keys_cleanup_interval = value.parse::<u64>().unwrap_or(60u64);
+            config.tracker_config.keys_cleanup_interval = parse_env_num::<u64>("TRACKER__KEYS_CLEANUP_INTERVAL", &value, 60);
         }
         if let Ok(value) = env::var("TRACKER__REQUEST_INTERVAL") {
-            config.tracker_config.request_interval = value.parse::<u64>().unwrap_or(1800u64);
+            config.tracker_config.request_interval = parse_env_num::<u64>("TRACKER__REQUEST_INTERVAL", &value, 1800);
         }
         if let Ok(value) = env::var("TRACKER__REQUEST_INTERVAL_MINIMUM") {
-            config.tracker_config.request_interval_minimum = value.parse::<u64>().unwrap_or(1800u64);
+            config.tracker_config.request_interval_minimum = parse_env_num::<u64>("TRACKER__REQUEST_INTERVAL_MINIMUM", &value, 1800);
         }
         if let Ok(value) = env::var("TRACKER__PEERS_TIMEOUT") {
-            config.tracker_config.peers_timeout = value.parse::<u64>().unwrap_or(2700u64);
+            config.tracker_config.peers_timeout = parse_env_num::<u64>("TRACKER__PEERS_TIMEOUT", &value, 2700);
         }
         if let Ok(value) = env::var("TRACKER__PEERS_CLEANUP_INTERVAL") {
-            config.tracker_config.peers_cleanup_interval = value.parse::<u64>().unwrap_or(900u64);
+            config.tracker_config.peers_cleanup_interval = parse_env_num::<u64>("TRACKER__PEERS_CLEANUP_INTERVAL", &value, 900);
         }
         if let Ok(value) = env::var("TRACKER__PEERS_CLEANUP_THREADS") {
-            config.tracker_config.peers_cleanup_threads = value.parse::<u64>().unwrap_or(256u64);
+            config.tracker_config.peers_cleanup_threads = parse_env_num::<u64>("TRACKER__PEERS_CLEANUP_THREADS", &value, 256);
         }
         if let Ok(value) = env::var("TRACKER__PROMETHEUS_ID") {
             config.tracker_config.prometheus_id = value;
@@ -255,25 +254,25 @@ impl Configuration {
             config.tracker_config.cluster_master_address = value;
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_KEEP_ALIVE") {
-            config.tracker_config.cluster_keep_alive = value.parse::<u64>().unwrap_or(60u64);
+            config.tracker_config.cluster_keep_alive = parse_env_num::<u64>("TRACKER__CLUSTER_KEEP_ALIVE", &value, 60);
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_REQUEST_TIMEOUT") {
-            config.tracker_config.cluster_request_timeout = value.parse::<u64>().unwrap_or(15u64);
+            config.tracker_config.cluster_request_timeout = parse_env_num::<u64>("TRACKER__CLUSTER_REQUEST_TIMEOUT", &value, 15);
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_DISCONNECT_TIMEOUT") {
-            config.tracker_config.cluster_disconnect_timeout = value.parse::<u64>().unwrap_or(15u64);
+            config.tracker_config.cluster_disconnect_timeout = parse_env_num::<u64>("TRACKER__CLUSTER_DISCONNECT_TIMEOUT", &value, 15);
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_RECONNECT_INTERVAL") {
-            config.tracker_config.cluster_reconnect_interval = value.parse::<u64>().unwrap_or(5u64);
+            config.tracker_config.cluster_reconnect_interval = parse_env_num::<u64>("TRACKER__CLUSTER_RECONNECT_INTERVAL", &value, 5);
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_MAX_CONNECTIONS") {
-            config.tracker_config.cluster_max_connections = value.parse::<u64>().unwrap_or(25000u64);
+            config.tracker_config.cluster_max_connections = parse_env_num::<u64>("TRACKER__CLUSTER_MAX_CONNECTIONS", &value, 25000);
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_THREADS") {
-            config.tracker_config.cluster_threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+            config.tracker_config.cluster_threads = parse_env_num::<u64>("TRACKER__CLUSTER_THREADS", &value, available_parallelism().unwrap().get() as u64);
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_SSL") {
-            config.tracker_config.cluster_ssl = match value.as_str() { "true" => true, "false" => false, _ => false };
+            config.tracker_config.cluster_ssl = parse_env_bool("TRACKER__CLUSTER_SSL", &value, false);
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_SSL_KEY") {
             config.tracker_config.cluster_ssl_key = value;
@@ -282,19 +281,19 @@ impl Configuration {
             config.tracker_config.cluster_ssl_cert = value;
         }
         if let Ok(value) = env::var("TRACKER__CLUSTER_TLS_CONNECTION_RATE") {
-            config.tracker_config.cluster_tls_connection_rate = value.parse::<u64>().unwrap_or(256u64);
+            config.tracker_config.cluster_tls_connection_rate = parse_env_num::<u64>("TRACKER__CLUSTER_TLS_CONNECTION_RATE", &value, 256);
         }
         if let Ok(value) = env::var("TRACKER__RTC_INTERVAL") {
-            config.tracker_config.rtc_interval = value.parse::<u64>().unwrap_or(10u64);
+            config.tracker_config.rtc_interval = parse_env_num::<u64>("TRACKER__RTC_INTERVAL", &value, 30);
         }
         if let Ok(value) = env::var("TRACKER__RTC_PEERS_TIMEOUT") {
-            config.tracker_config.rtc_peers_timeout = value.parse::<u64>().unwrap_or(120u64);
+            config.tracker_config.rtc_peers_timeout = parse_env_num::<u64>("TRACKER__RTC_PEERS_TIMEOUT", &value, 120);
         }
         if let Ok(value) = env::var("TRACKER__TOTAL_DOWNLOADS") {
-            config.tracker_config.total_downloads = value.parse::<u64>().unwrap_or(0u64);
+            config.tracker_config.total_downloads = parse_env_num::<u64>("TRACKER__TOTAL_DOWNLOADS", &value, 0);
         }
         if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_ENABLED") {
-            config.tracker_config.rtc_compression_enabled = match value.as_str() { "true" => true, "false" => false, _ => true };
+            config.tracker_config.rtc_compression_enabled = parse_env_bool("TRACKER__RTC_COMPRESSION_ENABLED", &value, true);
         }
         if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_ALGORITHM") {
             config.tracker_config.rtc_compression_algorithm = match value.to_lowercase().as_str() {
@@ -303,46 +302,46 @@ impl Configuration {
             };
         }
         if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_LEVEL") {
-            config.tracker_config.rtc_compression_level = value.parse::<u32>().unwrap_or(1u32);
+            config.tracker_config.rtc_compression_level = parse_env_num::<u32>("TRACKER__RTC_COMPRESSION_LEVEL", &value, 1);
         }
         if let Ok(value) = env::var("SENTRY__ENABLED") {
-            config.sentry_config.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.sentry_config.enabled = parse_env_bool("SENTRY__ENABLED", &value, false);
         }
         if let Ok(value) = env::var("SENTRY__DEBUG") {
-            config.sentry_config.debug = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.sentry_config.debug = parse_env_bool("SENTRY__DEBUG", &value, false);
         }
         if let Ok(value) = env::var("SENTRY__ATTACH_STACKTRACE") {
-            config.sentry_config.attach_stacktrace = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+            config.sentry_config.attach_stacktrace = parse_env_bool("SENTRY__ATTACH_STACKTRACE", &value, true);
         }
         if let Ok(value) = env::var("SENTRY__SEND_DEFAULT_PII") {
-            config.sentry_config.send_default_pii = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.sentry_config.send_default_pii = parse_env_bool("SENTRY__SEND_DEFAULT_PII", &value, false);
         }
         if let Ok(value) = env::var("SENTRY__DSN") {
             config.sentry_config.dsn = value;
         }
         if let Ok(value) = env::var("SENTRY__MAX_BREADCRUMBS") {
-            config.sentry_config.max_breadcrumbs = value.parse::<usize>().unwrap_or(100);
+            config.sentry_config.max_breadcrumbs = parse_env_num::<usize>("SENTRY__MAX_BREADCRUMBS", &value, 100);
         }
         if let Ok(value) = env::var("SENTRY__SAMPLE_RATE") {
-            config.sentry_config.sample_rate = value.parse::<f32>().unwrap_or(1.0);
+            config.sentry_config.sample_rate = parse_env_num::<f32>("SENTRY__SAMPLE_RATE", &value, 1.0);
         }
         if let Ok(value) = env::var("SENTRY__TRACES_SAMPLE_RATE") {
-            config.sentry_config.traces_sample_rate = value.parse::<f32>().unwrap_or(1.0);
+            config.sentry_config.traces_sample_rate = parse_env_num::<f32>("SENTRY__TRACES_SAMPLE_RATE", &value, 1.0);
         }
         if let Ok(value) = env::var("DATABASE__PERSISTENT") {
-            config.database.persistent = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.database.persistent = parse_env_bool("DATABASE__PERSISTENT", &value, false);
         }
         if let Ok(value) = env::var("DATABASE__INSERT_VACANT") {
-            config.database.insert_vacant = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.database.insert_vacant = parse_env_bool("DATABASE__INSERT_VACANT", &value, false);
         }
         if let Ok(value) = env::var("DATABASE__REMOVE_ACTION") {
-            config.database.remove_action = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.database.remove_action = parse_env_bool("DATABASE__REMOVE_ACTION", &value, false);
         }
         if let Ok(value) = env::var("DATABASE__UPDATE_COMPLETED") {
-            config.database.update_completed = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+            config.database.update_completed = parse_env_bool("DATABASE__UPDATE_COMPLETED", &value, true);
         }
         if let Ok(value) = env::var("DATABASE__UPDATE_PEERS") {
-            config.database.update_peers = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+            config.database.update_peers = parse_env_bool("DATABASE__UPDATE_PEERS", &value, false);
         }
         if let Ok(value) = env::var("DATABASE__PATH") {
             config.database.path = value;
@@ -356,10 +355,10 @@ impl Configuration {
             };
         }
         if let Ok(value) = env::var("DATABASE__PERSISTENT_INTERVAL") {
-            config.database.persistent_interval = value.parse::<u64>().unwrap_or(60u64);
+            config.database.persistent_interval = parse_env_num::<u64>("DATABASE__PERSISTENT_INTERVAL", &value, 60);
         }
         if let Ok(value) = env::var("CACHE__ENABLED") {
-            let enabled = match value.as_str() { "true" => true, "false" => false, _ => false };
+            let enabled = parse_env_bool("CACHE__ENABLED", &value, false);
             if let Some(ref mut cache) = config.cache {
                 cache.enabled = enabled;
             } else if enabled {
@@ -403,7 +402,7 @@ impl Configuration {
             }
         }
         if let Ok(value) = env::var("CACHE__TTL") {
-            let ttl = value.parse::<u64>().unwrap_or(300u64);
+            let ttl = parse_env_num::<u64>("CACHE__TTL", &value, 300);
             if let Some(ref mut cache) = config.cache {
                 cache.ttl = ttl;
             } else {
@@ -414,7 +413,7 @@ impl Configuration {
             }
         }
         if let Ok(value) = env::var("CACHE__SPLIT_PEERS") {
-            let split_peers = matches!(value.as_str(), "true");
+            let split_peers = parse_env_bool("CACHE__SPLIT_PEERS", &value, false);
             if let Some(ref mut cache) = config.cache {
                 cache.split_peers = split_peers;
             } else {
@@ -425,7 +424,7 @@ impl Configuration {
             }
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH") {
-            config.database_structure.torrents.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+            config.database_structure.torrents.bin_type_infohash = parse_env_bool("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH", &value, true);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__TABLE_NAME") {
             config.database_structure.torrents.table_name = value;
@@ -443,10 +442,10 @@ impl Configuration {
             config.database_structure.torrents.column_completed = value;
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__PERSISTENT") {
-            config.database_structure.torrents.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
+            config.database_structure.torrents.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__TORRENTS__PERSISTENT", &value);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH") {
-            config.database_structure.whitelist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+            config.database_structure.whitelist.bin_type_infohash = parse_env_bool("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH", &value, true);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__TABLE_NAME") {
             config.database_structure.whitelist.table_name = value;
@@ -455,10 +454,10 @@ impl Configuration {
             config.database_structure.whitelist.column_infohash = value;
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__PERSISTENT") {
-            config.database_structure.whitelist.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
+            config.database_structure.whitelist.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__WHITELIST__PERSISTENT", &value);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH") {
-            config.database_structure.blacklist.bin_type_infohash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+            config.database_structure.blacklist.bin_type_infohash = parse_env_bool("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH", &value, true);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__TABLE_NAME") {
             config.database_structure.blacklist.table_name = value;
@@ -467,10 +466,10 @@ impl Configuration {
             config.database_structure.blacklist.column_infohash = value;
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__PERSISTENT") {
-            config.database_structure.blacklist.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
+            config.database_structure.blacklist.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__BLACKLIST__PERSISTENT", &value);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH") {
-            config.database_structure.keys.bin_type_hash = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+            config.database_structure.keys.bin_type_hash = parse_env_bool("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH", &value, true);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__TABLE_NAME") {
             config.database_structure.keys.table_name = value;
@@ -482,13 +481,13 @@ impl Configuration {
             config.database_structure.keys.column_timeout = value;
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__PERSISTENT") {
-            config.database_structure.keys.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
+            config.database_structure.keys.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__KEYS__PERSISTENT", &value);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__ID_UUID") {
-            config.database_structure.users.id_uuid = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+            config.database_structure.users.id_uuid = parse_env_bool("DATABASE_STRUCTURE__USERS__ID_UUID", &value, true);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__BIN_TYPE_KEY") {
-            config.database_structure.users.bin_type_key = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+            config.database_structure.users.bin_type_key = parse_env_bool("DATABASE_STRUCTURE__USERS__BIN_TYPE_KEY", &value, true);
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__TABLE_NAME") {
             config.database_structure.users.table_name = value;
@@ -518,7 +517,7 @@ impl Configuration {
             config.database_structure.users.column_updated = value;
         }
         if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__PERSISTENT") {
-            config.database_structure.users.persistent = match value.as_str() { "true" => Some(true), "false" => Some(false), _ => None };
+            config.database_structure.users.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__USERS__PERSISTENT", &value);
         }
         let mut api_iteration = 0;
         loop {
@@ -528,10 +527,10 @@ impl Configuration {
                 }
                 Some(block) => {
                     if let Ok(value) = env::var(format!("API_{api_iteration}_ENABLED")) {
-                        block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+                        block.enabled = parse_env_bool(format!("API_{api_iteration}_ENABLED"), &value, true);
                     }
                     if let Ok(value) = env::var(format!("API_{api_iteration}_SSL")) {
-                        block.ssl = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+                        block.ssl = parse_env_bool(format!("API_{api_iteration}_SSL"), &value, false);
                     }
                     if let Ok(value) = env::var(format!("API_{api_iteration}_BIND_ADDRESS")) {
                         block.bind_address = value;
@@ -546,22 +545,22 @@ impl Configuration {
                         block.ssl_cert = value;
                     }
                     if let Ok(value) = env::var(format!("API_{api_iteration}_KEEP_ALIVE")) {
-                        block.keep_alive = value.parse::<u64>().unwrap_or(60);
+                        block.keep_alive = parse_env_num::<u64>(format!("API_{api_iteration}_KEEP_ALIVE"), &value, 60);
                     }
                     if let Ok(value) = env::var(format!("API_{api_iteration}_REQUEST_TIMEOUT")) {
-                        block.request_timeout = value.parse::<u64>().unwrap_or(30);
+                        block.request_timeout = parse_env_num::<u64>(format!("API_{api_iteration}_REQUEST_TIMEOUT"), &value, 30);
                     }
                     if let Ok(value) = env::var(format!("API_{api_iteration}_DISCONNECT_TIMEOUT")) {
-                        block.disconnect_timeout = value.parse::<u64>().unwrap_or(30);
+                        block.disconnect_timeout = parse_env_num::<u64>(format!("API_{api_iteration}_DISCONNECT_TIMEOUT"), &value, 30);
                     }
                     if let Ok(value) = env::var(format!("API_{api_iteration}_MAX_CONNECTIONS")) {
-                        block.max_connections = value.parse::<u64>().unwrap_or(25000);
+                        block.max_connections = parse_env_num::<u64>(format!("API_{api_iteration}_MAX_CONNECTIONS"), &value, 25000);
                     }
                     if let Ok(value) = env::var(format!("API_{api_iteration}_THREADS")) {
-                        block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+                        block.threads = parse_env_num::<u64>(format!("API_{api_iteration}_THREADS"), &value, available_parallelism().unwrap().get() as u64);
                     }
                     if let Ok(value) = env::var(format!("API_{api_iteration}_TLS_CONNECTION_RATE")) {
-                        block.tls_connection_rate = value.parse::<u64>().unwrap_or(256);
+                        block.tls_connection_rate = parse_env_num::<u64>(format!("API_{api_iteration}_TLS_CONNECTION_RATE"), &value, 256);
                     }
                 }
             }
@@ -575,10 +574,10 @@ impl Configuration {
                 }
                 Some(block) => {
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_ENABLED")) {
-                        block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+                        block.enabled = parse_env_bool(format!("HTTP_{http_iteration}_ENABLED"), &value, true);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_SSL")) {
-                        block.ssl = match value.as_str() { "true" => { true } "false" => { false } _ => { false } };
+                        block.ssl = parse_env_bool(format!("HTTP_{http_iteration}_SSL"), &value, false);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_BIND_ADDRESS")) {
                         block.bind_address = value;
@@ -593,25 +592,25 @@ impl Configuration {
                         block.ssl_cert = value;
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_KEEP_ALIVE")) {
-                        block.keep_alive = value.parse::<u64>().unwrap_or(60);
+                        block.keep_alive = parse_env_num::<u64>(format!("HTTP_{http_iteration}_KEEP_ALIVE"), &value, 60);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT")) {
-                        block.request_timeout = value.parse::<u64>().unwrap_or(30);
+                        block.request_timeout = parse_env_num::<u64>(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT"), &value, 15);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT")) {
-                        block.disconnect_timeout = value.parse::<u64>().unwrap_or(30);
+                        block.disconnect_timeout = parse_env_num::<u64>(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT"), &value, 15);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_MAX_CONNECTIONS")) {
-                        block.max_connections = value.parse::<u64>().unwrap_or(25000);
+                        block.max_connections = parse_env_num::<u64>(format!("HTTP_{http_iteration}_MAX_CONNECTIONS"), &value, 25000);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_THREADS")) {
-                        block.threads = value.parse::<u64>().unwrap_or(available_parallelism().unwrap().get() as u64);
+                        block.threads = parse_env_num::<u64>(format!("HTTP_{http_iteration}_THREADS"), &value, available_parallelism().unwrap().get() as u64);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_TLS_CONNECTION_RATE")) {
-                        block.tls_connection_rate = value.parse::<u64>().unwrap_or(256);
+                        block.tls_connection_rate = parse_env_num::<u64>(format!("HTTP_{http_iteration}_TLS_CONNECTION_RATE"), &value, 256);
                     }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_RTCTORRENT")) {
-                        block.rtctorrent = match value.as_str() { "true" => true, "false" => false, _ => false };
+                        block.rtctorrent = parse_env_bool(format!("HTTP_{http_iteration}_RTCTORRENT"), &value, false);
                     }
                 }
             }
@@ -625,31 +624,31 @@ impl Configuration {
                 }
                 Some(block) => {
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_ENABLED")) {
-                        block.enabled = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+                        block.enabled = parse_env_bool(format!("UDP_{udp_iteration}_ENABLED"), &value, true);
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_BIND_ADDRESS")) {
                         block.bind_address = value;
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_UDP_THREADS")) {
-                        block.udp_threads = value.parse::<usize>().unwrap_or(2);
+                        block.udp_threads = parse_env_num::<usize>(format!("UDP_{udp_iteration}_UDP_THREADS"), &value, 2);
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_WORKER_THREADS")) {
-                        block.worker_threads = value.parse::<usize>().unwrap_or(available_parallelism().unwrap().get());
+                        block.worker_threads = parse_env_num::<usize>(format!("UDP_{udp_iteration}_WORKER_THREADS"), &value, available_parallelism().unwrap().get());
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_RECEIVE_BUFFER_SIZE")) {
-                        block.receive_buffer_size = value.parse::<usize>().unwrap_or(134_217_728);
+                        block.receive_buffer_size = parse_env_num::<usize>(format!("UDP_{udp_iteration}_RECEIVE_BUFFER_SIZE"), &value, 134_217_728);
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SEND_BUFFER_SIZE")) {
-                        block.send_buffer_size = value.parse::<usize>().unwrap_or(67_108_864);
+                        block.send_buffer_size = parse_env_num::<usize>(format!("UDP_{udp_iteration}_SEND_BUFFER_SIZE"), &value, 67_108_864);
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
-                        block.reuse_address = match value.as_str() { "true" => { true } "false" => { false } _ => { true } };
+                        block.reuse_address = parse_env_bool(format!("UDP_{udp_iteration}_REUSE_ADDRESS"), &value, true);
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_USE_PAYLOAD_IP")) {
-                        block.use_payload_ip = match value.as_str() { "true" => true, "false" => false, _ => false };
+                        block.use_payload_ip = parse_env_bool(format!("UDP_{udp_iteration}_USE_PAYLOAD_IP"), &value, false);
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL")) {
-                        block.simple_proxy_protocol = match value.as_str() { "true" => true, "false" => false, _ => false };
+                        block.simple_proxy_protocol = parse_env_bool(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL"), &value, false);
                     }
                 }
             }
@@ -900,7 +899,7 @@ impl Configuration {
             }
         }
     }
-    
+
     pub fn validate_socket_address(field_name: &str, address: &str) {
         use std::net::SocketAddr;
         match address.parse::<SocketAddr>() {
@@ -923,9 +922,6 @@ impl Configuration {
         assert!(regex_check.is_match(value.as_str()), "[VALIDATE CONFIG] Error checking {name} [:] Name: \"{value}\" [:] Regex: \"{regex_check}\"");
     }
 
-    /// Generate a `config.toml` string with `# Optional:` remarks injected
-    /// above every key that may be omitted from the file.  Called by
-    /// `--create-config` so new users know which fields are required.
     pub fn generate_annotated_config(config: &Configuration) -> String {
         let raw = toml::to_string(config).unwrap();
         Self::annotate_config_toml(&raw)
@@ -1030,5 +1026,40 @@ impl Configuration {
             result.push('\n');
         }
         result
+    }
+}
+
+fn parse_env_bool(name: impl std::fmt::Display, value: &str, default: bool) -> bool {
+    match value.to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => true,
+        "false" | "0" | "no" | "off" => false,
+        _ => {
+            log::warn!("[CONFIG] Invalid boolean for {name}={value:?}, using {default}");
+            default
+        }
+    }
+}
+
+fn parse_env_optional_bool(name: impl std::fmt::Display, value: &str) -> Option<bool> {
+    match value.to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Some(true),
+        "false" | "0" | "no" | "off" => Some(false),
+        _ => {
+            log::warn!("[CONFIG] Invalid boolean for {name}={value:?}, leaving unset");
+            None
+        }
+    }
+}
+
+fn parse_env_num<T>(name: impl std::fmt::Display, value: &str, default: T) -> T
+where
+    T: std::str::FromStr + std::fmt::Display + Copy,
+{
+    match value.parse::<T>() {
+        Ok(v) => v,
+        Err(_) => {
+            log::warn!("[CONFIG] Invalid numeric value for {name}={value:?}, using {default}");
+            default
+        }
     }
 }

@@ -13,8 +13,8 @@ use torrust_actix::udp::udp::PROTOCOL_IDENTIFIER;
 #[test]
 fn test_udp_connect_request_parsing() {
     let mut packet = vec![];
-    packet.extend_from_slice(&PROTOCOL_IDENTIFIER.to_be_bytes()); 
-    packet.extend_from_slice(&0u32.to_be_bytes()); 
+    packet.extend_from_slice(&PROTOCOL_IDENTIFIER.to_be_bytes());
+    packet.extend_from_slice(&0u32.to_be_bytes());
     packet.extend_from_slice(&12345u32.to_be_bytes());
     let result = Request::from_bytes(&packet, 74);
     assert!(result.is_ok(), "Should parse valid connect request");
@@ -125,7 +125,7 @@ async fn test_udp_packet_size_limits() {
 
     let mut packet = vec![];
     packet.write_u64::<BigEndian>(12345).unwrap();
-    packet.write_u32::<BigEndian>(2).unwrap(); 
+    packet.write_u32::<BigEndian>(2).unwrap();
     packet.write_u32::<BigEndian>(1).unwrap();
     for _ in 0..80 {
         packet.extend_from_slice(&[0u8; 20]);

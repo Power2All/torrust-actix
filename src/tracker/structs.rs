@@ -11,3 +11,4 @@ pub mod user_id;
 pub mod torrent_peers;
 pub mod torrent_sharding;
 pub mod cleanup_stats;
+pub mod torrent_counts;

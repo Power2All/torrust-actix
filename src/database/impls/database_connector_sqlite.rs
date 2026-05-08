@@ -73,11 +73,7 @@ impl DatabaseConnectorSQLite {
                 LOG_PREFIX,
                 config.database.clone().path
             );
-            error!(
-                "{} Message: {:#?}",
-                LOG_PREFIX,
-                sqlite_connect.into_database_error().unwrap().message()
-            );
+            error!("{LOG_PREFIX} Message: {sqlite_connect}");
             exit(1);
         }
         let mut structure = DatabaseConnector {
@@ -114,7 +110,8 @@ impl DatabaseConnectorSQLite {
                 ts.table_name, ts.column_infohash, hash_type, ts.column_seeds, ts.column_peers, ts.column_completed
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", ts.table_name);
+                exit(1);
             }
             let ws = &config.database_structure.whitelist;
             let hash_type = if ws.bin_type_infohash { "BLOB" } else { "TEXT" };
@@ -124,7 +121,8 @@ impl DatabaseConnectorSQLite {
                 ws.table_name, ws.column_infohash, hash_type
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", ws.table_name);
+                exit(1);
             }
             let bs = &config.database_structure.blacklist;
             let hash_type = if bs.bin_type_infohash { "BLOB" } else { "TEXT" };
@@ -134,7 +132,8 @@ impl DatabaseConnectorSQLite {
                 bs.table_name, bs.column_infohash, hash_type
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", bs.table_name);
+                exit(1);
             }
             let ks = &config.database_structure.keys;
             let hash_type = if ks.bin_type_hash { "BLOB" } else { "TEXT" };
@@ -144,7 +143,8 @@ impl DatabaseConnectorSQLite {
                 ks.table_name, ks.column_hash, hash_type, ks.column_timeout
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", ks.table_name);
+                exit(1);
             }
             let us = &config.database_structure.users;
             let key_type = if us.bin_type_key { "BLOB" } else { "TEXT" };
@@ -161,7 +161,8 @@ impl DatabaseConnectorSQLite {
                 )
             };
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", us.table_name);
+                exit(1);
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
         }

@@ -74,17 +74,42 @@ pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>
     Ok(queries)
 }
 
-pub fn udp_check_host_and_port_used(bind_address: String) {
-    if cfg!(target_os = "windows") && let Err(data) = std::net::UdpSocket::bind(&bind_address) {
-        sentry::capture_error(&data);
-        panic!("Unable to bind to {} ! Exiting...", &bind_address);
+pub fn udp_check_host_and_port_used(bind_address: &str) -> std::io::Result<()> {
+    if cfg!(target_os = "windows")
+        && let Err(e) = std::net::UdpSocket::bind(bind_address)
+    {
+        sentry::capture_error(&e);
+        log::error!("Unable to bind UDP socket to {bind_address}: {e}");
+        return Err(e);
     }
+    Ok(())
 }
 
 pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     let mut chars = [0u8; 40];
     binascii::bin2hex(data, &mut chars).expect("failed to hexlify");
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
+}
+
+pub struct Hex20(pub [u8; 40]);
+
+impl Hex20 {
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        unsafe { std::str::from_utf8_unchecked(&self.0) }
+    }
+}
+
+#[inline]
+pub fn bin20_to_hex(data: &[u8; 20]) -> Hex20 {
+    const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+    let mut buffer = [0u8; 40];
+    for (i, &byte) in data.iter().enumerate() {
+        let idx = i * 2;
+        buffer[idx] = HEX_CHARS[(byte >> 4) as usize];
+        buffer[idx + 1] = HEX_CHARS[(byte & 0xf) as usize];
+    }
+    Hex20(buffer)
 }
 
 pub fn hex2bin(data: String) -> Result<[u8; 20], CustomError> {
@@ -99,23 +124,6 @@ pub fn hex2bin(data: String) -> Result<[u8; 20], CustomError> {
                 .and_then(|slice| slice.try_into().ok())
                 .ok_or_else(|| CustomError::new("invalid hex length"))
         })
-}
-
-pub fn print_type<T>(_: &T) {
-    println!("{:?}", std::any::type_name::<T>());
-}
-
-pub fn return_type<T>(_: &T) -> String {
-    format!("{:?}", std::any::type_name::<T>())
-}
-
-pub fn equal_string_check(source: &str, check: &str) -> bool {
-    if source == check {
-        return true;
-    }
-    println!("Source: {source}");
-    println!("Check:  {check}");
-    false
 }
 
 pub fn setup_logging(config: &Configuration) {
@@ -191,16 +199,6 @@ pub fn hash_id(id: &str) -> [u8; 20] {
 
 #[inline(always)]
 pub fn hex_to_nibble(c: u8) -> u8 {
-    match c {
-        b'0'..=b'9' => c - b'0',
-        b'a'..=b'f' => c - b'a' + 10,
-        b'A'..=b'F' => c - b'A' + 10,
-        _ => 0xFF,
-    }
-}
-
-#[inline(always)]
-pub fn hex_char_to_nibble(c: u8) -> u8 {
     match c {
         b'0'..=b'9' => c - b'0',
         b'a'..=b'f' => c - b'a' + 10,

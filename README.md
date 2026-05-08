@@ -566,6 +566,9 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 ### ChangeLog
 
+#### v4.2.10
+* Various audit findings and performance fixes
+
 #### v4.2.9
 * Bumping versions
 * Locking versions, cause of chain attacks, making sure we use "safe" libs

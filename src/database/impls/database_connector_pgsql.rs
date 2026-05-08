@@ -71,11 +71,7 @@ impl DatabaseConnectorPgSQL {
                 LOG_PREFIX,
                 config.database.clone().path
             );
-            error!(
-                "{} Message: {:#?}",
-                LOG_PREFIX,
-                pgsql_connect.into_database_error().unwrap().message()
-            );
+            error!("{LOG_PREFIX} Message: {pgsql_connect}");
             exit(1);
         }
         let mut structure = DatabaseConnector {
@@ -99,7 +95,8 @@ impl DatabaseConnectorPgSQL {
                 ts.table_name, ts.column_infohash, hash_type, ts.column_seeds, ts.column_peers, ts.column_completed, ts.column_infohash
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", ts.table_name);
+                exit(1);
             }
             let ws = &config.database_structure.whitelist;
             let hash_type = if ws.bin_type_infohash { "bytea" } else { "character(40)" };
@@ -109,7 +106,8 @@ impl DatabaseConnectorPgSQL {
                 ws.table_name, ws.column_infohash, hash_type, ws.column_infohash
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", ws.table_name);
+                exit(1);
             }
             let bs = &config.database_structure.blacklist;
             let hash_type = if bs.bin_type_infohash { "bytea" } else { "character(40)" };
@@ -119,7 +117,8 @@ impl DatabaseConnectorPgSQL {
                 bs.table_name, bs.column_infohash, hash_type, bs.column_infohash
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", bs.table_name);
+                exit(1);
             }
             let ks = &config.database_structure.keys;
             let hash_type = if ks.bin_type_hash { "bytea" } else { "character(40)" };
@@ -129,7 +128,8 @@ impl DatabaseConnectorPgSQL {
                 ks.table_name, ks.column_hash, hash_type, ks.column_timeout, ks.column_hash
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", ks.table_name);
+                exit(1);
             }
             let us = &config.database_structure.users;
             let key_type = if us.bin_type_key { "bytea" } else { "character(40)" };
@@ -144,7 +144,8 @@ impl DatabaseConnectorPgSQL {
                 us.table_name, id_col, id_type, us.column_key, key_type, us.column_uploaded, us.column_downloaded, us.column_completed, us.column_active, us.column_updated, pk_col, id_col
             );
             if let Err(e) = sqlx::query(&query).execute(pool).await {
-                panic!("{LOG_PREFIX} Error: {e}");
+                error!("{LOG_PREFIX} Failed to create table {}: {e}", us.table_name);
+                exit(1);
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
         }

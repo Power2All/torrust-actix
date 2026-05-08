@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use serde::Serialize;
 use crate::common::common::bin2hex;
-use crate::common::common::hex_char_to_nibble;
+use crate::common::common::hex_to_nibble;
 use crate::tracker::structs::peer_id::PeerId;
 
 impl fmt::Display for PeerId {
@@ -96,20 +96,14 @@ impl Serialize for PeerId {
     where
         S: serde::Serializer,
     {
-        const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
-        let mut buffer = [0u8; 40];
-        for (i, &byte) in self.0.iter().enumerate() {
-            buffer[i * 2] = HEX_CHARS[(byte >> 4) as usize];
-            buffer[i * 2 + 1] = HEX_CHARS[(byte & 0xf) as usize];
-        }
-        let id = unsafe { std::str::from_utf8_unchecked(&buffer) };
+        let buffer = crate::common::common::bin20_to_hex(&self.0);
         #[derive(Serialize)]
         struct PeerIdInfo<'a> {
             id: &'a str,
             client: Option<&'a str>,
         }
         let obj = PeerIdInfo {
-            id,
+            id: buffer.as_str(),
             client: self.get_client_name(),
         };
         obj.serialize(serializer)
@@ -126,8 +120,8 @@ impl std::str::FromStr for PeerId {
         let mut result = PeerId([0u8; 20]);
         let bytes = s.as_bytes();
         for i in 0..20 {
-            let high = hex_char_to_nibble(bytes[i * 2]);
-            let low = hex_char_to_nibble(bytes[i * 2 + 1]);
+            let high = hex_to_nibble(bytes[i * 2]);
+            let low = hex_to_nibble(bytes[i * 2 + 1]);
             if high == 0xFF || low == 0xFF {
                 return Err(binascii::ConvertError::InvalidInput);
             }
@@ -170,8 +164,8 @@ impl<'de> serde::de::Deserialize<'de> for PeerId {
                 let mut res = PeerId([0u8; 20]);
                 let bytes = v.as_bytes();
                 for i in 0..20 {
-                    let high = hex_char_to_nibble(bytes[i * 2]);
-                    let low = hex_char_to_nibble(bytes[i * 2 + 1]);
+                    let high = hex_to_nibble(bytes[i * 2]);
+                    let low = hex_to_nibble(bytes[i * 2 + 1]);
                     if high == 0xFF || low == 0xFF {
                         return Err(serde::de::Error::invalid_value(
                             serde::de::Unexpected::Str(v),

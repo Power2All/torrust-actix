@@ -17,13 +17,24 @@ use std::collections::{
     HashMap
 };
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Monotonic, process-local sequence number used as the dedupe ordering
+/// key for queued torrent updates.  Replaces wall-clock nanoseconds
+/// (`SystemTime::now()`), which can jump backwards on NTP corrections /
+/// leap seconds and would let an older update win the dedupe.
+static UPDATE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+#[inline]
+fn next_seq() -> u128 {
+    u128::from(UPDATE_SEQ.fetch_add(1, Ordering::Relaxed))
+}
 
 impl TorrentTracker {
     pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_entry: TorrentEntry, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.torrents_updates.write();
-        let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
+        let timestamp = next_seq();
         if lock.insert(timestamp, (info_hash, torrent_entry, updates_action)).is_none() {
             self.update_stats(StatsEvent::TorrentsUpdates, 1);
             true
@@ -39,7 +50,7 @@ impl TorrentTracker {
         let mut success_count = 0i64;
         let mut remove_count = 0i64;
         for (timestamp, (info_hash, torrent_entry, updates_action)) in hashes {
-            let new_timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
+            let new_timestamp = next_seq();
             let success = lock.insert(new_timestamp, (info_hash, torrent_entry, updates_action)).is_none();
             if success {
                 success_count += 1;
@@ -84,24 +95,21 @@ impl TorrentTracker {
 
     pub async fn save_torrent_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
-        let updates = {
-            let lock = self.torrents_updates.read_recursive();
-            lock.clone()
+        let updates: HashMap<u128, (InfoHash, TorrentEntry, UpdatesAction)> = {
+            let mut lock = self.torrents_updates.write();
+            std::mem::take(&mut *lock)
         };
         if updates.is_empty() {
             return Ok(());
         }
+        let drained = updates.len() as i64;
+        self.update_stats(StatsEvent::TorrentsUpdates, -drained);
         let mut mapping: HashMap<InfoHash, (u128, TorrentEntry, UpdatesAction)> = HashMap::with_capacity(updates.len());
-        let mut timestamps_to_remove = Vec::new();
         for (timestamp, (info_hash, torrent_entry, updates_action)) in updates {
             match mapping.entry(info_hash) {
                 Entry::Occupied(mut o) => {
-                    let existing = o.get();
-                    if timestamp > existing.0 {
-                        timestamps_to_remove.push(existing.0);
+                    if timestamp > o.get().0 {
                         o.insert((timestamp, torrent_entry, updates_action));
-                    } else {
-                        timestamps_to_remove.push(timestamp);
                     }
                 }
                 Entry::Vacant(v) => {
@@ -110,11 +118,11 @@ impl TorrentTracker {
             }
         }
         let mapping_len = mapping.len();
+        let is_persistent = torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(torrent_tracker.config.database.persistent);
         let torrents_to_save: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)> = mapping
             .iter()
             .map(|(info_hash, (_, torrent_entry, updates_action))| (*info_hash, (torrent_entry.clone(), *updates_action)))
             .collect();
-        let is_persistent = torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(torrent_tracker.config.database.persistent);
         let db_result = if is_persistent {
             self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await
         } else {
@@ -161,24 +169,18 @@ impl TorrentTracker {
                         }
                 }
             }
-            let mut lock = self.torrents_updates.write();
-            let mut removed_count = 0i64;
-            for (_, (timestamp, _, _)) in mapping {
-                if lock.remove(&timestamp).is_some() {
-                    removed_count += 1;
-                }
-            }
-            for timestamp in timestamps_to_remove {
-                if lock.remove(&timestamp).is_some() {
-                    removed_count += 1;
-                }
-            }
-            if removed_count > 0 {
-                self.update_stats(StatsEvent::TorrentsUpdates, -removed_count);
-            }
             Ok(())
         } else {
             error!("[SYNC TORRENT UPDATES] Unable to sync {mapping_len} torrents");
+            let mut lock = self.torrents_updates.write();
+            let mut restored = 0i64;
+            for (info_hash, (timestamp, torrent_entry, updates_action)) in mapping {
+                if let Entry::Vacant(v) = lock.entry(timestamp) {
+                    v.insert((info_hash, torrent_entry, updates_action));
+                    restored += 1;
+                }
+            }
+            self.update_stats(StatsEvent::TorrentsUpdates, restored);
             Err(())
         }
     }

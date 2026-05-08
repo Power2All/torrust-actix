@@ -101,8 +101,6 @@ impl ParsePool {
                 }
             });
         }
-        let runtime = self.udp_runtime.clone();
-        std::mem::forget(runtime);
     }
 
     fn extract_spp_info(packet: &UdpPacket) -> (SocketAddr, &[u8]) {

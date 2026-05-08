@@ -48,15 +48,7 @@ impl From<[u8; 20]> for InfoHash {
 
 impl serde::ser::Serialize for InfoHash {
     fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
-        let mut buffer = [0u8; 40];
-        for (i, &byte) in self.0.iter().enumerate() {
-            let idx = i * 2;
-            buffer[idx] = HEX_CHARS[(byte >> 4) as usize];
-            buffer[idx + 1] = HEX_CHARS[(byte & 0xf) as usize];
-        }
-        let str_out = unsafe { std::str::from_utf8_unchecked(&buffer) };
-        serializer.serialize_str(str_out)
+        serializer.serialize_str(crate::common::common::bin20_to_hex(&self.0).as_str())
     }
 }
 

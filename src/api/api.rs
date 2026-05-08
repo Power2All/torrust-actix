@@ -254,7 +254,10 @@ pub async fn api_service(
             .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
             .workers(worker_threads)
             .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-            .unwrap()
+            .unwrap_or_else(|e| {
+                error!("[APIS] Unable to bind to {addr}: {e}");
+                exit(1);
+            })
             .disable_signals()
             .run();
         return (server.handle(), server);
@@ -266,7 +269,10 @@ pub async fn api_service(
         .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
         .workers(worker_threads)
         .bind((addr.ip(), addr.port()))
-        .unwrap()
+        .unwrap_or_else(|e| {
+            error!("[API] Unable to bind to {addr}: {e}");
+            exit(1);
+        })
         .disable_signals()
         .run();
     (server.handle(), server)
