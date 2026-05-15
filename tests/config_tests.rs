@@ -177,6 +177,9 @@ udp_server = []
 api_server = []
 
 [tracker_config]
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+api_key  = std::env::var("<SECRET>")?;
 api_key = "TestKeyThatIsLongEnoughToBeValid1234!"
 whitelist_enabled = false
 blacklist_enabled = false
@@ -297,6 +300,9 @@ async fn test_config_rtctorrent_toml_explicit_true() {
 log_level = "info"
 log_console_interval = 60
 udp_server = []
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+api_key  = std::env::var("<SECRET>")?;
 api_server = []
 
 [tracker_config]
