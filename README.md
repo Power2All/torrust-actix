@@ -566,6 +566,10 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 ### ChangeLog
 
+#### v4.2.11
+* Fixing a database (PostgreSQL) implementation code (Thanks zmiguel)
+* Bumping version of SQLx, needed to modify the code to use the newer SQLx functions properly
+
 #### v4.2.10
 * Various audit findings and performance fixes
 
