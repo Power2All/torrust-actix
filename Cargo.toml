@@ -5,7 +5,7 @@ resolver = "3"
 
 [package]
 name = "torrust-actix"
-version = "4.2.10"
+version = "4.2.11"
 edition = "2024"
 license = "MIT"
 authors = ["Power2All <info@power2all.com>"]
@@ -64,7 +64,7 @@ serde_json = { version = "1.0.149", features = ["preserve_order"] }
 serde_millis = "0.1.1"
 sha1 = "0.11.0"
 socket2 = "0.6.3"
-sqlx = { version = "0.8.6", features = ["mysql", "postgres", "sqlite", "runtime-tokio-rustls"] }
+sqlx = { version = "0.9.0", features = ["mysql", "mysql-rsa", "postgres", "sqlite", "runtime-tokio", "tls-rustls-ring-webpki"] }
 async-trait = "0.1.89"
 redis = { version = "1.2.1", features = ["tokio-comp", "connection-manager"] }
 memcache = { version = "0.19.0", default-features = false }
@@ -101,7 +101,7 @@ harness = false
 name = "Torrust Actix"
 identifier = "com.power2all.torrust-actix"
 icon = ["icon.ico"]
-version = "4.2.9"
+version = "4.2.11"
 copyright = "Copyright (c) 2024-2026 Power2All"
 category = "Public Utility"
 short_description = "BitTorrent Tracker"

@@ -22,7 +22,7 @@ pub fn format_hex_select(engine: DatabaseDrivers, column: &str, is_binary: bool)
                 format!("HEX(`{column}`) AS `{column}`")
             }
             DatabaseDrivers::pgsql => {
-                format!("encode({column}, 'hex') AS {column}")
+                quote_identifier(engine, column)
             }
         }
     } else {

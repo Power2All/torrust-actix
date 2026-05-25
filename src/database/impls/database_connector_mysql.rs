@@ -97,7 +97,7 @@ impl DatabaseConnectorMySQL {
                 "CREATE TABLE IF NOT EXISTS `{}` (`{}` {} NOT NULL, `{}` INT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                 ts.table_name, ts.column_infohash, hash_type, ts.column_seeds, ts.column_peers, ts.column_completed, ts.column_infohash
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", ts.table_name);
                 exit(1);
             }
@@ -108,7 +108,7 @@ impl DatabaseConnectorMySQL {
                 "CREATE TABLE IF NOT EXISTS `{}` (`{}` {} NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                 ws.table_name, ws.column_infohash, hash_type, ws.column_infohash
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", ws.table_name);
                 exit(1);
             }
@@ -119,7 +119,7 @@ impl DatabaseConnectorMySQL {
                 "CREATE TABLE IF NOT EXISTS `{}` (`{}` {} NOT NULL, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                 bs.table_name, bs.column_infohash, hash_type, bs.column_infohash
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", bs.table_name);
                 exit(1);
             }
@@ -130,7 +130,7 @@ impl DatabaseConnectorMySQL {
                 "CREATE TABLE IF NOT EXISTS `{}` (`{}` {} NOT NULL, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                 ks.table_name, ks.column_hash, hash_type, ks.column_timeout, ks.column_hash
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", ks.table_name);
                 exit(1);
             }
@@ -148,7 +148,7 @@ impl DatabaseConnectorMySQL {
                     us.table_name, us.column_id, us.column_key, key_type, us.column_uploaded, us.column_downloaded, us.column_completed, us.column_active, us.column_updated, us.column_id
                 )
             };
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", us.table_name);
                 exit(1);
             }
@@ -174,11 +174,11 @@ impl DatabaseConnectorMySQL {
                 start,
                 length,
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
                 let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
                 let info_hash: [u8; 20] =
-                    <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref())
+                    <[u8; 20]>::try_from(&hex::decode(info_hash_data).unwrap()[0..20])
                         .unwrap();
                 let completed_count: u64 = result.get::<Option<i64>, _>(structure.column_completed.as_str()).unwrap_or(0) as u64;
                 tracker.add_torrent(
@@ -233,7 +233,7 @@ impl DatabaseConnectorMySQL {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -254,7 +254,7 @@ impl DatabaseConnectorMySQL {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                                 error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
@@ -269,7 +269,7 @@ impl DatabaseConnectorMySQL {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                                 error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
@@ -287,7 +287,7 @@ impl DatabaseConnectorMySQL {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                                 error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
@@ -301,7 +301,7 @@ impl DatabaseConnectorMySQL {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                                 error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
@@ -333,11 +333,11 @@ impl DatabaseConnectorMySQL {
                 start,
                 length,
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
                 let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
                 let info_hash: [u8; 20] =
-                    <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref())
+                    <[u8; 20]>::try_from(&hex::decode(info_hash_data).unwrap()[0..20])
                         .unwrap();
                 tracker.add_whitelist(InfoHash(info_hash));
                 hashes += 1;
@@ -374,7 +374,7 @@ impl DatabaseConnectorMySQL {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -388,7 +388,7 @@ impl DatabaseConnectorMySQL {
                         &hash_str,
                         is_binary,
                     );
-                    if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
@@ -419,11 +419,11 @@ impl DatabaseConnectorMySQL {
                 start,
                 length,
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
                 let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
                 let info_hash: [u8; 20] =
-                    <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref())
+                    <[u8; 20]>::try_from(&hex::decode(info_hash_data).unwrap()[0..20])
                         .unwrap();
                 tracker.add_blacklist(InfoHash(info_hash));
                 hashes += 1;
@@ -460,7 +460,7 @@ impl DatabaseConnectorMySQL {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -474,7 +474,7 @@ impl DatabaseConnectorMySQL {
                         &hash_str,
                         is_binary,
                     );
-                    if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
@@ -505,11 +505,11 @@ impl DatabaseConnectorMySQL {
                 start,
                 length,
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
                 let hash_data: &[u8] = result.get(structure.column_hash.as_str());
                 let hash: [u8; 20] =
-                    <[u8; 20]>::try_from(hex::decode(hash_data).unwrap()[0..20].as_ref()).unwrap();
+                    <[u8; 20]>::try_from(&hex::decode(hash_data).unwrap()[0..20]).unwrap();
                 let timeout: i64 = result.get(structure.column_timeout.as_str());
                 tracker.add_key(InfoHash(hash), timeout);
                 hashes += 1;
@@ -546,7 +546,7 @@ impl DatabaseConnectorMySQL {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -562,7 +562,7 @@ impl DatabaseConnectorMySQL {
                         &hash_str,
                         is_binary,
                     );
-                    if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
@@ -603,7 +603,7 @@ impl DatabaseConnectorMySQL {
                 structure.table_name,
                 limit_offset(ENGINE, start, length)
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
                 let hash = if is_uuid {
                     let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
@@ -683,7 +683,7 @@ impl DatabaseConnectorMySQL {
                                 user_entry_item.user_id.unwrap()
                             )
                         };
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -769,7 +769,7 @@ impl DatabaseConnectorMySQL {
                             where_val
                         )
                     };
-                    if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
@@ -790,7 +790,7 @@ impl DatabaseConnectorMySQL {
             "UPDATE `{}` SET `{}`=0, `{}`=0",
             structure.table_name, structure.column_seeds, structure.column_peers
         );
-        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
             error!("{LOG_PREFIX} Error: {e}");
             return Err(e);
         }
