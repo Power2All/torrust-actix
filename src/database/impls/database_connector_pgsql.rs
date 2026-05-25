@@ -94,7 +94,7 @@ impl DatabaseConnectorPgSQL {
                 "CREATE TABLE IF NOT EXISTS public.{} ({} {} NOT NULL, {} integer NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, CONSTRAINT torrents_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                 ts.table_name, ts.column_infohash, hash_type, ts.column_seeds, ts.column_peers, ts.column_completed, ts.column_infohash
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", ts.table_name);
                 exit(1);
             }
@@ -105,7 +105,7 @@ impl DatabaseConnectorPgSQL {
                 "CREATE TABLE IF NOT EXISTS public.{} ({} {} NOT NULL, CONSTRAINT whitelist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                 ws.table_name, ws.column_infohash, hash_type, ws.column_infohash
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", ws.table_name);
                 exit(1);
             }
@@ -116,7 +116,7 @@ impl DatabaseConnectorPgSQL {
                 "CREATE TABLE IF NOT EXISTS public.{} ({} {} NOT NULL, CONSTRAINT blacklist_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                 bs.table_name, bs.column_infohash, hash_type, bs.column_infohash
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", bs.table_name);
                 exit(1);
             }
@@ -127,7 +127,7 @@ impl DatabaseConnectorPgSQL {
                 "CREATE TABLE IF NOT EXISTS public.{} ({} {} NOT NULL, {} integer NOT NULL DEFAULT 0, CONSTRAINT keys_pkey PRIMARY KEY ({})) TABLESPACE pg_default",
                 ks.table_name, ks.column_hash, hash_type, ks.column_timeout, ks.column_hash
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", ks.table_name);
                 exit(1);
             }
@@ -143,7 +143,7 @@ impl DatabaseConnectorPgSQL {
                 "CREATE TABLE IF NOT EXISTS public.{} ({} {} NOT NULL, {} {} NOT NULL, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} bigint NOT NULL DEFAULT 0, {} smallint NOT NULL DEFAULT 0, {} integer NOT NULL DEFAULT 0, CONSTRAINT {} PRIMARY KEY ({})) TABLESPACE pg_default",
                 us.table_name, id_col, id_type, us.column_key, key_type, us.column_uploaded, us.column_downloaded, us.column_completed, us.column_active, us.column_updated, pk_col, id_col
             );
-            if let Err(e) = sqlx::query(&query).execute(pool).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
                 error!("{LOG_PREFIX} Failed to create table {}: {e}", us.table_name);
                 exit(1);
             }
@@ -169,12 +169,15 @@ impl DatabaseConnectorPgSQL {
                 start,
                 length,
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
-                let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
-                let info_hash: [u8; 20] =
-                    <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref())
-                        .unwrap();
+                let info_hash: [u8; 20] = if is_binary {
+                    let raw: &[u8] = result.get(structure.column_infohash.as_str());
+                    <[u8; 20]>::try_from(&raw[0..20]).unwrap()
+                } else {
+                    let text: String = result.get(structure.column_infohash.as_str());
+                    <[u8; 20]>::try_from(&hex::decode(text).unwrap()[0..20]).unwrap()
+                };
                 let completed_count: i64 = result.get::<Option<i64>, _>(structure.column_completed.as_str()).unwrap_or(0);
                 tracker.add_torrent(
                     InfoHash(info_hash),
@@ -228,7 +231,7 @@ impl DatabaseConnectorPgSQL {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -249,7 +252,7 @@ impl DatabaseConnectorPgSQL {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                                 error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
@@ -264,7 +267,7 @@ impl DatabaseConnectorPgSQL {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                                 error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
@@ -282,7 +285,7 @@ impl DatabaseConnectorPgSQL {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                                 error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
@@ -296,7 +299,7 @@ impl DatabaseConnectorPgSQL {
                                 &hash_str,
                                 is_binary,
                             );
-                            if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                                 error!("{LOG_PREFIX} Error: {e}");
                                 return Err(e);
                             }
@@ -328,12 +331,15 @@ impl DatabaseConnectorPgSQL {
                 start,
                 length,
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
-                let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
-                let info_hash: [u8; 20] =
-                    <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref())
-                        .unwrap();
+                let info_hash: [u8; 20] = if is_binary {
+                    let raw: &[u8] = result.get(structure.column_infohash.as_str());
+                    <[u8; 20]>::try_from(&raw[0..20]).unwrap()
+                } else {
+                    let text: String = result.get(structure.column_infohash.as_str());
+                    <[u8; 20]>::try_from(&hex::decode(text).unwrap()[0..20]).unwrap()
+                };
                 tracker.add_whitelist(InfoHash(info_hash));
                 hashes += 1;
             }
@@ -369,7 +375,7 @@ impl DatabaseConnectorPgSQL {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -383,7 +389,7 @@ impl DatabaseConnectorPgSQL {
                         &hash_str,
                         is_binary,
                     );
-                    if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
@@ -414,12 +420,15 @@ impl DatabaseConnectorPgSQL {
                 start,
                 length,
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
-                let info_hash_data: &[u8] = result.get(structure.column_infohash.as_str());
-                let info_hash: [u8; 20] =
-                    <[u8; 20]>::try_from(hex::decode(info_hash_data).unwrap()[0..20].as_ref())
-                        .unwrap();
+                let info_hash: [u8; 20] = if is_binary {
+                    let raw: &[u8] = result.get(structure.column_infohash.as_str());
+                    <[u8; 20]>::try_from(&raw[0..20]).unwrap()
+                } else {
+                    let text: String = result.get(structure.column_infohash.as_str());
+                    <[u8; 20]>::try_from(&hex::decode(text).unwrap()[0..20]).unwrap()
+                };
                 tracker.add_blacklist(InfoHash(info_hash));
                 hashes += 1;
             }
@@ -455,7 +464,7 @@ impl DatabaseConnectorPgSQL {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -469,7 +478,7 @@ impl DatabaseConnectorPgSQL {
                         &hash_str,
                         is_binary,
                     );
-                    if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
@@ -500,11 +509,15 @@ impl DatabaseConnectorPgSQL {
                 start,
                 length,
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
-                let hash_data: &[u8] = result.get(structure.column_hash.as_str());
-                let hash: [u8; 20] =
-                    <[u8; 20]>::try_from(hex::decode(hash_data).unwrap()[0..20].as_ref()).unwrap();
+                let hash: [u8; 20] = if is_binary {
+                    let raw: &[u8] = result.get(structure.column_hash.as_str());
+                    <[u8; 20]>::try_from(&raw[0..20]).unwrap()
+                } else {
+                    let text: String = result.get(structure.column_hash.as_str());
+                    <[u8; 20]>::try_from(&hex::decode(text).unwrap()[0..20]).unwrap()
+                };
                 let timeout: i64 = result.get(structure.column_timeout.as_str());
                 tracker.add_key(InfoHash(hash), timeout);
                 hashes += 1;
@@ -541,7 +554,7 @@ impl DatabaseConnectorPgSQL {
                             &hash_str,
                             is_binary,
                         );
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -557,7 +570,7 @@ impl DatabaseConnectorPgSQL {
                         &hash_str,
                         is_binary,
                     );
-                    if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
@@ -598,17 +611,17 @@ impl DatabaseConnectorPgSQL {
                 structure.table_name,
                 limit_offset(ENGINE, start, length)
             );
-            let mut rows = sqlx::query(&query).fetch(&self.pool);
+            let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
                 let hash = if is_uuid {
-                    let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
+                    let uuid_data: String = result.get(structure.column_uuid.as_str());
                     let mut hasher = Sha1::new();
-                    hasher.update(uuid_data);
+                    hasher.update(uuid_data.as_bytes());
                     <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                 } else {
-                    let id_data: &[u8] = result.get(structure.column_id.as_str());
+                    let id_data: i64 = result.get(structure.column_id.as_str());
                     let mut hasher = Sha1::new();
-                    hasher.update(id_data);
+                    hasher.update(id_data.to_string().as_bytes());
                     <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                 };
                 tracker.add_user(
@@ -678,7 +691,7 @@ impl DatabaseConnectorPgSQL {
                                 user_entry_item.user_id.unwrap()
                             )
                         };
-                        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
@@ -764,7 +777,7 @@ impl DatabaseConnectorPgSQL {
                             where_val
                         )
                     };
-                    if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }
@@ -785,7 +798,7 @@ impl DatabaseConnectorPgSQL {
             "UPDATE {} SET {}=0, {}=0",
             structure.table_name, structure.column_seeds, structure.column_peers
         );
-        if let Err(e) = sqlx::query(&query).execute(&mut *transaction).await {
+        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
             error!("{LOG_PREFIX} Error: {e}");
             return Err(e);
         }

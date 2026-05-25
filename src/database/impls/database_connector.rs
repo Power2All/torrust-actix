@@ -351,21 +351,21 @@ impl DatabaseConnector {
         match self.engine.as_ref() {
             Some(DatabaseDrivers::sqlite3) => {
                 if let Some(ref sqlite) = self.sqlite {
-                    sqlx::query(&query).execute(&sqlite.pool).await.map(|_| ())
+                    sqlx::query(sqlx::AssertSqlSafe(query)).execute(&sqlite.pool).await.map(|_| ())
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::mysql) => {
                 if let Some(ref mysql) = self.mysql {
-                    sqlx::query(&query).execute(&mysql.pool).await.map(|_| ())
+                    sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mysql.pool).await.map(|_| ())
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
-                    sqlx::query(&query).execute(&pgsql.pool).await.map(|_| ())
+                    sqlx::query(sqlx::AssertSqlSafe(query)).execute(&pgsql.pool).await.map(|_| ())
                 } else {
                     Err(Error::RowNotFound)
                 }
