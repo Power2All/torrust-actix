@@ -1,3 +1,4 @@
+use crate::config::enums::udp_receive_method::UdpReceiveMethod;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -49,7 +50,7 @@ use tokio::runtime::Builder;
 
 impl UdpServer {
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, receive_method: UdpReceiveMethod) -> tokio::io::Result<UdpServer>
     {
         let sockets = Self::build_sockets(bind_address, udp_threads, recv_buffer_size, send_buffer_size, reuse_address)?;
         Ok(UdpServer {
@@ -59,6 +60,7 @@ impl UdpServer {
             tracker,
             use_payload_ip,
             simple_proxy_protocol,
+            receive_method,
         })
     }
 
@@ -120,6 +122,7 @@ impl UdpServer {
         let udp_threads = self.udp_threads;
         let sockets = self.sockets.clone();
         let parse_pool_clone = parse_pool.clone();
+        let receive_method = self.receive_method;
         tokio::task::spawn_blocking(move || {
             let tokio_udp = Builder::new_multi_thread()
                 .thread_name("udp")
@@ -128,10 +131,39 @@ impl UdpServer {
                 .build()
                 .unwrap();
             tokio_udp.block_on(async move {
+                #[cfg(target_os = "linux")]
+                let use_io_uring = {
+                    let requested = receive_method == UdpReceiveMethod::io_uring;
+                    let available = requested && crate::udp::impls::io_uring_recv::is_available();
+                    if requested && !available {
+                        log::warn!("[UDP] io_uring requested but unavailable (kernel/seccomp); falling back to recvmmsg");
+                    }
+                    info!("[UDP] receive backend: {}", if available { "io_uring" } else { "recvmmsg" });
+                    available
+                };
+                #[cfg(not(target_os = "linux"))]
+                let _ = receive_method;
+
                 for index in 0..udp_threads {
                     let parse_pool_clone = parse_pool_clone.clone();
                     let socket = sockets[index % sockets.len()].clone();
                     let rx = rx.clone();
+
+                    #[cfg(target_os = "linux")]
+                    if use_io_uring {
+                        std::thread::Builder::new()
+                            .name(format!("udp-uring-{index}"))
+                            .spawn(move || {
+                                crate::udp::impls::io_uring_recv::run(socket, parse_pool_clone, rx);
+                            })
+                            .expect("failed to spawn io_uring receive thread");
+                    } else {
+                        tokio::spawn(async move {
+                            Self::recv_loop_recvmmsg(socket, parse_pool_clone, rx).await;
+                        });
+                    }
+
+                    #[cfg(not(target_os = "linux"))]
                     tokio::spawn(async move {
                         Self::recv_loop(socket, parse_pool_clone, rx).await;
                     });
@@ -168,7 +200,7 @@ impl UdpServer {
     }
 
     #[cfg(target_os = "linux")]
-    async fn recv_loop(socket: Arc<UdpSocket>, parse_pool: Arc<ParsePool>, mut rx: tokio::sync::watch::Receiver<bool>) {
+    async fn recv_loop_recvmmsg(socket: Arc<UdpSocket>, parse_pool: Arc<ParsePool>, mut rx: tokio::sync::watch::Receiver<bool>) {
         use crate::udp::impls::batch_recv::{RecvBatch, BATCH};
         use std::os::unix::io::AsRawFd;
         use tokio::io::Interest;

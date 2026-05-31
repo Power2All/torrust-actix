@@ -74,7 +74,7 @@ impl RecvBatch {
     }
 }
 
-fn sockaddr_to_socketaddr(storage: &libc::sockaddr_storage) -> Option<SocketAddr> {
+pub(crate) fn sockaddr_to_socketaddr(storage: &libc::sockaddr_storage) -> Option<SocketAddr> {
     match storage.ss_family as libc::c_int {
         libc::AF_INET => {
             let addr = unsafe { &*(storage as *const libc::sockaddr_storage as *const libc::sockaddr_in) };

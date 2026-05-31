@@ -8,3 +8,5 @@ pub mod parse_pool;
 pub mod simple_proxy_protocol;
 #[cfg(target_os = "linux")]
 pub mod batch_recv;
+#[cfg(target_os = "linux")]
+pub mod io_uring_recv;

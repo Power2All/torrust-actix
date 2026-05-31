@@ -92,6 +92,7 @@ reqwest = { version = "0.13.4", default-features = false, features = ["rustls", 
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
+io-uring = "0.7"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"

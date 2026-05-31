@@ -4,6 +4,7 @@ use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 use crate::config::enums::configuration_error::ConfigurationError;
+use crate::config::enums::udp_receive_method::UdpReceiveMethod;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::cache_config::CacheConfig;
 use crate::config::structs::configuration::Configuration;
@@ -165,6 +166,7 @@ impl Configuration {
                     reuse_address: true,
                     use_payload_ip: false,
                     simple_proxy_protocol: false,
+                    receive_method: UdpReceiveMethod::recvmmsg,
                 }
             ),
             api_server: vec!(
