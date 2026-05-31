@@ -26,6 +26,7 @@ This project originated from Torrust-Tracker code originally developed by Mick v
 * [X] Cloudflare's "Simple Proxy Protocol" support added (https://developers.cloudflare.com/spectrum/how-to/enable-proxy-protocol/#enable-simple-proxy-protocol-for-udp)
 * [X] RtcTorrent implementation (as alternative/replacement for WebTorrent)
 * [X] Configurable LZ4/Zstd compression for RTC SDP data (lz4 default, enabled by default)
+* [X] Adding UDP receive method with recvmmsg or io_uring
 
 ## Implemented BEPs
 * [BEP 3](https://www.bittorrent.org/beps/bep_0003.html): The BitTorrent Protocol
@@ -246,6 +247,7 @@ UDP_0_SEND_BUFFER_SIZE <UINT64>
 UDP_0_REUSE_ADDRESS <true | false>
 UDP_0_USE_PAYLOAD_IP <true | false>
 UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
+UDP_0_RECEIVE_METHOD <auto | recvmmsg | io_uring>
 ```
 
 ---
@@ -565,6 +567,10 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 ---
 
 ### ChangeLog
+
+#### v4.2.12
+* Applied UDP traffic control performance and improvements
+* Introduced a new optional config for further optimization: receive_method. This can be "auto", "recvmmsg" or "io_uring". By default, "recvmmsg" is used, but io_uring can be used when you received a lot of traffic
 
 #### v4.2.11
 * Fixing a database (PostgreSQL) implementation code (Thanks zmiguel)

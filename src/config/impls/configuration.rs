@@ -652,6 +652,13 @@ impl Configuration {
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL")) {
                         block.simple_proxy_protocol = parse_env_bool(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL"), &value, false);
                     }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_RECEIVE_METHOD")) {
+                        block.receive_method = match value.to_lowercase().as_str() {
+                            "auto" => UdpReceiveMethod::auto,
+                            "io_uring" => UdpReceiveMethod::io_uring,
+                            _ => UdpReceiveMethod::recvmmsg,
+                        };
+                    }
                 }
             }
             udp_iteration += 1;
