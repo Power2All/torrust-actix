@@ -1,3 +1,4 @@
+use crate::config::enums::udp_receive_method::UdpReceiveMethod;
 use serde::{
     Deserialize,
     Serialize
@@ -16,4 +17,6 @@ pub struct UdpTrackersConfig {
     pub use_payload_ip: bool,
     #[serde(default)]
     pub simple_proxy_protocol: bool,
+    #[serde(default)]
+    pub receive_method: UdpReceiveMethod,
 }

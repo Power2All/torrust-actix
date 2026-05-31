@@ -1,3 +1,4 @@
+use crate::config::enums::udp_receive_method::UdpReceiveMethod;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::udp::enums::simple_proxy_protocol::SppParseResult;
 use crate::udp::structs::number_of_downloads::NumberOfDownloads;
@@ -38,9 +39,9 @@ pub const SPP_HEADER_SIZE: usize = 38;
 pub const SPP_MAGIC: u16 = 0x56EC;
 
 #[allow(clippy::too_many_arguments)]
-pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
+pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, receive_method: UdpReceiveMethod, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
 {
-    let udp_server = UdpServer::new(data, addr, udp_threads, worker_threads, recv_buffer_size, send_buffer_size, reuse_address, use_payload_ip, simple_proxy_protocol).await.unwrap_or_else(|e| {
+    let udp_server = UdpServer::new(data, addr, udp_threads, worker_threads, recv_buffer_size, send_buffer_size, reuse_address, use_payload_ip, simple_proxy_protocol, receive_method).await.unwrap_or_else(|e| {
         error!("Could not listen to the UDP port: {e}");
         exit(1);
     });

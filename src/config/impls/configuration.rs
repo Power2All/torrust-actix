@@ -4,6 +4,7 @@ use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 use crate::config::enums::configuration_error::ConfigurationError;
+use crate::config::enums::udp_receive_method::UdpReceiveMethod;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::cache_config::CacheConfig;
 use crate::config::structs::configuration::Configuration;
@@ -165,6 +166,7 @@ impl Configuration {
                     reuse_address: true,
                     use_payload_ip: false,
                     simple_proxy_protocol: false,
+                    receive_method: UdpReceiveMethod::recvmmsg,
                 }
             ),
             api_server: vec!(
@@ -649,6 +651,13 @@ impl Configuration {
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL")) {
                         block.simple_proxy_protocol = parse_env_bool(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL"), &value, false);
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_RECEIVE_METHOD")) {
+                        block.receive_method = match value.to_lowercase().as_str() {
+                            "auto" => UdpReceiveMethod::auto,
+                            "io_uring" => UdpReceiveMethod::io_uring,
+                            _ => UdpReceiveMethod::recvmmsg,
+                        };
                     }
                 }
             }

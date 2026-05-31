@@ -5,7 +5,7 @@ resolver = "3"
 
 [package]
 name = "torrust-actix"
-version = "4.2.11"
+version = "4.2.12"
 edition = "2024"
 license = "MIT"
 authors = ["Power2All <info@power2all.com>"]
@@ -40,7 +40,7 @@ actix-web-actors = "4.3.1"
 tokio-tungstenite = { version = "0.29.0", features = ["rustls-tls-webpki-roots"] }
 rmp-serde = "1.3.1"
 once_cell = "1.21.4"
-uuid = { version = "1.23.1", features = ["v4"] }
+uuid = { version = "1.23.2", features = ["v4"] }
 async-std = "1.13.2"
 binascii = "0.1.4"
 bip_bencode = "0.4.4"
@@ -63,10 +63,10 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149", features = ["preserve_order"] }
 serde_millis = "0.1.1"
 sha1 = "0.11.0"
-socket2 = "0.6.3"
+socket2 = "0.6.4"
 sqlx = { version = "0.9.0", features = ["mysql", "mysql-rsa", "postgres", "sqlite", "runtime-tokio", "tls-rustls-ring-webpki"] }
 async-trait = "0.1.89"
-redis = { version = "1.2.1", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.2.2", features = ["tokio-comp", "connection-manager"] }
 memcache = { version = "0.19.0", default-features = false }
 thiserror = "2.0.18"
 tokio = { version = "1.52.2", features = ["full"] }
@@ -88,7 +88,11 @@ tempfile = "3.27.0"
 criterion = { version = "0.8.2", features = ["async_tokio"] }
 mockall = "0.14.0"
 proptest = "1.11.0"
-reqwest = { version = "0.13.3", default-features = false, features = ["rustls", "json"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+io-uring = "0.7"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"
@@ -101,7 +105,7 @@ harness = false
 name = "Torrust Actix"
 identifier = "com.power2all.torrust-actix"
 icon = ["icon.ico"]
-version = "4.2.11"
+version = "4.2.12"
 copyright = "Copyright (c) 2024-2026 Power2All"
 category = "Public Utility"
 short_description = "BitTorrent Tracker"

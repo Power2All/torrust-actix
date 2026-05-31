@@ -1,3 +1,4 @@
+use crate::config::enums::udp_receive_method::UdpReceiveMethod;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -30,6 +31,7 @@ use log::{
     debug,
     info
 };
+use smallvec::SmallVec;
 use socket2::{
     Domain,
     Protocol,
@@ -48,25 +50,53 @@ use tokio::runtime::Builder;
 
 impl UdpServer {
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, receive_method: UdpReceiveMethod) -> tokio::io::Result<UdpServer>
     {
-        let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
-        let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
-        socket.set_recv_buffer_size(recv_buffer_size).map_err(tokio::io::Error::other)?;
-        socket.set_send_buffer_size(send_buffer_size).map_err(tokio::io::Error::other)?;
-        socket.set_reuse_address(reuse_address).map_err(tokio::io::Error::other)?;
-        socket.bind(&bind_address.into()).map_err(tokio::io::Error::other)?;
-        socket.set_nonblocking(true).map_err(tokio::io::Error::other)?;
-        let std_socket: std::net::UdpSocket = socket.into();
-        let tokio_socket = UdpSocket::from_std(std_socket)?;
+        let sockets = Self::build_sockets(bind_address, udp_threads, recv_buffer_size, send_buffer_size, reuse_address)?;
         Ok(UdpServer {
-            socket: Arc::new(tokio_socket),
+            sockets,
             udp_threads,
             worker_threads,
             tracker,
             use_payload_ip,
             simple_proxy_protocol,
+            receive_method,
         })
+    }
+
+    #[cfg(target_os = "linux")]
+    fn build_sockets(bind_address: SocketAddr, count: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool) -> tokio::io::Result<Vec<Arc<UdpSocket>>> {
+        let count = count.max(1);
+        let mut sockets = Vec::with_capacity(count);
+        for _ in 0..count {
+            let socket = Self::configure_socket(bind_address, recv_buffer_size, send_buffer_size, reuse_address, true)?;
+            sockets.push(Arc::new(socket));
+        }
+        Ok(sockets)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn build_sockets(bind_address: SocketAddr, _count: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool) -> tokio::io::Result<Vec<Arc<UdpSocket>>> {
+        let socket = Self::configure_socket(bind_address, recv_buffer_size, send_buffer_size, reuse_address, false)?;
+        Ok(vec![Arc::new(socket)])
+    }
+
+    fn configure_socket(bind_address: SocketAddr, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, reuse_port: bool) -> tokio::io::Result<UdpSocket> {
+        let domain = if bind_address.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
+        let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
+        socket.set_recv_buffer_size(recv_buffer_size).map_err(tokio::io::Error::other)?;
+        socket.set_send_buffer_size(send_buffer_size).map_err(tokio::io::Error::other)?;
+        socket.set_reuse_address(reuse_address).map_err(tokio::io::Error::other)?;
+        #[cfg(target_os = "linux")]
+        if reuse_port {
+            socket.set_reuse_port(true).map_err(tokio::io::Error::other)?;
+        }
+        #[cfg(not(target_os = "linux"))]
+        let _ = reuse_port;
+        socket.bind(&bind_address.into()).map_err(tokio::io::Error::other)?;
+        socket.set_nonblocking(true).map_err(tokio::io::Error::other)?;
+        let std_socket: std::net::UdpSocket = socket.into();
+        UdpSocket::from_std(std_socket)
     }
 
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
@@ -90,8 +120,9 @@ impl UdpServer {
             }
         });
         let udp_threads = self.udp_threads;
-        let socket_clone = self.socket.clone();
+        let sockets = self.sockets.clone();
         let parse_pool_clone = parse_pool.clone();
+        let receive_method = self.receive_method;
         tokio::task::spawn_blocking(move || {
             let tokio_udp = Builder::new_multi_thread()
                 .thread_name("udp")
@@ -100,40 +131,127 @@ impl UdpServer {
                 .build()
                 .unwrap();
             tokio_udp.block_on(async move {
-                for _index in 0..udp_threads {
-                    let parse_pool_clone = parse_pool_clone.clone();
-                    let socket_clone = socket_clone.clone();
-                    let mut rx = rx.clone();
-                    tokio::spawn(async move {
-                        let mut data = [0; 1496];
-                        loop {
-                            let udp_sock = socket_clone.local_addr().unwrap();
-                            tokio::select! {
-                                _ = rx.changed() => {
-                                    info!("Stopping UDP server: {udp_sock}...");
-                                    break;
-                                }
-                                Ok((valid_bytes, remote_addr)) = socket_clone.recv_from(&mut data) => {
-                                    if valid_bytes > 0 {
-                                        let packet = UdpPacket {
-                                            remote_addr,
-                                            data,
-                                            data_len: valid_bytes,
-                                            socket: socket_clone.clone(),
-                                        };
-                                        if parse_pool_clone.payload.push(packet).is_err() {
+                #[cfg(target_os = "linux")]
+                let use_io_uring = {
+                    let requested = receive_method == UdpReceiveMethod::io_uring;
+                    let available = requested && crate::udp::impls::io_uring_recv::is_available();
+                    if requested && !available {
+                        log::warn!("[UDP] io_uring requested but unavailable (kernel/seccomp); falling back to recvmmsg");
+                    }
+                    info!("[UDP] receive backend: {}", if available { "io_uring" } else { "recvmmsg" });
+                    available
+                };
+                #[cfg(not(target_os = "linux"))]
+                let _ = receive_method;
 
-                                            debug!("Parse pool queue full, dropping packet");
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                for index in 0..udp_threads {
+                    let parse_pool_clone = parse_pool_clone.clone();
+                    let socket = sockets[index % sockets.len()].clone();
+                    let rx = rx.clone();
+
+                    #[cfg(target_os = "linux")]
+                    if use_io_uring {
+                        std::thread::Builder::new()
+                            .name(format!("udp-uring-{index}"))
+                            .spawn(move || {
+                                crate::udp::impls::io_uring_recv::run(socket, parse_pool_clone, rx);
+                            })
+                            .expect("failed to spawn io_uring receive thread");
+                    } else {
+                        tokio::spawn(async move {
+                            Self::recv_loop_recvmmsg(socket, parse_pool_clone, rx).await;
+                        });
+                    }
+
+                    #[cfg(not(target_os = "linux"))]
+                    tokio::spawn(async move {
+                        Self::recv_loop(socket, parse_pool_clone, rx).await;
                     });
                 }
                 rx.changed().await.ok();
             });
         });
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    async fn recv_loop(socket: Arc<UdpSocket>, parse_pool: Arc<ParsePool>, mut rx: tokio::sync::watch::Receiver<bool>) {
+        let udp_sock = socket.local_addr().unwrap();
+        let mut data = [0u8; crate::udp::udp::MAX_PACKET_SIZE];
+        loop {
+            tokio::select! {
+                _ = rx.changed() => {
+                    info!("Stopping UDP server: {udp_sock}...");
+                    break;
+                }
+                Ok((valid_bytes, remote_addr)) = socket.recv_from(&mut data) => {
+                    if valid_bytes > 0 {
+                        let packet = UdpPacket {
+                            remote_addr,
+                            data: SmallVec::from_slice(&data[..valid_bytes]),
+                            socket: socket.clone(),
+                        };
+                        if parse_pool.payload.push(packet).is_err() {
+                            debug!("Parse pool queue full, dropping packet");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn recv_loop_recvmmsg(socket: Arc<UdpSocket>, parse_pool: Arc<ParsePool>, mut rx: tokio::sync::watch::Receiver<bool>) {
+        use crate::udp::impls::batch_recv::{RecvBatch, BATCH};
+        use std::os::unix::io::AsRawFd;
+        use tokio::io::Interest;
+
+        const MAX_DRAIN_ROUNDS: usize = 16;
+
+        let udp_sock = socket.local_addr().unwrap();
+        let fd = socket.as_raw_fd();
+        let mut batch = RecvBatch::new();
+        loop {
+            tokio::select! {
+                biased;
+                _ = rx.changed() => {
+                    info!("Stopping UDP server: {udp_sock}...");
+                    break;
+                }
+                readable = socket.readable() => {
+                    if readable.is_err() {
+                        break;
+                    }
+                    let mut rounds = 0;
+                    loop {
+                        match socket.try_io(Interest::READABLE, || batch.recv(fd)) {
+                            Ok(count) => {
+                                for i in 0..count {
+                                    if let Some((buf, remote_addr)) = batch.datagram(i) {
+                                        if buf.is_empty() {
+                                            continue;
+                                        }
+                                        let packet = UdpPacket {
+                                            remote_addr,
+                                            data: SmallVec::from_slice(buf),
+                                            socket: socket.clone(),
+                                        };
+                                        if parse_pool.payload.push(packet).is_err() {
+                                            debug!("Parse pool queue full, dropping packet");
+                                        }
+                                    }
+                                }
+                                rounds += 1;
+                                if count < BATCH || rounds >= MAX_DRAIN_ROUNDS {
+                                    break;
+                                }
+                            }
+                            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
