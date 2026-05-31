@@ -79,7 +79,7 @@ impl ParsePool {
                                         let (effective_addr, payload_slice) = if simple_proxy_protocol {
                                             Self::extract_spp_info(&packet)
                                         } else {
-                                            (packet.remote_addr, &packet.data[..packet.data_len])
+                                            (packet.remote_addr, packet.data.as_slice())
                                         };
                                         let response = UdpServer::handle_packet(
                                             effective_addr,
@@ -104,7 +104,7 @@ impl ParsePool {
     }
 
     fn extract_spp_info(packet: &UdpPacket) -> (SocketAddr, &[u8]) {
-        let data = &packet.data[..packet.data_len];
+        let data = packet.data.as_slice();
         match parse_spp_header(data) {
             SppParseResult::Found { header, payload_offset } => {
                 debug!(
@@ -129,7 +129,7 @@ impl ParsePool {
             let (addr, slice) = Self::extract_spp_info(&packet);
             (addr, slice.to_vec())
         } else {
-            (packet.remote_addr, packet.data[..packet.data_len].to_vec())
+            (packet.remote_addr, packet.data.to_vec())
         };
         match forward_request(
             tracker,
