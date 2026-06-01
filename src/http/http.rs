@@ -434,13 +434,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             IpAddr::V4(_) => {
                 if announce_unwrapped.left != 0 {
                     let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds };
-                    let seeds = data.get_peers(
+                    let seeds = data.get_peers_ref(
                         peers_to_use,
                         TorrentPeersType::IPv4,
                         Some(announce_unwrapped.peer_id),
                         72
                     );
-                    for torrent_peer in seeds.values() {
+                    for &(_, torrent_peer) in &seeds {
 
                         if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                             let _ = peers_list.write(&ipv4.octets());
@@ -450,13 +450,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 }
                 if peers_list.len() < 72 * 6 {
                     let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers };
-                    let peers = data.get_peers(
+                    let peers = data.get_peers_ref(
                         peers_to_use,
                         TorrentPeersType::IPv4,
                         Some(announce_unwrapped.peer_id),
                         72
                     );
-                    for torrent_peer in peers.values() {
+                    for &(_, torrent_peer) in &peers {
                         if peers_list.len() >= 72 * 6 {
                             break;
                         }
@@ -480,13 +480,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             IpAddr::V6(_) => {
                 if announce_unwrapped.left != 0 {
                     let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds_ipv6 };
-                    let seeds = data.get_peers(
+                    let seeds = data.get_peers_ref(
                         peers_to_use,
                         TorrentPeersType::IPv6,
                         Some(announce_unwrapped.peer_id),
                         72
                     );
-                    for torrent_peer in seeds.values() {
+                    for &(_, torrent_peer) in &seeds {
                         if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                             let _ = peers_list.write(&ipv6.octets());
                             let _ = peers_list.write(&port_bytes);
@@ -495,13 +495,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                 }
                 if peers_list.len() < 72 * 18 {
                     let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers_ipv6 };
-                    let peers = data.get_peers(
+                    let peers = data.get_peers_ref(
                         peers_to_use,
                         TorrentPeersType::IPv6,
                         Some(announce_unwrapped.peer_id),
                         72
                     );
-                    for torrent_peer in peers.values() {
+                    for &(_, torrent_peer) in &peers {
                         if peers_list.len() >= 72 * 18 {
                             break;
                         }
@@ -529,13 +529,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         IpAddr::V4(_) => {
             if announce_unwrapped.left != 0 {
                 let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds };
-                let seeds = data.get_peers(
+                let seeds = data.get_peers_ref(
                     peers_to_use,
                     TorrentPeersType::IPv4,
                     Some(announce_unwrapped.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in &seeds {
+                for &(peer_id, torrent_peer) in &seeds {
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
@@ -545,13 +545,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             }
             if peers_list_mut.len() < 72 {
                 let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers };
-                let peers = data.get_peers(
+                let peers = data.get_peers_ref(
                     peers_to_use,
                     TorrentPeersType::IPv4,
                     Some(announce_unwrapped.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in &peers {
+                for &(peer_id, torrent_peer) in &peers {
                     if peers_list_mut.len() >= 72 {
                         break;
                     }
@@ -575,13 +575,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         IpAddr::V6(_) => {
             if announce_unwrapped.left != 0 {
                 let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds_ipv6 };
-                let seeds = data.get_peers(
+                let seeds = data.get_peers_ref(
                     peers_to_use,
                     TorrentPeersType::IPv6,
                     Some(announce_unwrapped.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in &seeds {
+                for &(peer_id, torrent_peer) in &seeds {
                     peers_list_mut.push(ben_map! {
                         "peer id" => ben_bytes!(peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
@@ -591,13 +591,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             }
             if peers_list_mut.len() < 72 {
                 let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers_ipv6 };
-                let peers = data.get_peers(
+                let peers = data.get_peers_ref(
                     peers_to_use,
                     TorrentPeersType::IPv6,
                     Some(announce_unwrapped.peer_id),
                     72
                 );
-                for (peer_id, torrent_peer) in &peers {
+                for &(peer_id, torrent_peer) in &peers {
                     if peers_list_mut.len() >= 72 {
                         break;
                     }

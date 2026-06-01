@@ -9,7 +9,7 @@ use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::types::ahash_map::AHashMap;
 use log::info;
-use std::collections::btree_map::Entry;
+use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 
 impl TorrentTracker {
@@ -61,6 +61,27 @@ impl TorrentTracker {
             }
             if should_include(peer_id, &torrent_peer.peer_addr) {
                 result.insert(*peer_id, torrent_peer.clone());
+            }
+        }
+        result
+    }
+
+    #[inline]
+    pub fn get_peers_ref<'a>(&self, peers: &'a AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_peer_id: Option<PeerId>, amount: usize) -> Vec<(&'a PeerId, &'a TorrentPeer)>
+    {
+        let mut result = Vec::with_capacity(amount.min(peers.len()));
+        for (peer_id, torrent_peer) in peers {
+            if amount != 0 && result.len() >= amount {
+                break;
+            }
+            let peer_addr = &torrent_peer.peer_addr;
+            let ip_type_match = match type_ip {
+                TorrentPeersType::All => peer_addr.is_ipv4() || peer_addr.is_ipv6(),
+                TorrentPeersType::IPv4 => peer_addr.is_ipv4(),
+                TorrentPeersType::IPv6 => peer_addr.is_ipv6(),
+            };
+            if ip_type_match && self_peer_id.is_none_or(|id| id != *peer_id) {
+                result.push((peer_id, torrent_peer));
             }
         }
         result

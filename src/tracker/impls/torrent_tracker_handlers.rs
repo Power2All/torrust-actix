@@ -69,10 +69,14 @@ impl TorrentTracker {
         let event_integer = query.get("event")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .map_or(AnnounceEvent::Started, |s| match s.to_lowercase().as_str() {
-                "stopped" => AnnounceEvent::Stopped,
-                "completed" => AnnounceEvent::Completed,
-                _ => AnnounceEvent::Started,
+            .map_or(AnnounceEvent::Started, |s| {
+                if s.eq_ignore_ascii_case("stopped") {
+                    AnnounceEvent::Stopped
+                } else if s.eq_ignore_ascii_case("completed") {
+                    AnnounceEvent::Completed
+                } else {
+                    AnnounceEvent::Started
+                }
             });
         let no_peer_id_bool = query.contains_key("no_peer_id");
         let numwant_integer = query.get("numwant")

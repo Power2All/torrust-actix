@@ -8,7 +8,7 @@ use log::{
     error,
     info
 };
-use std::collections::btree_map::Entry;
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 

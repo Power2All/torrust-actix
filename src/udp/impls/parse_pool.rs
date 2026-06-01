@@ -19,6 +19,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const BATCH_SIZE: usize = 64;
+const POLL_MIN: Duration = Duration::from_micros(100);
+const POLL_MAX: Duration = Duration::from_millis(1);
 
 impl Default for ParsePool {
     fn default() -> Self {
@@ -50,8 +52,7 @@ impl ParsePool {
             runtime.spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
                 let mut batch: Vec<UdpPacket> = Vec::with_capacity(BATCH_SIZE);
-                let mut interval = tokio::time::interval(Duration::from_micros(100));
-                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                let mut poll_interval = POLL_MIN;
                 loop {
                     tokio::select! {
                         biased;
@@ -59,7 +60,7 @@ impl ParsePool {
                             info!("[UDP] Shutting down the Parse Pool thread {i}...");
                             return;
                         }
-                        _ = interval.tick() => {
+                        _ = tokio::time::sleep(poll_interval) => {
                             while batch.len() < BATCH_SIZE {
                                 if let Some(packet) = payload.pop() {
                                     batch.push(packet);
@@ -67,7 +68,10 @@ impl ParsePool {
                                     break;
                                 }
                             }
-                            if !batch.is_empty() {
+                            if batch.is_empty() {
+                                poll_interval = (poll_interval * 2).min(POLL_MAX);
+                            } else {
+                                poll_interval = POLL_MIN;
                                 for packet in batch.drain(..) {
                                     if is_slave_mode {
                                         Self::handle_slave_forward(
