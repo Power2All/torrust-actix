@@ -1,7 +1,7 @@
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use async_trait::async_trait;
@@ -24,7 +24,7 @@ pub trait DatabaseBackend: Send + Sync {
     async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
-        torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>,
+        torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
     ) -> Result<(), Error>;
 
     async fn save_whitelist(

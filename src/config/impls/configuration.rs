@@ -656,6 +656,7 @@ impl Configuration {
                         block.receive_method = match value.to_lowercase().as_str() {
                             "auto" => UdpReceiveMethod::auto,
                             "io_uring" => UdpReceiveMethod::io_uring,
+                            "rio" => UdpReceiveMethod::rio,
                             _ => UdpReceiveMethod::recvmmsg,
                         };
                     }

@@ -12,3 +12,4 @@ pub mod torrent_peers;
 pub mod torrent_sharding;
 pub mod cleanup_stats;
 pub mod torrent_counts;
+pub mod torrent_update_data;

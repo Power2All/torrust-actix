@@ -89,7 +89,7 @@ impl ParsePool {
                                         ).await;
                                         UdpServer::send_response(
                                             tracker_cloned.clone(),
-                                            packet.socket.clone(),
+                                            packet.reply.clone(),
                                             packet.remote_addr,
                                             response
                                         ).await;
@@ -140,7 +140,7 @@ impl ParsePool {
             payload_data,
         ).await {
             Ok(response) => {
-                UdpServer::send_packet(packet.socket, &packet.remote_addr, &response.payload).await;
+                UdpServer::send_packet(packet.reply, &packet.remote_addr, &response.payload).await;
             }
             Err(e) => {
                 debug!("[UDP SLAVE] Failed to forward packet to master: {e}");

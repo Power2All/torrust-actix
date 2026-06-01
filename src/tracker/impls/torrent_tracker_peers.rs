@@ -66,7 +66,7 @@ impl TorrentTracker {
         result
     }
 
-    pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> (Option<TorrentEntry>, TorrentEntry)
+    pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> TorrentEntry
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
@@ -112,10 +112,9 @@ impl TorrentTracker {
                 }
                 let entry_clone = torrent_entry.clone();
                 v.insert(torrent_entry);
-                (None, entry_clone)
+                entry_clone
             }
             Entry::Occupied(mut o) => {
-                let previous_torrent = o.get().clone();
                 let entry = o.get_mut();
                 let (seeds_removed, peers_removed) = if torrent_peer.peer_addr.is_ipv4() {
                     (
@@ -185,7 +184,7 @@ impl TorrentTracker {
                     }
                 }
                 entry.updated = std::time::Instant::now();
-                (Some(previous_torrent), entry.clone())
+                entry.clone()
             }
         }
     }

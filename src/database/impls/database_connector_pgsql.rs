@@ -16,6 +16,7 @@ use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
@@ -211,14 +212,14 @@ impl DatabaseConnectorPgSQL {
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
-        torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>,
+        torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
     ) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
         let mut handled = 0u64;
         let structure = &tracker.config.database_structure.torrents;
         let db_config = &tracker.config.database;
         let is_binary = structure.bin_type_infohash;
-        for (info_hash, (torrent_entry, updates_action)) in &torrents {
+        for (info_hash, (counts, updates_action)) in &torrents {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -245,8 +246,8 @@ impl DatabaseConnectorPgSQL {
                                 &structure.table_name,
                                 &structure.column_infohash,
                                 &[
-                                    (&structure.column_seeds, &torrent_entry.seeds.len().to_string()),
-                                    (&structure.column_peers, &torrent_entry.peers.len().to_string()),
+                                    (&structure.column_seeds, &counts.seeds_ipv4.to_string()),
+                                    (&structure.column_peers, &counts.peers_ipv4.to_string()),
                                 ],
                                 &[&structure.column_seeds, &structure.column_peers],
                                 &hash_str,
@@ -262,7 +263,7 @@ impl DatabaseConnectorPgSQL {
                                 ENGINE,
                                 &structure.table_name,
                                 &structure.column_infohash,
-                                &[(&structure.column_completed, &torrent_entry.completed.to_string())],
+                                &[(&structure.column_completed, &counts.completed.to_string())],
                                 &[&structure.column_completed],
                                 &hash_str,
                                 is_binary,
@@ -279,8 +280,8 @@ impl DatabaseConnectorPgSQL {
                                 &structure.table_name,
                                 &structure.column_infohash,
                                 &[
-                                    (&structure.column_seeds, &torrent_entry.seeds.len().to_string()),
-                                    (&structure.column_peers, &torrent_entry.peers.len().to_string()),
+                                    (&structure.column_seeds, &counts.seeds_ipv4.to_string()),
+                                    (&structure.column_peers, &counts.peers_ipv4.to_string()),
                                 ],
                                 &hash_str,
                                 is_binary,
@@ -295,7 +296,7 @@ impl DatabaseConnectorPgSQL {
                                 ENGINE,
                                 &structure.table_name,
                                 &structure.column_infohash,
-                                &[(&structure.column_completed, &torrent_entry.completed.to_string())],
+                                &[(&structure.column_completed, &counts.completed.to_string())],
                                 &hash_str,
                                 is_binary,
                             );
@@ -842,7 +843,7 @@ impl DatabaseBackend for DatabaseConnectorPgSQL {
     async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
-        torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>,
+        torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
     ) -> Result<(), Error> {
         DatabaseConnectorPgSQL::save_torrents(self, tracker, torrents).await
     }

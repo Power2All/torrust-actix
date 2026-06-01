@@ -10,3 +10,5 @@ pub mod simple_proxy_protocol;
 pub mod batch_recv;
 #[cfg(target_os = "linux")]
 pub mod io_uring_recv;
+#[cfg(windows)]
+pub mod rio_recv;

@@ -94,6 +94,15 @@ reqwest = { version = "0.13.4", default-features = false, features = ["rustls", 
 libc = "0.2"
 io-uring = "0.7"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinSock",
+    "Win32_Security",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+] }
+
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"
 

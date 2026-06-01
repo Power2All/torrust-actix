@@ -7,7 +7,7 @@ use crate::database::structs::database_connector_pgsql::DatabaseConnectorPgSQL;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
@@ -268,7 +268,7 @@ impl DatabaseConnector {
         }
     }
 
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), Error>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), Error>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("db_save_torrents", "database");
         let result: Result<(), Error> = match self.engine.as_ref() {

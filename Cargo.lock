@@ -4611,6 +4611,7 @@ dependencies = [
  "tracing",
  "utoipa-swagger-ui",
  "uuid",
+ "windows-sys 0.59.0",
  "winres",
  "zstd",
 ]
