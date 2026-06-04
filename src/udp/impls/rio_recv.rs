@@ -1,7 +1,7 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
-use crate::udp::structs::parse_pool::ParsePool;
 use crate::udp::enums::udp_reply::UdpReply;
+use crate::udp::structs::parse_pool::ParsePool;
 use crate::udp::structs::udp_packet::{
     UdpPacket,
     INLINE_PACKET_SIZE
@@ -35,6 +35,7 @@ use windows_sys::Win32::Networking::WinSock::{
     closesocket,
     htons,
     setsockopt,
+    WSACleanup,
     WSAGetLastError,
     WSAIoctl,
     WSASocketW,
@@ -120,6 +121,7 @@ pub fn is_available() -> bool {
         if WSAStartup(0x0202, &mut wsadata) != 0 {
             return false;
         }
+        let mut available = false;
         let socket = WSASocketW(
             AF_INET as i32,
             SOCK_DGRAM,
@@ -128,13 +130,13 @@ pub fn is_available() -> bool {
             0,
             WSA_FLAG_OVERLAPPED | WSA_FLAG_REGISTERED_IO,
         );
-        if socket == INVALID_SOCKET {
-            return false;
+        if socket != INVALID_SOCKET {
+            let table = load_rio_table(socket);
+            closesocket(socket);
+            available = table.is_some();
         }
-        let table = load_rio_table(socket);
-        closesocket(socket);
-        table.is_some()
-    }
+        WSACleanup();
+        available    }
 }
 
 unsafe fn load_rio_table(socket: SOCKET) -> Option<RIO_EXTENSION_FUNCTION_TABLE> {

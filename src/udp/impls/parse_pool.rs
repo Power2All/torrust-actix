@@ -54,6 +54,50 @@ impl ParsePool {
                 let mut batch: Vec<UdpPacket> = Vec::with_capacity(BATCH_SIZE);
                 let mut poll_interval = POLL_MIN;
                 loop {
+                    loop {
+                        while batch.len() < BATCH_SIZE {
+                            if let Some(packet) = payload.pop() {
+                                batch.push(packet);
+                            } else {
+                                break;
+                            }
+                        }
+                        if batch.is_empty() {
+                            break;
+                        }
+                        poll_interval = POLL_MIN;
+                        for packet in batch.drain(..) {
+                            if is_slave_mode {
+                                Self::handle_slave_forward(
+                                    &tracker_cloned,
+                                    packet,
+                                    simple_proxy_protocol,
+                                ).await;
+                            } else {
+                                let (effective_addr, payload_slice) = if simple_proxy_protocol {
+                                    Self::extract_spp_info(&packet)
+                                } else {
+                                    (packet.remote_addr, packet.data.as_slice())
+                                };
+                                let response = UdpServer::handle_packet(
+                                    effective_addr,
+                                    payload_slice,
+                                    tracker_cloned.clone(),
+                                    use_payload_ip
+                                ).await;
+                                UdpServer::send_response(
+                                    tracker_cloned.clone(),
+                                    packet.reply.clone(),
+                                    packet.remote_addr,
+                                    response
+                                ).await;
+                            }
+                        }
+                        if shutdown_handler.has_changed().unwrap_or(true) {
+                            info!("[UDP] Shutting down the Parse Pool thread {i}...");
+                            return;
+                        }
+                    }
                     tokio::select! {
                         biased;
                         _ = shutdown_handler.changed() => {
@@ -61,45 +105,7 @@ impl ParsePool {
                             return;
                         }
                         _ = tokio::time::sleep(poll_interval) => {
-                            while batch.len() < BATCH_SIZE {
-                                if let Some(packet) = payload.pop() {
-                                    batch.push(packet);
-                                } else {
-                                    break;
-                                }
-                            }
-                            if batch.is_empty() {
-                                poll_interval = (poll_interval * 2).min(POLL_MAX);
-                            } else {
-                                poll_interval = POLL_MIN;
-                                for packet in batch.drain(..) {
-                                    if is_slave_mode {
-                                        Self::handle_slave_forward(
-                                            &tracker_cloned,
-                                            packet,
-                                            simple_proxy_protocol,
-                                        ).await;
-                                    } else {
-                                        let (effective_addr, payload_slice) = if simple_proxy_protocol {
-                                            Self::extract_spp_info(&packet)
-                                        } else {
-                                            (packet.remote_addr, packet.data.as_slice())
-                                        };
-                                        let response = UdpServer::handle_packet(
-                                            effective_addr,
-                                            payload_slice,
-                                            tracker_cloned.clone(),
-                                            use_payload_ip
-                                        ).await;
-                                        UdpServer::send_response(
-                                            tracker_cloned.clone(),
-                                            packet.reply.clone(),
-                                            packet.remote_addr,
-                                            response
-                                        ).await;
-                                    }
-                                }
-                            }
+                            poll_interval = (poll_interval * 2).min(POLL_MAX);
                         }
                     }
                 }

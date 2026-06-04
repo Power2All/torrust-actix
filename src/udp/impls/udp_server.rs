@@ -8,6 +8,7 @@ use crate::tracker::structs::user_id::UserId;
 use crate::udp::enums::request::Request;
 use crate::udp::enums::response::Response;
 use crate::udp::enums::server_error::ServerError;
+use crate::udp::enums::udp_reply::UdpReply;
 use crate::udp::structs::announce_interval::AnnounceInterval;
 use crate::udp::structs::announce_request::AnnounceRequest;
 use crate::udp::structs::announce_response::AnnounceResponse;
@@ -24,7 +25,6 @@ use crate::udp::structs::scrape_request::ScrapeRequest;
 use crate::udp::structs::scrape_response::ScrapeResponse;
 use crate::udp::structs::torrent_scrape_statistics::TorrentScrapeStatistics;
 use crate::udp::structs::transaction_id::TransactionId;
-use crate::udp::enums::udp_reply::UdpReply;
 use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
 use crate::udp::udp::MAX_SCRAPE_TORRENTS;
@@ -160,13 +160,19 @@ impl UdpServer {
                     info!("[UDP] receive backend: rio");
                     let parse_pool_rio = parse_pool_clone.clone();
                     let rx_rio = rx.clone();
-                    std::thread::Builder::new()
+                    match std::thread::Builder::new()
                         .name("udp-rio".to_string())
                         .spawn(move || {
                             crate::udp::impls::rio_recv::run(bind_address, recv_buffer_size, send_buffer_size, reuse_address, parse_pool_rio, rx_rio);
-                        })
-                        .expect("failed to spawn RIO receive thread");
-                    rx.changed().await.ok();
+                        }) {
+                            Ok(_handle) => {
+                                rx.changed().await.ok();
+                            }
+                            Err(e) => {
+                                log::error!("[UDP] failed to spawn RIO receive thread: {e}");
+                                return;
+                            }
+                        }
                     return;
                 }
                 let _ = (bind_address, recv_buffer_size, send_buffer_size, reuse_address);
