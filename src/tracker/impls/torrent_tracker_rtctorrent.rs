@@ -1,10 +1,9 @@
 use crate::common::structs::compressed_bytes::CompressedBytes;
 use crate::rtctorrent_bridge::structs::rtc_torrent_bridge::RtcTorrentBridge;
+use crate::tracker::structs::announce_entry::AnnounceEntry;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use crate::tracker::types::ahash_map::AHashMap;
 use log::{
     info,
     warn
@@ -39,9 +38,9 @@ impl TorrentTracker {
         }
     }
 
-    pub fn get_rtctorrent_peers(&self, info_hash: InfoHash, requester_is_seed: bool, requester_peer_id: PeerId) -> TorrentEntry {
+    pub fn get_rtctorrent_peers(&self, info_hash: InfoHash, requester_is_seed: bool, requester_peer_id: PeerId) -> AnnounceEntry {
         if let Some(torrent_entry) = self.get_torrent(info_hash) {
-            let mut filtered_entry = torrent_entry.clone();
+            let mut filtered_entry = AnnounceEntry::from_entry(&torrent_entry);
             if requester_is_seed {
                 filtered_entry.rtc_seeds.retain(|&peer_id, _| peer_id != requester_peer_id);
                 filtered_entry.rtc_peers.retain(|&peer_id, _| peer_id != requester_peer_id);
@@ -51,16 +50,7 @@ impl TorrentTracker {
             }
             filtered_entry
         } else {
-            TorrentEntry {
-                seeds: AHashMap::default(),
-                seeds_ipv6: AHashMap::default(),
-                peers: AHashMap::default(),
-                peers_ipv6: AHashMap::default(),
-                rtc_seeds: AHashMap::default(),
-                rtc_peers: AHashMap::default(),
-                completed: 0,
-                updated: std::time::Instant::now()
-            }
+            AnnounceEntry::default()
         }
     }
 

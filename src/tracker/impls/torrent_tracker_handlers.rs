@@ -8,7 +8,7 @@ use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::rtc_data::RtcData;
 use crate::tracker::structs::scrape_query_request::ScrapeQueryRequest;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::structs::announce_entry::AnnounceEntry;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
@@ -135,8 +135,9 @@ impl TorrentTracker {
         })
     }
 
-    pub async fn handle_announce(&self, data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
+    pub async fn handle_announce(&self, announce_query: &AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, AnnounceEntry), CustomError>
     {
+        let data = self;
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("handle_announce", "tracker");
 
         let now = std::time::Instant::now();
@@ -259,7 +260,7 @@ impl TorrentTracker {
                         }
                         new_torrent
                     }
-                    _ => TorrentEntry::new()
+                    _ => AnnounceEntry::default()
                 };
                 if needs_update {
                     let _ = data.add_torrent_update(

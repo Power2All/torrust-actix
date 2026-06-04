@@ -570,6 +570,8 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 #### v4.2.13
 * Applied a fix for Windows, implemented RIO for Windows
+* Further optimization and some refactor work to improve performance and efficiency
+* Minimum Rust version is 1.88.0
 
 #### v4.2.12
 * Applied UDP traffic control performance and improvements

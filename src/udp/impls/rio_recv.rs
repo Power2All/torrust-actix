@@ -1,9 +1,9 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
 use crate::udp::structs::parse_pool::ParsePool;
+use crate::udp::enums::udp_reply::UdpReply;
 use crate::udp::structs::udp_packet::{
     UdpPacket,
-    UdpReply,
     INLINE_PACKET_SIZE
 };
 use crate::udp::udp::MAX_PACKET_SIZE;

@@ -2380,9 +2380,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.30"
+version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "616ec5685824bcc94416c6d4a7a446eea774a31efd7062c8480ba6fd06d7a6e5"
+checksum = "953f07c43838f8e6f9758cab68bf5bed85465e7587ebe0b823f1bcd81978ad3a"
 dependencies = [
  "value-bag",
 ]
@@ -4554,7 +4554,7 @@ checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
 
 [[package]]
 name = "torrust-actix"
-version = "4.2.12"
+version = "4.2.13"
 dependencies = [
  "actix",
  "actix-cors",
@@ -4611,7 +4611,7 @@ dependencies = [
  "tracing",
  "utoipa-swagger-ui",
  "uuid",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
  "winres",
  "zstd",
 ]

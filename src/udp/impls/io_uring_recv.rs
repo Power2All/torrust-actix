@@ -1,6 +1,7 @@
+use crate::udp::enums::udp_reply::UdpReply;
 use crate::udp::impls::batch_recv::sockaddr_to_socketaddr;
 use crate::udp::structs::parse_pool::ParsePool;
-use crate::udp::structs::udp_packet::{UdpPacket, UdpReply};
+use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::udp::MAX_PACKET_SIZE;
 use io_uring::{
     opcode,

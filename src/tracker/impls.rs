@@ -24,3 +24,6 @@ pub mod torrent_tracker_torrents_blacklist_updates;
 pub mod torrent_tracker_torrents_whitelist_updates;
 pub mod torrent_tracker_keys_updates;
 pub mod cleanup_stats;
+pub mod announce_entry;
+pub mod torrent_update_data;
+pub mod torrent_counts;

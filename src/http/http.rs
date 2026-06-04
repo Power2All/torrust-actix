@@ -338,7 +338,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             }
         }
     }
-    let query_map_result = parse_query(Some(request.query_string().to_string()));
+    let query_map_result = parse_query(Some(request.query_string()));
     let query_map = match http_service_query_hashing(query_map_result) {
         Ok(result) => { result }
         Err(err) => {
@@ -362,7 +362,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     if tracker_config.blacklist_enabled && data.check_blacklist(announce_unwrapped.info_hash) {
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_FORBIDDEN_INFO_HASH.clone());
     }
-    let (_torrent_peer, torrent_entry) = match data.handle_announce(data.clone(), announce_unwrapped.clone(), user_key).await {
+    let (_torrent_peer, torrent_entry) = match data.handle_announce(&announce_unwrapped, user_key).await {
         Ok(result) => { result }
         Err(e) => {
             http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
@@ -383,12 +383,12 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let seeds_count = if is_rtc_request {
         torrent_entry.rtc_seeds.len() as i64
     } else {
-        (torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64
+        torrent_entry.counts.total_seeds() as i64
     };
     let peers_count = if is_rtc_request {
         torrent_entry.rtc_peers.len() as i64
     } else {
-        (torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64
+        torrent_entry.counts.total_peers() as i64
     };
     let completed_count = torrent_entry.completed as i64;
     if is_rtc_request {
@@ -676,7 +676,7 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
             }
         }
     }
-    let query_map_result = parse_query(Some(request.query_string().to_string()));
+    let query_map_result = parse_query(Some(request.query_string()));
     let query_map = match http_service_query_hashing(query_map_result) {
         Ok(result) => { result }
         Err(err) => {

@@ -18,3 +18,8 @@ pub(crate) fn default_cluster_reconnect_interval() -> u64 { 5 }
 pub(crate) fn default_cluster_max_connections() -> u64 { 25000 }
 pub(crate) fn default_cluster_threads() -> u64 { available_parallelism().map(|n| n.get() as u64).unwrap_or(4) }
 pub(crate) fn default_cluster_tls_connection_rate() -> u64 { 256 }
+
+pub(crate) fn default_sample_rate() -> f32 { 1.0 }
+pub(crate) fn default_traces_sample_rate() -> f32 { 1.0 }
+pub(crate) fn default_max_breadcrumbs() -> usize { 100 }
+pub(crate) fn default_attach_stacktrace() -> bool { true }

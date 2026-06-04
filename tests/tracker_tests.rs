@@ -450,3 +450,26 @@ async fn test_reaper_persistent_clears_maps_but_keeps_torrent() {
     let entry = entry.unwrap();
     assert!(entry.peers.is_empty(), "Expired peers should be cleared even in persistent mode");
 }
+
+#[tokio::test]
+async fn test_announce_entry_counts_exact_when_peer_map_capped() {
+    use torrust_actix::tracker::structs::announce_entry::SNAPSHOT_PEER_CAP;
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let total = SNAPSHOT_PEER_CAP + 25;
+    let mut snapshot = None;
+    for i in 0..total {
+        let peer_id = common::random_peer_id();
+        let peer = common::create_test_peer(
+            peer_id,
+            IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)),
+            6881,
+        );
+        snapshot = Some(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
+    }
+    let snapshot = snapshot.unwrap();
+    assert_eq!(snapshot.counts.peers_ipv4, total, "counts must reflect the full swarm, not the cap");
+    assert_eq!(snapshot.counts.total_peers(), total, "total_peers must be exact");
+    assert!(snapshot.peers.len() <= SNAPSHOT_PEER_CAP, "returned peer map must be capped");
+    assert!(snapshot.peers.len() >= 72, "bounded map must still cover a full response");
+}

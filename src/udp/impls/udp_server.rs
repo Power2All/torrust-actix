@@ -24,10 +24,8 @@ use crate::udp::structs::scrape_request::ScrapeRequest;
 use crate::udp::structs::scrape_response::ScrapeResponse;
 use crate::udp::structs::torrent_scrape_statistics::TorrentScrapeStatistics;
 use crate::udp::structs::transaction_id::TransactionId;
-use crate::udp::structs::udp_packet::{
-    UdpPacket,
-    UdpReply
-};
+use crate::udp::enums::udp_reply::UdpReply;
+use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
 use crate::udp::udp::MAX_SCRAPE_TORRENTS;
 use log::{
@@ -506,7 +504,7 @@ impl UdpServer {
             debug!("[UDP ERROR] Peer Key Not Valid");
             return Err(ServerError::PeerKeyNotValid);
         }
-        let torrent = match tracker.handle_announce(tracker.clone(), AnnounceQueryRequest {
+        let announce_request = AnnounceQueryRequest {
             info_hash: InfoHash(request.info_hash.0),
             peer_id: PeerId(request.peer_id.0),
             port: request.port.0,
@@ -523,7 +521,8 @@ impl UdpServer {
             rtcrequest: None,
             rtcanswer: None,
             rtcanswerfor: None,
-        }, user_key).await {
+        };
+        let torrent = match tracker.handle_announce(&announce_request, user_key).await {
             Ok(result) => result.1,
             Err(error) => {
                 debug!("[UDP ERROR] Handle Announce - Internal Server Error: {error:#?}");
@@ -570,8 +569,8 @@ impl UdpServer {
             }
         }
         let request_interval = config.request_interval as i32;
-        let leechers = (torrent.peers.len() + torrent.peers_ipv6.len()) as i32;
-        let seeders = (torrent.seeds.len() + torrent.seeds_ipv6.len()) as i32;
+        let leechers = torrent.counts.total_peers() as i32;
+        let seeders = torrent.counts.total_seeds() as i32;
         let response = if effective_remote_addr.is_ipv6() {
             Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,
