@@ -3,11 +3,12 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use log::{
     error,
     info
 };
-use std::collections::btree_map::Entry;
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -19,7 +20,7 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)>) -> Result<(), ()>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), ()>
     {
         let torrents_count = torrents.len();
         if let Ok(()) = self.sqlx.save_torrents(tracker, torrents).await {

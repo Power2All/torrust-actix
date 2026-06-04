@@ -8,9 +8,10 @@ use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::rtc_data::RtcData;
 use crate::tracker::structs::scrape_query_request::ScrapeQueryRequest;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::structs::announce_entry::AnnounceEntry;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::user_id::UserId;
 use log::debug;
 use std::collections::{
@@ -68,10 +69,14 @@ impl TorrentTracker {
         let event_integer = query.get("event")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .map_or(AnnounceEvent::Started, |s| match s.to_lowercase().as_str() {
-                "stopped" => AnnounceEvent::Stopped,
-                "completed" => AnnounceEvent::Completed,
-                _ => AnnounceEvent::Started,
+            .map_or(AnnounceEvent::Started, |s| {
+                if s.eq_ignore_ascii_case("stopped") {
+                    AnnounceEvent::Stopped
+                } else if s.eq_ignore_ascii_case("completed") {
+                    AnnounceEvent::Completed
+                } else {
+                    AnnounceEvent::Started
+                }
             });
         let no_peer_id_bool = query.contains_key("no_peer_id");
         let numwant_integer = query.get("numwant")
@@ -130,8 +135,9 @@ impl TorrentTracker {
         })
     }
 
-    pub async fn handle_announce(&self, data: Arc<TorrentTracker>, announce_query: AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, TorrentEntry), CustomError>
+    pub async fn handle_announce(&self, announce_query: &AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, AnnounceEntry), CustomError>
     {
+        let data = self;
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("handle_announce", "tracker");
 
         let now = std::time::Instant::now();
@@ -194,7 +200,7 @@ impl TorrentTracker {
                     if needs_update {
                         let _ = data.add_torrent_update(
                             announce_query.info_hash,
-                            rtc_entry.clone(),
+                            TorrentUpdateData::from(&rtc_entry),
                             UpdatesAction::Add
                         );
                     }
@@ -214,7 +220,7 @@ impl TorrentTracker {
                     if needs_update {
                         let _ = data.add_torrent_update(
                             announce_query.info_hash,
-                            torrent_entry.1.clone(),
+                            TorrentUpdateData::from(&torrent_entry),
                             UpdatesAction::Add
                         );
                     }
@@ -229,7 +235,7 @@ impl TorrentTracker {
                     }
                     let elapsed = now.elapsed();
                     debug!("[PERF] Announce Started handling took: {elapsed:?}");
-                    Ok((torrent_peer, torrent_entry.1))
+                    Ok((torrent_peer, torrent_entry))
                 }
             }
             AnnounceEvent::Stopped => {
@@ -254,12 +260,12 @@ impl TorrentTracker {
                         }
                         new_torrent
                     }
-                    _ => TorrentEntry::new()
+                    _ => AnnounceEntry::default()
                 };
                 if needs_update {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
-                        torrent_entry.clone(),
+                        TorrentUpdateData::from(&torrent_entry),
                         UpdatesAction::Add
                     );
                 }
@@ -285,7 +291,7 @@ impl TorrentTracker {
                     if is_persistent {
                         let _ = data.add_torrent_update(
                             announce_query.info_hash,
-                            rtc_entry.clone(),
+                            TorrentUpdateData::from(&rtc_entry),
                             UpdatesAction::Add
                         );
                     }
@@ -304,7 +310,7 @@ impl TorrentTracker {
                     if is_persistent {
                         let _ = data.add_torrent_update(
                             announce_query.info_hash,
-                            torrent_entry.1.clone(),
+                            TorrentUpdateData::from(&torrent_entry),
                             UpdatesAction::Add
                         );
                     }
@@ -318,7 +324,7 @@ impl TorrentTracker {
                     }
                     let elapsed = now.elapsed();
                     debug!("[PERF] Announce Completed handling took: {elapsed:?}");
-                    Ok((torrent_peer, torrent_entry.1))
+                    Ok((torrent_peer, torrent_entry))
                 }
             }
         };

@@ -1,8 +1,8 @@
 use crate::structs::Cli;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use log::{
@@ -38,15 +38,9 @@ impl TorrentTracker {
                 .expect("[IMPORT] Torrent hash is not hex or invalid!");
             let info_hash = InfoHash(hash_bytes[..20].try_into()
                 .expect("[IMPORT] Invalid hash length"));
-            tracker.add_torrent_update(info_hash, TorrentEntry {
-                seeds: Default::default(),
-                seeds_ipv6: Default::default(),
-                peers: Default::default(),
-                peers_ipv6: Default::default(),
-                rtc_seeds: Default::default(),
-                rtc_peers: Default::default(),
+            tracker.add_torrent_update(info_hash, TorrentUpdateData {
                 completed,
-                updated: std::time::Instant::now(),
+                ..Default::default()
             }, UpdatesAction::Add);
         }
         tracker.save_torrent_updates(Arc::clone(&tracker)).await

@@ -11,4 +11,5 @@ pub enum UdpReceiveMethod {
     recvmmsg,
     auto,
     io_uring,
+    rio,
 }

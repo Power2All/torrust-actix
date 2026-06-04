@@ -19,6 +19,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const BATCH_SIZE: usize = 64;
+const POLL_MIN: Duration = Duration::from_micros(100);
+const POLL_MAX: Duration = Duration::from_millis(1);
 
 impl Default for ParsePool {
     fn default() -> Self {
@@ -50,52 +52,60 @@ impl ParsePool {
             runtime.spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
                 let mut batch: Vec<UdpPacket> = Vec::with_capacity(BATCH_SIZE);
-                let mut interval = tokio::time::interval(Duration::from_micros(100));
-                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                let mut poll_interval = POLL_MIN;
                 loop {
+                    loop {
+                        while batch.len() < BATCH_SIZE {
+                            if let Some(packet) = payload.pop() {
+                                batch.push(packet);
+                            } else {
+                                break;
+                            }
+                        }
+                        if batch.is_empty() {
+                            break;
+                        }
+                        poll_interval = POLL_MIN;
+                        for packet in batch.drain(..) {
+                            if is_slave_mode {
+                                Self::handle_slave_forward(
+                                    &tracker_cloned,
+                                    packet,
+                                    simple_proxy_protocol,
+                                ).await;
+                            } else {
+                                let (effective_addr, payload_slice) = if simple_proxy_protocol {
+                                    Self::extract_spp_info(&packet)
+                                } else {
+                                    (packet.remote_addr, packet.data.as_slice())
+                                };
+                                let response = UdpServer::handle_packet(
+                                    effective_addr,
+                                    payload_slice,
+                                    tracker_cloned.clone(),
+                                    use_payload_ip
+                                ).await;
+                                UdpServer::send_response(
+                                    tracker_cloned.clone(),
+                                    packet.reply.clone(),
+                                    packet.remote_addr,
+                                    response
+                                ).await;
+                            }
+                        }
+                        if shutdown_handler.has_changed().unwrap_or(true) {
+                            info!("[UDP] Shutting down the Parse Pool thread {i}...");
+                            return;
+                        }
+                    }
                     tokio::select! {
                         biased;
                         _ = shutdown_handler.changed() => {
                             info!("[UDP] Shutting down the Parse Pool thread {i}...");
                             return;
                         }
-                        _ = interval.tick() => {
-                            while batch.len() < BATCH_SIZE {
-                                if let Some(packet) = payload.pop() {
-                                    batch.push(packet);
-                                } else {
-                                    break;
-                                }
-                            }
-                            if !batch.is_empty() {
-                                for packet in batch.drain(..) {
-                                    if is_slave_mode {
-                                        Self::handle_slave_forward(
-                                            &tracker_cloned,
-                                            packet,
-                                            simple_proxy_protocol,
-                                        ).await;
-                                    } else {
-                                        let (effective_addr, payload_slice) = if simple_proxy_protocol {
-                                            Self::extract_spp_info(&packet)
-                                        } else {
-                                            (packet.remote_addr, packet.data.as_slice())
-                                        };
-                                        let response = UdpServer::handle_packet(
-                                            effective_addr,
-                                            payload_slice,
-                                            tracker_cloned.clone(),
-                                            use_payload_ip
-                                        ).await;
-                                        UdpServer::send_response(
-                                            tracker_cloned.clone(),
-                                            packet.socket.clone(),
-                                            packet.remote_addr,
-                                            response
-                                        ).await;
-                                    }
-                                }
-                            }
+                        _ = tokio::time::sleep(poll_interval) => {
+                            poll_interval = (poll_interval * 2).min(POLL_MAX);
                         }
                     }
                 }
@@ -140,7 +150,7 @@ impl ParsePool {
             payload_data,
         ).await {
             Ok(response) => {
-                UdpServer::send_packet(packet.socket, &packet.remote_addr, &response.payload).await;
+                UdpServer::send_packet(packet.reply, &packet.remote_addr, &response.payload).await;
             }
             Err(e) => {
                 debug!("[UDP SLAVE] Failed to forward packet to master: {e}");

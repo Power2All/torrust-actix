@@ -1,3 +1,4 @@
+use crate::udp::enums::udp_reply::UdpReply;
 use crate::udp::impls::batch_recv::sockaddr_to_socketaddr;
 use crate::udp::structs::parse_pool::ParsePool;
 use crate::udp::structs::udp_packet::UdpPacket;
@@ -116,7 +117,7 @@ pub fn run(socket: Arc<UdpSocket>, parse_pool: Arc<ParsePool>, rx: tokio::sync::
                     let packet = UdpPacket {
                         remote_addr,
                         data: SmallVec::from_slice(&slots.bufs[slot][..len]),
-                        socket: socket.clone(),
+                        reply: UdpReply::Socket(socket.clone()),
                     };
                     if parse_pool.payload.push(packet).is_err() {
                         debug!("Parse pool queue full, dropping packet");

@@ -9,6 +9,7 @@ use crate::api::structs::query_token::QueryToken;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::types::ahash_map::AHashMap;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
@@ -99,7 +100,7 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
         updated: std::time::Instant::now(),
     };
     if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-        let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
+        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentUpdateData::from(&torrent_entry), UpdatesAction::Add);
     }
     match data.torrent_tracker.add_torrent(info_hash, torrent_entry) {
         (_, true) => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
@@ -136,7 +137,7 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
                         updated: std::time::Instant::now(),
                     };
                     if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-                        let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_entry.clone(), UpdatesAction::Add);
+                        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentUpdateData::from(&torrent_entry), UpdatesAction::Add);
                     }
                     let status = match data.torrent_tracker.add_torrent(info_hash, torrent_entry) {
                         (_, true) => json!({"status": "ok"}),
@@ -167,7 +168,7 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
         Err(r) => return r,
     };
     if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
+        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentUpdateData::default(), UpdatesAction::Remove);
     }
     match data.torrent_tracker.remove_torrent(info_hash) {
         None => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown info_hash"})),
@@ -194,7 +195,7 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
             match parse_info_hash(&info) {
                 Ok(info_hash) => {
                     if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-                        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentEntry::default(), UpdatesAction::Remove);
+                        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentUpdateData::default(), UpdatesAction::Remove);
                     }
                     let status = match data.torrent_tracker.remove_torrent(info_hash) {
                         None => json!({"status": "unknown info_hash"}),

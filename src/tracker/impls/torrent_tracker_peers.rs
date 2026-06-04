@@ -1,6 +1,7 @@
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
+use crate::tracker::structs::announce_entry::AnnounceEntry;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
@@ -9,7 +10,7 @@ use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::types::ahash_map::AHashMap;
 use log::info;
-use std::collections::btree_map::Entry;
+use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 
 impl TorrentTracker {
@@ -66,7 +67,28 @@ impl TorrentTracker {
         result
     }
 
-    pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> (Option<TorrentEntry>, TorrentEntry)
+    #[inline]
+    pub fn get_peers_ref<'a>(&self, peers: &'a AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_peer_id: Option<PeerId>, amount: usize) -> Vec<(&'a PeerId, &'a TorrentPeer)>
+    {
+        let mut result = Vec::with_capacity(amount.min(peers.len()));
+        for (peer_id, torrent_peer) in peers {
+            if amount != 0 && result.len() >= amount {
+                break;
+            }
+            let peer_addr = &torrent_peer.peer_addr;
+            let ip_type_match = match type_ip {
+                TorrentPeersType::All => peer_addr.is_ipv4() || peer_addr.is_ipv6(),
+                TorrentPeersType::IPv4 => peer_addr.is_ipv4(),
+                TorrentPeersType::IPv6 => peer_addr.is_ipv6(),
+            };
+            if ip_type_match && self_peer_id.is_none_or(|id| id != *peer_id) {
+                result.push((peer_id, torrent_peer));
+            }
+        }
+        result
+    }
+
+    pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> AnnounceEntry
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
@@ -110,12 +132,11 @@ impl TorrentTracker {
                         torrent_entry.peers_ipv6.insert(peer_id, torrent_peer);
                     }
                 }
-                let entry_clone = torrent_entry.clone();
+                let snapshot = AnnounceEntry::from_entry(&torrent_entry);
                 v.insert(torrent_entry);
-                (None, entry_clone)
+                snapshot
             }
             Entry::Occupied(mut o) => {
-                let previous_torrent = o.get().clone();
                 let entry = o.get_mut();
                 let (seeds_removed, peers_removed) = if torrent_peer.peer_addr.is_ipv4() {
                     (
@@ -185,12 +206,12 @@ impl TorrentTracker {
                     }
                 }
                 entry.updated = std::time::Instant::now();
-                (Some(previous_torrent), entry.clone())
+                AnnounceEntry::from_entry(entry)
             }
         }
     }
 
-    pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (Option<TorrentEntry>, Option<TorrentEntry>)
+    pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (Option<AnnounceEntry>, Option<AnnounceEntry>)
     {
         if !self.torrents_sharding.contains_peer(info_hash, peer_id) {
             return (None, None);
@@ -203,7 +224,7 @@ impl TorrentTracker {
                 if cleanup {
                     info!("[PEERS] Removing from torrent {info_hash} peer {peer_id}");
                 }
-                let previous_torrent = o.get().clone();
+                let previous_torrent = AnnounceEntry::from_entry(o.get());
                 let entry = o.get_mut();
                 let seeds_removed = i64::from(entry.seeds.remove(&peer_id).is_some())
                     + i64::from(entry.seeds_ipv6.remove(&peer_id).is_some());
@@ -228,7 +249,7 @@ impl TorrentTracker {
                     self.update_stats(StatsEvent::Torrents, -1);
                     (Some(previous_torrent), None)
                 } else {
-                    (Some(previous_torrent), Some(entry.clone()))
+                    (Some(previous_torrent), Some(AnnounceEntry::from_entry(entry)))
                 }
             }
         }

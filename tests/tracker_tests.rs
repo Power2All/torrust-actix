@@ -15,8 +15,8 @@ async fn test_add_peer_to_new_torrent() {
     let info_hash = common::random_info_hash();
     let peer_id = common::random_peer_id();
     let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
-    let (previous, current) = tracker.add_torrent_peer(info_hash, peer_id, peer, false);
-    assert!(previous.is_none(), "Should be no previous entry for new torrent");
+    assert!(tracker.get_torrent(info_hash).is_none(), "Should be no previous entry for new torrent");
+    let current = tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     assert_eq!(current.peers.len(), 1, "Should have 1 peer");
     assert_eq!(current.seeds.len(), 0, "Should have 0 seeds (left > 0)");
 }
@@ -28,7 +28,7 @@ async fn test_add_seed_to_torrent() {
     let peer_id = common::random_peer_id();
     let mut seed = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
     seed.left = NumberOfBytes(0);
-    let (_previous, current) = tracker.add_torrent_peer(info_hash, peer_id, seed, false);
+    let current = tracker.add_torrent_peer(info_hash, peer_id, seed, false);
     assert_eq!(current.seeds.len(), 1, "Should have 1 seed");
     assert_eq!(current.peers.len(), 0, "Should have 0 peers");
 }
@@ -42,9 +42,7 @@ async fn test_peer_to_seed_transition() {
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     let mut seed = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
     seed.left = NumberOfBytes(0);
-    let (previous, current) = tracker.add_torrent_peer(info_hash, peer_id, seed, true);
-    assert!(previous.is_some(), "Should have previous entry");
-    assert_eq!(previous.unwrap().peers.len(), 1, "Previous should have 1 peer");
+    let current = tracker.add_torrent_peer(info_hash, peer_id, seed, true);
     assert_eq!(current.seeds.len(), 1, "Current should have 1 seed");
     assert_eq!(current.peers.len(), 0, "Current should have 0 peers");
     assert_eq!(current.completed, 1, "Completed count should increment");
@@ -451,4 +449,27 @@ async fn test_reaper_persistent_clears_maps_but_keeps_torrent() {
     assert!(entry.is_some(), "Torrent entry should be kept in persistent mode");
     let entry = entry.unwrap();
     assert!(entry.peers.is_empty(), "Expired peers should be cleared even in persistent mode");
+}
+
+#[tokio::test]
+async fn test_announce_entry_counts_exact_when_peer_map_capped() {
+    use torrust_actix::tracker::structs::announce_entry::SNAPSHOT_PEER_CAP;
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let total = SNAPSHOT_PEER_CAP + 25;
+    let mut snapshot = None;
+    for i in 0..total {
+        let peer_id = common::random_peer_id();
+        let peer = common::create_test_peer(
+            peer_id,
+            IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)),
+            6881,
+        );
+        snapshot = Some(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
+    }
+    let snapshot = snapshot.unwrap();
+    assert_eq!(snapshot.counts.peers_ipv4, total, "counts must reflect the full swarm, not the cap");
+    assert_eq!(snapshot.counts.total_peers(), total, "total_peers must be exact");
+    assert!(snapshot.peers.len() <= SNAPSHOT_PEER_CAP, "returned peer map must be capped");
+    assert!(snapshot.peers.len() >= 72, "bounded map must still cover a full response");
 }

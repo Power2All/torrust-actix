@@ -3,7 +3,7 @@ use crate::cache::traits::cache_backend::CacheBackend;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
-use crate::tracker::structs::torrent_entry::TorrentEntry;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use log::{
     debug,
@@ -31,11 +31,11 @@ fn next_seq() -> u128 {
 }
 
 impl TorrentTracker {
-    pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_entry: TorrentEntry, updates_action: UpdatesAction) -> bool
+    pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_update_data: TorrentUpdateData, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.torrents_updates.write();
         let timestamp = next_seq();
-        if lock.insert(timestamp, (info_hash, torrent_entry, updates_action)).is_none() {
+        if lock.insert(timestamp, (info_hash, torrent_update_data, updates_action)).is_none() {
             self.update_stats(StatsEvent::TorrentsUpdates, 1);
             true
         } else {
@@ -43,7 +43,7 @@ impl TorrentTracker {
         }
     }
 
-    pub fn add_torrent_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentEntry, UpdatesAction)>) -> BTreeMap<InfoHash, bool>
+    pub fn add_torrent_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)>) -> BTreeMap<InfoHash, bool>
     {
         let mut lock = self.torrents_updates.write();
         let mut returned_data = BTreeMap::new();
@@ -69,7 +69,7 @@ impl TorrentTracker {
         returned_data
     }
 
-    pub fn get_torrent_updates(&self) -> HashMap<u128, (InfoHash, TorrentEntry, UpdatesAction)>
+    pub fn get_torrent_updates(&self) -> HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)>
     {
         let lock = self.torrents_updates.read_recursive();
         lock.clone()
@@ -95,7 +95,7 @@ impl TorrentTracker {
 
     pub async fn save_torrent_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
-        let updates: HashMap<u128, (InfoHash, TorrentEntry, UpdatesAction)> = {
+        let updates: HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)> = {
             let mut lock = self.torrents_updates.write();
             std::mem::take(&mut *lock)
         };
@@ -104,7 +104,7 @@ impl TorrentTracker {
         }
         let drained = updates.len() as i64;
         self.update_stats(StatsEvent::TorrentsUpdates, -drained);
-        let mut mapping: HashMap<InfoHash, (u128, TorrentEntry, UpdatesAction)> = HashMap::with_capacity(updates.len());
+        let mut mapping: HashMap<InfoHash, (u128, TorrentUpdateData, UpdatesAction)> = HashMap::with_capacity(updates.len());
         for (timestamp, (info_hash, torrent_entry, updates_action)) in updates {
             match mapping.entry(info_hash) {
                 Entry::Occupied(mut o) => {
@@ -119,9 +119,9 @@ impl TorrentTracker {
         }
         let mapping_len = mapping.len();
         let is_persistent = torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(torrent_tracker.config.database.persistent);
-        let torrents_to_save: BTreeMap<InfoHash, (TorrentEntry, UpdatesAction)> = mapping
+        let torrents_to_save: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)> = mapping
             .iter()
-            .map(|(info_hash, (_, torrent_entry, updates_action))| (*info_hash, (torrent_entry.clone(), *updates_action)))
+            .map(|(info_hash, (_, torrent_update_data, updates_action))| (*info_hash, (*torrent_update_data, *updates_action)))
             .collect();
         let db_result = if is_persistent {
             self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await
@@ -141,12 +141,12 @@ impl TorrentTracker {
                     .filter(|(_, (_, action))| *action != UpdatesAction::Remove)
                     .map(|(hash, (entry, _))| {
                         let counts = TorrentPeerCounts {
-                            bt_seeds_ipv4: entry.seeds.len() as u64,
-                            bt_seeds_ipv6: entry.seeds_ipv6.len() as u64,
-                            rtc_seeds:     entry.rtc_seeds.len() as u64,
-                            bt_peers_ipv4: entry.peers.len() as u64,
-                            bt_peers_ipv6: entry.peers_ipv6.len() as u64,
-                            rtc_peers:     entry.rtc_peers.len() as u64,
+                            bt_seeds_ipv4: entry.seeds_ipv4,
+                            bt_seeds_ipv6: entry.seeds_ipv6,
+                            rtc_seeds:     entry.rtc_seeds,
+                            bt_peers_ipv4: entry.peers_ipv4,
+                            bt_peers_ipv6: entry.peers_ipv6,
+                            rtc_peers:     entry.rtc_peers,
                             completed:     entry.completed,
                         };
                         (*hash, counts)

@@ -119,7 +119,7 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
             );
         }
     };
-    let query_map = match parse_query(Some(query_string)) {
+    let query_map = match parse_query(Some(&query_string)) {
         Ok(map) => map,
         Err(e) => {
             let error_response = ben_map! {
@@ -150,7 +150,7 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
         }.encode();
         return ClusterResponse::success(request.request_id, error_response);
     }
-    let (_torrent_peer, torrent_entry) = match tracker.handle_announce(tracker.clone(), announce.clone(), None).await {
+    let (_torrent_peer, torrent_entry) = match tracker.handle_announce(&announce, None).await {
         Ok(result) => result,
         Err(e) => {
             let error_response = ben_map! {
@@ -205,8 +205,8 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
     let stats = AnnounceResponseStats {
         interval: tracker_config.request_interval as i64,
         min_interval: tracker_config.request_interval_minimum as i64,
-        complete: (torrent_entry.seeds.len() + torrent_entry.seeds_ipv6.len()) as i64,
-        incomplete: (torrent_entry.peers.len() + torrent_entry.peers_ipv6.len()) as i64,
+        complete: torrent_entry.counts.total_seeds() as i64,
+        incomplete: torrent_entry.counts.total_peers() as i64,
         downloaded: torrent_entry.completed as i64,
     };
     let response_bytes = if announce.compact {
@@ -232,7 +232,7 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
 pub fn build_compact_announce_response(
     tracker: &Arc<TorrentTracker>,
     client_ip: &IpAddr,
-    torrent_entry: &crate::tracker::structs::torrent_entry::TorrentEntry,
+    torrent_entry: &crate::tracker::structs::announce_entry::AnnounceEntry,
     announce: &crate::tracker::structs::announce_query_request::AnnounceQueryRequest,
     stats: &AnnounceResponseStats,
 ) -> Vec<u8> {
@@ -327,7 +327,7 @@ pub fn build_compact_announce_response(
 pub fn build_extended_announce_response(
     tracker: &Arc<TorrentTracker>,
     client_ip: &IpAddr,
-    torrent_entry: &crate::tracker::structs::torrent_entry::TorrentEntry,
+    torrent_entry: &crate::tracker::structs::announce_entry::AnnounceEntry,
     announce: &crate::tracker::structs::announce_query_request::AnnounceQueryRequest,
     stats: &AnnounceResponseStats,
 ) -> Vec<u8> {
@@ -433,7 +433,7 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
             );
         }
     };
-    let query_map = match parse_query(Some(query_string)) {
+    let query_map = match parse_query(Some(&query_string)) {
         Ok(map) => map,
         Err(e) => {
             let error_response = ben_map! {

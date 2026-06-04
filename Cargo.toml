@@ -5,8 +5,9 @@ resolver = "3"
 
 [package]
 name = "torrust-actix"
-version = "4.2.12"
+version = "4.2.13"
 edition = "2024"
+rust-version = "1.88.0"
 license = "MIT"
 authors = ["Power2All <info@power2all.com>"]
 description = "A rich, fast and efficient Bittorrent Tracker."
@@ -50,7 +51,7 @@ clap = { version = "4.6.1", features = ["derive"] }
 fern = { version = "0.7.1", features = ["colored"] }
 futures-util = "0.3.32"
 hex = "0.4.3"
-log = "0.4.29"
+log = "0.4.32"
 parking_lot = { version = "0.12.5", features = ["arc_lock", "hardware-lock-elision", "serde", "deadlock_detection"] }
 percent-encoding = "2.3.2"
 rcgen = "0.14.7"
@@ -94,6 +95,15 @@ reqwest = { version = "0.13.4", default-features = false, features = ["rustls", 
 libc = "0.2"
 io-uring = "0.7"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinSock",
+    "Win32_Security",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+] }
+
 [target.'cfg(windows)'.build-dependencies]
 winres = "^0.1"
 
@@ -105,7 +115,7 @@ harness = false
 name = "Torrust Actix"
 identifier = "com.power2all.torrust-actix"
 icon = ["icon.ico"]
-version = "4.2.12"
+version = "4.2.13"
 copyright = "Copyright (c) 2024-2026 Power2All"
 category = "Public Utility"
 short_description = "BitTorrent Tracker"

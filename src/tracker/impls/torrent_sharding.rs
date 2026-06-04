@@ -5,9 +5,10 @@ use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_sharding::TorrentSharding;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::tracker::types::ahash_map::AHashMap;
 use log::info;
 use parking_lot::RwLock;
-use std::collections::btree_map::Entry;
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,7 +26,7 @@ impl Default for TorrentSharding {
 impl TorrentSharding {
     pub fn new() -> TorrentSharding {
         TorrentSharding {
-            shards: std::array::from_fn(|_| Arc::new(RwLock::new(BTreeMap::new()))),
+            shards: std::array::from_fn(|_| Arc::new(RwLock::new(AHashMap::default()))),
         }
     }
 
@@ -300,13 +301,13 @@ impl TorrentSharding {
     }
 
     #[inline]
-    pub fn get_shard(&self, shard: u8) -> Option<Arc<RwLock<BTreeMap<InfoHash, TorrentEntry>>>> {
+    pub fn get_shard(&self, shard: u8) -> Option<Arc<RwLock<AHashMap<InfoHash, TorrentEntry>>>> {
         self.shards.get(shard as usize).cloned()
     }
 
     pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry> {
         self.shards.get(shard as usize)
-            .map(|s| s.read().clone())
+            .map(|s| s.read().iter().map(|(k, v)| (*k, v.clone())).collect())
             .unwrap_or_default()
     }
 

@@ -8,6 +8,7 @@ use crate::tracker::structs::user_id::UserId;
 use crate::udp::enums::request::Request;
 use crate::udp::enums::response::Response;
 use crate::udp::enums::server_error::ServerError;
+use crate::udp::enums::udp_reply::UdpReply;
 use crate::udp::structs::announce_interval::AnnounceInterval;
 use crate::udp::structs::announce_request::AnnounceRequest;
 use crate::udp::structs::announce_response::AnnounceResponse;
@@ -52,9 +53,28 @@ impl UdpServer {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, receive_method: UdpReceiveMethod) -> tokio::io::Result<UdpServer>
     {
-        let sockets = Self::build_sockets(bind_address, udp_threads, recv_buffer_size, send_buffer_size, reuse_address)?;
+        #[cfg(windows)]
+        let use_rio = receive_method == UdpReceiveMethod::rio && {
+            let available = crate::udp::impls::rio_recv::is_available();
+            if !available {
+                log::warn!("[UDP] RIO requested but unavailable on this system; falling back to standard receive");
+            }
+            available
+        };
+        #[cfg(not(windows))]
+        let use_rio = false;
+
+        let sockets = if use_rio {
+            Vec::new()
+        } else {
+            Self::build_sockets(bind_address, udp_threads, recv_buffer_size, send_buffer_size, reuse_address)?
+        };
         Ok(UdpServer {
             sockets,
+            bind_address,
+            recv_buffer_size,
+            send_buffer_size,
+            reuse_address,
             udp_threads,
             worker_threads,
             tracker,
@@ -123,6 +143,10 @@ impl UdpServer {
         let sockets = self.sockets.clone();
         let parse_pool_clone = parse_pool.clone();
         let receive_method = self.receive_method;
+        let bind_address = self.bind_address;
+        let recv_buffer_size = self.recv_buffer_size;
+        let send_buffer_size = self.send_buffer_size;
+        let reuse_address = self.reuse_address;
         tokio::task::spawn_blocking(move || {
             let tokio_udp = Builder::new_multi_thread()
                 .thread_name("udp")
@@ -131,6 +155,28 @@ impl UdpServer {
                 .build()
                 .unwrap();
             tokio_udp.block_on(async move {
+                #[cfg(windows)]
+                if sockets.is_empty() {
+                    info!("[UDP] receive backend: rio");
+                    let parse_pool_rio = parse_pool_clone.clone();
+                    let rx_rio = rx.clone();
+                    match std::thread::Builder::new()
+                        .name("udp-rio".to_string())
+                        .spawn(move || {
+                            crate::udp::impls::rio_recv::run(bind_address, recv_buffer_size, send_buffer_size, reuse_address, parse_pool_rio, rx_rio);
+                        }) {
+                            Ok(_handle) => {
+                                rx.changed().await.ok();
+                            }
+                            Err(e) => {
+                                log::error!("[UDP] failed to spawn RIO receive thread: {e}");
+                                return;
+                            }
+                        }
+                    return;
+                }
+                let _ = (bind_address, recv_buffer_size, send_buffer_size, reuse_address);
+
                 #[cfg(target_os = "linux")]
                 let use_io_uring = {
                     let requested = receive_method == UdpReceiveMethod::io_uring;
@@ -188,7 +234,7 @@ impl UdpServer {
                         let packet = UdpPacket {
                             remote_addr,
                             data: SmallVec::from_slice(&data[..valid_bytes]),
-                            socket: socket.clone(),
+                            reply: UdpReply::Socket(socket.clone()),
                         };
                         if parse_pool.payload.push(packet).is_err() {
                             debug!("Parse pool queue full, dropping packet");
@@ -233,7 +279,7 @@ impl UdpServer {
                                         let packet = UdpPacket {
                                             remote_addr,
                                             data: SmallVec::from_slice(buf),
-                                            socket: socket.clone(),
+                                            reply: UdpReply::Socket(socket.clone()),
                                         };
                                         if parse_pool.payload.push(packet).is_err() {
                                             debug!("Parse pool queue full, dropping packet");
@@ -254,13 +300,13 @@ impl UdpServer {
         }
     }
 
-    pub async fn send_response(tracker: Arc<TorrentTracker>, socket: Arc<UdpSocket>, remote_addr: SocketAddr, response: Response) {
+    pub async fn send_response(tracker: Arc<TorrentTracker>, reply: UdpReply, remote_addr: SocketAddr, response: Response) {
         debug!("sending response to: {:?}", &remote_addr);
         let estimated_size = response.estimated_size();
         let mut buffer = Vec::with_capacity(estimated_size);
         match response.write(&mut buffer) {
             Ok(()) => {
-                UdpServer::send_packet(socket, &remote_addr, &buffer).await;
+                UdpServer::send_packet(reply, &remote_addr, &buffer).await;
             }
             Err(error) => {
                 match remote_addr {
@@ -272,8 +318,16 @@ impl UdpServer {
         }
     }
 
-    pub async fn send_packet(socket: Arc<UdpSocket>, remote_addr: &SocketAddr, payload: &[u8]) {
-        let _ = socket.send_to(payload, remote_addr).await;
+    pub async fn send_packet(reply: UdpReply, remote_addr: &SocketAddr, payload: &[u8]) {
+        match reply {
+            UdpReply::Socket(socket) => {
+                let _ = socket.send_to(payload, remote_addr).await;
+            }
+            #[cfg(windows)]
+            UdpReply::Rio(sender) => {
+                sender.send(*remote_addr, payload);
+            }
+        }
     }
 
     pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
@@ -456,7 +510,7 @@ impl UdpServer {
             debug!("[UDP ERROR] Peer Key Not Valid");
             return Err(ServerError::PeerKeyNotValid);
         }
-        let torrent = match tracker.handle_announce(tracker.clone(), AnnounceQueryRequest {
+        let announce_request = AnnounceQueryRequest {
             info_hash: InfoHash(request.info_hash.0),
             peer_id: PeerId(request.peer_id.0),
             port: request.port.0,
@@ -473,7 +527,8 @@ impl UdpServer {
             rtcrequest: None,
             rtcanswer: None,
             rtcanswerfor: None,
-        }, user_key).await {
+        };
+        let torrent = match tracker.handle_announce(&announce_request, user_key).await {
             Ok(result) => result.1,
             Err(error) => {
                 debug!("[UDP ERROR] Handle Announce - Internal Server Error: {error:#?}");
@@ -520,8 +575,8 @@ impl UdpServer {
             }
         }
         let request_interval = config.request_interval as i32;
-        let leechers = (torrent.peers.len() + torrent.peers_ipv6.len()) as i32;
-        let seeders = (torrent.seeds.len() + torrent.seeds_ipv6.len()) as i32;
+        let leechers = torrent.counts.total_peers() as i32;
+        let seeders = torrent.counts.total_seeds() as i32;
         let response = if effective_remote_addr.is_ipv6() {
             Response::from(AnnounceResponse {
                 transaction_id: request.transaction_id,

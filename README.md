@@ -247,7 +247,7 @@ UDP_0_SEND_BUFFER_SIZE <UINT64>
 UDP_0_REUSE_ADDRESS <true | false>
 UDP_0_USE_PAYLOAD_IP <true | false>
 UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
-UDP_0_RECEIVE_METHOD <auto | recvmmsg | io_uring>
+UDP_0_RECEIVE_METHOD <auto | recvmmsg | io_uring | rio>
 ```
 
 ---
@@ -567,6 +567,11 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 ---
 
 ### ChangeLog
+
+#### v4.2.13
+* Applied a fix for Windows, implemented RIO for Windows
+* Further optimization and some refactor work to improve performance and efficiency
+* Minimum Rust version is 1.88.0
 
 #### v4.2.12
 * Applied UDP traffic control performance and improvements

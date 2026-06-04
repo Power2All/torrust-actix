@@ -64,7 +64,7 @@ impl TorrentTracker {
     }
 
     #[inline]
-    pub fn update_stats(&self, event: StatsEvent, value: i64) -> Stats
+    pub fn update_stats(&self, event: StatsEvent, value: i64)
     {
         match event {
             StatsEvent::Torrents => {
@@ -222,10 +222,9 @@ impl TorrentTracker {
                 self.update_counter(&self.stats.ws_auth_failed, value);
             }
         }
-        self.get_stats()
     }
 
-    pub fn set_stats(&self, event: StatsEvent, value: i64) -> Stats
+    pub fn set_stats(&self, event: StatsEvent, value: i64)
     {
         match event {
             StatsEvent::Torrents => {
@@ -382,7 +381,6 @@ impl TorrentTracker {
                 self.stats.ws_auth_failed.store(value, Ordering::Release);
             }
         }
-        self.get_stats()
     }
 
     #[inline(always)]

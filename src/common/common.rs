@@ -22,7 +22,7 @@ use std::time::{
 use tokio_shutdown::Shutdown;
 
 #[inline]
-pub fn parse_query(query: Option<String>) -> Result<HashMap<String, QueryValues>, CustomError> {
+pub fn parse_query(query: Option<&str>) -> Result<HashMap<String, QueryValues>, CustomError> {
     let mut queries: HashMap<String, QueryValues> = HashMap::with_capacity(12);
     if let Some(result) = query {
         for query_item in result.split('&') {
