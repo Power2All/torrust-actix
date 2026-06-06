@@ -13,5 +13,7 @@ pub struct DatabaseConfig {
     pub insert_vacant: bool,
     pub remove_action: bool,
     pub update_completed: bool,
-    pub update_peers: bool
+    pub update_peers: bool,
+    #[serde(default = "crate::config::config::default_chunk_size")]
+    pub chunk_size: u64
 }

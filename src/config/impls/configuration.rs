@@ -91,6 +91,7 @@ impl Configuration {
                 remove_action: false,
                 update_completed: true,
                 update_peers: false,
+                chunk_size: 1000,
             },
             cache: None,
             database_structure: DatabaseStructureConfig {
@@ -358,6 +359,9 @@ impl Configuration {
         }
         if let Ok(value) = env::var("DATABASE__PERSISTENT_INTERVAL") {
             config.database.persistent_interval = parse_env_num::<u64>("DATABASE__PERSISTENT_INTERVAL", &value, 60);
+        }
+        if let Ok(value) = env::var("DATABASE__CHUNK_SIZE") {
+            config.database.chunk_size = parse_env_num::<u64>("DATABASE__CHUNK_SIZE", &value, 1000);
         }
         if let Ok(value) = env::var("CACHE__ENABLED") {
             let enabled = parse_env_bool("CACHE__ENABLED", &value, false);
