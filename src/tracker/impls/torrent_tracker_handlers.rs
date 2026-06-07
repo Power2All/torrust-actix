@@ -1,6 +1,11 @@
 use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::common::types::QueryValues;
+use crate::security::security::{
+    MAX_OFFER_ID_LENGTH,
+    MAX_PEER_MESSAGE_SIZE,
+    MAX_SCRAPE_TORRENTS
+};
 use crate::tracker::enums::announce_event::AnnounceEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
@@ -106,6 +111,15 @@ impl TorrentTracker {
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .map(std::string::ToString::to_string);
+        if let Some(ref offer) = rtcoffer_string && offer.len() > MAX_PEER_MESSAGE_SIZE {
+            return Err(CustomError::new("rtcoffer exceeds maximum size"));
+        }
+        if let Some(ref answer) = rtcanswer_string && answer.len() > MAX_PEER_MESSAGE_SIZE {
+            return Err(CustomError::new("rtcanswer exceeds maximum size"));
+        }
+        if let Some(ref answer_for) = rtcanswerfor_string && answer_for.len() > MAX_OFFER_ID_LENGTH {
+            return Err(CustomError::new("rtcanswerfor exceeds maximum size"));
+        }
         let elapsed = now.elapsed();
         debug!("[PERF] Announce validation took: {elapsed:?}");
 
@@ -349,8 +363,9 @@ impl TorrentTracker {
                 if result.is_empty() {
                     return Err(CustomError::new("no info_hash given"));
                 }
-                let mut info_hash_vec = Vec::with_capacity(result.len());
-                for hash in result {
+                let cap = result.len().min(MAX_SCRAPE_TORRENTS);
+                let mut info_hash_vec = Vec::with_capacity(cap);
+                for hash in result.iter().take(MAX_SCRAPE_TORRENTS) {
                     if hash.len() != 20 {
                         return Err(CustomError::new("an invalid info_hash was given"));
                     }
@@ -363,7 +378,7 @@ impl TorrentTracker {
         }
     }
 
-    pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: ScrapeQueryRequest) -> BTreeMap<InfoHash, crate::tracker::structs::torrent_counts::TorrentCounts>
+    pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: &ScrapeQueryRequest) -> BTreeMap<InfoHash, crate::tracker::structs::torrent_counts::TorrentCounts>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("handle_scrape", "tracker");
 

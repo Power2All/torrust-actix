@@ -1,4 +1,3 @@
-use async_std::task;
 use clap::Parser;
 use futures_util::future::try_join_all;
 use log::{
@@ -78,7 +77,7 @@ fn main() -> std::io::Result<()>
             let tracker = Arc::new(TorrentTracker::new(config.clone(), args.create_database).await);
 
             if args.create_database {
-                task::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 exit(0);
             }
 
@@ -536,7 +535,7 @@ fn main() -> std::io::Result<()>
                     }
 
                     tokio_shutdown.handle().await;
-                    task::sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
 
                     tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
                     Configuration::save_from_config(tracker.config.clone(), "config.toml");
@@ -596,7 +595,7 @@ fn main() -> std::io::Result<()>
                         info!("Saving completed data to config...");
                     }
 
-                    task::sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                     info!("Server shutting down completed");
 
                     mem::forget(tokio_core);

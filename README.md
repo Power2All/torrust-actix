@@ -37,7 +37,7 @@ This project originated from Torrust-Tracker code originally developed by Mick v
 * [BEP 48](https://www.bittorrent.org/beps/bep_0048.html): Tracker Protocol Extension: Scrape
 
 ## Getting Started
-You can get the latest binaries from [releases](https://github.com/Power2All/torrust-actix/releases) or follow the install from scratch instructions below.
+You can get the latest binaries from [releases](https://github.com/Power2All/torrust-actix/releases) or follow the installation from scratch instructions below.
 
 ### Install From Scratch
 1. Clone the repository:
@@ -85,7 +85,7 @@ cargo build --release --workspace
 ```
 
 ### Usage
-Run the code using `--help` argument for using in your enironment:
+Run the code using `--help` argument for using in your environment:
 ```bash
 ./target/release/torrust-actix --help
 ```
@@ -173,6 +173,7 @@ DATABASE__UPDATE_PEERS <true | false>
 DATABASE__PATH <STRING>
 DATABASE__ENGINE <sqlite3 | mysql | pgsql>
 DATABASE__PERSISTENT_INTERVAL <UINT64>
+DATABASE__CHUNK_SIZE <UINT64>
 
 DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH <true | false>
 DATABASE_STRUCTURE__TORRENTS__TABLE_NAME <STRING>
@@ -248,6 +249,47 @@ UDP_0_REUSE_ADDRESS <true | false>
 UDP_0_USE_PAYLOAD_IP <true | false>
 UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 UDP_0_RECEIVE_METHOD <auto | recvmmsg | io_uring | rio>
+```
+
+#### Database commit chunk size
+
+`database.chunk_size` controls how many rows the tracker writes per SQL transaction when it flushes torrent/user updates to the database (once per `persistent_interval`). Instead of committing the whole sync batch in a single long-running transaction — which holds row/foreign-key locks for the entire batch and can block other applications writing to the same database (e.g. a website doing `DELETE`/`UPDATE`, leading to lock-wait timeouts) — the tracker commits every `chunk_size` rows, releasing locks frequently.
+
+```toml
+[database]
+chunk_size = 1000   # rows per transaction (default: 1000; 0 = commit the whole batch in one transaction)
+```
+
+Lower the value (e.g. `500` or `250`) if another application sharing the database still experiences lock contention; raise it (or set `0`) for maximum write throughput when the tracker owns the database exclusively. Applies to the high-volume `torrents` and `users` sync tables on MySQL, PostgreSQL, and SQLite.
+
+---
+
+## API Authentication
+
+Every `/api/...` endpoint (and `/stats`, `/metrics`) is protected by the API key configured in `tracker.api_key` (or the `TRACKER__API_KEY` environment variable). The key can be supplied in two ways:
+
+1. **`Authorization` header (recommended)** — keeps the secret out of URLs, access logs and browser history:
+
+   ```
+   Authorization: Bearer <api_key>
+   ```
+
+   The `Bearer ` prefix is optional; a bare `Authorization: <api_key>` is also accepted.
+
+2. **`token` query-string parameter (legacy)** — kept for backwards compatibility:
+
+   ```
+   GET /api/torrents?token=<api_key>
+   ```
+
+If both are present, the `Authorization` header takes precedence. The key is compared in constant time. Example:
+
+```bash
+# Preferred — token in the header
+curl -H "Authorization: Bearer <api_key>" http://127.0.0.1:8080/api/torrents
+
+# Legacy — token in the query string
+curl "http://127.0.0.1:8080/api/torrents?token=<api_key>"
 ```
 
 ---
@@ -568,6 +610,12 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 ### ChangeLog
 
+#### v4.2.14]
+* Hotfix in regard to database handling
+* A full audit and security scan of the code, shown some possible vulnerabilities
+* Small little performance tweaks
+* Adding a better token usage by recommending a header bearer, legacy still works
+
 #### v4.2.13
 * Applied a fix for Windows, implemented RIO for Windows
 * Further optimization and some refactor work to improve performance and efficiency
@@ -615,8 +663,8 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 * Added `///` / `//!` doc comments throughout the codebase for docs.rs / crates.io publishing
 * Made a large set of `[tracker_config]`, `[sentry_config]`, and `[database_structure.*]` keys optional in `config.toml` — sensible defaults are applied automatically when the keys are absent
   * Optional tracker fields: `whitelist_enabled`, `blacklist_enabled`, `keys_enabled`, `keys_cleanup_interval`, `users_enabled`, `swagger`, `prometheus_id`, all `cluster_*` fields, and all `rtc_*` fields
-  * The entire `[sentry_config]` section can now be omitted (defaults to disabled)
-  * All `[database_structure.*]` sub-sections can be omitted (default table/column names are used)
+  * The entire `[sentry_config]` section can now be omitted (defaults to disable)
+  * All `[database_structure.*]` subsections can be omitted (default table/column names are used)
 * `--create-config` now annotates every optional key with an inline `# Optional: defaults to …` comment so new users can see at a glance what can be left out
 * Refactored `impl RtcData` out of the struct file into `src/tracker/impls/rtc_data.rs`, consistent with the rest of the project structure
 

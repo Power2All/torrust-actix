@@ -3,11 +3,9 @@ use crate::api::api::{
     api_validation
 };
 use crate::api::structs::api_service_data::ApiServiceData;
-use crate::api::structs::query_token::QueryToken;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
 use actix_web::{
-    web,
     HttpRequest,
     HttpResponse
 };
@@ -16,16 +14,14 @@ use std::sync::Arc;
 pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     HttpResponse::Ok().content_type(ContentType::json()).json(data.torrent_tracker.get_stats())
 }
 
 pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     let stats = data.torrent_tracker.get_stats();
     let prometheus_id = &data.torrent_tracker.config.tracker_config.prometheus_id;
     let mut string_output = String::with_capacity(4096);
