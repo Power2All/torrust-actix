@@ -7,7 +7,6 @@ use crate::api::structs::certificate_reload_request::CertificateReloadRequest;
 use crate::api::structs::certificate_reload_result::CertificateReloadResult;
 use crate::api::structs::certificate_status_item::CertificateStatusItem;
 use crate::api::structs::api_service_data::ApiServiceData;
-use crate::api::structs::query_token::QueryToken;
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
@@ -27,8 +26,7 @@ pub async fn api_service_certificate_reload(
     if let Some(error_return) = api_validation(&request, &data).await {
         return error_return;
     }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await {
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await {
         return response;
     }
     let certificate_store = &data.torrent_tracker.certificate_store;
@@ -105,8 +103,7 @@ pub async fn api_service_certificate_status(
     if let Some(error_return) = api_validation(&request, &data).await {
         return error_return;
     }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await {
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await {
         return response;
     }
     let certificate_store = &data.torrent_tracker.certificate_store;

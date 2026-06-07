@@ -5,7 +5,6 @@ use crate::api::api::{
     parse_info_hash
 };
 use crate::api::structs::api_service_data::ApiServiceData;
-use crate::api::structs::query_token::QueryToken;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
@@ -32,8 +31,7 @@ use std::time::{
 pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     let info = path.into_inner();
     let info_hash = match parse_info_hash(&info) {
         Ok(h) => h,
@@ -48,8 +46,7 @@ pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<Strin
 pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     let body = match api_parse_body(payload).await {
         Ok(data) => data,
         Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
@@ -82,8 +79,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payloa
 pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(String, u64)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     let (info, completed) = path.into_inner();
     let info_hash = match parse_info_hash(&info) {
         Ok(h) => h,
@@ -111,8 +107,7 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
 pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     let body = match api_parse_body(payload).await {
         Ok(data) => data,
         Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
@@ -160,8 +155,7 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
 pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     let info = path.into_inner();
     let info_hash = match parse_info_hash(&info) {
         Ok(h) => h,
@@ -179,8 +173,7 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
 pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    let params = web::Query::<QueryToken>::from_query(request.query_string()).unwrap();
-    if let Some(response) = api_service_token(params.token.clone(), Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     let body = match api_parse_body(payload).await {
         Ok(data) => data,
         Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),

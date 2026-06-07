@@ -5,7 +5,6 @@ use crate::common::types::QueryValues;
 use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 use crate::config::structs::configuration::Configuration;
 use crate::security::security::MAX_PERCENT_DECODED_SIZE;
-use async_std::future;
 use fern::colors::{
     Color,
     ColoredLevelConfig
@@ -186,7 +185,7 @@ pub fn convert_bytes_to_int(array: &[u8]) -> u64 {
 }
 
 pub async fn shutdown_waiting(timeout: Duration, shutdown_handler: Shutdown) -> bool {
-    future::timeout(timeout, shutdown_handler.handle())
+    tokio::time::timeout(timeout, shutdown_handler.handle())
         .await
         .is_ok()
 }

@@ -51,6 +51,7 @@ use crate::api::api_whitelists::{
     api_service_whitelists_post
 };
 use crate::api::structs::api_service_data::ApiServiceData;
+use crate::api::structs::query_token::QueryToken;
 use crate::common::common::hex2bin;
 use crate::common::structs::custom_error::CustomError;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
@@ -107,6 +108,7 @@ pub fn api_service_cors() -> Cors
         .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
         .allowed_headers(vec![http::header::X_FORWARDED_FOR, http::header::ACCEPT])
         .allowed_header(http::header::CONTENT_TYPE)
+        .allowed_header(http::header::AUTHORIZATION)
         .max_age(1)
 }
 
@@ -288,9 +290,26 @@ pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     tracker.update_stats(event, 1);
 }
 
-pub async fn api_service_token(token: Option<String>, config: Arc<Configuration>) -> Option<HttpResponse>
+pub fn api_extract_token(request: &HttpRequest) -> Option<String>
 {
-    let token_code = match token {
+    if let Some(value) = request.headers().get(http::header::AUTHORIZATION).and_then(|h| h.to_str().ok()) {
+        let token = value
+            .strip_prefix("Bearer ")
+            .or_else(|| value.strip_prefix("bearer "))
+            .unwrap_or(value)
+            .trim();
+        if !token.is_empty() {
+            return Some(token.to_string());
+        }
+    }
+    web::Query::<QueryToken>::from_query(request.query_string())
+        .ok()
+        .and_then(|params| params.token.clone())
+}
+
+pub async fn api_service_token(request: &HttpRequest, config: Arc<Configuration>) -> Option<HttpResponse>
+{
+    let token_code = match api_extract_token(request) {
         Some(token) => token,
         None => {
             return Some(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({

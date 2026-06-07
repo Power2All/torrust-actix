@@ -452,7 +452,7 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
         }
     };
     let tracker_config = &tracker.config.tracker_config;
-    let data_scrape = tracker.handle_scrape(tracker.clone(), scrape.clone()).await;
+    let data_scrape = tracker.handle_scrape(tracker.clone(), &scrape).await;
     let mut files_map = ben_map!();
     let files_map_mut = files_map.dict_mut().unwrap();
     for (info_hash, counts) in &data_scrape {

@@ -242,6 +242,8 @@ impl DatabaseConnectorSQLite {
         let structure = &tracker.config.database_structure.torrents;
         let db_config = &tracker.config.database;
         let is_binary = structure.bin_type_infohash;
+        let chunk_size = db_config.chunk_size;
+        let mut in_chunk = 0u64;
         for (info_hash, (counts, updates_action)) in &torrents {
             handled += 1;
             let hash_str = info_hash.to_string();
@@ -334,6 +336,7 @@ impl DatabaseConnectorSQLite {
             if (handled as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == handled {
                 info!("{LOG_PREFIX} Handled {handled} torrents");
             }
+            self.commit_chunk(&mut transaction_db, &mut in_chunk, chunk_size).await?;
         }
         info!("{LOG_PREFIX} Handled {handled} torrents");
         if let Some(txn) = transaction {
@@ -688,6 +691,8 @@ impl DatabaseConnectorSQLite {
         let db_config = &tracker.config.database;
         let is_uuid = structure.id_uuid;
         let is_binary_key = structure.bin_type_key;
+        let chunk_size = db_config.chunk_size;
+        let mut in_chunk = 0u64;
         for (user_entry_item, updates_action) in users.values() {
             handled += 1;
             match updates_action {
@@ -804,6 +809,7 @@ impl DatabaseConnectorSQLite {
             if (handled as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == handled {
                 info!("{LOG_PREFIX} Handled {handled} users");
             }
+            self.commit_chunk(&mut transaction, &mut in_chunk, chunk_size).await?;
         }
         info!("{LOG_PREFIX} Handled {handled} users");
         self.commit(transaction).await
@@ -821,6 +827,20 @@ impl DatabaseConnectorSQLite {
             return Err(e);
         }
         let _ = self.commit(transaction).await;
+        Ok(())
+    }
+
+    async fn commit_chunk(&self, transaction: &mut Transaction<'_, Sqlite>, in_chunk: &mut u64, chunk_size: u64) -> Result<(), Error> {
+        *in_chunk += 1;
+        if chunk_size != 0 && *in_chunk >= chunk_size {
+            let new_tx = self.pool.begin().await?;
+            let old_tx = std::mem::replace(transaction, new_tx);
+            if let Err(e) = old_tx.commit().await {
+                error!("{LOG_PREFIX} Error: {e}");
+                return Err(e);
+            }
+            *in_chunk = 0;
+        }
         Ok(())
     }
 

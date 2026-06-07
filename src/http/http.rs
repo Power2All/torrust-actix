@@ -253,9 +253,14 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
     }
     if tracker_config.users_enabled && !tracker_config.keys_enabled {
         let user_key = path.clone();
-        let user_key_check = http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key.clone()).await;
-        if user_key_check.is_none() {
-            return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap()), data.http_trackers_config.rtctorrent).await;
+        match http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key).await {
+            Ok(user_id) => {
+                return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(user_id), data.http_trackers_config.rtctorrent).await;
+            }
+            Err(response) => {
+                http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                return response;
+            }
         }
     }
     http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None, data.http_trackers_config.rtctorrent).await
@@ -281,9 +286,14 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
     }
     if tracker_config.users_enabled {
         let user_key = path.clone().1;
-        let user_key_check = http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key.clone()).await;
-        if user_key_check.is_none() {
-            return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(http_service_decode_hex_user_id(user_key.clone()).await.unwrap()), data.http_trackers_config.rtctorrent).await;
+        match http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key).await {
+            Ok(user_id) => {
+                return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(user_id), data.http_trackers_config.rtctorrent).await;
+            }
+            Err(response) => {
+                http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                return response;
+            }
         }
     }
     http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None, data.http_trackers_config.rtctorrent).await
@@ -696,7 +706,7 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
     let request_interval_minimum = tracker_config.request_interval_minimum as i64;
     match scrape.as_ref() {
         Ok(e) => {
-            let data_scrape = data.handle_scrape(data.clone(), e.clone()).await;
+            let data_scrape = data.handle_scrape(data.clone(), e).await;
             let mut scrape_list = ben_map!();
             let scrape_list_mut = scrape_list.dict_mut().unwrap();
             for (info_hash, counts) in &data_scrape {
@@ -845,19 +855,16 @@ pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: S
     None
 }
 
-pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, user_key: String) -> Option<HttpResponse>
+pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, user_key: String) -> Result<UserId, HttpResponse>
 {
     if user_key.len() != 40 {
-        return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_INVALID_USER_KEY.clone()));
+        return Err(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_INVALID_USER_KEY.clone()));
     }
-    let user_key_decoded: UserId = match http_service_decode_hex_user_id(user_key).await {
-        Ok(result) => { result }
-        Err(error) => { return Some(error) }
-    };
+    let user_key_decoded: UserId = http_service_decode_hex_user_id(user_key).await?;
     if data.check_user_key(user_key_decoded).is_none() {
-        return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_USER_KEY.clone()));
+        return Err(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_USER_KEY.clone()));
     }
-    None
+    Ok(user_key_decoded)
 }
 
 pub fn http_check_host_and_port_used(bind_address: &str) -> std::io::Result<()> {
