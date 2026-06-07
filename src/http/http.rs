@@ -253,8 +253,14 @@ pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<Str
     }
     if tracker_config.users_enabled && !tracker_config.keys_enabled {
         let user_key = path.clone();
-        if let Ok(user_id) = http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key).await {
-            return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(user_id), data.http_trackers_config.rtctorrent).await;
+        match http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key).await {
+            Ok(user_id) => {
+                return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(user_id), data.http_trackers_config.rtctorrent).await;
+            }
+            Err(response) => {
+                http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                return response;
+            }
         }
     }
     http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None, data.http_trackers_config.rtctorrent).await
@@ -280,8 +286,14 @@ pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path
     }
     if tracker_config.users_enabled {
         let user_key = path.clone().1;
-        if let Ok(user_id) = http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key).await {
-            return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(user_id), data.http_trackers_config.rtctorrent).await;
+        match http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key).await {
+            Ok(user_id) => {
+                return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(user_id), data.http_trackers_config.rtctorrent).await;
+            }
+            Err(response) => {
+                http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                return response;
+            }
         }
     }
     http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None, data.http_trackers_config.rtctorrent).await

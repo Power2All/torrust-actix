@@ -108,6 +108,7 @@ pub fn api_service_cors() -> Cors
         .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
         .allowed_headers(vec![http::header::X_FORWARDED_FOR, http::header::ACCEPT])
         .allowed_header(http::header::CONTENT_TYPE)
+        .allowed_header(http::header::AUTHORIZATION)
         .max_age(1)
 }
 
