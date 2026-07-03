@@ -24,12 +24,20 @@ impl Default for TorrentSharding {
 
 #[allow(dead_code)]
 impl TorrentSharding {
+    /// Creates an empty sharded torrent store with 256 independently locked shards.
+    ///
+    /// Torrents are assigned to a shard by the first byte of their info-hash.
     pub fn new() -> TorrentSharding {
         TorrentSharding {
             shards: std::array::from_fn(|_| Arc::new(RwLock::new(AHashMap::default()))),
         }
     }
 
+    /// Runs the periodic peer-cleanup loop until shutdown is signalled.
+    ///
+    /// Spawns `peers_cleanup_threads` workers on a dedicated runtime; each pass scans all 256
+    /// shards and removes peers older than `peer_timeout` (or `rtc_peer_timeout` for WebRTC peers).
+    /// When `persistent` is false, torrents left without peers are removed entirely.
     pub async fn cleanup_threads(&self, torrent_tracker: Arc<TorrentTracker>, shutdown: Shutdown, peer_timeout: Duration, rtc_peer_timeout: Duration, persistent: bool) {
         let cleanup_interval = torrent_tracker.config.tracker_config.peers_cleanup_interval;
         let cleanup_threads = torrent_tracker.config.tracker_config.peers_cleanup_threads;
@@ -275,6 +283,7 @@ impl TorrentSharding {
         }
     }
 
+    /// Returns `true` when the given info-hash is currently tracked.
     #[inline]
     pub fn contains_torrent(&self, info_hash: InfoHash) -> bool {
         let shard_index = info_hash.0[0] as usize;
@@ -282,6 +291,7 @@ impl TorrentSharding {
             .is_some_and(|s| s.read().contains_key(&info_hash))
     }
 
+    /// Returns `true` when the given peer id is present in any peer map of the torrent.
     #[inline]
     pub fn contains_peer(&self, info_hash: InfoHash, peer_id: PeerId) -> bool {
         let shard_index = info_hash.0[0] as usize;
@@ -300,17 +310,22 @@ impl TorrentSharding {
             .unwrap_or(false)
     }
 
+    /// Returns the shard (an `Arc<RwLock<..>>` map) that stores torrents whose info-hash starts with `shard`.
     #[inline]
     pub fn get_shard(&self, shard: u8) -> Option<Arc<RwLock<AHashMap<InfoHash, TorrentEntry>>>> {
         self.shards.get(shard as usize).cloned()
     }
 
+    /// Returns a cloned, ordered snapshot of every torrent in the given shard.
     pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry> {
         self.shards.get(shard as usize)
             .map(|s| s.read().iter().map(|(k, v)| (*k, v.clone())).collect())
             .unwrap_or_default()
     }
 
+    /// Returns a cloned, ordered snapshot of every tracked torrent across all shards.
+    ///
+    /// This clones the full swarm state; intended for export/persistence, not per-request use.
     pub fn get_all_content(&self) -> BTreeMap<InfoHash, TorrentEntry> {
         let mut torrents_return = BTreeMap::new();
         for shard in &self.shards {
@@ -322,12 +337,16 @@ impl TorrentSharding {
         torrents_return
     }
 
+    /// Returns the total number of tracked torrents across all shards.
     pub fn get_torrents_amount(&self) -> u64 {
         self.shards.iter()
             .map(|shard| shard.read().len() as u64)
             .sum()
     }
 
+    /// Fetches multiple torrents in one pass, grouping the lookups per shard to minimise locking.
+    ///
+    /// Absent torrents map to `None`.
     pub fn get_multiple_torrents(&self, info_hashes: &[InfoHash]) -> BTreeMap<InfoHash, Option<TorrentEntry>> {
         let mut results = BTreeMap::new();
         let mut shard_groups: [Vec<InfoHash>; 256] = std::array::from_fn(|_| Vec::new());
@@ -345,6 +364,9 @@ impl TorrentSharding {
         results
     }
 
+    /// Checks `(info_hash, peer_id)` pairs in one pass, grouping the lookups per shard.
+    ///
+    /// The result vector matches the order of `queries`.
     pub fn batch_contains_peers(&self, queries: &[(InfoHash, PeerId)]) -> Vec<bool> {
         let mut results = vec![false; queries.len()];
         let mut shard_groups: [Vec<usize>; 256] = std::array::from_fn(|_| Vec::new());
@@ -371,6 +393,9 @@ impl TorrentSharding {
         results
     }
 
+    /// Invokes `f` for every tracked torrent, shard by shard, without cloning entries.
+    ///
+    /// Each shard's read lock is held while its entries are visited.
     pub fn iter_all_torrents<F>(&self, mut f: F)
     where
         F: FnMut(&InfoHash, &TorrentEntry)

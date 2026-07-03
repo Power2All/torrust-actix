@@ -4,6 +4,7 @@ use crate::websocket::structs::handshake_request::{
 };
 
 impl HandshakeRequest {
+    /// Creates the authentication handshake a slave sends when connecting to the master.
     pub fn new(token: String, slave_id: String) -> Self {
         Self {
             token,

@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 impl TorrentTracker {
+    /// Loads all torrents (and their completion counts) from the configured database at startup.
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker).await {
@@ -20,6 +21,11 @@ impl TorrentTracker {
         }
     }
 
+    /// Persists the given batch of torrent updates to the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the database write fails; the caller re-queues the batch.
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), ()>
     {
         let torrents_count = torrents.len();
@@ -32,6 +38,9 @@ impl TorrentTracker {
         }
     }
 
+    /// Resets the seed and peer counters of every torrent row in the database.
+    ///
+    /// Used at startup so stale counts from a previous run do not linger. Returns `true` on success.
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> bool
     {
         if let Ok(()) = self.sqlx.reset_seeds_peers(tracker).await {
@@ -43,6 +52,10 @@ impl TorrentTracker {
         }
     }
 
+    /// Inserts or replaces a full torrent entry, adjusting the global torrent/seed/peer/completed
+    /// statistics by the delta between the old and new entry.
+    ///
+    /// Returns the stored entry and `true` when the torrent was newly inserted.
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
@@ -86,6 +99,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Inserts or replaces multiple torrent entries; see [`TorrentTracker::add_torrent`].
     pub fn add_torrents(&self, hashes: BTreeMap<InfoHash, TorrentEntry>) -> BTreeMap<InfoHash, (TorrentEntry, bool)>
     {
         hashes.into_iter()
@@ -96,6 +110,9 @@ impl TorrentTracker {
             .collect()
     }
 
+    /// Returns a full clone of the torrent entry, including all peer maps.
+    ///
+    /// Prefer [`TorrentTracker::get_torrent_counts`] when only counters are needed.
     #[inline]
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
@@ -104,6 +121,9 @@ impl TorrentTracker {
         lock.get(&info_hash).cloned()
     }
 
+    /// Returns only the seed/peer/completed counters of a torrent, without cloning its peer maps.
+    ///
+    /// This is the cheap lookup used by scrape handling.
     #[inline]
     pub fn get_torrent_counts(&self, info_hash: InfoHash) -> Option<crate::tracker::structs::torrent_counts::TorrentCounts>
     {
@@ -112,6 +132,7 @@ impl TorrentTracker {
         lock.get(&info_hash).map(crate::tracker::structs::torrent_counts::TorrentCounts::from_entry)
     }
 
+    /// Returns full clones of multiple torrent entries; absent torrents map to `None`.
     pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         hashes.into_iter()
@@ -122,6 +143,9 @@ impl TorrentTracker {
             .collect()
     }
 
+    /// Removes a torrent and subtracts its seeds/peers from the global statistics.
+    ///
+    /// Returns the removed entry if it existed.
     pub fn remove_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         if !self.torrents_sharding.contains_torrent(info_hash) {
@@ -139,6 +163,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Removes multiple torrents; see [`TorrentTracker::remove_torrent`].
     pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
     {
         hashes.into_iter()

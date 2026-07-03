@@ -16,6 +16,8 @@ use std::process::exit;
 use std::sync::Arc;
 
 impl TorrentTracker {
+    /// Handles the `--import` CLI command: loads torrents, whitelist, blacklist, keys and users
+    /// from JSON files into the tracker and persists them.
     pub async fn import(&self, args: &Cli, tracker: Arc<TorrentTracker>)
     {
         info!("[IMPORT] Requesting to import data");

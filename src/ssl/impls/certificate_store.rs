@@ -28,6 +28,7 @@ impl Default for CertificateStore {
 }
 
 impl CertificateStore {
+    /// Creates an empty certificate store.
     pub fn new() -> Self {
         Self {
             bundles: parking_lot::RwLock::new(std::collections::HashMap::new()),
@@ -35,6 +36,12 @@ impl CertificateStore {
         }
     }
 
+    /// Loads a certificate chain and private key from the given PEM files and registers them
+    /// under `server_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CertificateError`](crate::ssl::enums::certificate_error::CertificateError) when the files cannot be read or parsed.
     pub fn load_certificate(
         &self,
         server_id: ServerIdentifier,
@@ -53,6 +60,7 @@ impl CertificateStore {
         Ok(())
     }
 
+    /// Returns the currently loaded certified key for a server, if any.
     pub fn get_certificate(
         &self,
         server_id: &ServerIdentifier,
@@ -60,10 +68,16 @@ impl CertificateStore {
         self.bundles.read().get(server_id).cloned()
     }
 
+    /// Returns the PEM file paths a server's certificate was loaded from, if registered.
     pub fn get_paths(&self, server_id: &ServerIdentifier) -> Option<CertificatePaths> {
         self.paths.read().get(server_id).cloned()
     }
 
+    /// Re-reads a server's certificate from its registered file paths (hot reload).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CertificateError`](crate::ssl::enums::certificate_error::CertificateError) when the server is unknown or the files are invalid.
     pub fn reload_certificate(
         &self,
         server_id: &ServerIdentifier,
@@ -81,6 +95,11 @@ impl CertificateStore {
         Ok(())
     }
 
+    /// Reloads a server's certificate from explicit file paths, updating the registered paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CertificateError`](crate::ssl::enums::certificate_error::CertificateError) when the files cannot be read or parsed.
     pub fn reload_certificate_with_paths(
         &self,
         server_id: &ServerIdentifier,
@@ -101,6 +120,7 @@ impl CertificateStore {
         Ok(())
     }
 
+    /// Lists every registered server together with its certificate file paths.
     pub fn all_servers(&self) -> Vec<(ServerIdentifier, CertificatePaths)> {
         self.paths
             .read()
@@ -109,6 +129,7 @@ impl CertificateStore {
             .collect()
     }
 
+    /// Returns the loaded certified keys of all registered servers.
     pub fn get_all_certificates(
         &self,
     ) -> Vec<(ServerIdentifier, std::sync::Arc<CertificateBundle>)> {
@@ -119,6 +140,7 @@ impl CertificateStore {
             .collect()
     }
 
+    /// Reloads every registered certificate, returning the per-server outcome.
     pub fn reload_all(&self) -> Vec<(ServerIdentifier, Result<(), crate::ssl::enums::certificate_error::CertificateError>)> {
         let servers: Vec<_> = self.paths.read().keys().cloned().collect();
         servers

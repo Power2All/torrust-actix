@@ -34,6 +34,7 @@ lazy_static::lazy_static! {
     static ref UUID_REGEX: Regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
 }
 
+/// `GET /api/user/{id}` — returns a user entry as JSON; `{id}` is the user id or UUID.
 pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -46,6 +47,7 @@ pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>,
     }
 }
 
+/// `GET /api/users` — returns user entries for a JSON array of ids/UUIDs in the body.
 pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -71,6 +73,8 @@ pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, 
     }))
 }
 
+/// `POST /api/user/{id}/{key}/{uploaded}/{downloaded}/{completed}/{updated}/{active}` —
+/// creates or replaces a user with the given announce key and statistics.
 pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String, String, u64, u64, u64, u64, u8)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -119,6 +123,7 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
     }
 }
 
+/// `POST /api/users` — creates or replaces multiple users from a JSON array of user objects.
 pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -181,6 +186,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
     }))
 }
 
+/// `DELETE /api/user/{id}` — removes a user; `{id}` is the user id or UUID.
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -213,6 +219,7 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
     }
 }
 
+/// `DELETE /api/users` — removes a JSON array of users by id/UUID.
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -259,6 +266,7 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
     }))
 }
 
+/// Looks up a user by id/UUID and returns the HTTP status plus JSON body for the API response.
 pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>) -> (StatusCode, Value)
 {
     let id_hash = hash_id(&id);
@@ -295,6 +303,7 @@ pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>
         }
     }
 }
+/// `DELETE /api/users/clear` — removes all users.
 pub async fn api_service_users_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }

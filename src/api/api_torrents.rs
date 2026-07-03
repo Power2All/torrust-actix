@@ -28,6 +28,7 @@ use std::time::{
     UNIX_EPOCH
 };
 
+/// `GET /api/torrent/{info_hash}` — returns a torrent's swarm data as JSON.
 pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -43,6 +44,7 @@ pub async fn api_service_torrent_get(request: HttpRequest, path: web::Path<Strin
     }
 }
 
+/// `GET /api/torrents` — returns swarm data for a JSON array of info-hashes in the body.
 pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -76,6 +78,7 @@ pub async fn api_service_torrents_get(request: HttpRequest, payload: web::Payloa
     }))
 }
 
+/// `POST /api/torrent/{info_hash}/{completed}` — inserts a torrent with the given completed count.
 pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(String, u64)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -104,6 +107,7 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
     }
 }
 
+/// `POST /api/torrents` — inserts multiple torrents from a JSON `{info_hash: completed}` map.
 pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -152,6 +156,7 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
     }))
 }
 
+/// `DELETE /api/torrent/{info_hash}` — removes a torrent from the tracker.
 pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -170,6 +175,7 @@ pub async fn api_service_torrent_delete(request: HttpRequest, path: web::Path<St
     }
 }
 
+/// `DELETE /api/torrents` — removes a JSON array of info-hashes from the tracker.
 pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -208,6 +214,7 @@ pub async fn api_service_torrents_delete(request: HttpRequest, payload: web::Pay
     }))
 }
 
+/// Serialises a [`TorrentEntry`] (seeds, peers, completed count) into the API JSON shape.
 pub fn api_service_torrents_return_torrent_json(torrent: TorrentEntry) -> Value
 {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();

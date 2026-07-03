@@ -28,6 +28,7 @@ use log::{
 };
 
 impl ClusterConnection {
+    /// Creates a master-side connection actor for a newly accepted slave WebSocket.
     pub fn new(data: std::sync::Arc<crate::websocket::structs::websocket_service_data::WebSocketServiceData>) -> Self {
         Self {
             encoding: data.config.tracker_config.cluster_encoding.clone(),

@@ -50,6 +50,12 @@ use tokio::net::UdpSocket;
 use tokio::runtime::Builder;
 
 impl UdpServer {
+    /// Binds the UDP tracker sockets for `bind_address` and prepares the configured receive
+    /// backend (blocking recv, `recvmmsg`, `io_uring` or Windows RIO).
+    ///
+    /// # Errors
+    ///
+    /// Returns the I/O error when the socket cannot be bound or configured.
     #[allow(clippy::too_many_arguments)]
     pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, receive_method: UdpReceiveMethod) -> tokio::io::Result<UdpServer>
     {
@@ -119,6 +125,7 @@ impl UdpServer {
         UdpSocket::from_std(std_socket)
     }
 
+    /// Runs the UDP receive/parse/respond loops until the shutdown watch channel fires.
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
         let parse_pool = Arc::new(ParsePool::new(1_000_000, self.worker_threads));
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone(), self.use_payload_ip, self.simple_proxy_protocol).await;
@@ -300,6 +307,7 @@ impl UdpServer {
         }
     }
 
+    /// Encodes a tracker [`Response`] and sends it to the client, logging failures.
     pub async fn send_response(tracker: Arc<TorrentTracker>, reply: UdpReply, remote_addr: SocketAddr, response: Response) {
         debug!("sending response to: {:?}", &remote_addr);
         let estimated_size = response.estimated_size();
@@ -318,6 +326,7 @@ impl UdpServer {
         }
     }
 
+    /// Sends a raw datagram to the client via the backend-specific reply channel.
     pub async fn send_packet(reply: UdpReply, remote_addr: &SocketAddr, payload: &[u8]) {
         match reply {
             UdpReply::Socket(socket) => {
@@ -330,6 +339,8 @@ impl UdpServer {
         }
     }
 
+    /// Derives the BEP 15 connection id for a client address from the current time window,
+    /// so ids expire automatically without server-side state.
     pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
         use std::hash::{
             DefaultHasher,
@@ -355,6 +366,8 @@ impl UdpServer {
         ConnectionId(hasher.finish() as i64)
     }
 
+    /// Parses one datagram and produces the tracker response, mapping malformed input and
+    /// handler failures to BEP 15 error responses.
     pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Response {
         if payload.len() == 16 && let [_, _, _, _, action1, action2, action3, action4, ..] = payload && *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 && let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
             return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
@@ -388,6 +401,12 @@ impl UdpServer {
         UdpServer::handle_udp_error(ServerError::BadRequest, transaction_id).await
     }
 
+    /// Dispatches a parsed request to the connect, announce or scrape handler after updating
+    /// the request statistics.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ServerError`] describing why the request was refused.
     pub async fn handle_request(request: Request, remote_addr: SocketAddr, tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Result<Response, ServerError> {
         let transaction = sentry::TransactionContext::new("udp server", "handle packet");
         let transaction_guard = sentry::start_transaction(transaction);
@@ -425,6 +444,11 @@ impl UdpServer {
         result
     }
 
+    /// Handles a BEP 15 connect request: returns the derived connection id.
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; kept as `Result` for interface symmetry.
     pub async fn handle_udp_connect(remote_addr: SocketAddr, request: &ConnectRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let connection_id = UdpServer::get_connection_id(&remote_addr).await;
         let response = Response::from(ConnectResponse {
@@ -440,6 +464,12 @@ impl UdpServer {
         Ok(response)
     }
 
+    /// Handles a BEP 15 announce: enforces whitelist/blacklist/keys/users (keys travel in the
+    /// request path), updates the swarm and returns up to 72 packed peers of the client's IP family.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ServerError`] when access rules reject the request or the swarm update fails.
     pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Result<Response, ServerError> {
         let config = &tracker.config.tracker_config;
         let effective_remote_addr = if use_payload_ip {
@@ -529,7 +559,7 @@ impl UdpServer {
             rtcanswerfor: None,
         };
         let torrent = match tracker.handle_announce(&announce_request, user_key).await {
-            Ok(result) => result.1,
+            Ok(result) => result,
             Err(error) => {
                 debug!("[UDP ERROR] Handle Announce - Internal Server Error: {error:#?}");
                 return Err(ServerError::InternalServerError);
@@ -603,6 +633,12 @@ impl UdpServer {
         Ok(response)
     }
 
+    /// Handles a BEP 15 scrape: returns seeders/completed/leechers for each requested info-hash
+    /// (zeroes for unknown torrents).
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; kept as `Result` for interface symmetry.
     pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
         let mut torrent_stats = Vec::with_capacity(request.info_hashes.len());
         for info_hash in &request.info_hashes {
@@ -632,6 +668,7 @@ impl UdpServer {
         }))
     }
 
+    /// Builds the BEP 15 error response for a failed request.
     pub async fn handle_udp_error(e: ServerError, transaction_id: TransactionId) -> Response {
         Response::from(ErrorResponse {
             transaction_id,

@@ -17,7 +17,8 @@ pub(crate) static COMPRESSION: OnceLock<CompressionState> = OnceLock::new();
 /// Compression and decompression are performed transparently via
 /// [`CompressedBytes::compress`] and [`CompressedBytes::decompress`].
 /// The algorithm (LZ4 or Zstd) and level are determined by the global
-/// [`COMPRESSION`] state initialised at startup.
+/// compression state initialised at startup via
+/// [`init_compression`](crate::common::common::init_compression).
 ///
 /// When compression is disabled the raw bytes are stored as-is, so callers
 /// never need to handle both cases explicitly.

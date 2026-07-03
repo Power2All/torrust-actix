@@ -55,8 +55,8 @@ async fn test_remove_peer_from_torrent() {
     let peer_id = common::random_peer_id();
     let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
-    let (previous, current) = tracker.remove_torrent_peer(info_hash, peer_id, false, false);
-    assert!(previous.is_some(), "Should have previous entry");
+    let (existed, current) = tracker.remove_torrent_peer(info_hash, peer_id, false, false);
+    assert!(existed, "Should have previous entry");
     assert!(current.is_none(), "Torrent should be removed when empty (non-persistent)");
 }
 
@@ -182,7 +182,7 @@ async fn test_rtc_store_and_take_pending_answers() {
         0,
     );
     tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
-    let stored = tracker.store_rtc_answer(info_hash, seeder_id, leecher_id, sdp_answer.clone());
+    let stored = tracker.store_rtc_answer(info_hash, seeder_id, leecher_id, &sdp_answer);
     assert!(stored, "store_rtc_answer should succeed when seeder exists");
     let answers = tracker.take_rtc_pending_answers(info_hash, seeder_id);
     assert_eq!(answers.len(), 1, "Should have exactly 1 pending answer");
@@ -211,7 +211,7 @@ async fn test_rtc_multiple_answers_queued() {
             info_hash,
             seeder_id,
             leecher_id,
-            format!("v=0\r\ns=answer{}\r\n", i),
+            &format!("v=0\r\ns=answer{}\r\n", i),
         );
     }
     let answers = tracker.take_rtc_pending_answers(info_hash, seeder_id);
@@ -233,7 +233,7 @@ async fn test_rtc_pending_answers_survive_re_announce() {
         0,
     );
     tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer.clone(), false);
-    tracker.store_rtc_answer(info_hash, seeder_id, leecher_id, sdp_answer.clone());
+    tracker.store_rtc_answer(info_hash, seeder_id, leecher_id, &sdp_answer);
     tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
     let answers = tracker.take_rtc_pending_answers(info_hash, seeder_id);
     assert_eq!(answers.len(), 1, "Pending answer should survive seeder re-announce");
@@ -254,7 +254,7 @@ async fn test_rtc_update_sdp_offer() {
         0,
     );
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
-    let updated = tracker.update_rtc_sdp_offer(info_hash, peer_id, offer.clone());
+    let updated = tracker.update_rtc_sdp_offer(info_hash, peer_id, &offer);
     assert!(updated, "update_rtc_sdp_offer should succeed when peer exists");
     let entry = tracker.get_torrent(info_hash).expect("Torrent should exist");
     let stored_peer = entry.rtc_seeds.get(&peer_id).expect("Seeder should be in rtc_seeds");
@@ -280,7 +280,7 @@ async fn test_rtc_get_peers_leecher_sees_seeders() {
         0,
     );
     tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
-    tracker.update_rtc_sdp_offer(info_hash, seeder_id, offer.clone());
+    tracker.update_rtc_sdp_offer(info_hash, seeder_id, &offer);
     let entry = tracker.get_rtctorrent_peers(info_hash, false, leecher_id);
     assert!(!entry.rtc_seeds.is_empty(), "Leecher should see at least one seeder");
     let peer = entry.rtc_seeds.get(&seeder_id).expect("Seeder should appear in rtc_seeds");
@@ -300,7 +300,7 @@ async fn test_rtc_get_peers_seeder_excluded_from_own_list() {
         0,
     );
     tracker.add_torrent_peer(info_hash, seeder_id, seeder_peer, false);
-    tracker.update_rtc_sdp_offer(info_hash, seeder_id, "v=0\r\ns=offer\r\n".to_string());
+    tracker.update_rtc_sdp_offer(info_hash, seeder_id, "v=0\r\ns=offer\r\n");
     let entry = tracker.get_rtctorrent_peers(info_hash, true, seeder_id);
     assert!(entry.rtc_peers.is_empty(), "No leechers should be present");
 }
@@ -315,7 +315,7 @@ async fn test_rtc_store_answer_for_nonexistent_peer_returns_false() {
         info_hash,
         seeder_id,
         leecher_id,
-        "v=0\r\ns=answer\r\n".to_string(),
+        "v=0\r\ns=answer\r\n",
     );
     assert!(!stored, "store_rtc_answer should fail when seeder does not exist");
 }

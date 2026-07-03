@@ -29,6 +29,7 @@ impl Default for ParsePool {
 }
 
 impl ParsePool {
+    /// Creates the bounded packet queue shared between receive backends and parse workers.
     pub fn new(capacity: usize, threads: usize) -> ParsePool {
         let tokio_udp = tokio::runtime::Builder::new_multi_thread()
             .thread_name("worker")
@@ -42,6 +43,8 @@ impl ParsePool {
         }
     }
 
+    /// Spawns `threads` async workers that drain the packet queue, run the UDP request pipeline
+    /// and send replies, until the shutdown watch channel fires.
     pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>, use_payload_ip: bool, simple_proxy_protocol: bool) {
         let is_slave_mode = tracker.config.tracker_config.cluster == ClusterMode::slave;
         for i in 0..threads {

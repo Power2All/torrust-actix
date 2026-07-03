@@ -15,6 +15,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
+    /// Queues an announce-key change (with expiry) for the next database flush; returns `true`
+    /// when a new slot was created.
     pub fn add_key_update(&self, info_hash: InfoHash, timeout: i64, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.keys_updates.write();
@@ -27,12 +29,14 @@ impl TorrentTracker {
         }
     }
 
+    /// Returns a clone of the pending key-update queue.
     pub fn get_key_updates(&self) -> HashMap<u128, (InfoHash, i64, UpdatesAction)>
     {
         let lock = self.keys_updates.read_recursive();
         lock.clone()
     }
 
+    /// Removes a single queued key update by its sequence key; returns `true` when it existed.
     pub fn remove_key_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.keys_updates.write();
@@ -44,6 +48,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Drops all queued key updates and resets the queue statistic.
     pub fn clear_key_updates(&self)
     {
         let mut lock = self.keys_updates.write();
@@ -51,6 +56,11 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::KeyUpdates, 0);
     }
 
+    /// Drains the key-update queue and flushes it to the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the flush fails; the drained updates are restored to the queue.
     pub async fn save_key_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = self.get_key_updates();

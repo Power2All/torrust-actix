@@ -5,6 +5,11 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 impl CacheConnectorMemcache {
+    /// Creates a Memcache-backed peer-count cache using the given key prefix.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CacheError`] when the connection cannot be established.
     pub fn connect(url: &str, prefix: &str, split_peers: bool) -> Result<Self, CacheError> {
         let client = memcache::connect(url)
             .map_err(|e| CacheError::ConnectionError(format!("Failed to connect to Memcache: {e}")))?;
@@ -15,6 +20,7 @@ impl CacheConnectorMemcache {
         })
     }
 
+    /// Builds the cache key for a torrent's peer counts (`<prefix>t:<info_hash>`).
     pub(crate) fn torrent_key(&self, info_hash: &InfoHash) -> String {
         format!("{}t:{}", self.prefix, info_hash)
     }
@@ -24,6 +30,7 @@ impl CacheConnectorMemcache {
         format!("{seeds}:{peers}:{completed}")
     }
 
+    /// Parses the aggregated `"seeds:peers:completed"` cache value.
     pub(crate) fn deserialize_aggregated(value: &str) -> Option<(u64, u64, u64)> {
         let mut parts = value.splitn(3, ':');
         let seeds = parts.next()?.parse::<u64>().ok()?;
@@ -42,6 +49,7 @@ impl CacheConnectorMemcache {
         )
     }
 
+    /// Parses the split per-family/per-protocol cache value.
     pub(crate) fn deserialize_split(value: &str) -> Option<crate::cache::structs::torrent_peer_counts::TorrentPeerCounts> {
         let parts: Vec<&str> = value.split(':').collect();
         if parts.len() < 7 {

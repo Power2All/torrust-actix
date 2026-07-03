@@ -8,6 +8,11 @@ use crate::config::structs::cache_config::CacheConfig;
 use log::info;
 
 impl CacheConnector {
+    /// Connects to the configured cache engine (Redis or Memcache).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CacheError`] when the backend cannot be initialised.
     pub async fn new(config: &CacheConfig) -> Result<CacheConnector, CacheError> {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("cache_init", "cache");
         let connection_url = format!("{}{}", config.engine.url_scheme(), config.address);
@@ -43,6 +48,7 @@ impl CacheConnector {
         result
     }
 
+    /// Returns the active cache backend, when one is connected.
     pub fn backend(&self) -> Option<&dyn CacheBackend> {
         match self.engine.as_ref()? {
             CacheEngine::redis => self.redis.as_ref().map(|r| r as &dyn CacheBackend),

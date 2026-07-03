@@ -16,6 +16,9 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
+    /// Queues a user change for the next database flush.
+    ///
+    /// Returns the queued entry and `true` when a new slot was created.
     pub fn add_user_update(&self, user_id: UserId, user_entry_item: UserEntryItem, updates_action: UpdatesAction) -> (UserEntryItem, bool)
     {
         let mut lock = self.users_updates.write();
@@ -28,12 +31,14 @@ impl TorrentTracker {
         }
     }
 
+    /// Returns a clone of the pending user-update queue.
     pub fn get_user_updates(&self) -> HashMap<u128, (UserId, UserEntryItem, UpdatesAction)>
     {
         let lock = self.users_updates.read_recursive();
         lock.clone()
     }
 
+    /// Removes a single queued user update by its sequence key; returns `true` when it existed.
     pub fn remove_user_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.users_updates.write();
@@ -45,6 +50,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Drops all queued user updates and resets the queue statistic.
     pub fn clear_user_updates(&self)
     {
         let mut lock = self.users_updates.write();
@@ -52,6 +58,12 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::UsersUpdates, 0);
     }
 
+    /// Drains the user-update queue, deduplicates it per user (newest wins) and flushes it to
+    /// the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the flush fails; the drained updates are restored to the queue.
     pub async fn save_user_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = {

@@ -9,6 +9,7 @@ use log::{
 use std::sync::Arc;
 
 impl TorrentTracker {
+    /// Loads the whitelist from the configured database into memory at startup.
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(whitelist) = self.sqlx.load_whitelist(tracker).await {
@@ -16,6 +17,11 @@ impl TorrentTracker {
         }
     }
 
+    /// Persists whitelist additions/removals to the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the database write fails; the caller re-queues the batch.
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
     {
         let hashes_len = hashes.len();
@@ -28,6 +34,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Adds an info-hash to the whitelist; returns `true` when it was newly inserted.
     #[inline]
     pub fn add_whitelist(&self, info_hash: InfoHash) -> bool
     {
@@ -39,12 +46,15 @@ impl TorrentTracker {
         false
     }
 
+    /// Returns all whitelisted info-hashes.
     pub fn get_whitelist(&self) -> Vec<InfoHash>
     {
         let lock = self.torrents_whitelist.read();
         lock.iter().copied().collect()
     }
 
+    /// Returns `true` when the info-hash is whitelisted (checked on every announce when
+    /// whitelist mode is enabled).
     #[inline]
     pub fn check_whitelist(&self, info_hash: InfoHash) -> bool
     {
@@ -52,6 +62,7 @@ impl TorrentTracker {
         lock.contains(&info_hash)
     }
 
+    /// Removes an info-hash from the whitelist; returns `true` when it existed.
     #[inline]
     pub fn remove_whitelist(&self, info_hash: InfoHash) -> bool
     {
@@ -64,6 +75,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Removes all whitelist entries and resets the whitelist counter statistic.
     pub fn clear_whitelist(&self)
     {
         let mut lock = self.torrents_whitelist.write();

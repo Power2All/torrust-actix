@@ -18,6 +18,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// `GET /api/whitelist/{info_hash}` — returns whether the info-hash is whitelisted.
 pub async fn api_service_whitelist_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -37,6 +38,7 @@ pub async fn api_service_whitelist_get(request: HttpRequest, path: web::Path<Str
     }
 }
 
+/// `GET /api/whitelists` — checks a JSON array of info-hashes against the whitelist.
 pub async fn api_service_whitelists_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -69,6 +71,7 @@ pub async fn api_service_whitelists_get(request: HttpRequest, payload: web::Payl
     }))
 }
 
+/// `POST /api/whitelist/{info_hash}` — adds an info-hash to the whitelist.
 pub async fn api_service_whitelist_post(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -91,6 +94,7 @@ pub async fn api_service_whitelist_post(request: HttpRequest, path: web::Path<St
     }
 }
 
+/// `POST /api/whitelists` — adds a JSON array of info-hashes to the whitelist.
 pub async fn api_service_whitelists_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -131,6 +135,7 @@ pub async fn api_service_whitelists_post(request: HttpRequest, payload: web::Pay
     }))
 }
 
+/// `DELETE /api/whitelist/{info_hash}` — removes an info-hash from the whitelist.
 pub async fn api_service_whitelist_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -153,6 +158,7 @@ pub async fn api_service_whitelist_delete(request: HttpRequest, path: web::Path<
     }
 }
 
+/// `DELETE /api/whitelists` — removes a JSON array of info-hashes from the whitelist.
 pub async fn api_service_whitelists_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -193,6 +199,7 @@ pub async fn api_service_whitelists_delete(request: HttpRequest, payload: web::P
         "whitelists": whitelists_output
     }))
 }
+/// `DELETE /api/whitelist/clear` — empties the whitelist.
 pub async fn api_service_whitelist_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }

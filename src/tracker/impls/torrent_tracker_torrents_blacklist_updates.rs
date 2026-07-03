@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
+    /// Queues a blacklist change for the next database flush; returns `true` when a new slot was created.
     pub fn add_blacklist_update(&self, info_hash: InfoHash, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.torrents_blacklist_updates.write();
@@ -24,6 +25,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Queues multiple blacklist changes; returns, per info-hash, whether a new slot was created.
     pub fn add_blacklist_updates(&self, hashes: Vec<(InfoHash, UpdatesAction)>) -> Vec<(InfoHash, bool)>
     {
         let mut lock = self.torrents_blacklist_updates.write();
@@ -43,12 +45,14 @@ impl TorrentTracker {
         returned_data
     }
 
+    /// Returns a clone of the pending blacklist-update queue.
     pub fn get_blacklist_updates(&self) -> HashMap<u128, (InfoHash, UpdatesAction)>
     {
         let lock = self.torrents_blacklist_updates.read_recursive();
         lock.clone()
     }
 
+    /// Removes a single queued blacklist update by its sequence key; returns `true` when it existed.
     pub fn remove_blacklist_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.torrents_blacklist_updates.write();
@@ -60,6 +64,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Drops all queued blacklist updates and resets the queue statistic.
     pub fn clear_blacklist_updates(&self)
     {
         let mut lock = self.torrents_blacklist_updates.write();
@@ -67,6 +72,11 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::BlacklistUpdates, 0);
     }
 
+    /// Drains the blacklist-update queue and flushes it to the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the flush fails; the drained updates are restored to the queue.
     pub async fn save_blacklist_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = {

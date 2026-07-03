@@ -11,6 +11,7 @@ impl fmt::Display for CacheEngine {
 }
 
 impl CacheEngine {
+    /// Returns the URL scheme used to connect to this cache engine (`redis` or `memcache`).
     pub fn url_scheme(&self) -> &'static str {
         match self {
             CacheEngine::redis => "redis://",

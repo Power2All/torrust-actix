@@ -18,6 +18,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// `GET /api/key/{key_hash}` — returns whether the announce key exists and its expiry.
 pub async fn api_service_key_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -39,6 +40,7 @@ pub async fn api_service_key_get(request: HttpRequest, path: web::Path<String>, 
     }
 }
 
+/// `GET /api/keys` — checks a JSON array of key hashes against the key table.
 pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -73,6 +75,8 @@ pub async fn api_service_keys_get(request: HttpRequest, payload: web::Payload, d
     }))
 }
 
+/// `POST /api/key/{key_hash}/{timeout}` — adds an announce key valid for `timeout` seconds
+/// (0 = permanent).
 pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String, u64)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -95,6 +99,7 @@ pub async fn api_service_key_post(request: HttpRequest, path: web::Path<(String,
     }
 }
 
+/// `POST /api/keys` — adds a JSON `{key_hash: timeout}` map of announce keys.
 pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -135,6 +140,7 @@ pub async fn api_service_keys_post(request: HttpRequest, payload: web::Payload, 
     }))
 }
 
+/// `DELETE /api/key/{key_hash}` — removes an announce key.
 pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -157,6 +163,7 @@ pub async fn api_service_key_delete(request: HttpRequest, path: web::Path<String
     }
 }
 
+/// `DELETE /api/keys` — removes a JSON array of announce keys.
 pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -196,6 +203,7 @@ pub async fn api_service_keys_delete(request: HttpRequest, payload: web::Payload
         "keys": keys_output
     }))
 }
+/// `DELETE /api/keys/clear` — empties the key table.
 pub async fn api_service_keys_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }

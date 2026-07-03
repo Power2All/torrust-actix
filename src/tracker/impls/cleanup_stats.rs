@@ -8,6 +8,7 @@ use std::sync::atomic::{
 use std::sync::Arc;
 
 impl CleanupStats {
+    /// Creates zeroed counters shared by the parallel cleanup workers.
     pub(crate) fn new() -> Self {
         Self {
             torrents: AtomicU64::new(0),
@@ -16,18 +17,22 @@ impl CleanupStats {
         }
     }
 
+    /// Adds removed-torrent count from one cleanup worker.
     pub(crate) fn add_torrents(&self, n: u64) {
         self.torrents.fetch_add(n, Ordering::Relaxed);
     }
 
+    /// Adds removed-seed count from one cleanup worker.
     pub(crate) fn add_seeds(&self, n: u64) {
         self.seeds.fetch_add(n, Ordering::Relaxed);
     }
 
+    /// Adds removed-peer count from one cleanup worker.
     pub(crate) fn add_peers(&self, n: u64) {
         self.peers.fetch_add(n, Ordering::Relaxed);
     }
 
+    /// Applies the accumulated removals to the tracker's global statistics in one step.
     pub(crate) fn apply_to_tracker(&self, tracker: &Arc<TorrentTracker>) {
         let torrents = self.torrents.swap(0, Ordering::Relaxed);
         let seeds = self.seeds.swap(0, Ordering::Relaxed);

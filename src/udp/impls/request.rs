@@ -45,6 +45,11 @@ impl From<ScrapeRequest> for Request {
 }
 
 impl Request {
+    /// Serialises the request into BEP 15 wire format.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying I/O error when writing fails.
     pub fn write(self, bytes: &mut impl Write) -> Result<(), io::Error> {
         match self {
             Request::Connect(r) => {
@@ -79,6 +84,14 @@ impl Request {
         Ok(())
     }
 
+    /// Parses a BEP 15 datagram into a connect, announce or scrape request.
+    ///
+    /// Scrape requests are capped at `max_scrape_torrents` info-hashes.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`RequestParseError`] carrying enough context to answer with an error packet
+    /// when possible.
     pub fn from_bytes(bytes: &[u8], max_scrape_torrents: u8) -> Result<Self, RequestParseError> {
         if bytes.len() < 16 {
             return Err(RequestParseError::unsendable_text("Packet too short"));

@@ -10,6 +10,11 @@ use crate::tracker::types::ahash_map::AHashMap;
 use std::time::Instant;
 
 impl AnnounceEntry {
+    /// Builds an announce snapshot from a live [`TorrentEntry`].
+    ///
+    /// Classic peer maps are capped at `SNAPSHOT_PEER_CAP` entries (enough to build a 72-peer
+    /// response); `counts` carries the exact full-swarm totals captured under the same lock.
+    /// RTC maps are copied in full, as RTC responses iterate all of them.
     pub fn from_entry(entry: &TorrentEntry) -> Self {
         AnnounceEntry {
             seeds: bounded_clone(&entry.seeds),

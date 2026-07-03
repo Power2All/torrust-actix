@@ -9,6 +9,7 @@ use log::{
 use std::sync::Arc;
 
 impl TorrentTracker {
+    /// Loads the blacklist from the configured database into memory at startup.
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(blacklist) = self.sqlx.load_blacklist(tracker).await {
@@ -16,6 +17,11 @@ impl TorrentTracker {
         }
     }
 
+    /// Persists blacklist additions/removals to the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the database write fails; the caller re-queues the batch.
     pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
     {
         let hashes_len = hashes.len();
@@ -28,6 +34,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Adds an info-hash to the blacklist; returns `true` when it was newly inserted.
     #[inline]
     pub fn add_blacklist(&self, info_hash: InfoHash) -> bool
     {
@@ -39,12 +46,15 @@ impl TorrentTracker {
         false
     }
 
+    /// Returns all blacklisted info-hashes.
     pub fn get_blacklist(&self) -> Vec<InfoHash>
     {
         let lock = self.torrents_blacklist.read();
         lock.iter().copied().collect()
     }
 
+    /// Returns `true` when the info-hash is blacklisted (checked on every announce when
+    /// blacklist mode is enabled).
     #[inline]
     pub fn check_blacklist(&self, info_hash: InfoHash) -> bool
     {
@@ -52,6 +62,7 @@ impl TorrentTracker {
         lock.contains(&info_hash)
     }
 
+    /// Removes an info-hash from the blacklist; returns `true` when it existed.
     #[inline]
     pub fn remove_blacklist(&self, info_hash: InfoHash) -> bool
     {
@@ -64,6 +75,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Removes all blacklist entries and resets the blacklist counter statistic.
     pub fn clear_blacklist(&self)
     {
         let mut lock = self.torrents_blacklist.write();

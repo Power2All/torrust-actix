@@ -20,6 +20,14 @@ use std::time::{
 };
 use tokio_shutdown::Shutdown;
 
+/// Parses a URL query string into a map of lower-cased keys to raw (percent-decoded) values.
+///
+/// Values are kept as bytes because BitTorrent info-hashes and peer ids are binary.
+/// Repeated keys accumulate multiple values.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] when a decoded value exceeds `MAX_PERCENT_DECODED_SIZE`.
 #[inline]
 pub fn parse_query(query: Option<&str>) -> Result<HashMap<String, QueryValues>, CustomError> {
     let mut queries: HashMap<String, QueryValues> = HashMap::with_capacity(12);
@@ -73,6 +81,11 @@ pub fn parse_query(query: Option<&str>) -> Result<HashMap<String, QueryValues>, 
     Ok(queries)
 }
 
+/// Windows-only sanity check that a UDP bind address is available before spawning the server.
+///
+/// # Errors
+///
+/// Returns the bind error when the address is already in use.
 pub fn udp_check_host_and_port_used(bind_address: &str) -> std::io::Result<()> {
     if cfg!(target_os = "windows")
         && let Err(e) = std::net::UdpSocket::bind(bind_address)
@@ -84,6 +97,7 @@ pub fn udp_check_host_and_port_used(bind_address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Formats a 20-byte binary hash as 40 lowercase hex characters into `f`.
 pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     let mut chars = [0u8; 40];
     binascii::bin2hex(data, &mut chars).expect("failed to hexlify");
@@ -93,12 +107,14 @@ pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
 pub struct Hex20(pub [u8; 40]);
 
 impl Hex20 {
+    /// Returns the hex string as `&str` (always 40 valid ASCII characters).
     #[inline]
     pub fn as_str(&self) -> &str {
         unsafe { std::str::from_utf8_unchecked(&self.0) }
     }
 }
 
+/// Converts a 20-byte binary hash into a stack-allocated 40-character lowercase hex buffer.
 #[inline]
 pub fn bin20_to_hex(data: &[u8; 20]) -> Hex20 {
     const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
@@ -111,6 +127,11 @@ pub fn bin20_to_hex(data: &[u8; 20]) -> Hex20 {
     Hex20(buffer)
 }
 
+/// Decodes a 40-character hex string into a 20-byte binary hash.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] when the input is not valid hex or is too short.
 pub fn hex2bin(data: String) -> Result<[u8; 20], CustomError> {
     hex::decode(data)
         .map_err(|data| {
@@ -125,6 +146,11 @@ pub fn hex2bin(data: String) -> Result<[u8; 20], CustomError> {
         })
 }
 
+/// Initialises the global `fern` logger with coloured output at the configured log level.
+///
+/// # Panics
+///
+/// Panics on an unknown `log_level` value or when a logger is already installed.
 pub fn setup_logging(config: &Configuration) {
     let level = match config.log_level.as_str() {
         "off" => log::LevelFilter::Off,
@@ -161,6 +187,7 @@ pub fn setup_logging(config: &Configuration) {
     info!("logging initialized.");
 }
 
+/// Returns the current Unix timestamp in seconds.
 #[inline]
 pub fn current_time() -> u64 {
     SystemTime::now()
@@ -169,6 +196,7 @@ pub fn current_time() -> u64 {
         .as_secs()
 }
 
+/// Encodes an integer as big-endian bytes with leading zero bytes stripped.
 #[inline]
 pub fn convert_int_to_bytes(number: &u64) -> Vec<u8> {
     let bytes = number.to_be_bytes();
@@ -176,6 +204,7 @@ pub fn convert_int_to_bytes(number: &u64) -> Vec<u8> {
     bytes[leading_zeros..].to_vec()
 }
 
+/// Decodes up to 8 big-endian bytes (as produced by [`convert_int_to_bytes`]) into a `u64`.
 #[inline]
 pub fn convert_bytes_to_int(array: &[u8]) -> u64 {
     let mut array_fixed = [0u8; 8];
@@ -184,18 +213,23 @@ pub fn convert_bytes_to_int(array: &[u8]) -> u64 {
     u64::from_be_bytes(array_fixed)
 }
 
+/// Waits up to `timeout` for the shutdown signal.
+///
+/// Returns `true` when shutdown was signalled, `false` when the timeout elapsed.
 pub async fn shutdown_waiting(timeout: Duration, shutdown_handler: Shutdown) -> bool {
     tokio::time::timeout(timeout, shutdown_handler.handle())
         .await
         .is_ok()
 }
 
+/// Returns the SHA-1 digest of the given string, used to derive stable 20-byte identifiers.
 pub fn hash_id(id: &str) -> [u8; 20] {
     let mut hasher = sha1::Sha1::new();
     hasher.update(id.as_bytes());
     <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
 }
 
+/// Converts one ASCII hex character to its 4-bit value, or `0xFF` for invalid input.
 #[inline(always)]
 pub fn hex_to_nibble(c: u8) -> u8 {
     match c {
@@ -206,6 +240,9 @@ pub fn hex_to_nibble(c: u8) -> u8 {
     }
 }
 
+/// Sets the global in-memory compression settings (algorithm and level) used for SDP storage.
+///
+/// Only the first call takes effect.
 pub fn init_compression(enabled: bool, algorithm: CompressionAlgorithm, level: u32) {
     let _ = COMPRESSION.set(CompressionState { enabled, algorithm, level });
 }

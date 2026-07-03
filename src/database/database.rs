@@ -1,5 +1,9 @@
 use crate::database::enums::database_drivers::DatabaseDrivers;
 
+/// Formats a hex hash as an engine-specific SQL literal: a binary literal
+/// (`X'..'` / `UNHEX` / `decode`) when `is_binary` is set, otherwise a quoted string.
+///
+/// Safe against injection because callers only pass hex-encoded values.
 pub fn format_hash_value(engine: DatabaseDrivers, hex_value: &str, is_binary: bool) -> String {
     if is_binary {
         match engine {
@@ -12,6 +16,8 @@ pub fn format_hash_value(engine: DatabaseDrivers, hex_value: &str, is_binary: bo
     }
 }
 
+/// Builds the SELECT expression that returns a hash column as hex text,
+/// wrapping binary columns in the engine's `HEX()`/`hex()` function.
 pub fn format_hex_select(engine: DatabaseDrivers, column: &str, is_binary: bool) -> String {
     if is_binary {
         match engine {
@@ -30,6 +36,8 @@ pub fn format_hex_select(engine: DatabaseDrivers, column: &str, is_binary: bool)
     }
 }
 
+/// Quotes a table or column identifier for the given engine (backticks for
+/// SQLite/MySQL, double quotes for PostgreSQL).
 pub fn quote_identifier(engine: DatabaseDrivers, identifier: &str) -> String {
     match engine {
         DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{identifier}`"),
@@ -37,6 +45,7 @@ pub fn quote_identifier(engine: DatabaseDrivers, identifier: &str) -> String {
     }
 }
 
+/// Returns the engine's "insert, ignore duplicates" statement prefix.
 pub fn insert_ignore_prefix(engine: DatabaseDrivers) -> &'static str {
     match engine {
         DatabaseDrivers::sqlite3 => "INSERT OR IGNORE INTO",
@@ -45,6 +54,8 @@ pub fn insert_ignore_prefix(engine: DatabaseDrivers) -> &'static str {
     }
 }
 
+/// Returns the engine's "insert, ignore duplicates" statement suffix
+/// (`ON CONFLICT .. DO NOTHING` for PostgreSQL, empty otherwise).
 pub fn insert_ignore_suffix(engine: DatabaseDrivers, conflict_column: &str) -> String {
     match engine {
         DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => String::new(),
@@ -52,6 +63,7 @@ pub fn insert_ignore_suffix(engine: DatabaseDrivers, conflict_column: &str) -> S
     }
 }
 
+/// Returns the engine's "update, ignore errors" statement prefix.
 pub fn update_ignore_prefix(engine: DatabaseDrivers) -> &'static str {
     match engine {
         DatabaseDrivers::sqlite3 => "UPDATE OR IGNORE",
@@ -60,6 +72,8 @@ pub fn update_ignore_prefix(engine: DatabaseDrivers) -> &'static str {
     }
 }
 
+/// Builds the engine-specific upsert conflict clause (`ON CONFLICT .. DO UPDATE` or
+/// `ON DUPLICATE KEY UPDATE`) updating the given columns.
 pub fn upsert_conflict_clause(engine: DatabaseDrivers, conflict_column: &str, update_columns: &[&str]) -> String {
     match engine {
         DatabaseDrivers::sqlite3 | DatabaseDrivers::pgsql => {
@@ -89,6 +103,7 @@ pub fn upsert_conflict_clause(engine: DatabaseDrivers, conflict_column: &str, up
     }
 }
 
+/// Builds the engine-specific `LIMIT`/`OFFSET` clause for paged loading.
 pub fn limit_offset(engine: DatabaseDrivers, start: u64, length: u64) -> String {
     match engine {
         DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("LIMIT {start}, {length}"),
@@ -96,6 +111,7 @@ pub fn limit_offset(engine: DatabaseDrivers, start: u64, length: u64) -> String 
     }
 }
 
+/// Builds a `DELETE .. WHERE hash_column = value` statement for the given engine.
 pub fn build_delete_hash_query(
     engine: DatabaseDrivers,
     table_name: &str,
@@ -111,6 +127,7 @@ pub fn build_delete_hash_query(
     )
 }
 
+/// Builds an insert-if-absent statement for a single hash value.
 pub fn build_insert_ignore_hash_query(
     engine: DatabaseDrivers,
     table_name: &str,
@@ -128,6 +145,7 @@ pub fn build_insert_ignore_hash_query(
     )
 }
 
+/// Builds a paged `SELECT` returning the hash column as hex plus any additional columns.
 pub fn build_select_hash_query(
     engine: DatabaseDrivers,
     table_name: &str,
@@ -154,6 +172,8 @@ pub fn build_select_hash_query(
     )
 }
 
+/// Builds an upsert statement for a torrent row keyed by info-hash, inserting
+/// `value_columns` and updating `update_columns` on conflict.
 pub fn build_upsert_torrent_query(
     engine: DatabaseDrivers,
     table_name: &str,
@@ -182,6 +202,7 @@ pub fn build_upsert_torrent_query(
     )
 }
 
+/// Builds an `UPDATE .. WHERE infohash = value` statement that ignores conflicts.
 pub fn build_update_ignore_torrent_query(
     engine: DatabaseDrivers,
     table_name: &str,
@@ -208,6 +229,7 @@ pub fn build_update_ignore_torrent_query(
     )
 }
 
+/// Returns the human-readable engine name used in log prefixes.
 pub fn engine_name(engine: DatabaseDrivers) -> &'static str {
     match engine {
         DatabaseDrivers::sqlite3 => "SQLite",

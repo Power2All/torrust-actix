@@ -3,6 +3,8 @@ use crate::common::structs::compressed_bytes::COMPRESSION;
 use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 
 impl CompressedBytes {
+    /// Stores a string compressed with the globally configured algorithm (LZ4 or Zstd),
+    /// or as plain bytes when compression is disabled or the input is empty.
     pub fn compress(s: &str) -> Self {
         let state = COMPRESSION.get();
         let enabled = state.is_some_and(|st| st.enabled);
@@ -23,6 +25,7 @@ impl CompressedBytes {
         }
     }
 
+    /// Returns the original string, decompressing when needed.
     pub fn decompress(&self) -> String {
         let state = COMPRESSION.get();
         let enabled = state.is_some_and(|st| st.enabled);

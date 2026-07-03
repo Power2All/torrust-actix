@@ -58,6 +58,11 @@ impl From<ErrorResponse> for Response {
 }
 
 impl Response {
+    /// Serialises the response into BEP 15 wire format.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying I/O error when writing fails.
     #[tracing::instrument(skip(bytes), level = "debug")]
     #[inline]
     pub fn write(&self, bytes: &mut impl Write) -> Result<(), io::Error> {
@@ -122,6 +127,12 @@ impl Response {
         Ok(())
     }
 
+    /// Parses a BEP 15 response datagram (connect, announce with `ipv4` peer format flag,
+    /// scrape or error).
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when the datagram is truncated or has an unknown action.
     #[inline]
     pub fn from_bytes(bytes: &[u8], ipv4: bool) -> Result<Self, io::Error> {
         let mut cursor = Cursor::new(bytes);
@@ -192,6 +203,7 @@ impl Response {
         }
     }
 
+    /// Returns the exact encoded size in bytes, for pre-allocating the output buffer.
     #[inline]
     pub fn estimated_size(&self) -> usize {
         match self {
@@ -203,6 +215,11 @@ impl Response {
         }
     }
 
+    /// Serialises the response into a freshly allocated, exactly sized buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying I/O error when writing fails.
     #[inline]
     pub fn write_to_vec(&self) -> Result<Vec<u8>, io::Error> {
         let estimated_size = self.estimated_size();

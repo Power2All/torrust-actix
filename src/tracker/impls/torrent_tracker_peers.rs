@@ -14,6 +14,8 @@ use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 
 impl TorrentTracker {
+    /// Returns up to `amount` seeds and peers of a torrent, filtered by IP family and excluding
+    /// `self_peer_id`. Returns `None` when the torrent is unknown.
     pub fn get_torrent_peers(&self, info_hash: InfoHash, amount: usize, ip_type: TorrentPeersType, self_peer_id: Option<PeerId>) -> Option<TorrentPeers>
     {
         self.get_torrent(info_hash).map(|data| {
@@ -43,6 +45,8 @@ impl TorrentTracker {
         })
     }
 
+    /// Copies up to `amount` peers out of a peer map, filtered by IP family and excluding
+    /// `self_peer_id`. An `amount` of 0 means unlimited.
     #[inline]
     pub fn get_peers(&self, peers: &AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_peer_id: Option<PeerId>, amount: usize) -> AHashMap<PeerId, TorrentPeer>
     {
@@ -67,6 +71,8 @@ impl TorrentTracker {
         result
     }
 
+    /// Borrowing variant of [`TorrentTracker::get_peers`]: returns references instead of clones,
+    /// for building responses without copying peer data. An `amount` of 0 means unlimited.
     #[inline]
     pub fn get_peers_ref<'a>(&self, peers: &'a AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_peer_id: Option<PeerId>, amount: usize) -> Vec<(&'a PeerId, &'a TorrentPeer)>
     {
@@ -88,6 +94,13 @@ impl TorrentTracker {
         result
     }
 
+    /// Inserts or refreshes a peer in the torrent's swarm, creating the torrent when needed.
+    ///
+    /// The peer is classified as seed or leecher (`left == 0` -> seed), IPv4/IPv6 or RTC, and any
+    /// previous classification of the same peer id is removed first so statistics stay exact.
+    /// Pending RTC answers survive re-announces. Set `completed` to also count a finished download.
+    ///
+    /// Returns a bounded [`AnnounceEntry`] snapshot for building the response.
     pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> AnnounceEntry
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
@@ -211,20 +224,23 @@ impl TorrentTracker {
         }
     }
 
-    pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (Option<AnnounceEntry>, Option<AnnounceEntry>)
+    /// Removes a peer from a torrent. Returns `(existed, remaining)` where `existed` is true
+    /// when the torrent entry was found, and `remaining` is a snapshot of the torrent after
+    /// removal (or `None` when the torrent itself was removed because it became empty and is
+    /// not persistent).
+    pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (bool, Option<AnnounceEntry>)
     {
         if !self.torrents_sharding.contains_peer(info_hash, peer_id) {
-            return (None, None);
+            return (false, None);
         }
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
         match lock.entry(info_hash) {
-            Entry::Vacant(_) => (None, None),
+            Entry::Vacant(_) => (false, None),
             Entry::Occupied(mut o) => {
                 if cleanup {
                     info!("[PEERS] Removing from torrent {info_hash} peer {peer_id}");
                 }
-                let previous_torrent = AnnounceEntry::from_entry(o.get());
                 let entry = o.get_mut();
                 let seeds_removed = i64::from(entry.seeds.remove(&peer_id).is_some())
                     + i64::from(entry.seeds_ipv6.remove(&peer_id).is_some());
@@ -247,9 +263,9 @@ impl TorrentTracker {
                 if !persistent && entry.seeds.is_empty() && entry.seeds_ipv6.is_empty() && entry.peers.is_empty() && entry.peers_ipv6.is_empty() && entry.rtc_seeds.is_empty() && entry.rtc_peers.is_empty() {
                     o.remove();
                     self.update_stats(StatsEvent::Torrents, -1);
-                    (Some(previous_torrent), None)
+                    (true, None)
                 } else {
-                    (Some(previous_torrent), Some(AnnounceEntry::from_entry(entry)))
+                    (true, Some(AnnounceEntry::from_entry(entry)))
                 }
             }
         }
