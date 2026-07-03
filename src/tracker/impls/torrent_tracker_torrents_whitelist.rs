@@ -11,7 +11,8 @@ use std::sync::Arc;
 impl TorrentTracker {
     /// Loads the whitelist from the configured database into memory at startup.
     ///
-    /// A load failure is logged and leaves the in-memory whitelist empty.
+    /// A load failure is fatal: the process exits instead of starting with an empty
+    /// whitelist (which would reject every announce while whitelist mode is enabled).
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>)
     {
         match self.sqlx.load_whitelist(tracker).await {
@@ -20,6 +21,7 @@ impl TorrentTracker {
             }
             Err(e) => {
                 error!("Unable to load the whitelist from the database: {e}");
+                std::process::exit(1);
             }
         }
     }

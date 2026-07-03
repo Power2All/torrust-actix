@@ -185,20 +185,14 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
     }))
 }
 
-/// `DELETE /api/user/{id}` — removes a user. Unlike the GET/POST routes, `{id}` here is the
-/// 40-character hex user hash (the SHA-1 of the id/UUID used at creation).
+/// `DELETE /api/user/{id}` — removes a user; `{id}` is the user id or UUID, using the same
+/// identifier contract (and internal SHA-1 hashing) as the GET/POST routes.
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
     if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
     let id = path.into_inner();
-    if id.len() != 40 {
-        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad user_hash"}));
-    }
-    let id_hash = match hex2bin(id) {
-        Ok(hash) => UserId(hash),
-        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid user_hash"})),
-    };
+    let id_hash = UserId(hash_id(&id));
     if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let empty_user = UserEntryItem {
             key: UserId([0u8; 20]),
@@ -219,8 +213,8 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
     }
 }
 
-/// `DELETE /api/users` — removes a JSON array of users by their 40-character hex user hashes
-/// (the SHA-1 of the id/UUID used at creation). Entries that are not 40 characters are skipped.
+/// `DELETE /api/users` — removes a JSON array of users by id/UUID, using the same identifier
+/// contract (and internal SHA-1 hashing) as the GET/POST routes.
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -235,31 +229,26 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
     };
     let mut users_output = HashMap::with_capacity(ids.len());
     for id in ids {
-        if id.len() == 40 {
-            let id_hash = match hex2bin(id.clone()) {
-                Ok(hash) => UserId(hash),
-                Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid user_hash"})),
+        let id_hash = UserId(hash_id(&id));
+        if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
+            let empty_user = UserEntryItem {
+                key: UserId([0u8; 20]),
+                user_id: None,
+                user_uuid: None,
+                uploaded: 0,
+                downloaded: 0,
+                completed: 0,
+                updated: 0,
+                active: 0,
+                torrents_active: BTreeMap::new(),
             };
-            if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-                let empty_user = UserEntryItem {
-                    key: UserId([0u8; 20]),
-                    user_id: None,
-                    user_uuid: None,
-                    uploaded: 0,
-                    downloaded: 0,
-                    completed: 0,
-                    updated: 0,
-                    active: 0,
-                    torrents_active: BTreeMap::new(),
-                };
-                let _ = data.torrent_tracker.add_user_update(id_hash, empty_user, UpdatesAction::Remove);
-            }
-            let status = match data.torrent_tracker.remove_user(id_hash) {
-                None => json!({"status": "unknown user_hash"}),
-                Some(_) => json!({"status": "ok"}),
-            };
-            users_output.insert(id, status);
+            let _ = data.torrent_tracker.add_user_update(id_hash, empty_user, UpdatesAction::Remove);
         }
+        let status = match data.torrent_tracker.remove_user(id_hash) {
+            None => json!({"status": "unknown user_hash"}),
+            Some(_) => json!({"status": "ok"}),
+        };
+        users_output.insert(id, status);
     }
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
