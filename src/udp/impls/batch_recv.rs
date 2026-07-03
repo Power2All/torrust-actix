@@ -25,6 +25,7 @@ impl Default for RecvBatch {
 }
 
 impl RecvBatch {
+    /// Allocates the reusable buffers for one `recvmmsg` batch.
     pub fn new() -> Self {
         RecvBatch {
             bufs: Box::new([[0u8; MAX_PACKET_SIZE]; BATCH]),
@@ -34,6 +35,11 @@ impl RecvBatch {
         }
     }
 
+    /// Receives up to a full batch of datagrams in one `recvmmsg` call.
+    ///
+    /// # Errors
+    ///
+    /// Returns the socket error reported by the kernel.
     pub fn recv(&mut self, fd: RawFd) -> std::io::Result<usize> {
         for i in 0..BATCH {
             let buf_ptr = self.bufs[i].as_mut_ptr() as *mut libc::c_void;
@@ -66,6 +72,7 @@ impl RecvBatch {
         Ok(ret as usize)
     }
 
+    /// Returns the payload slice and source address of the `index`-th datagram of the last batch.
     pub fn datagram(&self, index: usize) -> Option<(&[u8], SocketAddr)> {
         let len = (self.msgs[index].msg_len as usize).min(MAX_PACKET_SIZE);
         let buf = &self.bufs[index][..len];
@@ -74,6 +81,7 @@ impl RecvBatch {
     }
 }
 
+/// Converts a raw `sockaddr_storage` filled by the kernel into a Rust [`SocketAddr`].
 pub(crate) fn sockaddr_to_socketaddr(storage: &libc::sockaddr_storage) -> Option<SocketAddr> {
     match storage.ss_family as libc::c_int {
         libc::AF_INET => {

@@ -15,6 +15,7 @@ impl CacheConnectorRedis {
         })
     }
 
+    /// Builds the cache key for a torrent's peer counts (`<prefix>t:<info_hash>`).
     pub(crate) fn torrent_key(&self, info_hash: &InfoHash) -> String {
         format!("{}t:{}", self.prefix, info_hash)
     }

@@ -31,6 +31,14 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 impl TorrentTracker {
+    /// Parses and validates an announce query string into an [`AnnounceQueryRequest`].
+    ///
+    /// Enforces required fields (`info_hash`, `peer_id`, `port`), clamps `numwant` to 72 and
+    /// bounds the optional WebRTC fields (`rtcoffer`, `rtcanswer`, `rtcanswerfor`).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CustomError`] describing the first missing or invalid field.
     pub async fn validate_announce(&self, remote_addr: IpAddr, query: HashMap<String, QueryValues>) -> Result<AnnounceQueryRequest, CustomError>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("validate_announce", "tracker");
@@ -149,7 +157,17 @@ impl TorrentTracker {
         })
     }
 
-    pub async fn handle_announce(&self, announce_query: &AnnounceQueryRequest, user_key: Option<UserId>) -> Result<(TorrentPeer, AnnounceEntry), CustomError>
+    /// Applies a validated announce to the swarm and returns the response snapshot.
+    ///
+    /// `Started`/`None` and `Completed` events insert or refresh the peer; `Stopped` removes it.
+    /// When enabled, user statistics and the persistence/cache update queues are maintained as
+    /// part of the same call. The returned [`AnnounceEntry`] carries bounded peer maps plus
+    /// exact swarm counts for building the client response.
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible in practice; the `Result` is kept for interface stability.
+    pub async fn handle_announce(&self, announce_query: &AnnounceQueryRequest, user_key: Option<UserId>) -> Result<AnnounceEntry, CustomError>
     {
         let data = self;
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("handle_announce", "tracker");
@@ -178,7 +196,7 @@ impl TorrentTracker {
                 announce_query.info_hash,
                 seeder_peer_id,
                 announce_query.peer_id,
-                sdp_answer.clone()
+                sdp_answer
             );
         }
         if let Some(ref sdp_offer) = announce_query.rtcoffer
@@ -186,7 +204,7 @@ impl TorrentTracker {
             data.update_rtc_sdp_offer(
                 announce_query.info_hash,
                 announce_query.peer_id,
-                sdp_offer.clone()
+                sdp_offer
             );
         }
         let is_torrents_persistent = data.config.database_structure.torrents.persistent.unwrap_or(data.config.database.persistent);
@@ -199,82 +217,21 @@ impl TorrentTracker {
             AnnounceEvent::Started | AnnounceEvent::None => {
                 torrent_peer.event = AnnounceEvent::Started;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
+                let is_rtctorrent = announce_query.rtctorrent.unwrap_or(false);
                 let torrent_entry = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
-                    torrent_peer.clone(),
+                    torrent_peer,
                     false
                 );
-                if announce_query.rtctorrent.unwrap_or(false) {
-                    let rtc_entry = data.get_rtctorrent_peers(
+                let torrent_entry = if is_rtctorrent {
+                    data.get_rtctorrent_peers(
                         announce_query.info_hash,
                         announce_query.left == 0,
                         announce_query.peer_id
-                    );
-                    if needs_update {
-                        let _ = data.add_torrent_update(
-                            announce_query.info_hash,
-                            TorrentUpdateData::from(&rtc_entry),
-                            UpdatesAction::Add
-                        );
-                    }
-                    if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
-                        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                        user.updated = now;
-                        user.torrents_active.insert(announce_query.info_hash, now);
-                        data.add_user(user_id, user.clone());
-                        if is_users_persistent {
-                            data.add_user_update(user_id, user, UpdatesAction::Add);
-                        }
-                    }
-                    let elapsed = now.elapsed();
-                    debug!("[PERF] Announce Started handling took: {elapsed:?}");
-                    Ok((torrent_peer, rtc_entry))
+                    )
                 } else {
-                    if needs_update {
-                        let _ = data.add_torrent_update(
-                            announce_query.info_hash,
-                            TorrentUpdateData::from(&torrent_entry),
-                            UpdatesAction::Add
-                        );
-                    }
-                    if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
-                        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                        user.updated = now;
-                        user.torrents_active.insert(announce_query.info_hash, now);
-                        data.add_user(user_id, user.clone());
-                        if is_users_persistent {
-                            data.add_user_update(user_id, user, UpdatesAction::Add);
-                        }
-                    }
-                    let elapsed = now.elapsed();
-                    debug!("[PERF] Announce Started handling took: {elapsed:?}");
-                    Ok((torrent_peer, torrent_entry))
-                }
-            }
-            AnnounceEvent::Stopped => {
-                torrent_peer.event = AnnounceEvent::Stopped;
-                debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
-                let torrent_entry = match data.remove_torrent_peer(
-                    announce_query.info_hash,
-                    announce_query.peer_id,
-                    is_persistent,
-                    false
-                ) {
-                    (Some(_), Some(new_torrent)) => {
-                        if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
-                            user.uploaded += announce_query.uploaded;
-                            user.downloaded += announce_query.downloaded;
-                            user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                            user.torrents_active.remove(&announce_query.info_hash);
-                            data.add_user(user_id, user.clone());
-                            if is_users_persistent {
-                                data.add_user_update(user_id, user, UpdatesAction::Add);
-                            }
-                        }
-                        new_torrent
-                    }
-                    _ => AnnounceEntry::default()
+                    torrent_entry
                 };
                 if needs_update {
                     let _ = data.add_torrent_update(
@@ -283,63 +240,92 @@ impl TorrentTracker {
                         UpdatesAction::Add
                     );
                 }
+                if users_enabled && let Some(user_id) = user_key {
+                    let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
+                        user.updated = timestamp;
+                        user.torrents_active.insert(announce_query.info_hash, timestamp);
+                    }) {
+                        data.add_user_update(user_id, user, UpdatesAction::Add);
+                    }
+                }
+                let elapsed = now.elapsed();
+                debug!("[PERF] Announce Started handling took: {elapsed:?}");
+                Ok(torrent_entry)
+            }
+            AnnounceEvent::Stopped => {
+                debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
+                let torrent_entry = match data.remove_torrent_peer(
+                    announce_query.info_hash,
+                    announce_query.peer_id,
+                    is_persistent,
+                    false
+                ) {
+                    (true, Some(new_torrent)) => {
+                        if users_enabled && let Some(user_id) = user_key {
+                            let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                            if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
+                                user.uploaded += announce_query.uploaded;
+                                user.downloaded += announce_query.downloaded;
+                                user.updated = timestamp;
+                                user.torrents_active.remove(&announce_query.info_hash);
+                            }) {
+                                data.add_user_update(user_id, user, UpdatesAction::Add);
+                            }
+                        }
+                        if needs_update {
+                            let _ = data.add_torrent_update(
+                                announce_query.info_hash,
+                                TorrentUpdateData::from(&new_torrent),
+                                UpdatesAction::Add
+                            );
+                        }
+                        new_torrent
+                    }
+                    _ => AnnounceEntry::default()
+                };
                 let elapsed = now.elapsed();
                 debug!("[PERF] Announce Stopped handling took: {elapsed:?}");
-                Ok((torrent_peer, torrent_entry))
+                Ok(torrent_entry)
             }
             AnnounceEvent::Completed => {
                 torrent_peer.event = AnnounceEvent::Completed;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
+                let is_rtctorrent = announce_query.rtctorrent.unwrap_or(false);
                 let torrent_entry = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
-                    torrent_peer.clone(),
+                    torrent_peer,
                     true
                 );
-                if announce_query.rtctorrent.unwrap_or(false) {
-                    let rtc_entry = data.get_rtctorrent_peers(
+                let torrent_entry = if is_rtctorrent {
+                    data.get_rtctorrent_peers(
                         announce_query.info_hash,
                         true,
                         announce_query.peer_id
-                    );
-                    if is_persistent {
-                        let _ = data.add_torrent_update(
-                            announce_query.info_hash,
-                            TorrentUpdateData::from(&rtc_entry),
-                            UpdatesAction::Add
-                        );
-                    }
-                    if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
-                        user.completed += 1;
-                        user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                        data.add_user(user_id, user.clone());
-                        if is_users_persistent {
-                            data.add_user_update(user_id, user, UpdatesAction::Add);
-                        }
-                    }
-                    let elapsed = now.elapsed();
-                    debug!("[PERF] Announce Completed handling took: {elapsed:?}");
-                    Ok((torrent_peer, rtc_entry))
+                    )
                 } else {
-                    if is_persistent {
-                        let _ = data.add_torrent_update(
-                            announce_query.info_hash,
-                            TorrentUpdateData::from(&torrent_entry),
-                            UpdatesAction::Add
-                        );
-                    }
-                    if users_enabled && let Some(user_id) = user_key && let Some(mut user) = data.get_user(user_id) {
-                        user.completed += 1;
-                        user.updated = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-                        data.add_user(user_id, user.clone());
-                        if is_users_persistent {
-                            data.add_user_update(user_id, user, UpdatesAction::Add);
-                        }
-                    }
-                    let elapsed = now.elapsed();
-                    debug!("[PERF] Announce Completed handling took: {elapsed:?}");
-                    Ok((torrent_peer, torrent_entry))
+                    torrent_entry
+                };
+                if needs_update {
+                    let _ = data.add_torrent_update(
+                        announce_query.info_hash,
+                        TorrentUpdateData::from(&torrent_entry),
+                        UpdatesAction::Add
+                    );
                 }
+                if users_enabled && let Some(user_id) = user_key {
+                    let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
+                        user.completed += 1;
+                        user.updated = timestamp;
+                    }) {
+                        data.add_user_update(user_id, user, UpdatesAction::Add);
+                    }
+                }
+                let elapsed = now.elapsed();
+                debug!("[PERF] Announce Completed handling took: {elapsed:?}");
+                Ok(torrent_entry)
             }
         };
 
@@ -354,6 +340,13 @@ impl TorrentTracker {
         result
     }
 
+    /// Parses and validates a scrape query string into a [`ScrapeQueryRequest`].
+    ///
+    /// Accepts up to `MAX_SCRAPE_TORRENTS` well-formed 20-byte info-hashes.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CustomError`] when no info-hash is supplied or one has an invalid length.
     pub async fn validate_scrape(&self, query: HashMap<String, QueryValues>) -> Result<ScrapeQueryRequest, CustomError>
     {
         let now = std::time::Instant::now();
@@ -378,6 +371,9 @@ impl TorrentTracker {
         }
     }
 
+    /// Returns the seed/peer/completed counters for every requested info-hash.
+    ///
+    /// Unknown torrents yield all-zero counts, matching BEP 48 expectations.
     pub async fn handle_scrape(&self, data: Arc<TorrentTracker>, scrape_query: &ScrapeQueryRequest) -> BTreeMap<InfoHash, crate::tracker::structs::torrent_counts::TorrentCounts>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("handle_scrape", "tracker");

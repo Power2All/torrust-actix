@@ -4,6 +4,7 @@ use crate::websocket::structs::cluster_request::ClusterRequest;
 use std::net::IpAddr;
 
 impl ClusterRequest {
+    /// Creates a cluster request envelope carrying the original client address and raw payload.
     pub fn new(
         request_id: u64,
         protocol: ProtocolType,

@@ -2,6 +2,7 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::types::ahash_map::AHashMap;
 
 impl TorrentEntry {
+    /// Creates an empty torrent entry with the update timestamp set to now.
     pub fn new() -> Self {
         TorrentEntry {
             seeds: AHashMap::default(),

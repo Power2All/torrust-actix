@@ -53,6 +53,12 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::mysql;
 const LOG_PREFIX: &str = "[MySQL]";
 
 impl DatabaseConnectorMySQL {
+    /// Opens a MySQL connection pool from the DSN with statement logging enabled
+    /// (schema creation happens in [`Self::database_connector`] when requested).
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn create(dsl: &str) -> Result<Pool<MySql>, Error> {
         MySqlPoolOptions::new()
             .connect_with(
@@ -63,6 +69,12 @@ impl DatabaseConnectorMySQL {
             .await
     }
 
+    /// Opens the MySQL connection pool from the configured path/DSN, optionally
+    /// creating the schema first.
+    ///
+    /// # Panics / exit
+    ///
+    /// Exits the process when the connection cannot be established.
     pub async fn database_connector(
         config: Arc<Configuration>,
         create_database: bool,
@@ -158,6 +170,11 @@ impl DatabaseConnectorMySQL {
         structure
     }
 
+    /// Loads all persisted torrents in pages into the tracker; returns `(torrents, completed)` counts.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error> {
         let mut start = 0u64;
         let length = 100_000_u64;
@@ -211,6 +228,12 @@ impl DatabaseConnectorMySQL {
         Ok((torrents, completed))
     }
 
+    /// Persists a batch of torrent updates (insert/update or delete per `UpdatesAction`),
+    /// committing every `chunk_size` rows so locks on the torrents table stay short.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -321,6 +344,11 @@ impl DatabaseConnectorMySQL {
         self.commit(transaction).await
     }
 
+    /// Loads the persisted whitelist in pages into the tracker; returns the number of entries.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100_000_u64;
@@ -356,6 +384,11 @@ impl DatabaseConnectorMySQL {
         Ok(hashes)
     }
 
+    /// Persists whitelist additions/removals in a single transaction; returns the rows written.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn save_whitelist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -403,10 +436,15 @@ impl DatabaseConnectorMySQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} whitelisted torrents");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
+    /// Loads the persisted blacklist in pages into the tracker; returns the number of entries.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100_000_u64;
@@ -442,6 +480,11 @@ impl DatabaseConnectorMySQL {
         Ok(hashes)
     }
 
+    /// Persists blacklist additions/removals in a single transaction; returns the rows written.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn save_blacklist(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -489,10 +532,15 @@ impl DatabaseConnectorMySQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} blacklisted torrents");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
+    /// Loads the persisted announce keys in pages into the tracker; returns the number of entries.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100_000_u64;
@@ -528,6 +576,11 @@ impl DatabaseConnectorMySQL {
         Ok(hashes)
     }
 
+    /// Persists announce-key additions/removals with expiry timestamps in a single transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn save_keys(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -577,10 +630,15 @@ impl DatabaseConnectorMySQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} keys");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
+    /// Loads the persisted users in pages into the tracker; returns the number of entries.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
         let mut start = 0u64;
         let length = 100_000_u64;
@@ -656,6 +714,12 @@ impl DatabaseConnectorMySQL {
         Ok(hashes)
     }
 
+    /// Persists a batch of user updates (upsert or delete per `UpdatesAction`),
+    /// committing every `chunk_size` rows so transactions stay short.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn save_users(
         &self,
         tracker: Arc<TorrentTracker>,
@@ -790,6 +854,11 @@ impl DatabaseConnectorMySQL {
         self.commit(transaction).await
     }
 
+    /// Zeroes the seeds and peers columns of every torrent row.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
         let structure = &tracker.config.database_structure.torrents;
@@ -801,7 +870,7 @@ impl DatabaseConnectorMySQL {
             error!("{LOG_PREFIX} Error: {e}");
             return Err(e);
         }
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(())
     }
 
@@ -819,6 +888,11 @@ impl DatabaseConnectorMySQL {
         Ok(())
     }
 
+    /// Commits the given transaction, logging and returning any failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `sqlx` error when the database operation fails.
     pub async fn commit(&self, transaction: Transaction<'_, MySql>) -> Result<(), Error> {
         match transaction.commit().await {
             Ok(()) => Ok(()),

@@ -101,6 +101,9 @@ pub struct RioSender {
 }
 
 impl RioSender {
+    /// Queues a reply datagram on the RIO send ring and wakes the I/O thread.
+    ///
+    /// Drops the reply when the send queue is full.
     pub fn send(&self, remote_addr: SocketAddr, payload: &[u8]) {
         if self.queue.push((remote_addr, SmallVec::from_slice(payload))).is_ok() {
             unsafe { SetEvent(self.wake.0); }
@@ -115,6 +118,7 @@ struct WakeHandle(HANDLE);
 unsafe impl Send for WakeHandle {}
 unsafe impl Sync for WakeHandle {}
 
+/// Probes Winsock for Registered I/O (RIO) support.
 pub fn is_available() -> bool {
     unsafe {
         let mut wsadata: WSADATA = std::mem::zeroed();
@@ -190,6 +194,8 @@ impl Drop for RioContext {
     }
 }
 
+/// Runs the Windows RIO receive/send loop on a dedicated thread using its own socket,
+/// pushing datagrams into the parse pool until shutdown.
 pub fn run(
     bind_address: SocketAddr,
     recv_buffer_size: usize,

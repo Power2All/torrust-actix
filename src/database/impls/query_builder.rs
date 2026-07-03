@@ -2,10 +2,12 @@ use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::query_builder::QueryBuilder;
 
 impl QueryBuilder {
+    /// Creates a query builder bound to the given database engine.
     pub fn new(engine: DatabaseDrivers) -> Self {
         Self { engine }
     }
 
+    /// Quotes a table or column identifier for the bound engine.
     pub fn quote_identifier(&self, identifier: &str) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{identifier}`"),
@@ -13,6 +15,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Formats a hex string as an engine-specific binary literal.
     pub fn binary_literal(&self, hex_value: &str) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 => format!("X'{hex_value}'"),
@@ -21,10 +24,12 @@ impl QueryBuilder {
         }
     }
 
+    /// Formats a value as a single-quoted SQL string literal.
     pub fn text_literal(&self, value: &str) -> String {
         format!("'{value}'")
     }
 
+    /// Builds the engine-specific upsert conflict clause updating the given columns.
     pub fn upsert_conflict_clause(&self, conflict_column: &str, update_columns: &[&str]) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 | DatabaseDrivers::pgsql => {
@@ -54,6 +59,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the engine's "insert, ignore duplicates" statement prefix.
     pub fn insert_ignore_prefix(&self) -> &'static str {
         match self.engine {
             DatabaseDrivers::sqlite3 => "INSERT OR IGNORE INTO",
@@ -62,6 +68,8 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the engine's "insert, ignore duplicates" statement suffix
+    /// (`ON CONFLICT .. DO NOTHING` for PostgreSQL, empty otherwise).
     pub fn insert_ignore_suffix(&self, conflict_column: &str) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => String::new(),
@@ -69,6 +77,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the engine's "update, ignore errors" statement prefix.
     pub fn update_ignore_prefix(&self) -> &'static str {
         match self.engine {
             DatabaseDrivers::sqlite3 => "UPDATE OR IGNORE",
@@ -77,6 +86,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Builds a SELECT expression returning a binary column as hex text under `alias`.
     pub fn select_hex(&self, column: &str, alias: &str) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => {
@@ -88,6 +98,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Formats a hex string as the engine's hex-to-binary conversion expression.
     pub fn unhex(&self, hex_value: &str) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 => format!("X'{hex_value}'"),
@@ -96,6 +107,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Builds the engine-specific `LIMIT`/`OFFSET` clause.
     pub fn limit_offset(&self, offset: u64, limit: u64) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("LIMIT {offset}, {limit}"),
@@ -103,6 +115,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the engine's auto-increment column keyword (empty for PostgreSQL).
     pub fn auto_increment(&self) -> &'static str {
         match self.engine {
             DatabaseDrivers::sqlite3 => "AUTOINCREMENT",
@@ -111,6 +124,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the engine's 32-bit integer column type.
     pub fn integer_type(&self) -> &'static str {
         match self.engine {
             DatabaseDrivers::sqlite3 => "INTEGER",
@@ -119,6 +133,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the engine's 64-bit integer column type.
     pub fn bigint_type(&self) -> &'static str {
         match self.engine {
             DatabaseDrivers::sqlite3 => "INTEGER",
@@ -127,6 +142,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the engine's fixed-size binary column type.
     pub fn binary_type(&self, size: usize) -> String {
         match self.engine {
             DatabaseDrivers::sqlite3 => "BLOB".to_string(),
@@ -135,6 +151,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the engine's 40-character text column type (for hex-encoded hashes).
     pub fn text_type(&self) -> &'static str {
         match self.engine {
             DatabaseDrivers::sqlite3 => "TEXT",
@@ -143,6 +160,7 @@ impl QueryBuilder {
         }
     }
 
+    /// Returns the human-readable engine name used in log prefixes.
     pub fn engine_name(&self) -> &'static str {
         match self.engine {
             DatabaseDrivers::sqlite3 => "SQLite",

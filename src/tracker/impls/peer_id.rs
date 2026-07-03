@@ -12,6 +12,8 @@ impl fmt::Display for PeerId {
 }
 
 impl PeerId {
+    /// Identifies the BitTorrent client from the peer-id prefix (Azureus-style and known
+    /// fixed prefixes); returns `None` for unknown clients.
     pub fn get_client_name(&self) -> Option<&'static str> {
         if self.0[0] == b'M' {
             return Some("BitTorrent");

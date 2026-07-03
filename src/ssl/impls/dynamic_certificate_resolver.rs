@@ -16,6 +16,12 @@ impl std::fmt::Debug for DynamicCertificateResolver {
 }
 
 impl DynamicCertificateResolver {
+    /// Creates a rustls certificate resolver that serves `server_id`'s certificate from the store.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CertificateError`] when no certificate is loaded for the server, or when
+    /// the bundle cannot be converted into a usable rustls signing key (`CertifiedKeyError`).
     pub fn new(
         store: Arc<CertificateStore>,
         server_id: ServerIdentifier,
@@ -29,10 +35,17 @@ impl DynamicCertificateResolver {
         Ok(resolver)
     }
 
+    /// Returns the server identity this resolver serves certificates for.
     pub fn server_id(&self) -> &ServerIdentifier {
         &self.server_id
     }
 
+    /// Refreshes the resolver's cached certified key from the store (after a hot reload).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CertificateError`] when the store no longer holds a certificate, or when
+    /// the bundle cannot be converted into a usable rustls signing key (`CertifiedKeyError`).
     pub fn refresh_cache(&self) -> Result<(), CertificateError> {
         let bundle = self
             .store
@@ -47,6 +60,7 @@ impl DynamicCertificateResolver {
         Ok(())
     }
 
+    /// Returns `true` when the resolver currently holds a usable certificate.
     pub fn has_certificate(&self) -> bool {
         self.cached_key.read().is_some()
     }

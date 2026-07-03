@@ -4,10 +4,17 @@ use serde_json::Value;
 use std::process::Command;
 
 impl RtcTorrentBridge {
+    /// Creates a bridge to the `rtctorrent` Node.js tooling, announcing against `tracker_url`.
     pub fn new(tracker_url: String) -> Self {
         Self { tracker_url }
     }
 
+    /// Creates a `.torrent` for a local file via the bundled rtctorrent script.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`RtcTorrentBridgeError`] when an input file path does not exist
+    /// (`FileNotFoundError`), the script fails, or its output cannot be parsed.
     pub fn create_torrent(&self, file_path: &str, torrent_name: Option<&str>) -> Result<Value, RtcTorrentBridgeError> {
         if !std::path::Path::new(file_path).exists() {
             return Err(RtcTorrentBridgeError::FileNotFoundError(
@@ -63,6 +70,12 @@ impl RtcTorrentBridge {
             .map_err(|e| RtcTorrentBridgeError::JsonParseError(e.to_string()))
     }
 
+    /// Starts seeding a torrent file via the bundled rtctorrent script.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`RtcTorrentBridgeError`] when an input file path does not exist
+    /// (`FileNotFoundError`), the script fails, or its output cannot be parsed.
     pub fn seed_torrent(&self, torrent_path: &str) -> Result<Value, RtcTorrentBridgeError> {
         if !std::path::Path::new(torrent_path).exists() {
             return Err(RtcTorrentBridgeError::FileNotFoundError(
@@ -113,6 +126,12 @@ impl RtcTorrentBridge {
             .map_err(|e| RtcTorrentBridgeError::JsonParseError(e.to_string()))
     }
 
+    /// Starts downloading a torrent (by file or magnet/hash) via the bundled rtctorrent script.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`RtcTorrentBridgeError`] when an input file path does not exist
+    /// (`FileNotFoundError`), the script fails, or its output cannot be parsed.
     pub fn download_torrent(&self, torrent_identifier: &str) -> Result<Value, RtcTorrentBridgeError> {
         let js_command = if torrent_identifier.starts_with("magnet:") {
             format!(

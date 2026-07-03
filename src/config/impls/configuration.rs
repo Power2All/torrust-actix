@@ -32,6 +32,7 @@ use std::sync::Arc;
 use std::thread::available_parallelism;
 
 impl Configuration {
+    /// Builds the built-in default configuration, including a freshly generated secure API key.
     pub fn init() -> Configuration {
         Configuration {
             log_level: String::from("info"),
@@ -189,6 +190,8 @@ impl Configuration {
             ),
         }
     }
+    /// Applies `SECTION__FIELD`-style environment variable overrides on top of the loaded
+    /// configuration (for example `TRACKER__API_KEY` or `DATABASE__CHUNK_SIZE`).
     pub fn env_overrides(config: &mut Configuration) -> &mut Configuration {
         if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
         if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = parse_env_num::<u64>("LOG_CONSOLE_INTERVAL", &value, 60); }
@@ -671,6 +674,11 @@ impl Configuration {
         config
     }
 
+    /// Writes the given TOML string to `path`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ConfigurationError::IOError`] when the file cannot be created or written.
     pub fn save_file(path: &str, data: String) -> Result<(), ConfigurationError> {
         match File::create(path) {
             Ok(mut file) => {
@@ -683,6 +691,7 @@ impl Configuration {
         }
     }
 
+    /// Serialises the configuration to TOML and saves it to `path`, logging the outcome.
     pub fn save_from_config(config: Arc<Configuration>, path: &str)
     {
         let config_toml = toml::to_string(&config).unwrap();
@@ -692,10 +701,22 @@ impl Configuration {
         }
     }
 
+    /// Parses a configuration from raw TOML bytes.
+    ///
+    /// Invalid UTF-8 sequences are replaced (lossy) before parsing rather than rejected.
+    ///
+    /// # Errors
+    ///
+    /// Returns the TOML deserialisation error when the content is invalid.
     pub fn load(data: &[u8]) -> Result<Configuration, toml::de::Error> {
         toml::from_str(&String::from_utf8_lossy(data))
     }
 
+    /// Reads and parses a TOML configuration file.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ConfigurationError`] when the file cannot be read or parsed.
     pub fn load_file(path: &str) -> Result<Configuration, ConfigurationError> {
         match std::fs::read(path) {
             Err(e) => Err(ConfigurationError::IOError(e)),
@@ -710,6 +731,14 @@ impl Configuration {
         }
     }
 
+    /// Loads `config.toml` from the working directory, applies environment overrides and validates it.
+    ///
+    /// When the file is missing and `create` is true, an annotated default configuration is written
+    /// and an error is returned so the operator can review it before the first start.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CustomError`] when the file is missing/corrupt or was just created.
     pub fn load_from_file(create: bool) -> Result<Configuration, CustomError> {
         let mut config = Configuration::init();
         match Configuration::load_file("config.toml") {
@@ -743,6 +772,12 @@ impl Configuration {
         Ok(config)
     }
 
+    /// Validates the complete configuration (API key strength, identifier patterns, tracker,
+    /// Sentry, cluster, cache and compression sections).
+    ///
+    /// # Panics
+    ///
+    /// Panics with a descriptive message on the first invalid value; called once at startup.
     pub fn validate(config: Configuration) {
         if validate_api_key_strength(&config.tracker_config.api_key) {
             println!("[VALIDATE] API key strength: OK");
@@ -823,6 +858,11 @@ impl Configuration {
         Self::validate_compression(&config);
     }
 
+    /// Validates tracker timing/thread settings (intervals, timeouts, thread counts).
+    ///
+    /// # Panics
+    ///
+    /// Panics when a value is zero or `request_interval_minimum` exceeds `request_interval`.
     pub fn validate_tracker(config: &Configuration) {
         let tc = &config.tracker_config;
         assert!(tc.request_interval > 0, "[VALIDATE CONFIG] request_interval must be > 0");
@@ -840,6 +880,11 @@ impl Configuration {
         println!("[VALIDATE] rtc_interval: {}s, rtc_peers_timeout: {}s", tc.rtc_interval, tc.rtc_peers_timeout);
     }
 
+    /// Validates the Sentry section.
+    ///
+    /// # Panics
+    ///
+    /// Panics when Sentry is enabled without a DSN.
     pub fn validate_sentry(config: &Configuration) {
         let sc = &config.sentry_config;
         if sc.enabled {
@@ -850,6 +895,7 @@ impl Configuration {
         }
     }
 
+    /// Validates the optional cache section (engine, address format, TTL) and logs the outcome.
     pub fn validate_cache(config: &Configuration) {
         if let Some(ref cache) = config.cache {
             if cache.enabled {
@@ -866,6 +912,11 @@ impl Configuration {
         }
     }
 
+    /// Validates the RTC compression settings.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the zstd level is outside 1..=22.
     pub fn validate_compression(config: &Configuration) {
         let tc = &config.tracker_config;
         if tc.rtc_compression_enabled {
@@ -882,6 +933,11 @@ impl Configuration {
         }
     }
 
+    /// Validates the cluster section for the selected mode (token, addresses, SSL material).
+    ///
+    /// # Panics
+    ///
+    /// Panics when a required cluster setting is missing or malformed.
     pub fn validate_cluster(config: &Configuration) {
         match config.tracker_config.cluster {
             ClusterMode::standalone => {
@@ -914,6 +970,11 @@ impl Configuration {
         }
     }
 
+    /// Validates that a string parses as an IPv4/IPv6 `host:port` socket address.
+    ///
+    /// # Panics
+    ///
+    /// Panics with a descriptive message when the address is malformed.
     pub fn validate_socket_address(field_name: &str, address: &str) {
         use std::net::SocketAddr;
         match address.parse::<SocketAddr>() {
@@ -930,12 +991,19 @@ impl Configuration {
         }
     }
 
+    /// Asserts that `value` matches the given regular expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the value does not match (or the regex itself is invalid).
     pub fn validate_value(name: &str, value: String, regex: String)
     {
         let regex_check = Regex::new(regex.as_str()).unwrap();
         assert!(regex_check.is_match(value.as_str()), "[VALIDATE CONFIG] Error checking {name} [:] Name: \"{value}\" [:] Regex: \"{regex_check}\"");
     }
 
+    /// Serialises the configuration to TOML with explanatory comments above each setting,
+    /// as written by `--create-config`.
     pub fn generate_annotated_config(config: &Configuration) -> String {
         let raw = toml::to_string(config).unwrap();
         Self::annotate_config_toml(&raw)

@@ -38,6 +38,8 @@ pub const MAX_PACKET_SIZE: usize = 1496;
 pub const SPP_HEADER_SIZE: usize = 38;
 pub const SPP_MAGIC: u16 = 0x56EC;
 
+/// Spawns the UDP tracker service on `addr` using the selected receive backend and returns
+/// its join handle. The service runs until the shutdown watch channel fires.
 #[allow(clippy::too_many_arguments)]
 pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, receive_method: UdpReceiveMethod, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
 {
@@ -52,6 +54,12 @@ pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: u
     })
 }
 
+/// Parses packed 6-byte (IPv4 + port) peer entries from a UDP announce response body.
+/// Trailing bytes that do not form a complete entry are ignored.
+///
+/// # Errors
+///
+/// Returns an I/O error when an entry cannot be decoded.
 #[inline]
 pub fn parse_ipv4_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv4Addr>>, Error> {
     let chunk_size = 6;
@@ -72,6 +80,12 @@ pub fn parse_ipv4_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv4Addr>>, Err
     Ok(peers)
 }
 
+/// Parses packed 18-byte (IPv6 + port) peer entries from a UDP announce response body.
+/// Trailing bytes that do not form a complete entry are ignored.
+///
+/// # Errors
+///
+/// Returns an I/O error when an entry cannot be decoded.
 #[inline]
 pub fn parse_ipv6_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv6Addr>>, Error> {
     let chunk_size = 18;
@@ -92,6 +106,12 @@ pub fn parse_ipv6_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv6Addr>>, Err
     Ok(peers)
 }
 
+/// Parses packed 12-byte scrape statistics entries (seeders/completed/leechers).
+/// Trailing bytes that do not form a complete entry are ignored.
+///
+/// # Errors
+///
+/// Returns an I/O error when an entry cannot be decoded.
 #[inline]
 pub fn parse_scrape_stats(bytes: &[u8]) -> Result<Vec<TorrentScrapeStatistics>, Error> {
     let chunk_size = 12;
@@ -117,6 +137,7 @@ pub fn parse_scrape_stats(bytes: &[u8]) -> Result<Vec<TorrentScrapeStatistics>, 
     Ok(stats)
 }
 
+/// Interprets 16 bytes as an IP address, collapsing IPv4-mapped IPv6 addresses to IPv4.
 pub fn parse_address(bytes: &[u8; 16]) -> IpAddr {
     let is_ipv4_mapped = bytes[0..10] == [0u8; 10] && bytes[10] == 0xff && bytes[11] == 0xff;
     if is_ipv4_mapped {
@@ -126,6 +147,8 @@ pub fn parse_address(bytes: &[u8; 16]) -> IpAddr {
     }
 }
 
+/// Parses the Simple Proxy Protocol header prepended by supported UDP load balancers,
+/// returning the real client address and the payload offset when present.
 pub fn parse_spp_header(data: &[u8]) -> SppParseResult {
     if data.len() < 2 {
         return SppParseResult::NotPresent;
@@ -162,6 +185,7 @@ pub fn parse_spp_header(data: &[u8]) -> SppParseResult {
     }
 }
 
+/// Returns `true` when the datagram starts with the Simple Proxy Protocol magic bytes.
 #[inline]
 pub fn has_spp_magic(data: &[u8]) -> bool {
     data.len() >= 2 && data[0] == 0x56 && data[1] == 0xEC

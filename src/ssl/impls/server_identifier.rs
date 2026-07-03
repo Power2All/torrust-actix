@@ -1,6 +1,7 @@
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 
 impl ServerIdentifier {
+    /// Returns the bind address of the server this identifier refers to.
     pub fn bind_address(&self) -> &str {
         match self {
             ServerIdentifier::HttpTracker(addr) => addr,
@@ -9,6 +10,7 @@ impl ServerIdentifier {
         }
     }
 
+    /// Returns the human-readable listener type (API, HTTP tracker, ...).
     pub fn server_type(&self) -> &'static str {
         match self {
             ServerIdentifier::HttpTracker(_) => "http",

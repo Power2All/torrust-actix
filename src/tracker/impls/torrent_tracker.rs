@@ -4,6 +4,7 @@ use crate::database::structs::database_connector::DatabaseConnector;
 use crate::ssl::structs::certificate_store::CertificateStore;
 use crate::stats::structs::stats_atomics::StatsAtomics;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::tracker::types::ahash_map::AHashMap;
 use chrono::Utc;
 use log::{
     info,
@@ -22,6 +23,9 @@ use std::sync::atomic::{
 use std::sync::Arc;
 
 impl TorrentTracker {
+    /// Creates the central tracker state: connects to the configured database (optionally
+    /// creating its schema) and cache backend, and initialises empty swarm/user/key tables
+    /// and statistics.
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> TorrentTracker
     {
         let tracker_config = &config.tracker_config;
@@ -115,6 +119,7 @@ impl TorrentTracker {
                 ws_auth_failed: AtomicI64::new(0),
             }),
             users: Arc::new(RwLock::new(BTreeMap::new())),
+            users_key_index: Arc::new(RwLock::new(AHashMap::default())),
             users_updates: Arc::new(RwLock::new(HashMap::new())),
             sqlx: DatabaseConnector::new(config.clone(), create_database).await,
         }

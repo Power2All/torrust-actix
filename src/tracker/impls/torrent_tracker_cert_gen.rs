@@ -12,6 +12,8 @@ use std::fs;
 use std::process::exit;
 
 impl TorrentTracker {
+    /// Handles the `--cert-gen` CLI command: generates a self-signed TLS certificate and key
+    /// and writes them to the paths given on the command line.
     pub async fn cert_gen(&self, args: &Cli)
     {
         info!("[CERTGEN] Requesting to generate a self-signed key and certificate file");

@@ -19,6 +19,7 @@ use std::time::{
 };
 
 impl TorrentTracker {
+    /// Loads all announce keys from the configured database into memory at startup.
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>)
     {
         if let Ok(keys) = self.sqlx.load_keys(tracker).await {
@@ -26,6 +27,11 @@ impl TorrentTracker {
         }
     }
 
+    /// Persists the given batch of announce keys (and their add/remove actions) to the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the database write fails; the caller re-queues the batch.
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<(), ()>
     {
         if let Ok(keys_count) = self.sqlx.save_keys(tracker, keys).await {
@@ -37,6 +43,10 @@ impl TorrentTracker {
         }
     }
 
+    /// Adds an announce key whose expiry is set to now + `timeout` seconds. A `timeout` of 0
+    /// therefore expires immediately; there is no permanent-key value.
+    ///
+    /// Returns `true` when the key was newly inserted, `false` when it was refreshed.
     pub fn add_key(&self, hash: InfoHash, timeout: i64) -> bool
     {
         let mut lock = self.keys.write();
@@ -55,18 +65,21 @@ impl TorrentTracker {
         }
     }
 
+    /// Returns the key and its expiry timestamp when the key exists.
     pub fn get_key(&self, hash: InfoHash) -> Option<(InfoHash, i64)>
     {
         let lock = self.keys.read_recursive();
         lock.get(&hash).map(|&data| (hash, data))
     }
 
+    /// Returns a clone of the complete key table.
     pub fn get_keys(&self) -> BTreeMap<InfoHash, i64>
     {
         let lock = self.keys.read_recursive();
         lock.clone()
     }
 
+    /// Removes an announce key; returns `true` when it existed.
     pub fn remove_key(&self, hash: InfoHash) -> bool
     {
         let mut lock = self.keys.write();
@@ -78,6 +91,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Returns `true` when the announce key exists (used on every keyed announce/scrape).
     pub fn check_key(&self, hash: InfoHash) -> bool
     {
         let lock = self.keys.read_recursive();
@@ -89,6 +103,7 @@ impl TorrentTracker {
         })
     }
 
+    /// Removes all announce keys and resets the key counter statistic.
     pub fn clear_keys(&self)
     {
         let mut lock = self.keys.write();
@@ -96,6 +111,9 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::Key, 0);
     }
 
+    /// Removes every announce key whose expiry timestamp has passed.
+    ///
+    /// Runs periodically from the key-cleanup task.
     pub fn clean_keys(&self)
     {
         let now = SystemTime::now();

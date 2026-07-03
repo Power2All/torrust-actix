@@ -9,6 +9,8 @@ use std::process::exit;
 use std::sync::Arc;
 
 impl TorrentTracker {
+    /// Handles the `--export` CLI command: dumps the tracker's current in-memory torrents,
+    /// whitelist, blacklist, keys and users to JSON files.
     pub async fn export(&self, args: &Cli, tracker: Arc<TorrentTracker>)
     {
         info!("[EXPORT] Requesting to export data");

@@ -101,6 +101,8 @@ use utoipa_swagger_ui::{
     SwaggerUi
 };
 
+/// Builds the CORS policy for the management API (any origin, common methods, `Authorization`
+/// and `Content-Type` headers allowed).
 pub fn api_service_cors() -> Cors
 {
     Cors::default()
@@ -112,6 +114,9 @@ pub fn api_service_cors() -> Cors
         .max_age(1)
 }
 
+/// Returns the Actix route configuration for the management API: `/stats`, `/metrics`,
+/// the `api/torrent(s)`, `api/whitelist(s)`, `api/blacklist(s)`, `api/key(s)`, `api/user(s)`
+/// and `api/certificate/*` resources, plus optional Swagger UI.
 pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceConfig) + Send + Sync>
 {
     Box::new(move |cfg: &mut ServiceConfig| {
@@ -204,6 +209,13 @@ pub fn api_service_routes(data: Arc<ApiServiceData>) -> Box<dyn Fn(&mut ServiceC
     })
 }
 
+/// Starts an API listener (HTTP, or HTTPS when `ssl` is set) on `addr`.
+///
+/// Returns the Actix [`ServerHandle`] for shutdown plus the server future to await.
+///
+/// # Panics / exit
+///
+/// Exits the process when the address cannot be bound or the TLS material is missing.
 pub async fn api_service(
     addr: SocketAddr,
     data: Arc<TorrentTracker>,
@@ -280,6 +292,7 @@ pub async fn api_service(
     (server.handle(), server)
 }
 
+/// Increments the API connections-handled statistic for the request's IP family.
 pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
 {
     let event = if ip.is_ipv4() {
@@ -290,6 +303,8 @@ pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
     tracker.update_stats(event, 1);
 }
 
+/// Extracts the API token from the `Authorization` header (with or without a `Bearer` prefix),
+/// falling back to the legacy `?token=` query parameter.
 pub fn api_extract_token(request: &HttpRequest) -> Option<String>
 {
     if let Some(value) = request.headers().get(http::header::AUTHORIZATION).and_then(|h| h.to_str().ok()) {
@@ -307,6 +322,9 @@ pub fn api_extract_token(request: &HttpRequest) -> Option<String>
         .and_then(|params| params.token.clone())
 }
 
+/// Validates the request's API token against the configured key using a constant-time comparison.
+///
+/// Returns `None` when the token is valid, or `Some(response)` with the JSON error to send.
 pub async fn api_service_token(request: &HttpRequest, config: Arc<Configuration>) -> Option<HttpResponse>
 {
     let token_code = match api_extract_token(request) {
@@ -325,6 +343,12 @@ pub async fn api_service_token(request: &HttpRequest, config: Arc<Configuration>
     None
 }
 
+/// Determines the client IP, honouring the configured `real_ip` header when trusted proxies
+/// are enabled; falls back to the socket peer address.
+///
+/// # Errors
+///
+/// Returns `Err(())` when no peer address is available.
 pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
 {
     let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
@@ -341,6 +365,11 @@ pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<Api
         .map_or(Ok(origin_ip), Ok)
 }
 
+/// Resolves and validates the client IP and logs the connection statistic.
+///
+/// # Errors
+///
+/// Returns a JSON `invalid ip` response when the IP cannot be determined.
 pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceData>>) -> Result<IpAddr, HttpResponse>
 {
     match api_service_retrieve_remote_ip(request, Arc::clone(&data.api_trackers_config)).await {
@@ -356,6 +385,7 @@ pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceDat
     }
 }
 
+/// Catch-all handler returning a JSON `unknown request` error with HTTP 404.
 pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await {
@@ -366,6 +396,7 @@ pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServi
     }))
 }
 
+/// Increments the IPv4 or IPv6 variant of a statistics event depending on the client IP.
 pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
 {
     let event = if ip.is_ipv4() {
@@ -376,6 +407,10 @@ pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsE
     data.update_stats(event, count);
 }
 
+/// Per-request guard: resolves and validates the client IP and records the API-handled
+/// statistic. Token validation is done separately by [`api_service_token`].
+///
+/// Returns `Some(response)` with the error to send, or `None` when the request may proceed.
 pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceData>>) -> Option<HttpResponse>
 {
     match api_validate_ip(request, data.clone()).await {
@@ -393,12 +428,18 @@ pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceDat
     }
 }
 
+/// `GET /api/openapi.json` — serves the generated OpenAPI specification for Swagger UI.
 pub async fn api_service_openapi_json() -> HttpResponse
 {
     let openapi_file = include_str!("../openapi.json");
     HttpResponse::Ok().content_type(ContentType::json()).body(openapi_file)
 }
 
+/// Collects a request body into memory, capped at 1 MiB.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] when the body overflows the cap or a chunk cannot be read.
 pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, CustomError>
 {
     let mut body = BytesMut::new();
@@ -413,6 +454,11 @@ pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, Custo
     Ok(body)
 }
 
+/// Parses a 40-character hex string into an [`InfoHash`].
+///
+/// # Errors
+///
+/// Returns a JSON error response describing the malformed value.
 pub fn parse_info_hash(info: &str) -> Result<InfoHash, HttpResponse>
 {
     if info.len() != 40 {

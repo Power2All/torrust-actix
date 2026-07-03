@@ -18,6 +18,27 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Validates a batch of info-hash strings up front (before any state is mutated), so a bad
+/// entry can never leave earlier entries half-applied.
+///
+/// # Errors
+///
+/// Returns the `BadRequest` response to send when an entry is not 40 hex characters.
+fn api_whitelists_validate(whitelists: Vec<String>) -> Result<Vec<(String, InfoHash)>, HttpResponse> {
+    let mut validated = Vec::with_capacity(whitelists.len());
+    for info in whitelists {
+        if info.len() != 40 {
+            return Err(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad info_hash"})));
+        }
+        match hex2bin(info.clone()) {
+            Ok(hash) => validated.push((info, InfoHash(hash))),
+            Err(_) => return Err(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"}))),
+        }
+    }
+    Ok(validated)
+}
+
+/// `GET /api/whitelist/{info_hash}` — returns whether the info-hash is whitelisted.
 pub async fn api_service_whitelist_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -37,6 +58,7 @@ pub async fn api_service_whitelist_get(request: HttpRequest, path: web::Path<Str
     }
 }
 
+/// `GET /api/whitelists` — checks a JSON array of info-hashes against the whitelist.
 pub async fn api_service_whitelists_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -49,19 +71,13 @@ pub async fn api_service_whitelists_get(request: HttpRequest, payload: web::Payl
         Ok(data) => data,
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
-    let mut whitelist_output = HashMap::with_capacity(whitelists.len());
-    for whitelist in whitelists {
-        if whitelist.len() == 40 {
-            match hex2bin(whitelist.clone()) {
-                Ok(hash) => {
-                    let whitelist_hash = InfoHash(hash);
-                    whitelist_output.insert(whitelist, data.torrent_tracker.check_whitelist(whitelist_hash));
-                }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"}))
-                }
-            }
-        }
+    let validated = match api_whitelists_validate(whitelists) {
+        Ok(validated) => validated,
+        Err(response) => return response,
+    };
+    let mut whitelist_output = HashMap::with_capacity(validated.len());
+    for (whitelist, whitelist_hash) in validated {
+        whitelist_output.insert(whitelist, data.torrent_tracker.check_whitelist(whitelist_hash));
     }
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
@@ -69,6 +85,7 @@ pub async fn api_service_whitelists_get(request: HttpRequest, payload: web::Payl
     }))
 }
 
+/// `POST /api/whitelist/{info_hash}` — adds an info-hash to the whitelist.
 pub async fn api_service_whitelist_post(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -91,6 +108,7 @@ pub async fn api_service_whitelist_post(request: HttpRequest, path: web::Path<St
     }
 }
 
+/// `POST /api/whitelists` — adds a JSON array of info-hashes to the whitelist.
 pub async fn api_service_whitelists_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -103,27 +121,21 @@ pub async fn api_service_whitelists_post(request: HttpRequest, payload: web::Pay
         Ok(data) => data,
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
-    let mut whitelists_output = HashMap::with_capacity(whitelists.len());
-    for info in whitelists {
-        if info.len() == 40 {
-            match hex2bin(info.clone()) {
-                Ok(hash) => {
-                    let info_hash = InfoHash(hash);
-                    if data.torrent_tracker.config.database_structure.whitelist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-                        let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Add);
-                    }
-                    let status = if data.torrent_tracker.add_whitelist(info_hash) {
-                        json!({"status": "ok"})
-                    } else {
-                        json!({"status": "info_hash updated"})
-                    };
-                    whitelists_output.insert(info, status);
-                }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"}))
-                }
-            }
+    let validated = match api_whitelists_validate(whitelists) {
+        Ok(validated) => validated,
+        Err(response) => return response,
+    };
+    let mut whitelists_output = HashMap::with_capacity(validated.len());
+    for (info, info_hash) in validated {
+        if data.torrent_tracker.config.database_structure.whitelist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
+            let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Add);
         }
+        let status = if data.torrent_tracker.add_whitelist(info_hash) {
+            json!({"status": "ok"})
+        } else {
+            json!({"status": "info_hash updated"})
+        };
+        whitelists_output.insert(info, status);
     }
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
@@ -131,6 +143,7 @@ pub async fn api_service_whitelists_post(request: HttpRequest, payload: web::Pay
     }))
 }
 
+/// `DELETE /api/whitelist/{info_hash}` — removes an info-hash from the whitelist.
 pub async fn api_service_whitelist_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -153,6 +166,7 @@ pub async fn api_service_whitelist_delete(request: HttpRequest, path: web::Path<
     }
 }
 
+/// `DELETE /api/whitelists` — removes a JSON array of info-hashes from the whitelist.
 pub async fn api_service_whitelists_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -165,27 +179,21 @@ pub async fn api_service_whitelists_delete(request: HttpRequest, payload: web::P
         Ok(data) => data,
         Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
     };
-    let mut whitelists_output = HashMap::with_capacity(whitelists.len());
-    for info in whitelists {
-        if info.len() == 40 {
-            match hex2bin(info.clone()) {
-                Ok(hash) => {
-                    let info_hash = InfoHash(hash);
-                    if data.torrent_tracker.config.database_structure.whitelist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-                        let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Remove);
-                    }
-                    let status = if data.torrent_tracker.remove_whitelist(info_hash) {
-                        json!({"status": "ok"})
-                    } else {
-                        json!({"status": "unknown info_hash"})
-                    };
-                    whitelists_output.insert(info, status);
-                }
-                Err(_) => {
-                    return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid info_hash"}))
-                }
-            }
+    let validated = match api_whitelists_validate(whitelists) {
+        Ok(validated) => validated,
+        Err(response) => return response,
+    };
+    let mut whitelists_output = HashMap::with_capacity(validated.len());
+    for (info, info_hash) in validated {
+        if data.torrent_tracker.config.database_structure.whitelist.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
+            let _ = data.torrent_tracker.add_whitelist_update(info_hash, UpdatesAction::Remove);
         }
+        let status = if data.torrent_tracker.remove_whitelist(info_hash) {
+            json!({"status": "ok"})
+        } else {
+            json!({"status": "unknown info_hash"})
+        };
+        whitelists_output.insert(info, status);
     }
 
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
@@ -193,6 +201,7 @@ pub async fn api_service_whitelists_delete(request: HttpRequest, payload: web::P
         "whitelists": whitelists_output
     }))
 }
+/// `DELETE /api/whitelist/clear` — empties the whitelist.
 pub async fn api_service_whitelist_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }

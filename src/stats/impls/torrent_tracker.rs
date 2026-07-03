@@ -4,6 +4,7 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use std::sync::atomic::Ordering;
 
 impl TorrentTracker {
+    /// Returns a point-in-time copy of all statistics counters.
     pub fn get_stats(&self) -> Stats
     {
         Stats {
@@ -63,6 +64,10 @@ impl TorrentTracker {
         }
     }
 
+    /// Adjusts a statistics counter by `value` (negative values decrement).
+    ///
+    /// Boolean-style events (`WhitelistEnabled`, `BlacklistEnabled`) and gauges (`UdpQueueLen`)
+    /// are stored instead of accumulated.
     #[inline]
     pub fn update_stats(&self, event: StatsEvent, value: i64)
     {
@@ -224,6 +229,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Overwrites a statistics counter with an absolute value.
     pub fn set_stats(&self, event: StatsEvent, value: i64)
     {
         match event {

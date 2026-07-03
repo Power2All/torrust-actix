@@ -38,6 +38,11 @@ use std::net::{
 };
 use std::sync::Arc;
 
+/// Serialises a value using the negotiated cluster wire encoding (MessagePack or JSON).
+///
+/// # Errors
+///
+/// Returns an [`EncodingError`] when serialisation fails.
 pub fn encode<T: Serialize>(encoding: &ClusterEncoding, value: &T) -> Result<Vec<u8>, EncodingError> {
     match encoding {
         ClusterEncoding::binary => encode_binary(value),
@@ -46,6 +51,11 @@ pub fn encode<T: Serialize>(encoding: &ClusterEncoding, value: &T) -> Result<Vec
     }
 }
 
+/// Deserialises a value using the negotiated cluster wire encoding (MessagePack or JSON).
+///
+/// # Errors
+///
+/// Returns an [`EncodingError`] when the payload is malformed.
 pub fn decode<T: DeserializeOwned>(encoding: &ClusterEncoding, data: &[u8]) -> Result<T, EncodingError> {
     match encoding {
         ClusterEncoding::binary => decode_binary(data),
@@ -84,6 +94,8 @@ fn decode_msgpack<T: DeserializeOwned>(data: &[u8]) -> Result<T, EncodingError> 
         .map_err(|e| EncodingError::DeserializationError(e.to_string()))
 }
 
+/// Master-side dispatcher: routes a decoded [`ClusterRequest`] from a slave to the announce,
+/// scrape, API or raw-UDP processor and returns the response to send back.
 pub async fn process_cluster_request(
     tracker: Arc<TorrentTracker>,
     _encoding: &ClusterEncoding,
@@ -109,6 +121,10 @@ pub async fn process_cluster_request(
     }
 }
 
+/// Master-side announce processing for a request forwarded by a slave.
+///
+/// Parses the forwarded query string, applies whitelist/blacklist rules, updates the swarm
+/// and returns the bencoded announce response as a [`ClusterResponse`].
 pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRequest) -> ClusterResponse {
     let query_string = match String::from_utf8(request.payload.clone()) {
         Ok(s) => s,
@@ -150,7 +166,7 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
         }.encode();
         return ClusterResponse::success(request.request_id, error_response);
     }
-    let (_torrent_peer, torrent_entry) = match tracker.handle_announce(&announce, None).await {
+    let torrent_entry = match tracker.handle_announce(&announce, None).await {
         Ok(result) => result,
         Err(e) => {
             let error_response = ben_map! {
@@ -229,6 +245,8 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
     ClusterResponse::success(request.request_id, response_bytes)
 }
 
+/// Builds the bencoded compact announce response (packed 6/18-byte peer strings) for a
+/// cluster-forwarded announce.
 pub fn build_compact_announce_response(
     tracker: &Arc<TorrentTracker>,
     client_ip: &IpAddr,
@@ -324,6 +342,8 @@ pub fn build_compact_announce_response(
     }
 }
 
+/// Builds the bencoded dictionary-style announce response (peer id/ip/port entries) for a
+/// cluster-forwarded announce.
 pub fn build_extended_announce_response(
     tracker: &Arc<TorrentTracker>,
     client_ip: &IpAddr,
@@ -423,6 +443,8 @@ pub fn build_extended_announce_response(
     }
 }
 
+/// Master-side scrape processing for a request forwarded by a slave; returns the bencoded
+/// `files` dictionary as a [`ClusterResponse`].
 pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequest) -> ClusterResponse {
     let query_string = match String::from_utf8(request.payload.clone()) {
         Ok(s) => s,
@@ -477,6 +499,7 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
     ClusterResponse::success(request.request_id, response_bytes)
 }
 
+/// Rejects API calls forwarded through the cluster (not supported); always returns a JSON error.
 pub async fn process_api_call(
     _tracker: &Arc<TorrentTracker>,
     request: &ClusterRequest,
@@ -492,6 +515,8 @@ pub async fn process_api_call(
     ClusterResponse::success(request.request_id, error_response)
 }
 
+/// Master-side handling of a raw UDP tracker packet forwarded by a slave; runs the normal
+/// UDP request pipeline and returns the encoded UDP response bytes.
 pub async fn process_udp_packet(tracker: &Arc<TorrentTracker>, request: &ClusterRequest) -> ClusterResponse {
     let remote_addr = SocketAddr::new(request.client_ip, request.client_port);
     let response = UdpServer::handle_packet(
@@ -511,6 +536,9 @@ pub async fn process_udp_packet(tracker: &Arc<TorrentTracker>, request: &Cluster
     }
 }
 
+/// Starts the cluster master WebSocket listener (optionally over TLS) that slaves connect to.
+///
+/// Returns the Actix [`ServerHandle`](actix_web::dev::ServerHandle) for shutdown plus the server future to await.
 pub async fn websocket_master_service(
     addr: SocketAddr,
     tracker: Arc<TorrentTracker>,
@@ -608,6 +636,12 @@ pub async fn websocket_master_service(
     (server.handle(), server)
 }
 
+/// Actix route handler upgrading an incoming master-side connection to the cluster
+/// WebSocket protocol.
+///
+/// # Errors
+///
+/// Returns the Actix error when the WebSocket handshake fails.
 pub async fn websocket_handler(
     req: actix_web::HttpRequest,
     stream: actix_web::web::Payload,
@@ -626,14 +660,21 @@ pub static SLAVE_CLIENT: std::sync::LazyLock<parking_lot::RwLock<SlaveClientStat
 pub static SLAVE_SENDER: std::sync::LazyLock<SlaveSenderChannel> =
     std::sync::LazyLock::new(|| parking_lot::RwLock::new(None));
 
+/// Returns `true` when this slave currently holds an authenticated connection to the master.
 pub fn is_connected() -> bool {
     SLAVE_CLIENT.read().connected
 }
 
+/// Returns the wire encoding negotiated with the master, when connected.
 pub fn get_encoding() -> Option<ClusterEncoding> {
     SLAVE_CLIENT.read().encoding.clone()
 }
 
+/// Sends a [`ClusterRequest`] to the master and awaits the matching response.
+///
+/// # Errors
+///
+/// Returns a [`ForwardError`] when not connected, the request times out, or encoding fails.
 pub async fn send_request(
     tracker: &Arc<TorrentTracker>,
     request: ClusterRequest,
@@ -699,6 +740,8 @@ pub async fn send_request(
     }
 }
 
+/// Runs the slave-side cluster client: connects to the master, performs the token handshake,
+/// then pumps forwarded requests/responses, reconnecting on failure until shutdown.
 pub async fn start_slave_client(tracker: Arc<TorrentTracker>) {
     let config = tracker.config.clone();
     let master_address = &config.tracker_config.cluster_master_address;
@@ -863,6 +906,12 @@ fn handle_response(encoding: &ClusterEncoding, data: &[u8]) {
     }
 }
 
+/// Assigns a request id and forwards a client request (announce, scrape or raw UDP packet)
+/// to the cluster master.
+///
+/// # Errors
+///
+/// Returns a [`ForwardError`] when the master is unreachable or the request fails.
 pub async fn forward_request(
     tracker: &Arc<TorrentTracker>,
     protocol: crate::websocket::enums::protocol_type::ProtocolType,
@@ -886,6 +935,8 @@ pub async fn forward_request(
     send_request(tracker, request).await
 }
 
+/// Builds the bencoded `failure reason` body sent to BitTorrent clients when cluster
+/// forwarding fails.
 pub fn create_cluster_error_response(error: &ForwardError) -> Vec<u8> {
     let message = match error {
         ForwardError::NotConnected => "Cluster connection lost",
@@ -897,6 +948,7 @@ pub fn create_cluster_error_response(error: &ForwardError) -> Vec<u8> {
     format!("d14:failure reason{}:{}e", message.len(), message).into_bytes()
 }
 
+/// Builds the JSON `failure_reason` body sent to API-style clients when cluster forwarding fails.
 pub fn create_cluster_error_response_json(error: &ForwardError) -> String {
     let message = match error {
         ForwardError::NotConnected => "Cluster connection lost",
@@ -910,6 +962,7 @@ pub fn create_cluster_error_response_json(error: &ForwardError) -> String {
     }).to_string()
 }
 
+/// Compares two strings in constant time (for token checks), returning `true` on equality.
 pub fn constant_time_compare(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;

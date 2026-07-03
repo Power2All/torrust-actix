@@ -11,6 +11,7 @@ use actix_web::{
 };
 use std::sync::Arc;
 
+/// `GET /stats` — returns all tracker statistics as JSON.
 pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -18,6 +19,7 @@ pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServi
     HttpResponse::Ok().content_type(ContentType::json()).json(data.torrent_tracker.get_stats())
 }
 
+/// `GET /metrics` — returns tracker statistics in Prometheus text exposition format.
 pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -72,6 +74,7 @@ pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServic
     HttpResponse::Ok().content_type(ContentType::plaintext()).body(string_output)
 }
 
+/// Formats one Prometheus metric line, optionally preceded by `# HELP` / `# TYPE` headers.
 pub fn api_service_prom_generate_line(id: &str, type_metric: &str, metric: &str, value: i64, without_header: bool, description: Option<&str>) -> String
 {
     if without_header {

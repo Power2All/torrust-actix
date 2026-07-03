@@ -31,6 +31,9 @@ fn next_seq() -> u128 {
 }
 
 impl TorrentTracker {
+    /// Queues a torrent update for the next database/cache flush.
+    ///
+    /// Returns `true` when a new queue slot was created.
     pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_update_data: TorrentUpdateData, updates_action: UpdatesAction) -> bool
     {
         let mut lock = self.torrents_updates.write();
@@ -43,6 +46,9 @@ impl TorrentTracker {
         }
     }
 
+    /// Re-queues a batch of torrent updates under fresh sequence numbers, removing the old slots.
+    ///
+    /// Returns, per info-hash, whether the insert created a new slot.
     pub fn add_torrent_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)>) -> BTreeMap<InfoHash, bool>
     {
         let mut lock = self.torrents_updates.write();
@@ -69,12 +75,14 @@ impl TorrentTracker {
         returned_data
     }
 
+    /// Returns a clone of the pending torrent-update queue.
     pub fn get_torrent_updates(&self) -> HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)>
     {
         let lock = self.torrents_updates.read_recursive();
         lock.clone()
     }
 
+    /// Removes a single queued update by its sequence key; returns `true` when it existed.
     pub fn remove_torrent_update(&self, timestamp: &u128) -> bool
     {
         let mut lock = self.torrents_updates.write();
@@ -86,6 +94,7 @@ impl TorrentTracker {
         }
     }
 
+    /// Drops all queued torrent updates and resets the queue statistic.
     pub fn clear_torrent_updates(&self)
     {
         let mut lock = self.torrents_updates.write();
@@ -93,6 +102,13 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::TorrentsUpdates, 0);
     }
 
+    /// Drains the update queue, deduplicates it per info-hash (newest wins) and flushes the
+    /// result to the database and/or peer-count cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the database flush fails; the drained updates are restored to the
+    /// queue so no data is lost.
     pub async fn save_torrent_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates: HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)> = {

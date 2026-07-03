@@ -11,6 +11,8 @@ pub const MAX_SCRAPE_TORRENTS: usize = 100;
 pub const MAX_OFFER_ID_LENGTH: usize = 128;
 pub const MAX_QUERY_STRING_LENGTH: usize = 8192;
 
+/// Generates an API key from 32 cryptographically secure random bytes, encoded as a
+/// 43-character URL-safe Base64 string (no padding).
 pub fn generate_secure_api_key() -> String {
     let mut rng = rand::rng();
     let bytes: Vec<u8> = (0..32).map(|_| rng.random()).collect();
@@ -18,6 +20,10 @@ pub fn generate_secure_api_key() -> String {
     BASE64_URL_SAFE_NO_PAD.encode(&bytes)
 }
 
+/// Checks that an API key is at least 32 characters and contains at least two character
+/// classes (lowercase, uppercase, digits, specials).
+///
+/// Used at startup to warn about weak keys; does not reject them.
 pub fn validate_api_key_strength(api_key: &str) -> bool {
     if api_key.len() < MIN_API_KEY_LENGTH {
         return false;
@@ -33,6 +39,7 @@ pub fn validate_api_key_strength(api_key: &str) -> bool {
     variety_count >= 2
 }
 
+/// Compares two strings in constant time to prevent timing attacks on token checks.
 pub fn constant_time_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
@@ -46,11 +53,16 @@ pub fn constant_time_eq(a: &str, b: &str) -> bool {
     result == 0
 }
 
+/// Rejects file paths containing traversal sequences or unexpected characters.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] describing the violation.
 pub fn validate_file_path(path: &str) -> Result<(), CustomError> {
     if path.contains("..") || path.contains("./") || path.contains(".\\") {
         return Err(CustomError::new("Path traversal detected in file path"));
     }
-    if path.starts_with('/') || (path.len() > 2 && path[1..].starts_with(":\\")) {
+    if path.starts_with('/') || path.as_bytes().get(1..3) == Some(b":\\".as_slice()) {
         return Err(CustomError::new("Absolute paths not allowed in certificate configuration"));
     }
     if path.contains('\0') {
@@ -59,6 +71,11 @@ pub fn validate_file_path(path: &str) -> Result<(), CustomError> {
     Ok(())
 }
 
+/// Bounds a peer-supplied message (such as an SDP payload) to `MAX_PEER_MESSAGE_SIZE`.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] when the message is too large.
 pub fn validate_peer_message(message: &str) -> Result<(), CustomError> {
     if message.len() > MAX_PEER_MESSAGE_SIZE {
         return Err(CustomError::new(&format!(
@@ -75,6 +92,11 @@ pub fn validate_peer_message(message: &str) -> Result<(), CustomError> {
     Ok(())
 }
 
+/// Validates that a string is a 40-character hex info-hash.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] when the format is invalid.
 pub fn validate_info_hash_hex(info_hash: &str) -> Result<(), CustomError> {
     if info_hash.len() == 40 && info_hash.chars().all(|c| c.is_ascii_hexdigit()) {
         return Ok(());
@@ -86,6 +108,11 @@ pub fn validate_info_hash_hex(info_hash: &str) -> Result<(), CustomError> {
     Err(CustomError::new("info_hash has invalid format"))
 }
 
+/// Validates that a string is a 40-character hex peer id.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] when the format is invalid.
 pub fn validate_peer_id_hex(peer_id: &str) -> Result<(), CustomError> {
     if peer_id.len() == 40 && peer_id.chars().all(|c| c.is_ascii_hexdigit()) {
         return Ok(());
@@ -96,6 +123,11 @@ pub fn validate_peer_id_hex(peer_id: &str) -> Result<(), CustomError> {
     Err(CustomError::new("peer_id has invalid format"))
 }
 
+/// Bounds a raw query string to `MAX_QUERY_STRING_LENGTH`.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] when the query is too long.
 pub fn validate_query_string_length(query: &str) -> Result<(), CustomError> {
     if query.len() > MAX_QUERY_STRING_LENGTH {
         return Err(CustomError::new(&format!(
@@ -105,6 +137,11 @@ pub fn validate_query_string_length(query: &str) -> Result<(), CustomError> {
     Ok(())
 }
 
+/// Validates a client-supplied IP string (from a proxy header) before parsing it.
+///
+/// # Errors
+///
+/// Returns a [`CustomError`] when the value is not a plausible IP or proxies are not trusted.
 pub fn validate_remote_ip(ip: &str, trusted_proxies_enabled: bool) -> Result<(), CustomError> {
     use std::net::IpAddr;
 

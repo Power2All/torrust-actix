@@ -23,6 +23,7 @@ const IN_FLIGHT: usize = 128;
 const RING_ENTRIES: u32 = 256;
 const SHUTDOWN_POLL: Duration = Duration::from_millis(250);
 
+/// Probes the running kernel for the `io_uring` features this backend needs.
 pub fn is_available() -> bool {
     IoUring::new(8).is_ok()
 }
@@ -62,6 +63,8 @@ impl Slots {
     }
 }
 
+/// Runs the `io_uring`-based receive loop on a dedicated thread, pushing datagrams into
+/// the parse pool until shutdown.
 pub fn run(socket: Arc<UdpSocket>, parse_pool: Arc<ParsePool>, rx: tokio::sync::watch::Receiver<bool>) {
     let fd = socket.as_raw_fd();
     let udp_sock = socket.local_addr().ok();

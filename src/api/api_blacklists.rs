@@ -18,6 +18,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// `GET /api/blacklist/{info_hash}` — returns whether the info-hash is blacklisted.
 pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -37,6 +38,7 @@ pub async fn api_service_blacklist_get(request: HttpRequest, path: web::Path<Str
     }
 }
 
+/// `GET /api/blacklists` — checks a JSON array of info-hashes against the blacklist.
 pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -69,6 +71,7 @@ pub async fn api_service_blacklists_get(request: HttpRequest, payload: web::Payl
     }))
 }
 
+/// `POST /api/blacklist/{info_hash}` — adds an info-hash to the blacklist.
 pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -91,6 +94,7 @@ pub async fn api_service_blacklist_post(request: HttpRequest, path: web::Path<St
     }
 }
 
+/// `POST /api/blacklists` — adds a JSON array of info-hashes to the blacklist.
 pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -128,6 +132,7 @@ pub async fn api_service_blacklists_post(request: HttpRequest, payload: web::Pay
     }))
 }
 
+/// `DELETE /api/blacklist/{info_hash}` — removes an info-hash from the blacklist.
 pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -150,6 +155,7 @@ pub async fn api_service_blacklist_delete(request: HttpRequest, path: web::Path<
     }
 }
 
+/// `DELETE /api/blacklists` — removes a JSON array of info-hashes from the blacklist.
 pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -189,6 +195,7 @@ pub async fn api_service_blacklists_delete(request: HttpRequest, payload: web::P
         "blacklists": blacklists_output
     }))
 }
+/// `DELETE /api/blacklist/clear` — empties the blacklist.
 pub async fn api_service_blacklist_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
