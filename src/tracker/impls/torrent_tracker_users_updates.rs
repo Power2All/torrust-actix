@@ -58,12 +58,12 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::UsersUpdates, 0);
     }
 
-    /// Drains the user-update queue, deduplicates it per user (newest wins) and flushes it to
-    /// the database.
+    /// Deduplicates a snapshot of the user-update queue (newest wins) and flushes it to the
+    /// database, removing the flushed entries only after the write succeeds.
     ///
     /// # Errors
     ///
-    /// Returns `Err(())` when the flush fails; the drained updates are restored to the queue.
+    /// Returns `Err(())` when the flush fails; the queued updates remain intact.
     pub async fn save_user_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = {

@@ -43,7 +43,8 @@ impl TorrentTracker {
         }
     }
 
-    /// Adds an announce key expiring after `timeout` seconds (0 = permanent).
+    /// Adds an announce key whose expiry is set to now + `timeout` seconds. A `timeout` of 0
+    /// therefore expires immediately; there is no permanent-key value.
     ///
     /// Returns `true` when the key was newly inserted, `false` when it was refreshed.
     pub fn add_key(&self, hash: InfoHash, timeout: i64) -> bool

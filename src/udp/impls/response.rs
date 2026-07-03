@@ -132,7 +132,8 @@ impl Response {
     ///
     /// # Errors
     ///
-    /// Returns an I/O error when the datagram is truncated or has an unknown action.
+    /// Returns an I/O error when the datagram is truncated. An unknown action is not an
+    /// error: it yields an `ErrorResponse` with the message `Invalid action`.
     #[inline]
     pub fn from_bytes(bytes: &[u8], ipv4: bool) -> Result<Self, io::Error> {
         let mut cursor = Cursor::new(bytes);

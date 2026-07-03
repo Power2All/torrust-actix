@@ -273,17 +273,17 @@ impl TorrentTracker {
                                 data.add_user_update(user_id, user, UpdatesAction::Add);
                             }
                         }
+                        if needs_update {
+                            let _ = data.add_torrent_update(
+                                announce_query.info_hash,
+                                TorrentUpdateData::from(&new_torrent),
+                                UpdatesAction::Add
+                            );
+                        }
                         new_torrent
                     }
                     _ => AnnounceEntry::default()
                 };
-                if needs_update {
-                    let _ = data.add_torrent_update(
-                        announce_query.info_hash,
-                        TorrentUpdateData::from(&torrent_entry),
-                        UpdatesAction::Add
-                    );
-                }
                 let elapsed = now.elapsed();
                 debug!("[PERF] Announce Stopped handling took: {elapsed:?}");
                 Ok(torrent_entry)
@@ -307,7 +307,7 @@ impl TorrentTracker {
                 } else {
                     torrent_entry
                 };
-                if is_persistent {
+                if needs_update {
                     let _ = data.add_torrent_update(
                         announce_query.info_hash,
                         TorrentUpdateData::from(&torrent_entry),

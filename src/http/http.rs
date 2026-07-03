@@ -465,7 +465,6 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
     if announce_unwrapped.compact {
         let mut peers_list: Vec<u8> = Vec::with_capacity(if ip.is_ipv4() { 72 * 6 } else { 72 * 18 });
-        let port_bytes = announce_unwrapped.port.to_be_bytes();
         return match ip {
             IpAddr::V4(_) => {
                 if announce_unwrapped.left != 0 {
@@ -480,7 +479,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
                         if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                             peers_list.extend_from_slice(&ipv4.octets());
-                            peers_list.extend_from_slice(&port_bytes);
+                            peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
                         }
                     }
                 }
@@ -499,7 +498,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
 
                         if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                             peers_list.extend_from_slice(&ipv4.octets());
-                            peers_list.extend_from_slice(&port_bytes);
+                            peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
                         }
                     }
                 }
@@ -525,7 +524,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     for &(_, torrent_peer) in &seeds {
                         if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                             peers_list.extend_from_slice(&ipv6.octets());
-                            peers_list.extend_from_slice(&port_bytes);
+                            peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
                         }
                     }
                 }
@@ -543,7 +542,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                         }
                         if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                             peers_list.extend_from_slice(&ipv6.octets());
-                            peers_list.extend_from_slice(&port_bytes);
+                            peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
                         }
                     }
                 }

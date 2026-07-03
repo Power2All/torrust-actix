@@ -703,6 +703,8 @@ impl Configuration {
 
     /// Parses a configuration from raw TOML bytes.
     ///
+    /// Invalid UTF-8 sequences are replaced (lossy) before parsing rather than rejected.
+    ///
     /// # Errors
     ///
     /// Returns the TOML deserialisation error when the content is invalid.

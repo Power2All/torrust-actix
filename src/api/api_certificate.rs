@@ -18,8 +18,9 @@ use actix_web::{
 use serde_json::json;
 use std::sync::Arc;
 
-/// `POST /api/certificate/reload` — reloads the TLS certificates of all SSL-enabled listeners
-/// from disk without restarting the tracker.
+/// `POST /api/certificate/reload` — reloads TLS certificates from disk without restarting
+/// the tracker. An optional JSON body filters by `server_type` and/or `bind_address`;
+/// without a body every loaded certificate is reloaded.
 pub async fn api_service_certificate_reload(
     request: HttpRequest,
     data: Data<Arc<ApiServiceData>>,
@@ -98,7 +99,8 @@ pub async fn api_service_certificate_reload(
     }))
 }
 
-/// `GET /api/certificate/status` — reports the loaded certificates and their expiry data.
+/// `GET /api/certificate/status` — reports each loaded certificate's server type, bind
+/// address, PEM file paths and load time.
 pub async fn api_service_certificate_status(
     request: HttpRequest,
     data: Data<Arc<ApiServiceData>>,

@@ -53,8 +53,8 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::mysql;
 const LOG_PREFIX: &str = "[MySQL]";
 
 impl DatabaseConnectorMySQL {
-    /// Creates the MySQL database schema (tables for torrents, whitelist, blacklist,
-    /// keys and users) and returns a connection pool.
+    /// Opens a MySQL connection pool from the DSN with statement logging enabled
+    /// (schema creation happens in [`Self::database_connector`] when requested).
     ///
     /// # Errors
     ///
@@ -436,7 +436,7 @@ impl DatabaseConnectorMySQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} whitelisted torrents");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -532,7 +532,7 @@ impl DatabaseConnectorMySQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} blacklisted torrents");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -630,7 +630,7 @@ impl DatabaseConnectorMySQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} keys");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -870,7 +870,7 @@ impl DatabaseConnectorMySQL {
             error!("{LOG_PREFIX} Error: {e}");
             return Err(e);
         }
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(())
     }
 

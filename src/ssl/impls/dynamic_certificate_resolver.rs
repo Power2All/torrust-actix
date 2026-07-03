@@ -20,7 +20,8 @@ impl DynamicCertificateResolver {
     ///
     /// # Errors
     ///
-    /// Returns a [`CertificateError`] when no certificate is loaded for the server.
+    /// Returns a [`CertificateError`] when no certificate is loaded for the server, or when
+    /// the bundle cannot be converted into a usable rustls signing key (`CertifiedKeyError`).
     pub fn new(
         store: Arc<CertificateStore>,
         server_id: ServerIdentifier,
@@ -43,7 +44,8 @@ impl DynamicCertificateResolver {
     ///
     /// # Errors
     ///
-    /// Returns a [`CertificateError`] when the store no longer holds a certificate.
+    /// Returns a [`CertificateError`] when the store no longer holds a certificate, or when
+    /// the bundle cannot be converted into a usable rustls signing key (`CertifiedKeyError`).
     pub fn refresh_cache(&self) -> Result<(), CertificateError> {
         let bundle = self
             .store

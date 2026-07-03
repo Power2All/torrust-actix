@@ -55,10 +55,11 @@ pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: u
 }
 
 /// Parses packed 6-byte (IPv4 + port) peer entries from a UDP announce response body.
+/// Trailing bytes that do not form a complete entry are ignored.
 ///
 /// # Errors
 ///
-/// Returns an I/O error when the buffer length is not a multiple of 6.
+/// Returns an I/O error when an entry cannot be decoded.
 #[inline]
 pub fn parse_ipv4_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv4Addr>>, Error> {
     let chunk_size = 6;
@@ -80,10 +81,11 @@ pub fn parse_ipv4_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv4Addr>>, Err
 }
 
 /// Parses packed 18-byte (IPv6 + port) peer entries from a UDP announce response body.
+/// Trailing bytes that do not form a complete entry are ignored.
 ///
 /// # Errors
 ///
-/// Returns an I/O error when the buffer length is not a multiple of 18.
+/// Returns an I/O error when an entry cannot be decoded.
 #[inline]
 pub fn parse_ipv6_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv6Addr>>, Error> {
     let chunk_size = 18;
@@ -105,10 +107,11 @@ pub fn parse_ipv6_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv6Addr>>, Err
 }
 
 /// Parses packed 12-byte scrape statistics entries (seeders/completed/leechers).
+/// Trailing bytes that do not form a complete entry are ignored.
 ///
 /// # Errors
 ///
-/// Returns an I/O error when the buffer length is not a multiple of 12.
+/// Returns an I/O error when an entry cannot be decoded.
 #[inline]
 pub fn parse_scrape_stats(bytes: &[u8]) -> Result<Vec<TorrentScrapeStatistics>, Error> {
     let chunk_size = 12;

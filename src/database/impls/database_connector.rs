@@ -31,7 +31,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("db_load_torrents", "database");
@@ -83,7 +84,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
         match self.engine.as_ref() {
@@ -116,7 +118,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
         match self.engine.as_ref() {
@@ -149,7 +152,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
         match self.engine.as_ref() {
@@ -182,7 +186,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
         match self.engine.as_ref() {
@@ -215,7 +220,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         match self.engine.as_ref() {
@@ -248,7 +254,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
         match self.engine.as_ref() {
@@ -281,7 +288,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<u64, Error>
     {
         match self.engine.as_ref() {
@@ -315,7 +323,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), Error>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("db_save_torrents", "database");
@@ -367,7 +376,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), Error>
     {
         match self.engine.as_ref() {
@@ -400,7 +410,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn clear_table(&self, table_name: &str) -> Result<(), Error>
     {
         let query = match self.engine.as_ref() {
@@ -437,7 +448,8 @@ impl DatabaseConnector {
     ///
     /// # Errors
     ///
-    /// Returns the underlying `sqlx` error when the database operation fails.
+    /// Returns the underlying `sqlx` error when the database operation fails, or
+    /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error>
     {
         match self.engine.as_ref() {

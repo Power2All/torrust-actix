@@ -11,7 +11,8 @@ pub const MAX_SCRAPE_TORRENTS: usize = 100;
 pub const MAX_OFFER_ID_LENGTH: usize = 128;
 pub const MAX_QUERY_STRING_LENGTH: usize = 8192;
 
-/// Generates a 32-character alphanumeric API key from a cryptographically secure RNG.
+/// Generates an API key from 32 cryptographically secure random bytes, encoded as a
+/// 43-character URL-safe Base64 string (no padding).
 pub fn generate_secure_api_key() -> String {
     let mut rng = rand::rng();
     let bytes: Vec<u8> = (0..32).map(|_| rng.random()).collect();
@@ -19,7 +20,8 @@ pub fn generate_secure_api_key() -> String {
     BASE64_URL_SAFE_NO_PAD.encode(&bytes)
 }
 
-/// Checks that an API key is at least 32 characters and mixes letters and digits.
+/// Checks that an API key is at least 32 characters and contains at least two character
+/// classes (lowercase, uppercase, digits, specials).
 ///
 /// Used at startup to warn about weak keys; does not reject them.
 pub fn validate_api_key_strength(api_key: &str) -> bool {
@@ -60,7 +62,7 @@ pub fn validate_file_path(path: &str) -> Result<(), CustomError> {
     if path.contains("..") || path.contains("./") || path.contains(".\\") {
         return Err(CustomError::new("Path traversal detected in file path"));
     }
-    if path.starts_with('/') || (path.len() > 2 && path[1..].starts_with(":\\")) {
+    if path.starts_with('/') || path.as_bytes().get(1..3) == Some(b":\\".as_slice()) {
         return Err(CustomError::new("Absolute paths not allowed in certificate configuration"));
     }
     if path.contains('\0') {

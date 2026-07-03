@@ -407,7 +407,8 @@ pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsE
     data.update_stats(event, count);
 }
 
-/// Combined per-request guard: validates the client IP and the API token.
+/// Per-request guard: resolves and validates the client IP and records the API-handled
+/// statistic. Token validation is done separately by [`api_service_token`].
 ///
 /// Returns `Some(response)` with the error to send, or `None` when the request may proceed.
 pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceData>>) -> Option<HttpResponse>

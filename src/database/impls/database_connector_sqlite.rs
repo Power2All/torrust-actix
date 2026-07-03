@@ -53,8 +53,8 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::sqlite3;
 const LOG_PREFIX: &str = "[SQLite]";
 
 impl DatabaseConnectorSQLite {
-    /// Creates the SQLite 3 database schema (tables for torrents, whitelist, blacklist,
-    /// keys and users) and returns a connection pool.
+    /// Opens an SQLite 3 connection pool from the DSN, creating the database file when
+    /// missing (schema creation happens in [`Self::database_connector`] when requested).
     ///
     /// # Errors
     ///
@@ -462,7 +462,7 @@ impl DatabaseConnectorSQLite {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} whitelisted torrents");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -558,7 +558,7 @@ impl DatabaseConnectorSQLite {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} blacklisted torrents");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -656,7 +656,7 @@ impl DatabaseConnectorSQLite {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} keys");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -895,7 +895,7 @@ impl DatabaseConnectorSQLite {
             error!("{LOG_PREFIX} Error: {e}");
             return Err(e);
         }
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(())
     }
 

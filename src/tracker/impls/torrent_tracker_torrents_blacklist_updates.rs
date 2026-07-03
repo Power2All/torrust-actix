@@ -72,11 +72,12 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::BlacklistUpdates, 0);
     }
 
-    /// Drains the blacklist-update queue and flushes it to the database.
+    /// Deduplicates a snapshot of the blacklist-update queue (newest wins) and flushes it to
+    /// the database, removing the flushed entries only after the write succeeds.
     ///
     /// # Errors
     ///
-    /// Returns `Err(())` when the flush fails; the drained updates are restored to the queue.
+    /// Returns `Err(())` when the flush fails; the queued updates remain intact.
     pub async fn save_blacklist_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = {

@@ -56,11 +56,12 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::KeyUpdates, 0);
     }
 
-    /// Drains the key-update queue and flushes it to the database.
+    /// Deduplicates a snapshot of the key-update queue (newest wins) and flushes it to the
+    /// database, removing the flushed entries only after the write succeeds.
     ///
     /// # Errors
     ///
-    /// Returns `Err(())` when the flush fails; the drained updates are restored to the queue.
+    /// Returns `Err(())` when the flush fails; the queued updates remain intact.
     pub async fn save_key_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
         let updates = self.get_key_updates();

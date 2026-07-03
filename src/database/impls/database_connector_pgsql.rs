@@ -53,8 +53,8 @@ const ENGINE: DatabaseDrivers = DatabaseDrivers::pgsql;
 const LOG_PREFIX: &str = "[PgSQL]";
 
 impl DatabaseConnectorPgSQL {
-    /// Creates the PostgreSQL database schema (tables for torrents, whitelist, blacklist,
-    /// keys and users) and returns a connection pool.
+    /// Opens a PostgreSQL connection pool from the DSN with statement logging enabled
+    /// (schema creation happens in [`Self::database_connector`] when requested).
     ///
     /// # Errors
     ///
@@ -437,7 +437,7 @@ impl DatabaseConnectorPgSQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} whitelisted torrents");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -536,7 +536,7 @@ impl DatabaseConnectorPgSQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} blacklisted torrents");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -638,7 +638,7 @@ impl DatabaseConnectorPgSQL {
             }
         }
         info!("{LOG_PREFIX} Handled {handled} keys");
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(handled)
     }
 
@@ -878,7 +878,7 @@ impl DatabaseConnectorPgSQL {
             error!("{LOG_PREFIX} Error: {e}");
             return Err(e);
         }
-        let _ = self.commit(transaction).await;
+        self.commit(transaction).await?;
         Ok(())
     }
 

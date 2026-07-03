@@ -60,7 +60,7 @@ impl CertificateStore {
         Ok(())
     }
 
-    /// Returns the currently loaded certified key for a server, if any.
+    /// Returns the currently loaded certificate bundle for a server, if any.
     pub fn get_certificate(
         &self,
         server_id: &ServerIdentifier,
@@ -129,7 +129,7 @@ impl CertificateStore {
             .collect()
     }
 
-    /// Returns the loaded certified keys of all registered servers.
+    /// Returns the loaded certificate bundles of all registered servers.
     pub fn get_all_certificates(
         &self,
     ) -> Vec<(ServerIdentifier, std::sync::Arc<CertificateBundle>)> {

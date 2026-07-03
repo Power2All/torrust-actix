@@ -10,10 +10,17 @@ use std::sync::Arc;
 
 impl TorrentTracker {
     /// Loads the whitelist from the configured database into memory at startup.
+    ///
+    /// A load failure is logged and leaves the in-memory whitelist empty.
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(whitelist) = self.sqlx.load_whitelist(tracker).await {
-            info!("Loaded {whitelist} whitelists");
+        match self.sqlx.load_whitelist(tracker).await {
+            Ok(whitelist) => {
+                info!("Loaded {whitelist} whitelists");
+            }
+            Err(e) => {
+                error!("Unable to load the whitelist from the database: {e}");
+            }
         }
     }
 

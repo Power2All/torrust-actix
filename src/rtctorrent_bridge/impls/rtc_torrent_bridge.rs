@@ -13,7 +13,8 @@ impl RtcTorrentBridge {
     ///
     /// # Errors
     ///
-    /// Returns an [`RtcTorrentBridgeError`] when the script fails or its output cannot be parsed.
+    /// Returns an [`RtcTorrentBridgeError`] when an input file path does not exist
+    /// (`FileNotFoundError`), the script fails, or its output cannot be parsed.
     pub fn create_torrent(&self, file_path: &str, torrent_name: Option<&str>) -> Result<Value, RtcTorrentBridgeError> {
         if !std::path::Path::new(file_path).exists() {
             return Err(RtcTorrentBridgeError::FileNotFoundError(
@@ -73,7 +74,8 @@ impl RtcTorrentBridge {
     ///
     /// # Errors
     ///
-    /// Returns an [`RtcTorrentBridgeError`] when the script fails or its output cannot be parsed.
+    /// Returns an [`RtcTorrentBridgeError`] when an input file path does not exist
+    /// (`FileNotFoundError`), the script fails, or its output cannot be parsed.
     pub fn seed_torrent(&self, torrent_path: &str) -> Result<Value, RtcTorrentBridgeError> {
         if !std::path::Path::new(torrent_path).exists() {
             return Err(RtcTorrentBridgeError::FileNotFoundError(
@@ -128,7 +130,8 @@ impl RtcTorrentBridge {
     ///
     /// # Errors
     ///
-    /// Returns an [`RtcTorrentBridgeError`] when the script fails or its output cannot be parsed.
+    /// Returns an [`RtcTorrentBridgeError`] when an input file path does not exist
+    /// (`FileNotFoundError`), the script fails, or its output cannot be parsed.
     pub fn download_torrent(&self, torrent_identifier: &str) -> Result<Value, RtcTorrentBridgeError> {
         let js_command = if torrent_identifier.starts_with("magnet:") {
             format!(

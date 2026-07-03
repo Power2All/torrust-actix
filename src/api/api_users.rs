@@ -62,10 +62,8 @@ pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, 
     };
     let mut users_output = HashMap::with_capacity(ids.len());
     for id in ids {
-        if id.len() == 40 {
-            let (_, user_data) = api_service_users_return_json(id.clone(), Data::clone(&data));
-            users_output.insert(id, user_data);
-        }
+        let (_, user_data) = api_service_users_return_json(id.clone(), Data::clone(&data));
+        users_output.insert(id, user_data);
     }
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
@@ -123,7 +121,8 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
     }
 }
 
-/// `POST /api/users` — creates or replaces multiple users from a JSON array of user objects.
+/// `POST /api/users` — creates or replaces multiple users from a JSON array of tuples
+/// (arrays), each shaped `[id, key_hash, uploaded, downloaded, completed, updated, active]`.
 pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -186,7 +185,8 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
     }))
 }
 
-/// `DELETE /api/user/{id}` — removes a user; `{id}` is the user id or UUID.
+/// `DELETE /api/user/{id}` — removes a user. Unlike the GET/POST routes, `{id}` here is the
+/// 40-character hex user hash (the SHA-1 of the id/UUID used at creation).
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
@@ -219,7 +219,8 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
     }
 }
 
-/// `DELETE /api/users` — removes a JSON array of users by id/UUID.
+/// `DELETE /api/users` — removes a JSON array of users by their 40-character hex user hashes
+/// (the SHA-1 of the id/UUID used at creation). Entries that are not 40 characters are skipped.
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
     if let Some(error_return) = api_validation(&request, &data).await { return error_return; }

@@ -10,10 +10,17 @@ use std::sync::Arc;
 
 impl TorrentTracker {
     /// Loads the blacklist from the configured database into memory at startup.
+    ///
+    /// A load failure is logged and leaves the in-memory blacklist empty.
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok(blacklist) = self.sqlx.load_blacklist(tracker).await {
-            info!("Loaded {blacklist} blacklists");
+        match self.sqlx.load_blacklist(tracker).await {
+            Ok(blacklist) => {
+                info!("Loaded {blacklist} blacklists");
+            }
+            Err(e) => {
+                error!("Unable to load the blacklist from the database: {e}");
+            }
         }
     }
 
