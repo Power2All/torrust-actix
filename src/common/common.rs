@@ -106,6 +106,22 @@ pub enum HexParseError {
     InvalidCharacter,
 }
 
+/// Decodes a 40-character hex string (either case) into a 20-byte id.
+///
+/// # Errors
+///
+/// Returns [`HexParseError::InvalidLength`] when `s` is not exactly 40 characters and
+/// [`HexParseError::InvalidCharacter`] when it contains a non-hex character.
+#[inline]
+pub fn hex_to_id(s: &str) -> Result<[u8; 20], HexParseError> {
+    if s.len() != 40 {
+        return Err(HexParseError::InvalidLength);
+    }
+    let mut out = [0u8; 20];
+    hex::decode_to_slice(s, &mut out).map_err(|_| HexParseError::InvalidCharacter)?;
+    Ok(out)
+}
+
 /// Formats a 20-byte binary hash as 40 lowercase hex characters into `f`.
 pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     let mut chars = [0u8; 40];
@@ -254,4 +270,18 @@ pub fn hex_to_nibble(c: u8) -> u8 {
 /// Only the first call takes effect.
 pub fn init_compression(enabled: bool, algorithm: CompressionAlgorithm, level: u32) {
     let _ = COMPRESSION.set(CompressionState { enabled, algorithm, level });
+}
+#[cfg(test)]
+mod tests {
+    use super::{hex_to_id, HexParseError};
+
+    #[test]
+    fn hex_to_id_accepts_mixed_case_and_rejects_bad_input() {
+        let lower = hex_to_id("aabbccddeeff00112233445566778899aabbccdd").unwrap();
+        let upper = hex_to_id("AABBCCDDEEFF00112233445566778899AABBCCDD").unwrap();
+        assert_eq!(lower, upper);
+        assert_eq!(lower[0], 0xAA);
+        assert_eq!(hex_to_id("aabb"), Err(HexParseError::InvalidLength));
+        assert_eq!(hex_to_id("zzbbccddeeff00112233445566778899aabbccdd"), Err(HexParseError::InvalidCharacter));
+    }
 }

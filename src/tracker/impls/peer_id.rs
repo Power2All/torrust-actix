@@ -116,20 +116,7 @@ impl std::str::FromStr for PeerId {
     type Err = crate::common::common::HexParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() != 40 {
-            return Err(crate::common::common::HexParseError::InvalidLength);
-        }
-        let mut result = PeerId([0u8; 20]);
-        let bytes = s.as_bytes();
-        for i in 0..20 {
-            let high = hex_to_nibble(bytes[i * 2]);
-            let low = hex_to_nibble(bytes[i * 2 + 1]);
-            if high == 0xFF || low == 0xFF {
-                return Err(crate::common::common::HexParseError::InvalidCharacter);
-            }
-            result.0[i] = (high << 4) | low;
-        }
-        Ok(result)
+        Ok(PeerId(crate::common::common::hex_to_id(s)?))
     }
 }
 
