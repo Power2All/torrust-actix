@@ -12,11 +12,9 @@ use crate::udp::structs::peer_key::PeerKey;
 use crate::udp::structs::port::Port;
 use crate::udp::structs::scrape_request::ScrapeRequest;
 use crate::udp::structs::transaction_id::TransactionId;
-use crate::udp::udp::PROTOCOL_IDENTIFIER;
-use byteorder::{
-    NetworkEndian,
-    ReadBytesExt,
-    WriteBytesExt
+use crate::udp::udp::{
+    read_be,
+    PROTOCOL_IDENTIFIER
 };
 use std::io;
 use std::io::{
@@ -53,29 +51,29 @@ impl Request {
     pub fn write(self, bytes: &mut impl Write) -> Result<(), io::Error> {
         match self {
             Request::Connect(r) => {
-                bytes.write_i64::<NetworkEndian>(PROTOCOL_IDENTIFIER)?;
-                bytes.write_i32::<NetworkEndian>(0)?;
-                bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
+                bytes.write_all(&PROTOCOL_IDENTIFIER.to_be_bytes())?;
+                bytes.write_all(&0i32.to_be_bytes())?;
+                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
             }
             Request::Announce(r) => {
-                bytes.write_i64::<NetworkEndian>(r.connection_id.0)?;
-                bytes.write_i32::<NetworkEndian>(1)?;
-                bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
+                bytes.write_all(&r.connection_id.0.to_be_bytes())?;
+                bytes.write_all(&1i32.to_be_bytes())?;
+                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
                 bytes.write_all(&r.info_hash.0)?;
                 bytes.write_all(&r.peer_id.0)?;
-                bytes.write_i64::<NetworkEndian>(r.bytes_downloaded.0)?;
-                bytes.write_i64::<NetworkEndian>(r.bytes_left.0)?;
-                bytes.write_i64::<NetworkEndian>(r.bytes_uploaded.0)?;
-                bytes.write_i32::<NetworkEndian>(r.event.to_i32())?;
+                bytes.write_all(&r.bytes_downloaded.0.to_be_bytes())?;
+                bytes.write_all(&r.bytes_left.0.to_be_bytes())?;
+                bytes.write_all(&r.bytes_uploaded.0.to_be_bytes())?;
+                bytes.write_all(&r.event.to_i32().to_be_bytes())?;
                 bytes.write_all(&r.ip_address.map_or([0; 4], |ip| ip.octets()))?;
-                bytes.write_u32::<NetworkEndian>(r.key.0)?;
-                bytes.write_i32::<NetworkEndian>(r.peers_wanted.0)?;
-                bytes.write_u16::<NetworkEndian>(r.port.0)?;
+                bytes.write_all(&r.key.0.to_be_bytes())?;
+                bytes.write_all(&r.peers_wanted.0.to_be_bytes())?;
+                bytes.write_all(&r.port.0.to_be_bytes())?;
             }
             Request::Scrape(r) => {
-                bytes.write_i64::<NetworkEndian>(r.connection_id.0)?;
-                bytes.write_i32::<NetworkEndian>(2)?;
-                bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
+                bytes.write_all(&r.connection_id.0.to_be_bytes())?;
+                bytes.write_all(&2i32.to_be_bytes())?;
+                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
                 for info_hash in r.info_hashes {
                     bytes.write_all(&info_hash.0)?;
                 }
@@ -136,22 +134,22 @@ impl Request {
                 };
                 cursor.read_exact(&mut info_hash).map_err(sendable_err)?;
                 cursor.read_exact(&mut peer_id).map_err(sendable_err)?;
-                let bytes_downloaded = cursor.read_i64::<NetworkEndian>().map_err(sendable_err)?;
-                let bytes_left = cursor.read_i64::<NetworkEndian>().map_err(sendable_err)?;
-                let bytes_uploaded = cursor.read_i64::<NetworkEndian>().map_err(sendable_err)?;
-                let event = cursor.read_i32::<NetworkEndian>().map_err(sendable_err)?;
+                let bytes_downloaded = i64::from_be_bytes(read_be(&mut cursor).map_err(sendable_err)?);
+                let bytes_left = i64::from_be_bytes(read_be(&mut cursor).map_err(sendable_err)?);
+                let bytes_uploaded = i64::from_be_bytes(read_be(&mut cursor).map_err(sendable_err)?);
+                let event = i32::from_be_bytes(read_be(&mut cursor).map_err(sendable_err)?);
                 cursor.read_exact(&mut ip).map_err(sendable_err)?;
-                let key = cursor.read_u32::<NetworkEndian>().map_err(sendable_err)?;
-                let peers_wanted = cursor.read_i32::<NetworkEndian>().map_err(sendable_err)?;
-                let port = cursor.read_u16::<NetworkEndian>().map_err(sendable_err)?;
+                let key = u32::from_be_bytes(read_be(&mut cursor).map_err(sendable_err)?);
+                let peers_wanted = i32::from_be_bytes(read_be(&mut cursor).map_err(sendable_err)?);
+                let port = u16::from_be_bytes(read_be(&mut cursor).map_err(sendable_err)?);
                 let opt_ip = if ip == [0; 4] {
                     None
                 } else {
                     Some(Ipv4Addr::from(ip))
                 };
                 let path = if cursor.position() < bytes.len() as u64 {
-                    let option_byte = cursor.read_u8().ok();
-                    let option_size = cursor.read_u8().ok();
+                    let option_byte = read_be::<1>(&mut cursor).ok().map(|b| b[0]);
+                    let option_size = read_be::<1>(&mut cursor).ok().map(|b| b[0]);
                     if option_byte == Some(2) {
                         if let Some(size) = option_size {
                             let size_usize = size as usize;

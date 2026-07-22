@@ -8,18 +8,14 @@ use crate::udp::structs::response_peer::ResponsePeer;
 use crate::udp::structs::simple_proxy_protocol::SppHeader;
 use crate::udp::structs::torrent_scrape_statistics::TorrentScrapeStatistics;
 use crate::udp::structs::udp_server::UdpServer;
-use byteorder::{
-    NetworkEndian,
-    ReadBytesExt
-};
 use log::{
     error,
     info
 };
 use std::io::{
-    Cursor,
     Error,
-    ErrorKind
+    ErrorKind,
+    Read
 };
 use std::net::{
     IpAddr,
@@ -37,6 +33,18 @@ pub const MAX_SCRAPE_TORRENTS: u8 = 74;
 pub const MAX_PACKET_SIZE: usize = 1496;
 pub const SPP_HEADER_SIZE: usize = 38;
 pub const SPP_MAGIC: u16 = 0x56EC;
+
+/// Reads exactly `N` big-endian bytes from `r`, for use with `iNN::from_be_bytes`.
+///
+/// # Errors
+///
+/// Returns an I/O error when `r` holds fewer than `N` bytes.
+#[inline]
+pub fn read_be<const N: usize>(r: &mut impl Read) -> Result<[u8; N], Error> {
+    let mut buf = [0u8; N];
+    r.read_exact(&mut buf)?;
+    Ok(buf)
+}
 
 /// Spawns the UDP tracker service on `addr` using the selected receive backend and returns
 /// its join handle. The service runs until the shutdown watch channel fires.
@@ -69,9 +77,7 @@ pub fn parse_ipv4_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv4Addr>>, Err
         let ip_bytes: [u8; 4] = chunk[..4].try_into().map_err(|_|
             Error::new(ErrorKind::InvalidData, "Invalid IPv4 address bytes")
         )?;
-        let port = (&chunk[4..6]).read_u16::<NetworkEndian>().map_err(|e|
-            Error::new(ErrorKind::InvalidData, e)
-        )?;
+        let port = u16::from_be_bytes([chunk[4], chunk[5]]);
         peers.push(ResponsePeer {
             ip_address: Ipv4Addr::from(ip_bytes),
             port: Port(port),
@@ -95,9 +101,7 @@ pub fn parse_ipv6_peers(bytes: &[u8]) -> Result<Vec<ResponsePeer<Ipv6Addr>>, Err
         let ip_bytes: [u8; 16] = chunk[..16].try_into().map_err(|_|
             Error::new(ErrorKind::InvalidData, "Invalid IPv6 address bytes")
         )?;
-        let port = (&chunk[16..18]).read_u16::<NetworkEndian>().map_err(|e|
-            Error::new(ErrorKind::InvalidData, e)
-        )?;
+        let port = u16::from_be_bytes([chunk[16], chunk[17]]);
         peers.push(ResponsePeer {
             ip_address: Ipv6Addr::from(ip_bytes),
             port: Port(port),
@@ -118,16 +122,9 @@ pub fn parse_scrape_stats(bytes: &[u8]) -> Result<Vec<TorrentScrapeStatistics>, 
     let stats_count = bytes.len() / chunk_size;
     let mut stats = Vec::with_capacity(stats_count);
     for chunk in bytes.chunks_exact(chunk_size) {
-        let mut cursor = Cursor::new(chunk);
-        let seeders = cursor.read_i32::<NetworkEndian>().map_err(|e|
-            Error::new(ErrorKind::InvalidData, e)
-        )?;
-        let downloads = cursor.read_i32::<NetworkEndian>().map_err(|e|
-            Error::new(ErrorKind::InvalidData, e)
-        )?;
-        let leechers = cursor.read_i32::<NetworkEndian>().map_err(|e|
-            Error::new(ErrorKind::InvalidData, e)
-        )?;
+        let seeders = i32::from_be_bytes(chunk[0..4].try_into().expect("chunk is 12 bytes"));
+        let downloads = i32::from_be_bytes(chunk[4..8].try_into().expect("chunk is 12 bytes"));
+        let leechers = i32::from_be_bytes(chunk[8..12].try_into().expect("chunk is 12 bytes"));
         stats.push(TorrentScrapeStatistics {
             seeders: NumberOfPeers(seeders),
             completed: NumberOfDownloads(downloads),

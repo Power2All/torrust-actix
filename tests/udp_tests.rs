@@ -63,25 +63,20 @@ fn test_udp_zero_copy_optimization() {
 
 #[tokio::test]
 async fn test_udp_announce_request_parsing() {
-    use byteorder::{
-        BigEndian,
-        WriteBytesExt
-    };
-
     let mut packet = vec![];
-    packet.write_u64::<BigEndian>(12345).unwrap();
-    packet.write_u32::<BigEndian>(1).unwrap();
-    packet.write_u32::<BigEndian>(54321).unwrap();
+    packet.extend_from_slice(&12345u64.to_be_bytes());
+    packet.extend_from_slice(&1u32.to_be_bytes());
+    packet.extend_from_slice(&54321u32.to_be_bytes());
     packet.extend_from_slice(&[0u8; 20]);
     packet.extend_from_slice(&[1u8; 20]);
-    packet.write_u64::<BigEndian>(0).unwrap();
-    packet.write_u64::<BigEndian>(1000).unwrap();
-    packet.write_u64::<BigEndian>(0).unwrap();
-    packet.write_u32::<BigEndian>(0).unwrap();
-    packet.write_u32::<BigEndian>(0).unwrap();
-    packet.write_u32::<BigEndian>(0).unwrap();
-    packet.write_i32::<BigEndian>(-1).unwrap();
-    packet.write_u16::<BigEndian>(6881).unwrap();
+    packet.extend_from_slice(&0u64.to_be_bytes());
+    packet.extend_from_slice(&1000u64.to_be_bytes());
+    packet.extend_from_slice(&0u64.to_be_bytes());
+    packet.extend_from_slice(&0u32.to_be_bytes());
+    packet.extend_from_slice(&0u32.to_be_bytes());
+    packet.extend_from_slice(&0u32.to_be_bytes());
+    packet.extend_from_slice(&(-1i32).to_be_bytes());
+    packet.extend_from_slice(&6881u16.to_be_bytes());
     let result = Request::from_bytes(&packet, 74);
     assert!(result.is_ok(), "Should parse valid announce request");
     match result.unwrap() {
@@ -95,15 +90,10 @@ async fn test_udp_announce_request_parsing() {
 
 #[tokio::test]
 async fn test_udp_scrape_request_parsing() {
-    use byteorder::{
-        BigEndian,
-        WriteBytesExt
-    };
-
     let mut packet = vec![];
-    packet.write_u64::<BigEndian>(12345).unwrap();
-    packet.write_u32::<BigEndian>(2).unwrap();
-    packet.write_u32::<BigEndian>(99999).unwrap();
+    packet.extend_from_slice(&12345u64.to_be_bytes());
+    packet.extend_from_slice(&2u32.to_be_bytes());
+    packet.extend_from_slice(&99999u32.to_be_bytes());
     packet.extend_from_slice(&[0u8; 20]);
     let result = Request::from_bytes(&packet, 74);
     assert!(result.is_ok(), "Should parse valid scrape request");
@@ -118,15 +108,10 @@ async fn test_udp_scrape_request_parsing() {
 
 #[tokio::test]
 async fn test_udp_packet_size_limits() {
-    use byteorder::{
-        BigEndian,
-        WriteBytesExt
-    };
-
     let mut packet = vec![];
-    packet.write_u64::<BigEndian>(12345).unwrap();
-    packet.write_u32::<BigEndian>(2).unwrap();
-    packet.write_u32::<BigEndian>(1).unwrap();
+    packet.extend_from_slice(&12345u64.to_be_bytes());
+    packet.extend_from_slice(&2u32.to_be_bytes());
+    packet.extend_from_slice(&1u32.to_be_bytes());
     for _ in 0..80 {
         packet.extend_from_slice(&[0u8; 20]);
     }

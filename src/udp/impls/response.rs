@@ -10,12 +10,8 @@ use crate::udp::structs::transaction_id::TransactionId;
 use crate::udp::udp::{
     parse_ipv4_peers,
     parse_ipv6_peers,
-    parse_scrape_stats
-};
-use byteorder::{
-    NetworkEndian,
-    ReadBytesExt,
-    WriteBytesExt
+    parse_scrape_stats,
+    read_be
 };
 use std::io;
 use std::io::{
@@ -63,64 +59,63 @@ impl Response {
     /// # Errors
     ///
     /// Returns the underlying I/O error when writing fails.
-    #[tracing::instrument(skip(bytes), level = "debug")]
     #[inline]
     pub fn write(&self, bytes: &mut impl Write) -> Result<(), io::Error> {
         match self {
             Response::Connect(r) => {
-                bytes.write_i32::<NetworkEndian>(0)?;
-                bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
-                bytes.write_i64::<NetworkEndian>(r.connection_id.0)?;
+                bytes.write_all(&0i32.to_be_bytes())?;
+                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
+                bytes.write_all(&r.connection_id.0.to_be_bytes())?;
             }
             Response::AnnounceIpv4(r) => {
-                bytes.write_i32::<NetworkEndian>(1)?;
-                bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
-                bytes.write_i32::<NetworkEndian>(r.announce_interval.0)?;
-                bytes.write_i32::<NetworkEndian>(r.leechers.0)?;
-                bytes.write_i32::<NetworkEndian>(r.seeders.0)?;
+                bytes.write_all(&1i32.to_be_bytes())?;
+                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
+                bytes.write_all(&r.announce_interval.0.to_be_bytes())?;
+                bytes.write_all(&r.leechers.0.to_be_bytes())?;
+                bytes.write_all(&r.seeders.0.to_be_bytes())?;
                 let peer_count = r.peers.len();
                 if peer_count > 0 {
                     let mut peer_buffer = Vec::with_capacity(peer_count * 6);
                     for peer in &r.peers {
                         peer_buffer.extend_from_slice(&peer.ip_address.octets());
-                        peer_buffer.write_u16::<NetworkEndian>(peer.port.0)?;
+                        peer_buffer.extend_from_slice(&peer.port.0.to_be_bytes());
                     }
                     bytes.write_all(&peer_buffer)?;
                 }
             }
             Response::AnnounceIpv6(r) => {
-                bytes.write_i32::<NetworkEndian>(1)?;
-                bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
-                bytes.write_i32::<NetworkEndian>(r.announce_interval.0)?;
-                bytes.write_i32::<NetworkEndian>(r.leechers.0)?;
-                bytes.write_i32::<NetworkEndian>(r.seeders.0)?;
+                bytes.write_all(&1i32.to_be_bytes())?;
+                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
+                bytes.write_all(&r.announce_interval.0.to_be_bytes())?;
+                bytes.write_all(&r.leechers.0.to_be_bytes())?;
+                bytes.write_all(&r.seeders.0.to_be_bytes())?;
                 let peer_count = r.peers.len();
                 if peer_count > 0 {
                     let mut peer_buffer = Vec::with_capacity(peer_count * 18);
                     for peer in &r.peers {
                         peer_buffer.extend_from_slice(&peer.ip_address.octets());
-                        peer_buffer.write_u16::<NetworkEndian>(peer.port.0)?;
+                        peer_buffer.extend_from_slice(&peer.port.0.to_be_bytes());
                     }
                     bytes.write_all(&peer_buffer)?;
                 }
             }
             Response::Scrape(r) => {
-                bytes.write_i32::<NetworkEndian>(2)?;
-                bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
+                bytes.write_all(&2i32.to_be_bytes())?;
+                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
                 let stats_count = r.torrent_stats.len();
                 if stats_count > 0 {
                     let mut stats_buffer = Vec::with_capacity(stats_count * 12);
                     for torrent_stat in &r.torrent_stats {
-                        stats_buffer.write_i32::<NetworkEndian>(torrent_stat.seeders.0)?;
-                        stats_buffer.write_i32::<NetworkEndian>(torrent_stat.completed.0)?;
-                        stats_buffer.write_i32::<NetworkEndian>(torrent_stat.leechers.0)?;
+                        stats_buffer.extend_from_slice(&torrent_stat.seeders.0.to_be_bytes());
+                        stats_buffer.extend_from_slice(&torrent_stat.completed.0.to_be_bytes());
+                        stats_buffer.extend_from_slice(&torrent_stat.leechers.0.to_be_bytes());
                     }
                     bytes.write_all(&stats_buffer)?;
                 }
             }
             Response::Error(r) => {
-                bytes.write_i32::<NetworkEndian>(3)?;
-                bytes.write_i32::<NetworkEndian>(r.transaction_id.0)?;
+                bytes.write_all(&3i32.to_be_bytes())?;
+                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
                 bytes.write_all(r.message.as_bytes())?;
             }
         }
@@ -137,11 +132,11 @@ impl Response {
     #[inline]
     pub fn from_bytes(bytes: &[u8], ipv4: bool) -> Result<Self, io::Error> {
         let mut cursor = Cursor::new(bytes);
-        let action = cursor.read_i32::<NetworkEndian>()?;
-        let transaction_id = cursor.read_i32::<NetworkEndian>()?;
+        let action = i32::from_be_bytes(read_be(&mut cursor)?);
+        let transaction_id = i32::from_be_bytes(read_be(&mut cursor)?);
         match action {
             0 => {
-                let connection_id = cursor.read_i64::<NetworkEndian>()?;
+                let connection_id = i64::from_be_bytes(read_be(&mut cursor)?);
                 Ok(ConnectResponse {
                     connection_id: ConnectionId(connection_id),
                     transaction_id: TransactionId(transaction_id),
@@ -149,9 +144,9 @@ impl Response {
                     .into())
             }
             1 => {
-                let announce_interval = cursor.read_i32::<NetworkEndian>()?;
-                let leechers = cursor.read_i32::<NetworkEndian>()?;
-                let seeders = cursor.read_i32::<NetworkEndian>()?;
+                let announce_interval = i32::from_be_bytes(read_be(&mut cursor)?);
+                let leechers = i32::from_be_bytes(read_be(&mut cursor)?);
+                let seeders = i32::from_be_bytes(read_be(&mut cursor)?);
                 let position = cursor.position() as usize;
                 let remaining_bytes = &bytes[position..];
                 if ipv4 {

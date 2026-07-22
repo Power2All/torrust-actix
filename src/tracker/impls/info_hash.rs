@@ -11,23 +11,10 @@ impl fmt::Display for InfoHash {
 }
 
 impl std::str::FromStr for InfoHash {
-    type Err = binascii::ConvertError;
+    type Err = crate::common::common::HexParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() != 40 {
-            return Err(binascii::ConvertError::InvalidInputLength);
-        }
-        let mut result = InfoHash([0u8; 20]);
-        let bytes = s.as_bytes();
-        for (i, chunk) in bytes.chunks_exact(2).enumerate() {
-            let high = hex_to_nibble(chunk[0]);
-            let low = hex_to_nibble(chunk[1]);
-            if high == 0xFF || low == 0xFF {
-                return Err(binascii::ConvertError::InvalidInput);
-            }
-            result.0[i] = (high << 4) | low;
-        }
-        Ok(result)
+        Ok(InfoHash(crate::common::common::hex_to_id(s)?))
     }
 }
 

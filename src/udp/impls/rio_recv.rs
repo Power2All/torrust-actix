@@ -7,7 +7,7 @@ use crate::udp::structs::udp_packet::{
     INLINE_PACKET_SIZE
 };
 use crate::udp::udp::MAX_PACKET_SIZE;
-use crossbeam::queue::ArrayQueue;
+use crossbeam_queue::ArrayQueue;
 use log::{
     debug,
     error,
