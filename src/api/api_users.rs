@@ -19,7 +19,6 @@ use actix_web::{
     HttpRequest,
     HttpResponse
 };
-use regex::Regex;
 use serde_json::{
     json,
     Value
@@ -30,8 +29,12 @@ use std::collections::{
 };
 use std::sync::Arc;
 
-lazy_static::lazy_static! {
-    static ref UUID_REGEX: Regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap();
+/// Accepts only the lowercase hyphenated UUID form, e.g. `550e8400-e29b-41d4-a716-446655440000`.
+fn is_uuid(s: &str) -> bool {
+    s.len() == 36 && s.bytes().enumerate().all(|(i, b)| match i {
+        8 | 13 | 18 | 23 => b == b'-',
+        _ => b.is_ascii_digit() || (b'a'..=b'f').contains(&b),
+    })
 }
 
 /// `GET /api/user/{id}` — returns a user entry as JSON; `{id}` is the user id or UUID.
@@ -97,7 +100,7 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
         torrents_active: BTreeMap::new(),
     };
     let id_hash = if data.torrent_tracker.config.database_structure.users.id_uuid {
-        if !UUID_REGEX.is_match(&id) {
+        if !is_uuid(&id) {
             return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid uuid"}));
         }
         user_entry.user_uuid = Some(id.to_lowercase());
@@ -154,7 +157,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
                 torrents_active: BTreeMap::new(),
             };
             let id_hash = if data.torrent_tracker.config.database_structure.users.id_uuid {
-                if !UUID_REGEX.is_match(&id) {
+                if !is_uuid(&id) {
                     return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid uuid"}));
                 }
                 user_entry.user_uuid = Some(id.to_lowercase());

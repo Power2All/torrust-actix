@@ -130,14 +130,13 @@ fn bench_sharding_distribution(c: &mut Criterion) {
 }
 
 fn bench_udp_packet_parsing(c: &mut Criterion) {
-    use byteorder::{BigEndian, WriteBytesExt};
     use torrust_actix::udp::enums::request::Request;
     use torrust_actix::udp::udp::PROTOCOL_IDENTIFIER;
 
     let mut packet = vec![];
-    packet.write_u64::<BigEndian>(PROTOCOL_IDENTIFIER as u64).unwrap();
-    packet.write_u32::<BigEndian>(0).unwrap();
-    packet.write_u32::<BigEndian>(12345).unwrap();
+    packet.extend_from_slice(&(PROTOCOL_IDENTIFIER as u64).to_be_bytes());
+    packet.extend_from_slice(&0u32.to_be_bytes());
+    packet.extend_from_slice(&12345u32.to_be_bytes());
     c.bench_function("udp_connect_request_parse", |b| {
         b.iter(|| {
             let _ = std::hint::black_box(Request::from_bytes(&packet[..], 74));

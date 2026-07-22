@@ -24,7 +24,6 @@ use crate::security::security::{
     generate_secure_api_key,
     validate_api_key_strength
 };
-use regex::Regex;
 use std::env;
 use std::fs::File;
 use std::io::Write;
@@ -785,32 +784,37 @@ impl Configuration {
             eprintln!("[SECURITY WARNING] API key is weak! Please use a stronger API key.");
             eprintln!("[SECURITY WARNING] Generate a secure key with: 'head -c 32 /dev/urandom | base64'");
         }
-        let check_map = vec![
-            ("[TRACKER_CONFIG] prometheus_id", config.tracker_config.clone().prometheus_id, r"^[a-zA-Z0-9_]+$".to_string()),
-            ("[DB: torrents]", config.database_structure.clone().torrents.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: torrents] Column: infohash", config.database_structure.clone().torrents.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: torrents] Column: seeds", config.database_structure.clone().torrents.column_seeds, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: torrents] Column: peers", config.database_structure.clone().torrents.column_peers, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: torrents] Column: completed", config.database_structure.clone().torrents.column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: whitelist]", config.database_structure.clone().whitelist.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: whitelist] Column: infohash", config.database_structure.clone().whitelist.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: blacklist]", config.database_structure.clone().blacklist.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: blacklist] Column: infohash", config.database_structure.clone().blacklist.column_infohash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: keys]", config.database_structure.clone().keys.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: keys] Column: hash", config.database_structure.clone().keys.column_hash, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: keys] Column: timeout", config.database_structure.clone().keys.column_timeout, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users]", config.database_structure.clone().users.table_name, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: id", config.database_structure.clone().users.column_id, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: uuid", config.database_structure.clone().users.column_uuid, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: key", config.database_structure.clone().users.column_key, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: uploaded", config.database_structure.clone().users.column_uploaded, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: downloaded", config.database_structure.clone().users.column_downloaded, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: completed", config.database_structure.clone().users.column_completed, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: active", config.database_structure.clone().users.column_active, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
-            ("[DB: users] Column: updated", config.database_structure.clone().users.column_updated, r"^[a-z_][a-z0-9_]{0,30}$".to_string()),
+        let prometheus_id = &config.tracker_config.prometheus_id;
+        assert!(
+            !prometheus_id.is_empty() && prometheus_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+            "[VALIDATE CONFIG] Error checking [TRACKER_CONFIG] prometheus_id [:] Name: \"{prometheus_id}\" [:] expected only letters, digits or underscores"
+        );
+        let db = &config.database_structure;
+        let check_map = [
+            ("[DB: torrents]", &db.torrents.table_name),
+            ("[DB: torrents] Column: infohash", &db.torrents.column_infohash),
+            ("[DB: torrents] Column: seeds", &db.torrents.column_seeds),
+            ("[DB: torrents] Column: peers", &db.torrents.column_peers),
+            ("[DB: torrents] Column: completed", &db.torrents.column_completed),
+            ("[DB: whitelist]", &db.whitelist.table_name),
+            ("[DB: whitelist] Column: infohash", &db.whitelist.column_infohash),
+            ("[DB: blacklist]", &db.blacklist.table_name),
+            ("[DB: blacklist] Column: infohash", &db.blacklist.column_infohash),
+            ("[DB: keys]", &db.keys.table_name),
+            ("[DB: keys] Column: hash", &db.keys.column_hash),
+            ("[DB: keys] Column: timeout", &db.keys.column_timeout),
+            ("[DB: users]", &db.users.table_name),
+            ("[DB: users] Column: id", &db.users.column_id),
+            ("[DB: users] Column: uuid", &db.users.column_uuid),
+            ("[DB: users] Column: key", &db.users.column_key),
+            ("[DB: users] Column: uploaded", &db.users.column_uploaded),
+            ("[DB: users] Column: downloaded", &db.users.column_downloaded),
+            ("[DB: users] Column: completed", &db.users.column_completed),
+            ("[DB: users] Column: active", &db.users.column_active),
+            ("[DB: users] Column: updated", &db.users.column_updated),
         ];
-        for (name, value, regex) in check_map {
-            Self::validate_value(name, value, regex);
+        for (name, value) in check_map {
+            Self::validate_value(name, value);
         }
         for (index, api_server) in config.api_server.iter().enumerate() {
             if api_server.enabled {
@@ -991,15 +995,20 @@ impl Configuration {
         }
     }
 
-    /// Asserts that `value` matches the given regular expression.
+    /// Asserts that `value` is a valid database identifier: first character a lowercase
+    /// letter or underscore, the rest lowercase letters, digits or underscores, at most
+    /// 31 characters (equivalent to `^[a-z_][a-z0-9_]{0,30}$`).
     ///
     /// # Panics
     ///
-    /// Panics when the value does not match (or the regex itself is invalid).
-    pub fn validate_value(name: &str, value: String, regex: String)
+    /// Panics when the value does not match.
+    pub fn validate_value(name: &str, value: &str)
     {
-        let regex_check = Regex::new(regex.as_str()).unwrap();
-        assert!(regex_check.is_match(value.as_str()), "[VALIDATE CONFIG] Error checking {name} [:] Name: \"{value}\" [:] Regex: \"{regex_check}\"");
+        let mut bytes = value.bytes();
+        let valid = value.len() <= 31
+            && bytes.next().is_some_and(|b| b.is_ascii_lowercase() || b == b'_')
+            && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+        assert!(valid, "[VALIDATE CONFIG] Error checking {name} [:] Name: \"{value}\" [:] expected pattern ^[a-z_][a-z0-9_]{{0,30}}$");
     }
 
     /// Serialises the configuration to TOML with explanatory comments above each setting,

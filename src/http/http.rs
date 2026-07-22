@@ -43,7 +43,6 @@ use bip_bencode::{
     ben_map,
     BMutAccess
 };
-use lazy_static::lazy_static;
 use log::{
     debug,
     error,
@@ -57,21 +56,22 @@ use std::net::{
 };
 use std::process::exit;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    LazyLock
+};
 use std::time::Duration;
 
-lazy_static! {
-    static ref ERR_MISSING_KEY: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("missing key") }.encode();
-    static ref ERR_UNKNOWN_INFO_HASH: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("unknown info_hash") }.encode();
-    static ref ERR_FORBIDDEN_INFO_HASH: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("forbidden info_hash") }.encode();
-    static ref ERR_UNKNOWN_REQUEST: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("unknown request") }.encode();
-    static ref ERR_UNABLE_DECODE_HEX: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("unable to decode hex string") }.encode();
-    static ref ERR_UNKNOWN_ORIGIN_IP: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("unknown origin ip") }.encode();
-    static ref ERR_INVALID_KEY: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("invalid key") }.encode();
-    static ref ERR_UNKNOWN_KEY: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("unknown key") }.encode();
-    static ref ERR_INVALID_USER_KEY: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("invalid user key") }.encode();
-    static ref ERR_UNKNOWN_USER_KEY: Vec<u8> = ben_map!{ "failure reason" => ben_bytes!("unknown user key") }.encode();
-}
+static ERR_MISSING_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("missing key") }.encode());
+static ERR_UNKNOWN_INFO_HASH: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown info_hash") }.encode());
+static ERR_FORBIDDEN_INFO_HASH: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("forbidden info_hash") }.encode());
+static ERR_UNKNOWN_REQUEST: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown request") }.encode());
+static ERR_UNABLE_DECODE_HEX: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unable to decode hex string") }.encode());
+static ERR_UNKNOWN_ORIGIN_IP: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown origin ip") }.encode());
+static ERR_INVALID_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("invalid key") }.encode());
+static ERR_UNKNOWN_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown key") }.encode());
+static ERR_INVALID_USER_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("invalid user key") }.encode());
+static ERR_UNKNOWN_USER_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown user key") }.encode());
 
 /// Builds the permissive CORS policy used by the HTTP tracker endpoints (any origin, GET only).
 pub fn http_service_cors() -> Cors

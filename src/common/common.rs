@@ -97,10 +97,19 @@ pub fn udp_check_host_and_port_used(bind_address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Error returned when parsing a 40-character hex string into a 20-byte id fails.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum HexParseError {
+    #[error("invalid input length")]
+    InvalidLength,
+    #[error("invalid hex character")]
+    InvalidCharacter,
+}
+
 /// Formats a 20-byte binary hash as 40 lowercase hex characters into `f`.
 pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     let mut chars = [0u8; 40];
-    binascii::bin2hex(data, &mut chars).expect("failed to hexlify");
+    hex::encode_to_slice(data, &mut chars).expect("failed to hexlify");
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
 }
 

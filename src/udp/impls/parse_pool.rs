@@ -8,7 +8,7 @@ use crate::udp::udp::parse_spp_header;
 use crate::websocket::enums::protocol_type::ProtocolType;
 use crate::websocket::enums::request_type::RequestType;
 use crate::websocket::websocket::forward_request;
-use crossbeam::queue::ArrayQueue;
+use crossbeam_queue::ArrayQueue;
 use log::{
     debug,
     info,

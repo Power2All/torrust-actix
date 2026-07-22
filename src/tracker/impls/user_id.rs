@@ -11,11 +11,11 @@ impl fmt::Display for UserId {
 }
 
 impl std::str::FromStr for UserId {
-    type Err = binascii::ConvertError;
+    type Err = crate::common::common::HexParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() != 40 {
-            return Err(binascii::ConvertError::InvalidInputLength);
+            return Err(crate::common::common::HexParseError::InvalidLength);
         }
         let mut result = UserId([0u8; 20]);
         let bytes = s.as_bytes();
@@ -24,7 +24,7 @@ impl std::str::FromStr for UserId {
             let low = hex_to_nibble(bytes[i * 2 + 1]);
 
             if high == 0xFF || low == 0xFF {
-                return Err(binascii::ConvertError::InvalidInput);
+                return Err(crate::common::common::HexParseError::InvalidCharacter);
             }
             result.0[i] = (high << 4) | low;
         }
