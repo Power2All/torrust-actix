@@ -4172,6 +4172,7 @@ dependencies = [
  "rcgen",
  "redis",
  "reqwest",
+ "ring",
  "rmp-serde",
  "rustls",
  "rustls-pemfile",

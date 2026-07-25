@@ -634,3 +634,78 @@ async fn test_torrent_updates_dedupe_per_info_hash() {
     assert!(tracker.get_torrent_updates().is_empty());
     assert_eq!(tracker.get_stats().torrents_updates, 0);
 }
+
+#[tokio::test]
+async fn test_keys_loaded_from_database_keep_absolute_expiry() {
+    use torrust_actix::common::common::current_time;
+
+    let tracker: common::TestTracker = common::create_test_tracker().await;
+
+    // Database rows store an absolute expiry. Feeding one through the relative `add_key` would
+    // add it to the current time, pushing a valid key decades out and turning a permanent key
+    // (0) into one that expired the instant it loaded.
+    let permanent = common::random_info_hash();
+    tracker.add_key_absolute(permanent, 0);
+    assert_eq!(tracker.get_key(permanent).unwrap().1, 0, "expiry must be stored verbatim");
+    assert!(tracker.check_key(permanent), "a stored expiry of 0 means permanent");
+
+    let future = common::random_info_hash();
+    let future_expiry = current_time() as i64 + 600;
+    tracker.add_key_absolute(future, future_expiry);
+    assert_eq!(tracker.get_key(future).unwrap().1, future_expiry);
+    assert!(tracker.check_key(future));
+
+    let past = common::random_info_hash();
+    tracker.add_key_absolute(past, current_time() as i64 - 600);
+    assert!(!tracker.check_key(past), "an already-expired stored key must not validate");
+
+    // The relative form stays relative for callers that pass a duration.
+    let relative = common::random_info_hash();
+    tracker.add_key(relative, 600);
+    assert!(tracker.get_key(relative).unwrap().1 >= current_time() as i64 + 599);
+    assert!(tracker.check_key(relative));
+}
+
+#[tokio::test]
+async fn test_permanent_keys_survive_cleanup() {
+    let tracker: common::TestTracker = common::create_test_tracker().await;
+    let permanent = common::random_info_hash();
+    let expired = common::random_info_hash();
+    tracker.add_key_absolute(permanent, 0);
+    tracker.add_key_absolute(expired, 1);
+
+    tracker.clean_keys();
+
+    assert!(tracker.get_key(permanent).is_some(), "permanent keys must not be swept");
+    assert!(tracker.get_key(expired).is_none(), "expired keys must be swept");
+}
+
+#[tokio::test]
+async fn test_rtc_peers_expire_while_bt_cutoff_unavailable() {
+    use std::sync::Arc;
+    use torrust_actix::tracker::structs::rtc_data::RtcData;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+
+    // `rtc_peers_timeout` is far shorter than `peers_timeout`, so shortly after boot the BT
+    // cutoff underflows while the RTC one is fine. RTC peers must still be swept then.
+    let config = Arc::new(common::build_test_config(|_| {}));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let info_hash = common::random_info_hash();
+
+    let bt_peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, bt_peer_id, common::create_test_peer(bt_peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881), false);
+
+    let rtc_peer_id = common::random_peer_id();
+    let mut rtc_peer = common::create_test_peer(rtc_peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)), 6882);
+    rtc_peer.rtc_data = Some(Box::new(RtcData::new(Some("v=0"))));
+    tracker.add_torrent_peer(info_hash, rtc_peer_id, rtc_peer, false);
+
+    tokio::time::sleep(Duration::from_millis(20)).await;
+
+    let unavailable_bt_timeout = Duration::from_secs(60 * 60 * 24 * 365 * 100);
+    TorrentSharding::cleanup_once(tracker.clone(), unavailable_bt_timeout, Duration::from_millis(1), false).await;
+
+    let entry = tracker.get_torrent(info_hash).expect("torrent must survive");
+    assert!(entry.rtc_peers.is_empty(), "RTC peers must expire on their own cutoff");
+    assert_eq!(entry.peers.len(), 1, "BT peers must survive an unavailable BT cutoff");
+}

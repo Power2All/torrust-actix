@@ -104,4 +104,17 @@ mod security_tests {
         assert!(validate_remote_ip("8.8.8.8", false).is_ok());
         assert!(validate_remote_ip("192.168.1.1", true).is_ok());
     }
+
+    #[test]
+    fn test_validate_remote_ip_rejects_internal_ipv6() {
+        // The IPv6 counterparts of the IPv4 private and link-local ranges rejected above.
+        assert!(validate_remote_ip("fd00::1", false).is_err());
+        assert!(validate_remote_ip("fc00::1", false).is_err());
+        assert!(validate_remote_ip("fe80::1", false).is_err());
+        assert!(validate_remote_ip("::1", false).is_err());
+        assert!(validate_remote_ip("::", false).is_err());
+        assert!(validate_remote_ip("2606:4700:4700::1111", false).is_ok());
+        // A configured proxy may legitimately forward an internal address.
+        assert!(validate_remote_ip("fd00::1", true).is_ok());
+    }
 }

@@ -36,10 +36,11 @@ pub struct TrackerConfig {
     pub peers_cleanup_interval: u64,
     /// Number of parallel threads used for peer cleanup.
     pub peers_cleanup_threads: u64,
-    /// Maximum peers kept per torrent in each peer map (IPv4 seeds, IPv6 seeds, IPv4
-    /// leechers, IPv6 leechers, RTC seeds, RTC leechers). When a map is full a stale peer
-    /// is evicted to make room. `0` disables the limit, leaving memory bounded only by
-    /// announce rate times `peers_timeout`.
+    /// Maximum peers kept in *each* of a torrent's six peer maps (IPv4 seeds, IPv6 seeds, IPv4
+    /// leechers, IPv6 leechers, RTC seeds, RTC leechers), so a single torrent can hold up to
+    /// six times this value. When a map is full a stale peer is evicted to make room.
+    /// `0` disables the limit, leaving memory bounded only by announce rate times
+    /// `peers_timeout`.
     #[serde(default = "crate::config::config::default_max_peers_per_torrent")]
     pub max_peers_per_torrent: u64,
     /// Maximum SDP answers queued for a single RtcTorrent peer before the oldest is dropped.

@@ -1086,7 +1086,7 @@ impl Configuration {
         remarks.insert(("tracker_config", "keys_enabled"), "# Optional: defaults to false -- require announce keys");
         remarks.insert(("tracker_config", "keys_cleanup_interval"), "# Optional: defaults to 60 -- expired-key cleanup interval (seconds)");
         remarks.insert(("tracker_config", "users_enabled"), "# Optional: defaults to false -- enable per-user statistics");
-        remarks.insert(("tracker_config", "max_peers_per_torrent"), "# Optional: defaults to 10000 -- max peers kept per torrent per peer map (0 = unlimited, not recommended)");
+        remarks.insert(("tracker_config", "max_peers_per_torrent"), "# Optional: defaults to 10000 -- max peers per torrent in EACH of its 6 peer maps, so up to 6x this per torrent (0 = unlimited, not recommended)");
         remarks.insert(("tracker_config", "max_rtc_pending_answers"), "# Optional: defaults to 32 -- max SDP answers queued for one RtcTorrent peer");
         remarks.insert(("tracker_config", "swagger"), "# Optional: defaults to false -- expose Swagger UI at <api>/swagger-ui/");
         remarks.insert(("tracker_config", "prometheus_id"), "# Optional: defaults to \"torrust_actix\" -- Prometheus metric label");

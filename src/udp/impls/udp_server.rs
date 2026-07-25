@@ -55,9 +55,17 @@ use tokio::runtime::Builder;
 /// Lifetime of a UDP connection id in seconds. BEP 15 suggests two minutes.
 const CONNECTION_ID_WINDOW_SECS: u64 = 120;
 
-/// Per-process secret keying the connection-id hash. Regenerated on every start, so ids do
-/// not survive a restart and cannot be precomputed by a client.
-static CONNECTION_ID_SECRET: LazyLock<ahash::RandomState> = LazyLock::new(ahash::RandomState::new);
+/// Per-process HMAC-SHA256 key for connection ids. Regenerated on every start, so ids do not
+/// survive a restart.
+///
+/// This must be a keyed MAC, not a fast hash: `ahash` and friends are built for hash-map
+/// distribution and make no key-recovery guarantee, and recovering the key would let an
+/// attacker mint ids for addresses they do not control, restoring the reflection attack the
+/// connection id exists to prevent.
+static CONNECTION_ID_KEY: LazyLock<ring::hmac::Key> = LazyLock::new(|| {
+    ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &ring::rand::SystemRandom::new())
+        .expect("failed to generate the UDP connection-id key from the system RNG")
+});
 
 /// Byte range of the 40-character hex announce key inside `/announce/<key>/<user key>`.
 const KEY_PATH_RANGE: std::ops::Range<usize> = 10..50;
@@ -360,19 +368,16 @@ impl UdpServer {
     /// A keyed hash of `(window, port, ip)`, so a client cannot forge one and ids expire with
     /// the window without the tracker keeping per-client state.
     fn derive_connection_id(remote_address: &SocketAddr, window: u64) -> ConnectionId {
-        use std::hash::{
-            BuildHasher,
-            Hasher
-        };
-
-        let mut hasher = CONNECTION_ID_SECRET.build_hasher();
-        hasher.write_u64(window);
-        hasher.write_u16(remote_address.port());
+        let mut context = ring::hmac::Context::with_key(&CONNECTION_ID_KEY);
+        context.update(&window.to_be_bytes());
+        context.update(&remote_address.port().to_be_bytes());
         match remote_address.ip() {
-            std::net::IpAddr::V4(ipv4) => hasher.write(&ipv4.octets()),
-            std::net::IpAddr::V6(ipv6) => hasher.write(&ipv6.octets()),
+            std::net::IpAddr::V4(ipv4) => context.update(&ipv4.octets()),
+            std::net::IpAddr::V6(ipv6) => context.update(&ipv6.octets()),
         }
-        ConnectionId(hasher.finish() as i64)
+        let tag = context.sign();
+        let truncated: [u8; 8] = tag.as_ref()[..8].try_into().expect("HMAC-SHA256 tag is 32 bytes");
+        ConnectionId(i64::from_be_bytes(truncated))
     }
 
     /// Returns the current time window index used to derive connection ids.

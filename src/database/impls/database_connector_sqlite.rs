@@ -589,7 +589,7 @@ impl DatabaseConnectorSQLite {
                 let hash: [u8; 20] =
                     <[u8; 20]>::try_from(&hex::decode(hash_data).unwrap()[0..20]).unwrap();
                 let timeout: i64 = result.get(structure.column_timeout.as_str());
-                tracker.add_key(InfoHash(hash), timeout);
+                tracker.add_key_absolute(InfoHash(hash), timeout);
                 hashes += 1;
             }
             start += length;

@@ -7,15 +7,10 @@ impl QueryBuilder {
         Self { engine }
     }
 
-    /// Quotes a table or column identifier for the bound engine.
-    ///
-    /// Quote characters are stripped so an identifier can never break out of its quoting.
+    /// Quotes a table or column identifier for the bound engine: backticks for SQLite/MySQL,
+    /// double quotes for PostgreSQL.
     pub fn quote_identifier(&self, identifier: &str) -> String {
-        let safe: String = identifier.chars().filter(|c| *c != '`' && *c != '"' && *c != '\0').collect();
-        match self.engine {
-            DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{safe}`"),
-            DatabaseDrivers::pgsql => safe,
-        }
+        crate::database::database::quote_identifier(self.engine, identifier)
     }
 
     /// Formats a hex string as an engine-specific binary literal.

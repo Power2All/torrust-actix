@@ -43,25 +43,35 @@ impl TorrentTracker {
         }
     }
 
-    /// Adds an announce key whose expiry is set to now + `timeout` seconds.
+    /// Adds an announce key expiring `timeout` seconds from now.
     ///
-    /// This stores an absolute timestamp, so `timeout = 0` means "expires now". Only a *stored*
-    /// expiry of `0`, as loaded from a database row, means permanent.
+    /// Use [`TorrentTracker::add_key_absolute`] when the expiry is already an absolute
+    /// timestamp, such as a value read back from the database.
     ///
     /// Returns `true` when the key was newly inserted, `false` when it was refreshed.
     pub fn add_key(&self, hash: InfoHash, timeout: i64) -> bool
     {
-        let mut lock = self.keys.write();
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let timeout_unix = timestamp.as_secs() as i64 + timeout;
+        self.add_key_absolute(hash, timestamp.as_secs() as i64 + timeout)
+    }
+
+    /// Adds an announce key with an absolute expiry timestamp, stored verbatim.
+    ///
+    /// An expiry of `0` means the key never expires; any other value is a Unix timestamp,
+    /// including ones already in the past.
+    ///
+    /// Returns `true` when the key was newly inserted, `false` when it was refreshed.
+    pub fn add_key_absolute(&self, hash: InfoHash, expiry: i64) -> bool
+    {
+        let mut lock = self.keys.write();
         match lock.entry(hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Key, 1);
-                v.insert(timeout_unix);
+                v.insert(expiry);
                 true
             }
             Entry::Occupied(mut o) => {
-                o.insert(timeout_unix);
+                o.insert(expiry);
                 false
             }
         }

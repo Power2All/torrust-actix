@@ -40,7 +40,7 @@ pub fn format_hex_select(engine: DatabaseDrivers, column: &str, is_binary: bool)
 /// SQLite/MySQL, double quotes for PostgreSQL).
 pub fn quote_identifier(engine: DatabaseDrivers, identifier: &str) -> String {
     match engine {
-        DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{identifier}`"),
+        DatabaseDrivers::sqlite3 | DatabaseDrivers::mysql => format!("`{}`", identifier.replace('`', "``")),
         DatabaseDrivers::pgsql => format!("\"{}\"", identifier.replace('"', "\"\"")),
     }
 }

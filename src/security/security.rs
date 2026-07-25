@@ -124,8 +124,9 @@ pub fn validate_query_string_length(query: &str) -> Result<(), CustomError> {
 
 /// Validates a client-supplied IP string (from a proxy header) before parsing it.
 ///
-/// With `trusted_proxies_enabled = false`, loopback/private/unspecified values are rejected so
-/// an untrusted sender cannot claim an internal address.
+/// With `trusted_proxies_enabled = false`, loopback, unspecified and private values are
+/// rejected (IPv4 private/link-local, IPv6 `fc00::/7` and `fe80::/10`) so an untrusted sender
+/// cannot claim an internal address.
 ///
 /// # Errors
 ///
@@ -140,7 +141,12 @@ pub fn validate_remote_ip(ip: &str, trusted_proxies_enabled: bool) -> Result<(),
                 ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local() || ipv4.is_unspecified()
             }
             IpAddr::V6(ipv6) => {
-                ipv6.is_loopback() || ipv6.is_unspecified()
+                ipv6.is_loopback()
+                    || ipv6.is_unspecified()
+                    // fc00::/7 and fe80::/10, the IPv6 counterparts of the private and
+                    // link-local ranges rejected above for IPv4.
+                    || ipv6.is_unique_local()
+                    || ipv6.is_unicast_link_local()
             }
         };
         if is_private {
