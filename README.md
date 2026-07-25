@@ -65,7 +65,7 @@ It is a workspace member but is **not compiled by default** (`default-members` e
 
 ```bash
 # Debian / Ubuntu
-sudo apt-get install libfontconfig1-dev
+sudo apt-get install libfontconfig-dev
 
 # Fedora / RHEL
 sudo dnf install fontconfig-devel
