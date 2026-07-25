@@ -18,6 +18,8 @@ pub enum ServerError {
     TorrentBlacklisted,
     #[error("unknown key")]
     UnknownKey,
+    #[error("connection id missing or expired")]
+    InvalidConnectionId,
     #[error("peer not authenticated")]
     PeerNotAuthenticated,
     #[error("invalid authentication key")]

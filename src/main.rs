@@ -248,6 +248,7 @@ fn main() -> std::io::Result<()>
                         udp_server_object.reuse_address,
                         udp_server_object.use_payload_ip,
                         udp_server_object.simple_proxy_protocol,
+                        Arc::new(udp_server_object.proxy_addrs.clone()),
                         udp_server_object.receive_method,
                         tracker.clone(),
                         udp_rx.clone(),

@@ -11,11 +11,7 @@ use log::{
     info,
     warn
 };
-use std::collections::hash_map::Entry;
-use std::collections::{
-    BTreeMap,
-    HashMap
-};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -33,12 +29,11 @@ fn next_seq() -> u128 {
 impl TorrentTracker {
     /// Queues a torrent update for the next database/cache flush.
     ///
-    /// Returns `true` when a new queue slot was created.
+    /// Returns `true` when a new queue slot was created; a `false` means an update for the same
+    /// info-hash was already pending and has been superseded.
     pub fn add_torrent_update(&self, info_hash: InfoHash, torrent_update_data: TorrentUpdateData, updates_action: UpdatesAction) -> bool
     {
-        let mut lock = self.torrents_updates.write();
-        let timestamp = next_seq();
-        if lock.insert(timestamp, (info_hash, torrent_update_data, updates_action)).is_none() {
+        if self.torrents_updates.insert(next_seq(), info_hash, torrent_update_data, updates_action) {
             self.update_stats(StatsEvent::TorrentsUpdates, 1);
             true
         } else {
@@ -46,59 +41,39 @@ impl TorrentTracker {
         }
     }
 
-    /// Re-queues a batch of torrent updates under fresh sequence numbers, removing the old slots.
+    /// Queues a batch of torrent updates.
     ///
     /// Returns, per info-hash, whether the insert created a new slot.
-    pub fn add_torrent_updates(&self, hashes: HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)>) -> BTreeMap<InfoHash, bool>
+    pub fn add_torrent_updates(&self, hashes: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> BTreeMap<InfoHash, bool>
     {
-        let mut lock = self.torrents_updates.write();
         let mut returned_data = BTreeMap::new();
         let mut success_count = 0i64;
-        let mut remove_count = 0i64;
-        for (timestamp, (info_hash, torrent_entry, updates_action)) in hashes {
-            let new_timestamp = next_seq();
-            let success = lock.insert(new_timestamp, (info_hash, torrent_entry, updates_action)).is_none();
+        for (info_hash, (torrent_entry, updates_action)) in hashes {
+            let success = self.torrents_updates.insert(next_seq(), info_hash, torrent_entry, updates_action);
             if success {
                 success_count += 1;
             }
             returned_data.insert(info_hash, success);
-            if lock.remove(&timestamp).is_some() {
-                remove_count += 1;
-            }
         }
         if success_count > 0 {
             self.update_stats(StatsEvent::TorrentsUpdates, success_count);
         }
-        if remove_count > 0 {
-            self.update_stats(StatsEvent::TorrentsUpdates, -remove_count);
-        }
         returned_data
     }
 
-    /// Returns a clone of the pending torrent-update queue.
-    pub fn get_torrent_updates(&self) -> HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)>
+    /// Returns a copy of the pending torrent-update queue, keyed by info-hash.
+    pub fn get_torrent_updates(&self) -> BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>
     {
-        let lock = self.torrents_updates.read_recursive();
-        lock.clone()
-    }
-
-    /// Removes a single queued update by its sequence key; returns `true` when it existed.
-    pub fn remove_torrent_update(&self, timestamp: &u128) -> bool
-    {
-        let mut lock = self.torrents_updates.write();
-        if lock.remove(timestamp).is_some() {
-            self.update_stats(StatsEvent::TorrentsUpdates, -1);
-            true
-        } else {
-            false
-        }
+        self.torrents_updates.snapshot()
+            .into_iter()
+            .map(|(info_hash, (_, data, action))| (info_hash, (data, action)))
+            .collect()
     }
 
     /// Drops all queued torrent updates and resets the queue statistic.
     pub fn clear_torrent_updates(&self)
     {
-        let mut lock = self.torrents_updates.write();
-        lock.clear();
+        self.torrents_updates.clear();
         self.set_stats(StatsEvent::TorrentsUpdates, 0);
     }
 
@@ -111,36 +86,19 @@ impl TorrentTracker {
     /// queue so no data is lost.
     pub async fn save_torrent_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), ()>
     {
-        let updates: HashMap<u128, (InfoHash, TorrentUpdateData, UpdatesAction)> = {
-            let mut lock = self.torrents_updates.write();
-            std::mem::take(&mut *lock)
-        };
-        if updates.is_empty() {
+        let drained_updates = self.torrents_updates.drain();
+        if drained_updates.is_empty() {
             return Ok(());
         }
-        let drained = updates.len() as i64;
-        self.update_stats(StatsEvent::TorrentsUpdates, -drained);
-        let mut mapping: HashMap<InfoHash, (u128, TorrentUpdateData, UpdatesAction)> = HashMap::with_capacity(updates.len());
-        for (timestamp, (info_hash, torrent_entry, updates_action)) in updates {
-            match mapping.entry(info_hash) {
-                Entry::Occupied(mut o) => {
-                    if timestamp > o.get().0 {
-                        o.insert((timestamp, torrent_entry, updates_action));
-                    }
-                }
-                Entry::Vacant(v) => {
-                    v.insert((timestamp, torrent_entry, updates_action));
-                }
-            }
-        }
-        let mapping_len = mapping.len();
+        let mapping_len = drained_updates.len();
+        self.update_stats(StatsEvent::TorrentsUpdates, -(mapping_len as i64));
         let is_persistent = torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(torrent_tracker.config.database.persistent);
-        let torrents_to_save: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)> = mapping
+        let torrents_to_save: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)> = drained_updates
             .iter()
             .map(|(info_hash, (_, torrent_update_data, updates_action))| (*info_hash, (*torrent_update_data, *updates_action)))
             .collect();
         let db_result = if is_persistent {
-            self.save_torrents(torrent_tracker.clone(), torrents_to_save.clone()).await
+            self.save_torrents(torrent_tracker.clone(), &torrents_to_save).await
         } else {
             Ok(())
         };
@@ -188,14 +146,7 @@ impl TorrentTracker {
             Ok(())
         } else {
             error!("[SYNC TORRENT UPDATES] Unable to sync {mapping_len} torrents");
-            let mut lock = self.torrents_updates.write();
-            let mut restored = 0i64;
-            for (info_hash, (timestamp, torrent_entry, updates_action)) in mapping {
-                if let Entry::Vacant(v) = lock.entry(timestamp) {
-                    v.insert((info_hash, torrent_entry, updates_action));
-                    restored += 1;
-                }
-            }
+            let restored = self.torrents_updates.restore(drained_updates);
             self.update_stats(StatsEvent::TorrentsUpdates, restored);
             Err(())
         }

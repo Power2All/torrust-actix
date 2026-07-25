@@ -344,7 +344,8 @@ pub async fn api_service_token(request: &HttpRequest, config: Arc<Configuration>
 }
 
 /// Determines the client IP, honouring the configured `real_ip` header when trusted proxies
-/// are enabled; falls back to the socket peer address.
+/// are enabled and the request came from a configured proxy; falls back to the socket peer
+/// address.
 ///
 /// # Errors
 ///
@@ -355,11 +356,15 @@ pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<Api
     if !data.trusted_proxies {
         return Ok(origin_ip);
     }
+    let explicit_proxies = !data.trusted_proxy_addrs.is_empty();
+    if explicit_proxies && !data.trusted_proxy_addrs.contains(&origin_ip) {
+        return Ok(origin_ip);
+    }
     request.headers()
         .get(&data.real_ip)
         .and_then(|header| header.to_str().ok())
         .and_then(|ip_str| {
-            validate_remote_ip(ip_str, data.trusted_proxies).ok()?;
+            validate_remote_ip(ip_str, explicit_proxies).ok()?;
             IpAddr::from_str(ip_str).ok()
         })
         .map_or(Ok(origin_ip), Ok)

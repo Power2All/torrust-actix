@@ -237,7 +237,7 @@ impl DatabaseConnectorMySQL {
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
-        torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
+        torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
     ) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
         let mut handled = 0u64;
@@ -246,7 +246,7 @@ impl DatabaseConnectorMySQL {
         let is_binary = structure.bin_type_infohash;
         let chunk_size = db_config.chunk_size;
         let mut in_chunk = 0u64;
-        for (info_hash, (counts, updates_action)) in &torrents {
+        for (info_hash, (counts, updates_action)) in torrents {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -929,7 +929,7 @@ impl DatabaseBackend for DatabaseConnectorMySQL {
     async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
-        torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
+        torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
     ) -> Result<(), Error> {
         DatabaseConnectorMySQL::save_torrents(self, tracker, torrents).await
     }

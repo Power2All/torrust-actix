@@ -40,15 +40,14 @@ pub fn validate_api_key_strength(api_key: &str) -> bool {
 }
 
 /// Compares two strings in constant time to prevent timing attacks on token checks.
+///
+/// A length mismatch is folded into the result rather than short-circuiting, so an early return
+/// cannot reveal the expected length.
 pub fn constant_time_eq(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let a_bytes = a.as_bytes();
-    let b_bytes = b.as_bytes();
-    let mut result = 0u8;
-    for (x, y) in a_bytes.iter().zip(b_bytes.iter()) {
-        result |= x ^ y;
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let mut result = u8::from(a.len() != b.len());
+    for i in 0..a.len().max(b.len()) {
+        result |= a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0);
     }
     result == 0
 }
@@ -82,13 +81,6 @@ pub fn validate_peer_message(message: &str) -> Result<(), CustomError> {
             "Peer message exceeds maximum size of {MAX_PEER_MESSAGE_SIZE} bytes"
         )));
     }
-    let suspicious_patterns = ["<script", "javascript:", "data:", "vbscript:"];
-    let message_lower = message.to_lowercase();
-    for pattern in suspicious_patterns {
-        if message_lower.contains(pattern) {
-            return Err(CustomError::new("Suspicious content detected in peer message"));
-        }
-    }
     Ok(())
 }
 
@@ -98,13 +90,9 @@ pub fn validate_peer_message(message: &str) -> Result<(), CustomError> {
 ///
 /// Returns a [`CustomError`] when the format is invalid.
 pub fn validate_info_hash_hex(info_hash: &str) -> Result<(), CustomError> {
-    if info_hash.len() == 40 && info_hash.chars().all(|c| c.is_ascii_hexdigit()) {
+    if info_hash.len() == MAX_INFO_HASH_HEX_LENGTH && info_hash.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Ok(());
     }
-    if info_hash.len() >= 15 && info_hash.len() <= 60 {
-        return Ok(());
-    }
-
     Err(CustomError::new("info_hash has invalid format"))
 }
 
@@ -114,10 +102,7 @@ pub fn validate_info_hash_hex(info_hash: &str) -> Result<(), CustomError> {
 ///
 /// Returns a [`CustomError`] when the format is invalid.
 pub fn validate_peer_id_hex(peer_id: &str) -> Result<(), CustomError> {
-    if peer_id.len() == 40 && peer_id.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Ok(());
-    }
-    if peer_id.len() >= 15 && peer_id.len() <= 60 {
+    if peer_id.len() == MAX_PEER_ID_HEX_LENGTH && peer_id.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Ok(());
     }
     Err(CustomError::new("peer_id has invalid format"))
@@ -138,6 +123,9 @@ pub fn validate_query_string_length(query: &str) -> Result<(), CustomError> {
 }
 
 /// Validates a client-supplied IP string (from a proxy header) before parsing it.
+///
+/// With `trusted_proxies_enabled = false`, loopback/private/unspecified values are rejected so
+/// an untrusted sender cannot claim an internal address.
 ///
 /// # Errors
 ///

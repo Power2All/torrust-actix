@@ -115,8 +115,11 @@ impl TorrentSharding {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
         if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
             let now = std::time::Instant::now();
-            let cutoff = now.checked_sub(peer_timeout).unwrap();
-            let rtc_cutoff = now.checked_sub(rtc_peer_timeout).unwrap();
+            // `Instant`'s origin is boot time on Linux, so this underflows while uptime is below
+            // the timeout. Nothing can be expired yet then; unwrapping here would abort.
+            let (Some(cutoff), Some(rtc_cutoff)) = (now.checked_sub(peer_timeout), now.checked_sub(rtc_peer_timeout)) else {
+                return;
+            };
             let mut expired_full: Vec<InfoHash> = Vec::new();
             #[allow(clippy::type_complexity)]
             let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>)> = Vec::new();

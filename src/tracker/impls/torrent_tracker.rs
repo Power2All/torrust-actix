@@ -56,7 +56,7 @@ impl TorrentTracker {
             cache,
             certificate_store: Arc::new(CertificateStore::new()),
             torrents_sharding: Arc::new(Default::default()),
-            torrents_updates: Arc::new(RwLock::new(HashMap::new())),
+            torrents_updates: Arc::new(Default::default()),
             torrents_whitelist: Arc::new(RwLock::new(HashSet::new())),
             torrents_whitelist_updates: Arc::new(RwLock::new(HashMap::new())),
             torrents_blacklist: Arc::new(RwLock::new(HashSet::new())),

@@ -3,6 +3,7 @@ use serde::{
     Deserialize,
     Serialize
 };
+use std::net::IpAddr;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UdpTrackersConfig {
@@ -17,6 +18,13 @@ pub struct UdpTrackersConfig {
     pub use_payload_ip: bool,
     #[serde(default)]
     pub simple_proxy_protocol: bool,
+    /// Source addresses allowed to prepend a Simple Proxy Protocol header. An empty list trusts
+    /// the header from any sender, letting anyone choose the client address the tracker records.
+    #[serde(default)]
+    pub proxy_addresses: Vec<String>,
+    /// Parsed form of [`Self::proxy_addresses`], filled in once at startup.
+    #[serde(skip)]
+    pub proxy_addrs: Vec<IpAddr>,
     #[serde(default)]
     pub receive_method: UdpReceiveMethod,
 }

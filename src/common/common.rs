@@ -4,7 +4,10 @@ use crate::common::structs::custom_error::CustomError;
 use crate::common::types::QueryValues;
 use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 use crate::config::structs::configuration::Configuration;
-use crate::security::security::MAX_PERCENT_DECODED_SIZE;
+use crate::security::security::{
+    validate_query_string_length,
+    MAX_PERCENT_DECODED_SIZE
+};
 use fern::colors::{
     Color,
     ColoredLevelConfig
@@ -27,11 +30,13 @@ use tokio_shutdown::Shutdown;
 ///
 /// # Errors
 ///
-/// Returns a [`CustomError`] when a decoded value exceeds `MAX_PERCENT_DECODED_SIZE`.
+/// Returns a [`CustomError`] when the query string exceeds `MAX_QUERY_STRING_LENGTH` or a
+/// decoded value exceeds `MAX_PERCENT_DECODED_SIZE`.
 #[inline]
 pub fn parse_query(query: Option<&str>) -> Result<HashMap<String, QueryValues>, CustomError> {
     let mut queries: HashMap<String, QueryValues> = HashMap::with_capacity(12);
     if let Some(result) = query {
+        validate_query_string_length(result)?;
         for query_item in result.split('&') {
             if query_item.is_empty() {
                 continue;
@@ -129,12 +134,17 @@ pub(crate) fn bin2hex(data: &[u8; 20], f: &mut Formatter) -> fmt::Result {
     write!(f, "{}", std::str::from_utf8(&chars).unwrap())
 }
 
-pub struct Hex20(pub [u8; 40]);
+/// A 20-byte hash rendered as 40 lowercase hex characters in a stack buffer.
+///
+/// The field is private: [`bin20_to_hex`] must remain the only constructor for
+/// [`Hex20::as_str`] to stay sound.
+pub struct Hex20([u8; 40]);
 
 impl Hex20 {
     /// Returns the hex string as `&str` (always 40 valid ASCII characters).
     #[inline]
     pub fn as_str(&self) -> &str {
+        // SAFETY: `bin20_to_hex` is the only constructor and writes only ASCII hex digits.
         unsafe { std::str::from_utf8_unchecked(&self.0) }
     }
 }

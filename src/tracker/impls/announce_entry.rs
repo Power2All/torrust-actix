@@ -12,17 +12,17 @@ use std::time::Instant;
 impl AnnounceEntry {
     /// Builds an announce snapshot from a live [`TorrentEntry`].
     ///
-    /// Classic peer maps are capped at `SNAPSHOT_PEER_CAP` entries (enough to build a 72-peer
-    /// response); `counts` carries the exact full-swarm totals captured under the same lock.
-    /// RTC maps are copied in full, as RTC responses iterate all of them.
+    /// Every peer map, RTC included, is capped at `SNAPSHOT_PEER_CAP` entries (enough to build
+    /// a 72-peer response) so the per-announce cost does not grow with swarm size. `counts`
+    /// carries the exact full-swarm totals, captured under the same lock.
     pub fn from_entry(entry: &TorrentEntry) -> Self {
         AnnounceEntry {
             seeds: bounded_clone(&entry.seeds),
             seeds_ipv6: bounded_clone(&entry.seeds_ipv6),
             peers: bounded_clone(&entry.peers),
             peers_ipv6: bounded_clone(&entry.peers_ipv6),
-            rtc_seeds: entry.rtc_seeds.clone(),
-            rtc_peers: entry.rtc_peers.clone(),
+            rtc_seeds: bounded_clone(&entry.rtc_seeds),
+            rtc_peers: bounded_clone(&entry.rtc_peers),
             completed: entry.completed,
             updated: entry.updated,
             counts: TorrentCounts::from_entry(entry),
@@ -46,6 +46,8 @@ impl Default for AnnounceEntry {
                 seeds_ipv6: 0,
                 peers_ipv4: 0,
                 peers_ipv6: 0,
+                rtc_seeds: 0,
+                rtc_peers: 0,
                 completed: 0,
             },
         }

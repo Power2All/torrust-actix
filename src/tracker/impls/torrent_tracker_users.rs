@@ -142,11 +142,17 @@ impl TorrentTracker {
 
     /// Resolves a user announce key to its [`UserId`] via the O(1) key index.
     ///
-    /// Returns `None` when no user owns the given key.
+    /// Returns `None` when no user owns the given key, or when the owning user is not active.
+    /// The `active` flag is the tracker's only way to turn a user off, so a deactivated user
+    /// must stop resolving here rather than merely being reported as inactive by the API.
     pub fn check_user_key(&self, key: UserId) -> Option<UserId>
     {
-        let lock = self.users_key_index.read_recursive();
-        lock.get(&key).copied()
+        let user_id = {
+            let lock = self.users_key_index.read_recursive();
+            lock.get(&key).copied()?
+        };
+        let users = self.users.read_recursive();
+        users.get(&user_id).filter(|user| user.active != 0).map(|_| user_id)
     }
 
     /// Mutates a user entry in place under a single write lock, avoiding the

@@ -35,6 +35,10 @@ mod security_tests {
     #[test]
     fn test_constant_time_eq_different_length() {
         assert!(!constant_time_eq("test", "test_key"));
+        assert!(!constant_time_eq("test_key", "test"));
+        assert!(!constant_time_eq("", "test"));
+        assert!(!constant_time_eq("test", ""));
+        assert!(constant_time_eq("", ""));
     }
 
     #[test]
@@ -65,19 +69,32 @@ mod security_tests {
     #[test]
     fn test_validate_peer_message_content() {
         assert!(validate_peer_message("normal message").is_ok());
-        assert!(validate_peer_message("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\n").is_ok());
-    }
-
-    #[test]
-    fn test_validate_peer_message_suspicious() {
-        assert!(validate_peer_message("<script>alert('xss')</script>").is_err());
-        assert!(validate_peer_message("javascript:alert(1)").is_err());
+        // An SDP body is opaque to the tracker: only its size is bounded.
+        assert!(validate_peer_message("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\na=candidate:1 1 UDP 1 10.0.0.1 9 typ host\r\n").is_ok());
     }
 
     #[test]
     fn test_validate_info_hash() {
         assert!(validate_info_hash_hex("3b245504cf5f11bb3ee84da598e4e5b78e5c2dde").is_ok());
+        assert!(validate_info_hash_hex("3B245504CF5F11BB3EE84DA598E4E5B78E5C2DDE").is_ok());
         assert!(validate_info_hash_hex("invalid!hash").is_err());
+        // Only exactly 40 hex characters may pass.
+        assert!(validate_info_hash_hex("3b245504cf5f11bb3ee84da598e4e5b78e5c2dd").is_err());
+        assert!(validate_info_hash_hex("3b245504cf5f11bb3ee84da598e4e5b78e5c2ddez").is_err());
+        assert!(validate_info_hash_hex("not hex but twenty five ch").is_err());
+    }
+
+    #[test]
+    fn test_validate_peer_id_hex() {
+        assert!(validate_peer_id_hex("2d7142343235302d6b6568786f6272736e397a").is_err());
+        assert!(validate_peer_id_hex("2d7142343235302d6b6568786f6272736e397a30").is_ok());
+        assert!(validate_peer_id_hex("this is not hex at all but is long enough").is_err());
+    }
+
+    #[test]
+    fn test_validate_query_string_length() {
+        assert!(validate_query_string_length(&"a".repeat(MAX_QUERY_STRING_LENGTH)).is_ok());
+        assert!(validate_query_string_length(&"a".repeat(MAX_QUERY_STRING_LENGTH + 1)).is_err());
     }
 
     #[test]

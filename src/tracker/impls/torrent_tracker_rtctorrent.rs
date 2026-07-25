@@ -72,7 +72,12 @@ impl TorrentTracker {
     ///
     /// The answer is compressed in memory and delivered on the seeder's next announce poll.
     /// Returns `false` when the seeder is not present or has no RTC state.
+    ///
+    /// The queue is filled by *other* peers naming this one as the target and survives the
+    /// target's re-announces, so it is capped at `max_rtc_pending_answers`, dropping the oldest
+    /// entry to make room.
     pub fn store_rtc_answer(&self, info_hash: InfoHash, seeder_peer_id: PeerId, answerer_peer_id: PeerId, sdp_answer: &str) -> bool {
+        let max_pending = self.config.tracker_config.max_rtc_pending_answers as usize;
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
         if let Some(torrent_entry) = lock.get_mut(&info_hash) {
@@ -80,6 +85,13 @@ impl TorrentTracker {
                 .or_else(|| torrent_entry.rtc_peers.get_mut(&seeder_peer_id));
             if let Some(seeder) = peer
                 && let Some(ref mut rtc) = seeder.rtc_data {
+                if let Some(slot) = rtc.pending_answers.iter_mut().find(|(id, _)| *id == answerer_peer_id) {
+                    slot.1 = CompressedBytes::compress(sdp_answer);
+                    return true;
+                }
+                while rtc.pending_answers.len() >= max_pending {
+                    rtc.pending_answers.remove(0);
+                }
                 rtc.pending_answers.push((answerer_peer_id, CompressedBytes::compress(sdp_answer)));
                 return true;
             }

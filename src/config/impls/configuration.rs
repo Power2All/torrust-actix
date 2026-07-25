@@ -48,6 +48,8 @@ impl Configuration {
                 peers_timeout: 2700,
                 peers_cleanup_interval: 900,
                 peers_cleanup_threads: 256,
+                max_peers_per_torrent: 10_000,
+                max_rtc_pending_answers: 32,
                 total_downloads: 0,
                 swagger: false,
                 prometheus_id: String::from("torrust_actix"),
@@ -144,6 +146,8 @@ impl Configuration {
                     bind_address: String::from("0.0.0.0:6969"),
                     real_ip: String::from("X-Real-IP"),
                     trusted_proxies: false,
+                    trusted_proxy_ips: Vec::new(),
+                    trusted_proxy_addrs: Vec::new(),
                     keep_alive: 60,
                     request_timeout: 15,
                     disconnect_timeout: 15,
@@ -167,6 +171,8 @@ impl Configuration {
                     reuse_address: true,
                     use_payload_ip: false,
                     simple_proxy_protocol: false,
+                    proxy_addresses: Vec::new(),
+                    proxy_addrs: Vec::new(),
                     receive_method: UdpReceiveMethod::recvmmsg,
                 }
             ),
@@ -176,6 +182,8 @@ impl Configuration {
                     bind_address: String::from("0.0.0.0:8080"),
                     real_ip: String::from("X-Real-IP"),
                     trusted_proxies: false,
+                    trusted_proxy_ips: Vec::new(),
+                    trusted_proxy_addrs: Vec::new(),
                     keep_alive: 60,
                     request_timeout: 30,
                     disconnect_timeout: 30,
@@ -229,6 +237,12 @@ impl Configuration {
         }
         if let Ok(value) = env::var("TRACKER__PEERS_CLEANUP_THREADS") {
             config.tracker_config.peers_cleanup_threads = parse_env_num::<u64>("TRACKER__PEERS_CLEANUP_THREADS", &value, 256);
+        }
+        if let Ok(value) = env::var("TRACKER__MAX_PEERS_PER_TORRENT") {
+            config.tracker_config.max_peers_per_torrent = parse_env_num::<u64>("TRACKER__MAX_PEERS_PER_TORRENT", &value, 10_000);
+        }
+        if let Ok(value) = env::var("TRACKER__MAX_RTC_PENDING_ANSWERS") {
+            config.tracker_config.max_rtc_pending_answers = parse_env_num::<u64>("TRACKER__MAX_RTC_PENDING_ANSWERS", &value, 32);
         }
         if let Ok(value) = env::var("TRACKER__PROMETHEUS_ID") {
             config.tracker_config.prometheus_id = value;
@@ -766,9 +780,37 @@ impl Configuration {
             }
         }
         Self::env_overrides(&mut config);
+        Self::resolve_proxy_lists(&mut config);
         println!("[VALIDATE] Validating configuration...");
         Self::validate(config.clone());
         Ok(config)
+    }
+
+    /// Parses the configured proxy address lists into [`IpAddr`]s once, so the request path
+    /// only has to compare already-parsed addresses.
+    ///
+    /// # Panics
+    ///
+    /// Panics when an entry is not a valid IP address.
+    pub fn resolve_proxy_lists(config: &mut Configuration) {
+        fn parse_list(label: &str, raw: &[String]) -> Vec<std::net::IpAddr> {
+            raw.iter()
+                .map(|entry| {
+                    entry.trim().parse::<std::net::IpAddr>().unwrap_or_else(|_| {
+                        panic!("[VALIDATE CONFIG] {label} contains an invalid IP address: \"{entry}\"")
+                    })
+                })
+                .collect()
+        }
+        for (index, server) in config.http_server.iter_mut().enumerate() {
+            server.trusted_proxy_addrs = parse_list(&format!("http_server[{index}].trusted_proxy_ips"), &server.trusted_proxy_ips);
+        }
+        for (index, server) in config.api_server.iter_mut().enumerate() {
+            server.trusted_proxy_addrs = parse_list(&format!("api_server[{index}].trusted_proxy_ips"), &server.trusted_proxy_ips);
+        }
+        for (index, server) in config.udp_server.iter_mut().enumerate() {
+            server.proxy_addrs = parse_list(&format!("udp_server[{index}].proxy_addresses"), &server.proxy_addresses);
+        }
     }
 
     /// Validates the complete configuration (API key strength, identifier patterns, tracker,
@@ -826,6 +868,9 @@ impl Configuration {
                     assert!(!api_server.ssl_key.is_empty(), "[VALIDATE CONFIG] api_server[{index}] ssl=true but ssl_key is not set");
                     assert!(!api_server.ssl_cert.is_empty(), "[VALIDATE CONFIG] api_server[{index}] ssl=true but ssl_cert is not set");
                 }
+                if api_server.trusted_proxies && api_server.trusted_proxy_addrs.is_empty() {
+                    eprintln!("[SECURITY WARNING] api_server[{index}] trusted_proxies=true with an empty trusted_proxy_ips list: the '{}' header is honoured from any source, so a client reaching this listener directly can spoof its IP. Set trusted_proxy_ips to your proxy addresses.", api_server.real_ip);
+                }
             }
         }
         for (index, http_server) in config.http_server.iter().enumerate() {
@@ -843,6 +888,9 @@ impl Configuration {
                     assert!(!http_server.ssl_key.is_empty(), "[VALIDATE CONFIG] http_server[{index}] ssl=true but ssl_key is not set");
                     assert!(!http_server.ssl_cert.is_empty(), "[VALIDATE CONFIG] http_server[{index}] ssl=true but ssl_cert is not set");
                 }
+                if http_server.trusted_proxies && http_server.trusted_proxy_addrs.is_empty() {
+                    eprintln!("[SECURITY WARNING] http_server[{index}] trusted_proxies=true with an empty trusted_proxy_ips list: the '{}' header is honoured from any source, so a client reaching this listener directly can spoof its IP. Set trusted_proxy_ips to your proxy addresses.", http_server.real_ip);
+                }
             }
         }
         for (index, udp_server) in config.udp_server.iter().enumerate() {
@@ -853,6 +901,12 @@ impl Configuration {
                 );
                 assert!(udp_server.udp_threads > 0, "[VALIDATE CONFIG] udp_server[{index}] udp_threads must be > 0");
                 assert!(udp_server.worker_threads > 0, "[VALIDATE CONFIG] udp_server[{index}] worker_threads must be > 0");
+                if udp_server.simple_proxy_protocol && udp_server.proxy_addrs.is_empty() {
+                    eprintln!("[SECURITY WARNING] udp_server[{index}] simple_proxy_protocol=true with an empty proxy_addresses list: the SPP header is trusted from any sender, so anyone can choose the client address the tracker records. Set proxy_addresses to your load balancer addresses.");
+                }
+                if udp_server.use_payload_ip {
+                    eprintln!("[SECURITY WARNING] udp_server[{index}] use_payload_ip=true lets a UDP client choose the IP address recorded for it, which can be used to point swarms at a third party. Only enable this behind a trusted proxy.");
+                }
             }
         }
         Self::validate_tracker(&config);
@@ -881,6 +935,12 @@ impl Configuration {
         assert!(tc.rtc_peers_timeout > 0, "[VALIDATE CONFIG] rtc_peers_timeout must be > 0");
         println!("[VALIDATE] request_interval: {}s (min: {}s)", tc.request_interval, tc.request_interval_minimum);
         println!("[VALIDATE] peers_timeout: {}s, cleanup_interval: {}s, cleanup_threads: {}", tc.peers_timeout, tc.peers_cleanup_interval, tc.peers_cleanup_threads);
+        if tc.max_peers_per_torrent == 0 {
+            eprintln!("[SECURITY WARNING] max_peers_per_torrent=0 disables the per-torrent peer limit: a client announcing with made-up peer ids can grow memory until peers_timeout expires them.");
+        } else {
+            println!("[VALIDATE] max_peers_per_torrent: {} per peer map", tc.max_peers_per_torrent);
+        }
+        assert!(tc.max_rtc_pending_answers > 0, "[VALIDATE CONFIG] max_rtc_pending_answers must be > 0");
         println!("[VALIDATE] rtc_interval: {}s, rtc_peers_timeout: {}s", tc.rtc_interval, tc.rtc_peers_timeout);
     }
 
@@ -1026,6 +1086,8 @@ impl Configuration {
         remarks.insert(("tracker_config", "keys_enabled"), "# Optional: defaults to false -- require announce keys");
         remarks.insert(("tracker_config", "keys_cleanup_interval"), "# Optional: defaults to 60 -- expired-key cleanup interval (seconds)");
         remarks.insert(("tracker_config", "users_enabled"), "# Optional: defaults to false -- enable per-user statistics");
+        remarks.insert(("tracker_config", "max_peers_per_torrent"), "# Optional: defaults to 10000 -- max peers kept per torrent per peer map (0 = unlimited, not recommended)");
+        remarks.insert(("tracker_config", "max_rtc_pending_answers"), "# Optional: defaults to 32 -- max SDP answers queued for one RtcTorrent peer");
         remarks.insert(("tracker_config", "swagger"), "# Optional: defaults to false -- expose Swagger UI at <api>/swagger-ui/");
         remarks.insert(("tracker_config", "prometheus_id"), "# Optional: defaults to \"torrust_actix\" -- Prometheus metric label");
         remarks.insert(("tracker_config", "cluster"), "# Optional: defaults to \"standalone\" -- cluster mode: standalone | master | slave");
@@ -1083,6 +1145,9 @@ impl Configuration {
         remarks.insert(("database_structure.users", "column_completed"), "# Optional: defaults to \"completed\"");
         remarks.insert(("database_structure.users", "column_updated"), "# Optional: defaults to \"updated\"");
         remarks.insert(("database_structure.users", "column_active"), "# Optional: defaults to \"active\"");
+        remarks.insert(("http_server", "trusted_proxy_ips"), "# Optional: defaults to [] -- source IPs allowed to set real_ip; empty trusts any sender, which allows IP spoofing");
+        remarks.insert(("api_server", "trusted_proxy_ips"), "# Optional: defaults to [] -- source IPs allowed to set real_ip; empty trusts any sender, which allows IP spoofing");
+        remarks.insert(("udp_server", "proxy_addresses"), "# Optional: defaults to [] -- source IPs allowed to send a Simple Proxy Protocol header; empty trusts any sender");
         let mut section_remarks: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
         section_remarks.insert("sentry_config", "# Optional section: the entire [sentry_config] block can be omitted (defaults to disabled)");
         section_remarks.insert("database_structure.torrents", "# Optional section: omit to use default table/column names for torrents");
@@ -1094,7 +1159,7 @@ impl Configuration {
         let mut current_section = String::new();
         for line in toml.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with('[') && !trimmed.starts_with("[[") {
+            if trimmed.starts_with('[') {
                 let inner = trimmed.trim_start_matches('[').trim_end_matches(']');
                 current_section = inner.to_string();
                 if let Some(remark) = section_remarks.get(inner) {
