@@ -325,7 +325,7 @@ impl UdpServer {
 
     /// Encodes a tracker [`Response`] and sends it to the client, logging failures.
     pub async fn send_response(tracker: Arc<TorrentTracker>, reply: UdpReply, remote_addr: SocketAddr, response: Response) {
-        debug!("sending response to: {:?}", &remote_addr);
+        debug!("sending response to: {remote_addr:?}");
         let estimated_size = response.estimated_size();
         let mut buffer = Vec::with_capacity(estimated_size);
         match response.write(&mut buffer) {
