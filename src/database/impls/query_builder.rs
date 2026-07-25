@@ -22,17 +22,23 @@ impl QueryBuilder {
         }
     }
 
-    /// Formats a value as a single-quoted SQL string literal, escaping embedded quotes (and
-    /// backslashes on MySQL, which treats them as escapes by default).
+    /// Formats a value as an SQL string literal for the bound engine.
     ///
     /// Statements here are assembled with `format!` and passed to sqlx via `AssertSqlSafe`, so
     /// nothing downstream escapes anything: literals must be self-contained.
+    ///
+    /// PostgreSQL gets an `E''` literal, where backslashes are always escapes, so doubling both
+    /// backslash and quote is correct whichever way the server has `standard_conforming_strings`
+    /// set. An ordinary `''` literal would be safe only under the modern default of `on`, and
+    /// doubling backslashes inside one would corrupt the value.
     pub fn text_literal(&self, value: &str) -> String {
-        let escaped = match self.engine {
-            DatabaseDrivers::mysql => value.replace('\\', "\\\\").replace('\'', "''"),
-            DatabaseDrivers::sqlite3 | DatabaseDrivers::pgsql => value.replace('\'', "''"),
-        };
-        format!("'{escaped}'")
+        match self.engine {
+            // MySQL treats backslash as an escape in ordinary literals unless NO_BACKSLASH_ESCAPES.
+            DatabaseDrivers::mysql => format!("'{}'", value.replace('\\', "\\\\").replace('\'', "''")),
+            // SQLite has no backslash escapes at all; doubling the quote is the whole contract.
+            DatabaseDrivers::sqlite3 => format!("'{}'", value.replace('\'', "''")),
+            DatabaseDrivers::pgsql => format!("E'{}'", value.replace('\\', "\\\\").replace('\'', "''")),
+        }
     }
 
     /// Builds the engine-specific upsert conflict clause updating the given columns.
