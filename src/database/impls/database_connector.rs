@@ -325,27 +325,27 @@ impl DatabaseConnector {
     ///
     /// Returns the underlying `sqlx` error when the database operation fails, or
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), Error>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), Error>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("db_save_torrents", "database");
         let result: Result<(), Error> = match self.engine.as_ref() {
             Some(DatabaseDrivers::sqlite3) => {
                 if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_torrents(tracker, torrents.clone()).await
+                    sqlite.save_torrents(tracker, torrents).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::mysql) => {
                 if let Some(ref mysql) = self.mysql {
-                    mysql.save_torrents(tracker, torrents.clone()).await
+                    mysql.save_torrents(tracker, torrents).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_torrents(tracker, torrents.clone()).await
+                    pgsql.save_torrents(tracker, torrents).await
                 } else {
                     Err(Error::RowNotFound)
                 }

@@ -115,15 +115,24 @@ impl TorrentSharding {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
         if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
             let now = std::time::Instant::now();
-            let cutoff = now.checked_sub(peer_timeout).unwrap();
-            let rtc_cutoff = now.checked_sub(rtc_peer_timeout).unwrap();
+            // `Instant`'s origin is boot time on Linux, so a cutoff underflows while uptime is
+            // below its timeout. The two are independent: `rtc_peer_timeout` is typically much
+            // shorter, so RTC peers must still expire while the longer BT cutoff is unavailable.
+            let cutoff = now.checked_sub(peer_timeout);
+            let rtc_cutoff = now.checked_sub(rtc_peer_timeout);
+            if cutoff.is_none() && rtc_cutoff.is_none() {
+                return;
+            }
+            // An unavailable cutoff means nothing of that kind can have expired yet.
+            let bt_expired = |updated: std::time::Instant| cutoff.is_some_and(|c| updated < c);
+            let rtc_expired = |updated: std::time::Instant| rtc_cutoff.is_some_and(|c| updated < c);
             let mut expired_full: Vec<InfoHash> = Vec::new();
             #[allow(clippy::type_complexity)]
             let mut expired_partial: Vec<(InfoHash, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>, Vec<PeerId>)> = Vec::new();
             {
                 let shard_read = shard_arc.read();
                 for (info_hash, torrent_entry) in shard_read.iter() {
-                    if torrent_entry.updated < cutoff {
+                    if bt_expired(torrent_entry.updated) {
                         expired_full.push(*info_hash);
                         continue;
                     }
@@ -135,37 +144,37 @@ impl TorrentSharding {
                     let mut expired_rtc_seeds = Vec::new();
                     let mut expired_rtc_peers = Vec::new();
                     for (peer_id, torrent_peer) in &torrent_entry.seeds {
-                        if torrent_peer.updated < cutoff {
+                        if bt_expired(torrent_peer.updated) {
                             expired_seeds.push(*peer_id);
                             has_expired = true;
                         }
                     }
                     for (peer_id, torrent_peer) in &torrent_entry.seeds_ipv6 {
-                        if torrent_peer.updated < cutoff {
+                        if bt_expired(torrent_peer.updated) {
                             expired_seeds_ipv6.push(*peer_id);
                             has_expired = true;
                         }
                     }
                     for (peer_id, torrent_peer) in &torrent_entry.peers {
-                        if torrent_peer.updated < cutoff {
+                        if bt_expired(torrent_peer.updated) {
                             expired_peers.push(*peer_id);
                             has_expired = true;
                         }
                     }
                     for (peer_id, torrent_peer) in &torrent_entry.peers_ipv6 {
-                        if torrent_peer.updated < cutoff {
+                        if bt_expired(torrent_peer.updated) {
                             expired_peers_ipv6.push(*peer_id);
                             has_expired = true;
                         }
                     }
                     for (peer_id, torrent_peer) in &torrent_entry.rtc_seeds {
-                        if torrent_peer.updated < rtc_cutoff {
+                        if rtc_expired(torrent_peer.updated) {
                             expired_rtc_seeds.push(*peer_id);
                             has_expired = true;
                         }
                     }
                     for (peer_id, torrent_peer) in &torrent_entry.rtc_peers {
-                        if torrent_peer.updated < rtc_cutoff {
+                        if rtc_expired(torrent_peer.updated) {
                             expired_rtc_peers.push(*peer_id);
                             has_expired = true;
                         }
@@ -226,7 +235,7 @@ impl TorrentSharding {
                 for info_hash in &expired_full {
                     if let Entry::Occupied(entry) = shard_write.entry(*info_hash) {
                         let mut entry = entry;
-                        if entry.get().updated >= cutoff { continue; }
+                        if !bt_expired(entry.get().updated) { continue; }
                         let torrent_entry = entry.get_mut();
                         let seeds_len = torrent_entry.seeds.len() as u64;
                         let seeds_ipv6_len = torrent_entry.seeds_ipv6.len() as u64;

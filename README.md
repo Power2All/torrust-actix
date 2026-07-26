@@ -65,7 +65,7 @@ It is a workspace member but is **not compiled by default** (`default-members` e
 
 ```bash
 # Debian / Ubuntu
-sudo apt-get install libfontconfig1-dev
+sudo apt-get install libfontconfig-dev
 
 # Fedora / RHEL
 sudo dnf install fontconfig-devel
@@ -609,6 +609,18 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 ---
 
 ### ChangeLog
+
+#### v4.2.17
+* Full code auditing, and found some possible security issues in the future.
+* Applied a README fix about library installation on Linux (Thanks https://github.com/diederikdehaas).
+* Some small version bumps, nothing special.
+
+#### v4.2.16
+* Added clearer error reporting for invalid hex-based identifiers.
+* Tightened UUID and database identifier validation rules.
+* Improved BEP 15 UDP request/response encoding and decoding for consistent big-endian behavior.
+* Updated application/desktop/container version to 4.2.16 (including Docker image tags) and refreshed bundled dependency versions.
+* Updated UDP parsing tests to match the revised packet encoding.
 
 #### v4.2.15
 * Did some further performance tweaking

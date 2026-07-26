@@ -11,10 +11,16 @@ pub type TestTracker = Arc<TorrentTracker>;
 pub type TestConfig = Arc<Configuration>;
 
 pub async fn create_test_config() -> TestConfig {
+    Arc::new(build_test_config(|_| {}))
+}
+
+/// Builds a test configuration, letting the caller flip the settings a test needs.
+pub fn build_test_config(customise: impl FnOnce(&mut Configuration)) -> Configuration {
     let mut config: Configuration = Configuration::init();
     config.database.path = ":memory:".to_string();
     config.database.persistent = false;
-    Arc::new(config)
+    customise(&mut config);
+    config
 }
 
 pub fn create_test_http_config() -> Arc<HttpTrackersConfig> {
@@ -27,6 +33,8 @@ pub fn create_test_http_config_with_rtctorrent(rtctorrent: bool) -> Arc<HttpTrac
         bind_address: "127.0.0.1:8080".to_string(),
         real_ip: String::new(),
         trusted_proxies: false,
+        trusted_proxy_ips: Vec::new(),
+        trusted_proxy_addrs: Vec::new(),
         keep_alive: 5,
         request_timeout: 10,
         disconnect_timeout: 5,
@@ -46,6 +54,8 @@ pub fn create_test_api_config() -> Arc<ApiTrackersConfig> {
         bind_address: "127.0.0.1:8081".to_string(),
         real_ip: String::new(),
         trusted_proxies: false,
+        trusted_proxy_ips: Vec::new(),
+        trusted_proxy_addrs: Vec::new(),
         keep_alive: 5,
         request_timeout: 10,
         disconnect_timeout: 5,

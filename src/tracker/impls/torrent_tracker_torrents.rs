@@ -26,7 +26,7 @@ impl TorrentTracker {
     /// # Errors
     ///
     /// Returns `Err(())` when the database write fails; the caller re-queues the batch.
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), ()>
+    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), ()>
     {
         let torrents_count = torrents.len();
         if let Ok(()) = self.sqlx.save_torrents(tracker, torrents).await {

@@ -23,8 +23,9 @@ impl From<&AnnounceEntry> for TorrentUpdateData {
             seeds_ipv6: entry.counts.seeds_ipv6 as u64,
             peers_ipv4: entry.counts.peers_ipv4 as u64,
             peers_ipv6: entry.counts.peers_ipv6 as u64,
-            rtc_seeds: entry.rtc_seeds.len() as u64,
-            rtc_peers: entry.rtc_peers.len() as u64,
+            // From `counts`, never `len()`: the snapshot's peer maps are bounded copies.
+            rtc_seeds: entry.counts.rtc_seeds as u64,
+            rtc_peers: entry.counts.rtc_peers as u64,
             completed: entry.completed,
         }
     }

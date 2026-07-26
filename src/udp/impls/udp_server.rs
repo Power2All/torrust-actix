@@ -44,10 +44,33 @@ use std::net::{
     Ipv6Addr,
     SocketAddr
 };
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    LazyLock
+};
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::runtime::Builder;
+
+/// Lifetime of a UDP connection id in seconds. BEP 15 suggests two minutes.
+const CONNECTION_ID_WINDOW_SECS: u64 = 120;
+
+/// Per-process HMAC-SHA256 key for connection ids. Regenerated on every start, so ids do not
+/// survive a restart.
+///
+/// This must be a keyed MAC, not a fast hash: `ahash` and friends are built for hash-map
+/// distribution and make no key-recovery guarantee, and recovering the key would let an
+/// attacker mint ids for addresses they do not control, restoring the reflection attack the
+/// connection id exists to prevent.
+static CONNECTION_ID_KEY: LazyLock<ring::hmac::Key> = LazyLock::new(|| {
+    ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &ring::rand::SystemRandom::new())
+        .expect("failed to generate the UDP connection-id key from the system RNG")
+});
+
+/// Byte range of the 40-character hex announce key inside `/announce/<key>/<user key>`.
+const KEY_PATH_RANGE: std::ops::Range<usize> = 10..50;
+/// Byte range of the 40-character hex user key inside `/announce/<key>/<user key>`.
+const USER_KEY_PATH_RANGE: std::ops::Range<usize> = 51..91;
 
 impl UdpServer {
     /// Binds the UDP tracker sockets for `bind_address` and prepares the configured receive
@@ -57,7 +80,7 @@ impl UdpServer {
     ///
     /// Returns the I/O error when the socket cannot be bound or configured.
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, receive_method: UdpReceiveMethod) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, proxy_addrs: Arc<Vec<std::net::IpAddr>>, receive_method: UdpReceiveMethod) -> tokio::io::Result<UdpServer>
     {
         #[cfg(windows)]
         let use_rio = receive_method == UdpReceiveMethod::rio && {
@@ -86,6 +109,7 @@ impl UdpServer {
             tracker,
             use_payload_ip,
             simple_proxy_protocol,
+            proxy_addrs,
             receive_method,
         })
     }
@@ -128,7 +152,7 @@ impl UdpServer {
     /// Runs the UDP receive/parse/respond loops until the shutdown watch channel fires.
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
         let parse_pool = Arc::new(ParsePool::new(1_000_000, self.worker_threads));
-        parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone(), self.use_payload_ip, self.simple_proxy_protocol).await;
+        parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone(), self.use_payload_ip, self.simple_proxy_protocol, self.proxy_addrs.clone()).await;
         let payload = parse_pool.payload.clone();
         let tracker_queue = self.tracker.clone();
         let mut rx_queue = rx.clone();
@@ -309,7 +333,7 @@ impl UdpServer {
 
     /// Encodes a tracker [`Response`] and sends it to the client, logging failures.
     pub async fn send_response(tracker: Arc<TorrentTracker>, reply: UdpReply, remote_addr: SocketAddr, response: Response) {
-        debug!("sending response to: {:?}", &remote_addr);
+        debug!("sending response to: {remote_addr:?}");
         let estimated_size = response.estimated_size();
         let mut buffer = Vec::with_capacity(estimated_size);
         match response.write(&mut buffer) {
@@ -339,31 +363,45 @@ impl UdpServer {
         }
     }
 
-    /// Derives the BEP 15 connection id for a client address from the current time window,
-    /// so ids expire automatically without server-side state.
-    pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
-        use std::hash::{
-            DefaultHasher,
-            Hasher
-        };
-        use std::time::{
-            SystemTime,
-            UNIX_EPOCH
-        };
-
-        let mut hasher = DefaultHasher::new();
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos() as u64;
-        hasher.write_u64(timestamp);
-        hasher.write_u16(remote_address.port());
-        if let std::net::IpAddr::V4(ipv4) = remote_address.ip() {
-            hasher.write(&ipv4.octets());
-        } else if let std::net::IpAddr::V6(ipv6) = remote_address.ip() {
-            hasher.write(&ipv6.octets());
+    /// Derives the BEP 15 connection id for a client address in a given time window.
+    ///
+    /// A keyed hash of `(window, port, ip)`, so a client cannot forge one and ids expire with
+    /// the window without the tracker keeping per-client state.
+    fn derive_connection_id(remote_address: &SocketAddr, window: u64) -> ConnectionId {
+        let mut context = ring::hmac::Context::with_key(&CONNECTION_ID_KEY);
+        context.update(&window.to_be_bytes());
+        context.update(&remote_address.port().to_be_bytes());
+        match remote_address.ip() {
+            std::net::IpAddr::V4(ipv4) => context.update(&ipv4.octets()),
+            std::net::IpAddr::V6(ipv6) => context.update(&ipv6.octets()),
         }
-        ConnectionId(hasher.finish() as i64)
+        let tag = context.sign();
+        let truncated: [u8; 8] = tag.as_ref()[..8].try_into().expect("HMAC-SHA256 tag is 32 bytes");
+        ConnectionId(i64::from_be_bytes(truncated))
+    }
+
+    /// Returns the current time window index used to derive connection ids.
+    #[inline]
+    fn connection_id_window() -> u64 {
+        crate::common::common::current_time() / CONNECTION_ID_WINDOW_SECS
+    }
+
+    /// Derives the BEP 15 connection id to hand a client in response to a connect request.
+    pub async fn get_connection_id(remote_address: &SocketAddr) -> ConnectionId {
+        Self::derive_connection_id(remote_address, Self::connection_id_window())
+    }
+
+    /// Checks a connection id supplied in an announce or scrape request against the ids this
+    /// tracker would have issued to `remote_address`.
+    ///
+    /// Required by BEP 15: without it the tracker answers announces from forged source
+    /// addresses, acting as a UDP reflector.
+    #[inline]
+    pub fn connection_id_valid(remote_address: &SocketAddr, connection_id: ConnectionId) -> bool {
+        let window = Self::connection_id_window();
+        // The previous window is accepted so an id stays usable across a window boundary.
+        connection_id == Self::derive_connection_id(remote_address, window)
+            || connection_id == Self::derive_connection_id(remote_address, window.wrapping_sub(1))
     }
 
     /// Parses one datagram and produces the tracker response, mapping malformed input and
@@ -471,6 +509,10 @@ impl UdpServer {
     ///
     /// Returns a [`ServerError`] when access rules reject the request or the swarm update fails.
     pub async fn handle_udp_announce(remote_addr: SocketAddr, request: &AnnounceRequest, tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Result<Response, ServerError> {
+        if !Self::connection_id_valid(&remote_addr, request.connection_id) {
+            debug!("[UDP ERROR] Invalid connection id from {remote_addr}");
+            return Err(ServerError::InvalidConnectionId);
+        }
         let config = &tracker.config.tracker_config;
         let effective_remote_addr = if use_payload_ip {
             if let Some(payload_ip) = request.ip_address {
@@ -489,49 +531,41 @@ impl UdpServer {
             debug!("[UDP ERROR] Torrent Blacklisted");
             return Err(ServerError::TorrentBlacklisted);
         }
+        // Slice the bytes, not the String: `path` is arbitrary client-supplied UTF-8, and a
+        // String slice at a byte offset inside a multi-byte character panics.
         if config.keys_enabled {
-            if request.path.len() < 50 {
-                debug!("[UDP ERROR] Unknown Key");
+            let Some(key_hex) = request.path.as_bytes().get(KEY_PATH_RANGE) else {
+                debug!("[UDP ERROR] Unknown Key - path too short");
                 return Err(ServerError::UnknownKey);
-            }
-            let key_path_extract = &request.path[10..50];
-            if let Ok(result) = hex::decode(key_path_extract) {
-                if result.len() >= 20 {
-                    let key = <[u8; 20]>::try_from(&result[0..20]).unwrap();
+            };
+            match hex::decode(key_hex) {
+                Ok(result) if result.len() >= 20 => {
+                    let key: [u8; 20] = result[..20].try_into().expect("length checked above");
                     if !tracker.check_key(InfoHash::from(key)) {
                         debug!("[UDP ERROR] Unknown Key");
                         return Err(ServerError::UnknownKey);
                     }
-                } else {
-                    debug!("[UDP ERROR] Unknown Key - insufficient bytes");
+                }
+                _ => {
+                    debug!("[UDP ERROR] Unknown Key - not valid hex");
                     return Err(ServerError::UnknownKey);
                 }
-            } else {
-                debug!("[UDP ERROR] Unknown Key");
-                return Err(ServerError::UnknownKey);
             }
         }
         let user_key = if config.users_enabled {
-            let user_key_path_extract = if request.path.len() >= 91 {
-                Some(&request.path[51..=91])
-            } else if !config.users_enabled && request.path.len() >= 50 {
-                Some(&request.path[10..=50])
-            } else {
-                None
+            let Some(user_key_hex) = request.path.as_bytes().get(USER_KEY_PATH_RANGE) else {
+                debug!("[UDP ERROR] Peer Key Not Valid - path too short");
+                return Err(ServerError::PeerKeyNotValid);
             };
-            if let Some(path) = user_key_path_extract {
-                match hex::decode(path) {
-                    Ok(result) if result.len() >= 20 => {
-                        let key = <[u8; 20]>::try_from(&result[0..20]).unwrap();
-                        tracker.check_user_key(UserId::from(key))
-                    }
-                    _ => {
-                        debug!("[UDP ERROR] Peer Key Not Valid");
-                        return Err(ServerError::PeerKeyNotValid);
-                    }
+            match hex::decode(user_key_hex) {
+                Ok(result) if result.len() >= 20 => {
+                    let key: [u8; 20] = result[..20].try_into().expect("length checked above");
+                    tracker.check_user_key(UserId::from(key))
                 }
-            } else {
-                None
+                _ => {
+                    debug!("[UDP ERROR] Peer Key Not Valid");
+                    return Err(ServerError::PeerKeyNotValid);
+                }
             }
         } else {
             None
@@ -640,6 +674,10 @@ impl UdpServer {
     ///
     /// Currently infallible; kept as `Result` for interface symmetry.
     pub async fn handle_udp_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: Arc<TorrentTracker>) -> Result<Response, ServerError> {
+        if !Self::connection_id_valid(&remote_addr, request.connection_id) {
+            debug!("[UDP ERROR] Invalid connection id from {remote_addr}");
+            return Err(ServerError::InvalidConnectionId);
+        }
         let mut torrent_stats = Vec::with_capacity(request.info_hashes.len());
         for info_hash in &request.info_hashes {
             let scrape_entry = match tracker.get_torrent_counts(InfoHash(info_hash.0)) {

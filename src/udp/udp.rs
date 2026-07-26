@@ -49,9 +49,9 @@ pub fn read_be<const N: usize>(r: &mut impl Read) -> Result<[u8; N], Error> {
 /// Spawns the UDP tracker service on `addr` using the selected receive backend and returns
 /// its join handle. The service runs until the shutdown watch channel fires.
 #[allow(clippy::too_many_arguments)]
-pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, receive_method: UdpReceiveMethod, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
+pub async fn udp_service(addr: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, proxy_addrs: Arc<Vec<IpAddr>>, receive_method: UdpReceiveMethod, data: Arc<TorrentTracker>, rx: tokio::sync::watch::Receiver<bool>, tokio_udp: Arc<Runtime>) -> JoinHandle<()>
 {
-    let udp_server = UdpServer::new(data, addr, udp_threads, worker_threads, recv_buffer_size, send_buffer_size, reuse_address, use_payload_ip, simple_proxy_protocol, receive_method).await.unwrap_or_else(|e| {
+    let udp_server = UdpServer::new(data, addr, udp_threads, worker_threads, recv_buffer_size, send_buffer_size, reuse_address, use_payload_ip, simple_proxy_protocol, proxy_addrs, receive_method).await.unwrap_or_else(|e| {
         error!("Could not listen to the UDP port: {e}");
         exit(1);
     });

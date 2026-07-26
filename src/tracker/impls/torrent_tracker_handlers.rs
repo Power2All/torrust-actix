@@ -382,7 +382,7 @@ impl TorrentTracker {
         let result = scrape_query.info_hash.iter()
             .map(|&info_hash| {
                 let counts = data.get_torrent_counts(info_hash).unwrap_or(crate::tracker::structs::torrent_counts::TorrentCounts {
-                    seeds_ipv4: 0, seeds_ipv6: 0, peers_ipv4: 0, peers_ipv6: 0, completed: 0,
+                    seeds_ipv4: 0, seeds_ipv6: 0, peers_ipv4: 0, peers_ipv6: 0, rtc_seeds: 0, rtc_peers: 0, completed: 0,
                 });
                 (info_hash, counts)
             })

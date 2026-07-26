@@ -9,6 +9,8 @@ impl TorrentCounts {
             seeds_ipv6: entry.seeds_ipv6.len(),
             peers_ipv4: entry.peers.len(),
             peers_ipv6: entry.peers_ipv6.len(),
+            rtc_seeds: entry.rtc_seeds.len(),
+            rtc_peers: entry.rtc_peers.len(),
             completed: entry.completed,
         }
     }

@@ -24,7 +24,7 @@ pub trait DatabaseBackend: Send + Sync {
     async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
-        torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
+        torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
     ) -> Result<(), Error>;
 
     async fn save_whitelist(

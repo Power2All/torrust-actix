@@ -177,8 +177,9 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
     };
     if announce.rtctorrent.unwrap_or(false) {
         let rtc_interval = tracker_config.rtc_interval as i64;
-        let seeds_count  = torrent_entry.rtc_seeds.len() as i64;
-        let peers_count  = torrent_entry.rtc_peers.len() as i64;
+        // Counts come from `counts`, never from the peer maps: those are bounded copies.
+        let seeds_count  = torrent_entry.counts.rtc_seeds as i64;
+        let peers_count  = torrent_entry.counts.rtc_peers as i64;
         let completed_count = torrent_entry.completed as i64;
         let mut rtc_peers_list = ben_list!();
         {
@@ -255,7 +256,6 @@ pub fn build_compact_announce_response(
     stats: &AnnounceResponseStats,
 ) -> Vec<u8> {
     let mut peers_list: Vec<u8> = Vec::with_capacity(72 * 6);
-    let port_bytes = announce.port.to_be_bytes();
     match client_ip {
         IpAddr::V4(_) => {
             if announce.left != 0 {
@@ -268,7 +268,7 @@ pub fn build_compact_announce_response(
                 for torrent_peer in seeds.values() {
                     if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                         let _ = peers_list.write(&ipv4.octets());
-                        let _ = peers_list.write(&port_bytes);
+                        let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
                     }
                 }
             }
@@ -285,7 +285,7 @@ pub fn build_compact_announce_response(
                     }
                     if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                         let _ = peers_list.write(&ipv4.octets());
-                        let _ = peers_list.write(&port_bytes);
+                        let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
                     }
                 }
             }
@@ -309,7 +309,7 @@ pub fn build_compact_announce_response(
                 for torrent_peer in seeds.values() {
                     if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                         let _ = peers_list.write(&ipv6.octets());
-                        let _ = peers_list.write(&port_bytes);
+                        let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
                     }
                 }
             }
@@ -326,7 +326,7 @@ pub fn build_compact_announce_response(
                     }
                     if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                         let _ = peers_list.write(&ipv6.octets());
-                        let _ = peers_list.write(&port_bytes);
+                        let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
                     }
                 }
             }

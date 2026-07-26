@@ -4,7 +4,10 @@ use crate::udp::enums::simple_proxy_protocol::SppParseResult;
 use crate::udp::structs::parse_pool::ParsePool;
 use crate::udp::structs::udp_packet::UdpPacket;
 use crate::udp::structs::udp_server::UdpServer;
-use crate::udp::udp::parse_spp_header;
+use crate::udp::udp::{
+    has_spp_magic,
+    parse_spp_header
+};
 use crate::websocket::enums::protocol_type::ProtocolType;
 use crate::websocket::enums::request_type::RequestType;
 use crate::websocket::websocket::forward_request;
@@ -45,13 +48,14 @@ impl ParsePool {
 
     /// Spawns `threads` async workers that drain the packet queue, run the UDP request pipeline
     /// and send replies, until the shutdown watch channel fires.
-    pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>, use_payload_ip: bool, simple_proxy_protocol: bool) {
+    pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>, use_payload_ip: bool, simple_proxy_protocol: bool, proxy_addrs: Arc<Vec<std::net::IpAddr>>) {
         let is_slave_mode = tracker.config.tracker_config.cluster == ClusterMode::slave;
         for i in 0..threads {
             let payload = self.payload.clone();
             let tracker_cloned = tracker.clone();
             let mut shutdown_handler = shutdown_handler.clone();
             let runtime = self.udp_runtime.clone();
+            let proxy_addrs = proxy_addrs.clone();
             runtime.spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
                 let mut batch: Vec<UdpPacket> = Vec::with_capacity(BATCH_SIZE);
@@ -75,10 +79,11 @@ impl ParsePool {
                                     &tracker_cloned,
                                     packet,
                                     simple_proxy_protocol,
+                                    &proxy_addrs,
                                 ).await;
                             } else {
                                 let (effective_addr, payload_slice) = if simple_proxy_protocol {
-                                    Self::extract_spp_info(&packet)
+                                    Self::extract_spp_info(&packet, &proxy_addrs)
                                 } else {
                                     (packet.remote_addr, packet.data.as_slice())
                                 };
@@ -116,8 +121,23 @@ impl ParsePool {
         }
     }
 
-    fn extract_spp_info(packet: &UdpPacket) -> (SocketAddr, &[u8]) {
+    /// Resolves the effective client address for a datagram carrying a Simple Proxy Protocol
+    /// header.
+    ///
+    /// `proxy_addrs` lists the sources permitted to speak SPP; the header is unauthenticated, so
+    /// honouring it from an arbitrary sender lets anyone choose their recorded address. An empty
+    /// list trusts any sender, which configuration validation warns about at startup.
+    fn extract_spp_info<'a>(packet: &'a UdpPacket, proxy_addrs: &[std::net::IpAddr]) -> (SocketAddr, &'a [u8]) {
         let data = packet.data.as_slice();
+        if !proxy_addrs.is_empty() && !proxy_addrs.contains(&packet.remote_addr.ip()) {
+            if has_spp_magic(data) {
+                debug!(
+                    "[UDP SPP] Ignoring proxy header from untrusted source {}",
+                    packet.remote_addr
+                );
+            }
+            return (packet.remote_addr, data);
+        }
         match parse_spp_header(data) {
             SppParseResult::Found { header, payload_offset } => {
                 debug!(
@@ -137,9 +157,9 @@ impl ParsePool {
         }
     }
 
-    async fn handle_slave_forward(tracker: &Arc<TorrentTracker>, packet: UdpPacket, simple_proxy_protocol: bool) {
+    async fn handle_slave_forward(tracker: &Arc<TorrentTracker>, packet: UdpPacket, simple_proxy_protocol: bool, proxy_addrs: &[std::net::IpAddr]) {
         let (effective_addr, payload_data) = if simple_proxy_protocol {
-            let (addr, slice) = Self::extract_spp_info(&packet);
+            let (addr, slice) = Self::extract_spp_info(&packet, proxy_addrs);
             (addr, slice.to_vec())
         } else {
             (packet.remote_addr, packet.data.to_vec())

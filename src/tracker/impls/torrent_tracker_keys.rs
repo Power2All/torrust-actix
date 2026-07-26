@@ -43,23 +43,35 @@ impl TorrentTracker {
         }
     }
 
-    /// Adds an announce key whose expiry is set to now + `timeout` seconds. A `timeout` of 0
-    /// therefore expires immediately; there is no permanent-key value.
+    /// Adds an announce key expiring `timeout` seconds from now.
+    ///
+    /// Use [`TorrentTracker::add_key_absolute`] when the expiry is already an absolute
+    /// timestamp, such as a value read back from the database.
     ///
     /// Returns `true` when the key was newly inserted, `false` when it was refreshed.
     pub fn add_key(&self, hash: InfoHash, timeout: i64) -> bool
     {
-        let mut lock = self.keys.write();
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let timeout_unix = timestamp.as_secs() as i64 + timeout;
+        self.add_key_absolute(hash, timestamp.as_secs() as i64 + timeout)
+    }
+
+    /// Adds an announce key with an absolute expiry timestamp, stored verbatim.
+    ///
+    /// An expiry of `0` means the key never expires; any other value is a Unix timestamp,
+    /// including ones already in the past.
+    ///
+    /// Returns `true` when the key was newly inserted, `false` when it was refreshed.
+    pub fn add_key_absolute(&self, hash: InfoHash, expiry: i64) -> bool
+    {
+        let mut lock = self.keys.write();
         match lock.entry(hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Key, 1);
-                v.insert(timeout_unix);
+                v.insert(expiry);
                 true
             }
             Entry::Occupied(mut o) => {
-                o.insert(timeout_unix);
+                o.insert(expiry);
                 false
             }
         }
@@ -91,11 +103,15 @@ impl TorrentTracker {
         }
     }
 
-    /// Returns `true` when the announce key exists (used on every keyed announce/scrape).
+    /// Returns `true` when the announce key exists and has not expired (used on every keyed
+    /// announce/scrape). An expiry of `0` means the key never expires.
     pub fn check_key(&self, hash: InfoHash) -> bool
     {
         let lock = self.keys.read_recursive();
         lock.get(&hash).is_some_and(|&key| {
+            if key == 0 {
+                return true;
+            }
             let key_time = Utc.timestamp_opt(key, 0)
                 .single()
                 .map_or(UNIX_EPOCH, SystemTime::from);
@@ -113,6 +129,8 @@ impl TorrentTracker {
 
     /// Removes every announce key whose expiry timestamp has passed.
     ///
+    /// Keys with an expiry of `0` are permanent and are left alone.
+    ///
     /// Runs periodically from the key-cleanup task.
     pub fn clean_keys(&self)
     {
@@ -121,6 +139,9 @@ impl TorrentTracker {
         {
             let lock = self.keys.read_recursive();
             for (&hash, &key_time) in lock.iter() {
+                if key_time == 0 {
+                    continue;
+                }
                 let time = Utc.timestamp_opt(key_time, 0)
                     .single()
                     .map_or(UNIX_EPOCH, SystemTime::from);

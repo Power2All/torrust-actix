@@ -96,6 +96,10 @@ pub fn http_service_routes(data: Arc<HttpServiceData>) -> Box<dyn Fn(&mut Servic
         cfg.service(web::resource("/{key}/announce")
             .route(web::get().to(http_service_announce_key))
         );
+        cfg.service(web::resource("/{key}/{userkey}/announce")
+            .route(web::get().to(http_service_announce_userkey))
+        );
+        // Slash-less variant kept for clients built against earlier releases.
         cfg.service(web::resource("/{key}/{userkey}announce")
             .route(web::get().to(http_service_announce_userkey))
         );
@@ -391,6 +395,13 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             }.encode());
         }
     };
+    let is_rtc_request = announce_unwrapped.rtctorrent.unwrap_or(false);
+    // Must precede `handle_announce`, which stores the client's SDP offer/answer.
+    if is_rtc_request && !rtctorrent_enabled {
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+            "failure reason" => ben_bytes!(b"rtctorrent not enabled" as &[u8])
+        }.encode());
+    }
     let tracker_config = &data.config.tracker_config;
     if tracker_config.whitelist_enabled && !data.check_whitelist(announce_unwrapped.info_hash) {
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_INFO_HASH.clone());
@@ -410,19 +421,14 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let request_interval = tracker_config.request_interval as i64;
     let request_interval_minimum = tracker_config.request_interval_minimum as i64;
     let rtc_interval = tracker_config.rtc_interval as i64;
-    let is_rtc_request = announce_unwrapped.rtctorrent.unwrap_or(false);
-    if is_rtc_request && !rtctorrent_enabled {
-        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-            "failure reason" => ben_bytes!(b"rtctorrent not enabled" as &[u8])
-        }.encode());
-    }
+    // Counts come from `counts`, never from the peer maps: those are bounded copies.
     let seeds_count = if is_rtc_request {
-        torrent_entry.rtc_seeds.len() as i64
+        torrent_entry.counts.rtc_seeds as i64
     } else {
         torrent_entry.counts.total_seeds() as i64
     };
     let peers_count = if is_rtc_request {
-        torrent_entry.rtc_peers.len() as i64
+        torrent_entry.counts.rtc_peers as i64
     } else {
         torrent_entry.counts.total_peers() as i64
     };
@@ -845,7 +851,8 @@ pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, Htt
 }
 
 /// Determines the client IP, honouring the configured `real_ip` header when trusted
-/// proxies are enabled; falls back to the socket peer address.
+/// proxies are enabled and the request came from a configured proxy; falls back to the
+/// socket peer address.
 ///
 /// # Errors
 ///
@@ -856,11 +863,17 @@ pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<Htt
     if !data.trusted_proxies {
         return Ok(origin_ip);
     }
+    let explicit_proxies = !data.trusted_proxy_addrs.is_empty();
+    if explicit_proxies && !data.trusted_proxy_addrs.contains(&origin_ip) {
+        return Ok(origin_ip);
+    }
     request.headers()
         .get(&data.real_ip)
         .and_then(|header| header.to_str().ok())
         .and_then(|ip_str| {
-            validate_remote_ip(ip_str, data.trusted_proxies).ok()?;
+            // Without an allowlist a proxy is indistinguishable from a client, so private
+            // address claims are refused; a configured proxy may legitimately forward them.
+            validate_remote_ip(ip_str, explicit_proxies).ok()?;
             IpAddr::from_str(ip_str).ok()
         })
         .map_or(Ok(origin_ip), Ok)

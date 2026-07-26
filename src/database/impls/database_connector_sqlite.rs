@@ -257,7 +257,7 @@ impl DatabaseConnectorSQLite {
     pub async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
-        torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
+        torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
     ) -> Result<(), Error> {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("save_torrents", "database");
         let mut transaction_db = self.pool.begin().await?;
@@ -267,7 +267,7 @@ impl DatabaseConnectorSQLite {
         let is_binary = structure.bin_type_infohash;
         let chunk_size = db_config.chunk_size;
         let mut in_chunk = 0u64;
-        for (info_hash, (counts, updates_action)) in &torrents {
+        for (info_hash, (counts, updates_action)) in torrents {
             handled += 1;
             let hash_str = info_hash.to_string();
             match updates_action {
@@ -589,7 +589,7 @@ impl DatabaseConnectorSQLite {
                 let hash: [u8; 20] =
                     <[u8; 20]>::try_from(&hex::decode(hash_data).unwrap()[0..20]).unwrap();
                 let timeout: i64 = result.get(structure.column_timeout.as_str());
-                tracker.add_key(InfoHash(hash), timeout);
+                tracker.add_key_absolute(InfoHash(hash), timeout);
                 hashes += 1;
             }
             start += length;
@@ -954,7 +954,7 @@ impl DatabaseBackend for DatabaseConnectorSQLite {
     async fn save_torrents(
         &self,
         tracker: Arc<TorrentTracker>,
-        torrents: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
+        torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
     ) -> Result<(), Error> {
         DatabaseConnectorSQLite::save_torrents(self, tracker, torrents).await
     }

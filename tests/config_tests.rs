@@ -2,6 +2,7 @@ mod common;
 
 use std::fs;
 use tempfile::TempDir;
+use torrust_actix::config::structs::configuration::Configuration;
 
 #[tokio::test]
 async fn test_config_default_values() {
@@ -411,4 +412,94 @@ rtctorrent = true
         cfg.http_server[0].rtctorrent,
         "'rtctorrent = true' in TOML should deserialise as true"
     );
+}
+#[tokio::test]
+async fn test_generated_config_round_trips() {
+    // Every field the defaults emit has to parse back, and `#[serde(skip)]` fields must not
+    // appear at all.
+    let defaults = Configuration::init();
+    let annotated = Configuration::generate_annotated_config(&defaults);
+    assert!(annotated.contains("max_peers_per_torrent"), "new tracker limits must be written out");
+    assert!(annotated.contains("trusted_proxy_ips"), "proxy allowlist must be written out");
+    assert!(annotated.contains("proxy_addresses"), "UDP proxy allowlist must be written out");
+    assert!(!annotated.contains("trusted_proxy_addrs"), "the parsed-only field must not be serialised");
+    assert!(!annotated.contains("proxy_addrs ="), "the parsed-only field must not be serialised");
+
+    let reparsed: Configuration = toml::from_str(&annotated).expect("generated config must parse");
+    assert_eq!(reparsed.tracker_config.max_peers_per_torrent, defaults.tracker_config.max_peers_per_torrent);
+    assert_eq!(reparsed.tracker_config.max_rtc_pending_answers, defaults.tracker_config.max_rtc_pending_answers);
+    assert_eq!(reparsed.http_server[0].trusted_proxy_ips, defaults.http_server[0].trusted_proxy_ips);
+    assert_eq!(reparsed.udp_server[0].proxy_addresses, defaults.udp_server[0].proxy_addresses);
+}
+
+#[tokio::test]
+async fn test_new_limits_default_when_absent_from_toml() {
+    // Config files predating these keys must fall back to safe defaults, not a disabled limit.
+    let toml_str = r#"
+log_level = "info"
+log_console_interval = 60
+
+[tracker_config]
+api_key = "SomeVeryStrongApiKey123456789abc"
+request_interval = 1800
+request_interval_minimum = 1800
+peers_timeout = 2700
+peers_cleanup_interval = 900
+peers_cleanup_threads = 256
+total_downloads = 0
+
+[database]
+engine = "sqlite3"
+path = "sqlite://data.db"
+persistent = false
+persistent_interval = 60
+insert_vacant = false
+remove_action = false
+update_completed = true
+update_peers = false
+
+[database_structure]
+
+[[http_server]]
+enabled = true
+bind_address = "0.0.0.0:6969"
+real_ip = "X-Real-IP"
+keep_alive = 60
+request_timeout = 15
+disconnect_timeout = 15
+max_connections = 25000
+threads = 4
+ssl = false
+ssl_key = ""
+ssl_cert = ""
+tls_connection_rate = 256
+
+[[udp_server]]
+enabled = true
+bind_address = "0.0.0.0:6969"
+udp_threads = 2
+worker_threads = 4
+receive_buffer_size = 134217728
+send_buffer_size = 67108864
+reuse_address = true
+
+[[api_server]]
+enabled = true
+bind_address = "0.0.0.0:8080"
+real_ip = "X-Real-IP"
+keep_alive = 60
+request_timeout = 30
+disconnect_timeout = 30
+max_connections = 25000
+threads = 4
+ssl = false
+ssl_key = ""
+ssl_cert = ""
+tls_connection_rate = 256
+"#;
+    let config: Configuration = toml::from_str(toml_str).expect("legacy config must still parse");
+    assert_eq!(config.tracker_config.max_peers_per_torrent, 10_000, "peer cap must default on, not off");
+    assert_eq!(config.tracker_config.max_rtc_pending_answers, 32);
+    assert!(config.http_server[0].trusted_proxy_ips.is_empty());
+    assert!(config.udp_server[0].proxy_addresses.is_empty());
 }

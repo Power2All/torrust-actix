@@ -473,3 +473,239 @@ async fn test_announce_entry_counts_exact_when_peer_map_capped() {
     assert!(snapshot.peers.len() <= SNAPSHOT_PEER_CAP, "returned peer map must be capped");
     assert!(snapshot.peers.len() >= 72, "bounded map must still cover a full response");
 }
+#[tokio::test]
+async fn test_peer_map_is_capped_per_torrent() {
+    use std::sync::Arc;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+
+    // Peer ids are client-chosen, so an uncapped map grows once per id announced.
+    const CAP: u64 = 8;
+    let config = Arc::new(common::build_test_config(|config| {
+        config.tracker_config.max_peers_per_torrent = CAP;
+    }));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let info_hash = common::random_info_hash();
+
+    // Seed the torrent so later announces take the "existing torrent" path.
+    let first = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, first, common::create_test_peer(first, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881), false);
+
+    for _ in 0..(CAP * 5) {
+        let peer_id = common::random_peer_id();
+        let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
+        tracker.add_torrent_peer(info_hash, peer_id, peer, false);
+    }
+
+    let entry = tracker.get_torrent(info_hash).expect("torrent should exist");
+    assert_eq!(entry.peers.len() as u64, CAP, "leecher map must stay at the cap");
+
+    // The global counter has to track evictions or it drifts.
+    let stats = tracker.get_stats();
+    assert_eq!(stats.peers, CAP as i64, "peer statistic must match the peers actually held");
+}
+
+#[tokio::test]
+async fn test_peer_cap_refreshes_existing_peer_without_evicting() {
+    use std::sync::Arc;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+
+    const CAP: u64 = 4;
+    let config = Arc::new(common::build_test_config(|config| {
+        config.tracker_config.max_peers_per_torrent = CAP;
+    }));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let info_hash = common::random_info_hash();
+
+    let peer_ids: Vec<_> = (0..CAP).map(|_| common::random_peer_id()).collect();
+    for peer_id in &peer_ids {
+        let peer = common::create_test_peer(*peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
+        tracker.add_torrent_peer(info_hash, *peer_id, peer, false);
+    }
+    assert_eq!(tracker.get_torrent(info_hash).unwrap().peers.len() as u64, CAP);
+
+    // A peer already in the map is a refresh, not an insert, so nobody is pushed out.
+    let peer = common::create_test_peer(peer_ids[0], IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6882);
+    tracker.add_torrent_peer(info_hash, peer_ids[0], peer, false);
+    let entry = tracker.get_torrent(info_hash).unwrap();
+    assert_eq!(entry.peers.len() as u64, CAP, "a refresh must not change the map size");
+    for peer_id in &peer_ids {
+        assert!(entry.peers.contains_key(peer_id), "no peer should have been evicted");
+    }
+    assert_eq!(tracker.get_stats().peers, CAP as i64);
+}
+
+#[tokio::test]
+async fn test_rtc_pending_answers_are_capped() {
+    use std::sync::Arc;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+
+    // Filled by *other* peers naming this one, so the cap is what stops anyone making the
+    // tracker hold arbitrary SDP on a victim's behalf.
+    const CAP: u64 = 4;
+    let config = Arc::new(common::build_test_config(|config| {
+        config.tracker_config.max_rtc_pending_answers = CAP;
+    }));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let info_hash = common::random_info_hash();
+    let seeder_id = common::random_peer_id();
+
+    let mut seeder = common::create_test_peer(seeder_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
+    seeder.left = NumberOfBytes(0);
+    seeder.rtc_data = Some(Box::new(torrust_actix::tracker::structs::rtc_data::RtcData::new(Some("v=0"))));
+    tracker.add_torrent_peer(info_hash, seeder_id, seeder, false);
+
+    for _ in 0..(CAP * 10) {
+        assert!(tracker.store_rtc_answer(info_hash, seeder_id, common::random_peer_id(), "v=0\r\nanswer"));
+    }
+    let queued = tracker.take_rtc_pending_answers(info_hash, seeder_id);
+    assert_eq!(queued.len() as u64, CAP, "pending answers must not grow past the cap");
+
+    assert!(tracker.take_rtc_pending_answers(info_hash, seeder_id).is_empty());
+}
+
+#[tokio::test]
+async fn test_rtc_pending_answer_replaces_same_peer() {
+    use std::sync::Arc;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+
+    let config = Arc::new(common::build_test_config(|config| {
+        config.tracker_config.max_rtc_pending_answers = 4;
+    }));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let info_hash = common::random_info_hash();
+    let seeder_id = common::random_peer_id();
+    let answerer_id = common::random_peer_id();
+
+    let mut seeder = common::create_test_peer(seeder_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
+    seeder.left = NumberOfBytes(0);
+    seeder.rtc_data = Some(Box::new(torrust_actix::tracker::structs::rtc_data::RtcData::new(Some("v=0"))));
+    tracker.add_torrent_peer(info_hash, seeder_id, seeder, false);
+
+    tracker.store_rtc_answer(info_hash, seeder_id, answerer_id, "first");
+    tracker.store_rtc_answer(info_hash, seeder_id, answerer_id, "second");
+    let queued = tracker.take_rtc_pending_answers(info_hash, seeder_id);
+    assert_eq!(queued.len(), 1, "the same answerer must occupy one slot");
+    assert_eq!(queued[0].1, "second", "the newest answer must win");
+}
+
+#[tokio::test]
+async fn test_cleanup_survives_timeout_longer_than_uptime() {
+    use std::sync::Arc;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+
+    let config = Arc::new(common::build_test_config(|_| {}));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let info_hash = common::random_info_hash();
+    let peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, peer_id, common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881), false);
+
+    // `Instant` counts from boot on Linux, so a timeout longer than uptime underflows.
+    let absurd_timeout = Duration::from_secs(60 * 60 * 24 * 365 * 100);
+    TorrentSharding::cleanup_once(tracker.clone(), absurd_timeout, absurd_timeout, false).await;
+
+    let entry = tracker.get_torrent(info_hash).expect("torrent must survive the skipped pass");
+    assert_eq!(entry.peers.len(), 1, "no peer should have been removed");
+}
+
+#[tokio::test]
+async fn test_torrent_updates_dedupe_per_info_hash() {
+    use torrust_actix::tracker::enums::updates_action::UpdatesAction;
+    use torrust_actix::tracker::structs::torrent_update_data::TorrentUpdateData;
+
+    let tracker: common::TestTracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+
+    // Repeat updates for one torrent collapse, so queue size tracks distinct torrents.
+    assert!(tracker.add_torrent_update(info_hash, TorrentUpdateData { seeds_ipv4: 1, ..Default::default() }, UpdatesAction::Add));
+    for seeds in 2..50u64 {
+        assert!(!tracker.add_torrent_update(info_hash, TorrentUpdateData { seeds_ipv4: seeds, ..Default::default() }, UpdatesAction::Add));
+    }
+    let pending = tracker.get_torrent_updates();
+    assert_eq!(pending.len(), 1, "one torrent must occupy one queue slot");
+    assert_eq!(pending[&info_hash].0.seeds_ipv4, 49, "the newest update must win");
+    assert_eq!(tracker.get_stats().torrents_updates, 1, "statistic must match the queue length");
+
+    let other = common::random_info_hash();
+    assert!(tracker.add_torrent_update(other, TorrentUpdateData::default(), UpdatesAction::Add));
+    assert_eq!(tracker.get_torrent_updates().len(), 2, "distinct torrents get distinct slots");
+    assert_eq!(tracker.get_stats().torrents_updates, 2);
+
+    tracker.clear_torrent_updates();
+    assert!(tracker.get_torrent_updates().is_empty());
+    assert_eq!(tracker.get_stats().torrents_updates, 0);
+}
+
+#[tokio::test]
+async fn test_keys_loaded_from_database_keep_absolute_expiry() {
+    use torrust_actix::common::common::current_time;
+
+    let tracker: common::TestTracker = common::create_test_tracker().await;
+
+    // Database rows store an absolute expiry. Feeding one through the relative `add_key` would
+    // add it to the current time, pushing a valid key decades out and turning a permanent key
+    // (0) into one that expired the instant it loaded.
+    let permanent = common::random_info_hash();
+    tracker.add_key_absolute(permanent, 0);
+    assert_eq!(tracker.get_key(permanent).unwrap().1, 0, "expiry must be stored verbatim");
+    assert!(tracker.check_key(permanent), "a stored expiry of 0 means permanent");
+
+    let future = common::random_info_hash();
+    let future_expiry = current_time() as i64 + 600;
+    tracker.add_key_absolute(future, future_expiry);
+    assert_eq!(tracker.get_key(future).unwrap().1, future_expiry);
+    assert!(tracker.check_key(future));
+
+    let past = common::random_info_hash();
+    tracker.add_key_absolute(past, current_time() as i64 - 600);
+    assert!(!tracker.check_key(past), "an already-expired stored key must not validate");
+
+    // The relative form stays relative for callers that pass a duration.
+    let relative = common::random_info_hash();
+    tracker.add_key(relative, 600);
+    assert!(tracker.get_key(relative).unwrap().1 >= current_time() as i64 + 599);
+    assert!(tracker.check_key(relative));
+}
+
+#[tokio::test]
+async fn test_permanent_keys_survive_cleanup() {
+    let tracker: common::TestTracker = common::create_test_tracker().await;
+    let permanent = common::random_info_hash();
+    let expired = common::random_info_hash();
+    tracker.add_key_absolute(permanent, 0);
+    tracker.add_key_absolute(expired, 1);
+
+    tracker.clean_keys();
+
+    assert!(tracker.get_key(permanent).is_some(), "permanent keys must not be swept");
+    assert!(tracker.get_key(expired).is_none(), "expired keys must be swept");
+}
+
+#[tokio::test]
+async fn test_rtc_peers_expire_while_bt_cutoff_unavailable() {
+    use std::sync::Arc;
+    use torrust_actix::tracker::structs::rtc_data::RtcData;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+
+    // `rtc_peers_timeout` is far shorter than `peers_timeout`, so shortly after boot the BT
+    // cutoff underflows while the RTC one is fine. RTC peers must still be swept then.
+    let config = Arc::new(common::build_test_config(|_| {}));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let info_hash = common::random_info_hash();
+
+    let bt_peer_id = common::random_peer_id();
+    tracker.add_torrent_peer(info_hash, bt_peer_id, common::create_test_peer(bt_peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881), false);
+
+    let rtc_peer_id = common::random_peer_id();
+    let mut rtc_peer = common::create_test_peer(rtc_peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)), 6882);
+    rtc_peer.rtc_data = Some(Box::new(RtcData::new(Some("v=0"))));
+    tracker.add_torrent_peer(info_hash, rtc_peer_id, rtc_peer, false);
+
+    tokio::time::sleep(Duration::from_millis(20)).await;
+
+    let unavailable_bt_timeout = Duration::from_secs(60 * 60 * 24 * 365 * 100);
+    TorrentSharding::cleanup_once(tracker.clone(), unavailable_bt_timeout, Duration::from_millis(1), false).await;
+
+    let entry = tracker.get_torrent(info_hash).expect("torrent must survive");
+    assert!(entry.rtc_peers.is_empty(), "RTC peers must expire on their own cutoff");
+    assert_eq!(entry.peers.len(), 1, "BT peers must survive an unavailable BT cutoff");
+}

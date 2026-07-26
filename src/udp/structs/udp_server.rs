@@ -1,4 +1,7 @@
-use std::net::SocketAddr;
+use std::net::{
+    IpAddr,
+    SocketAddr
+};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use crate::config::enums::udp_receive_method::UdpReceiveMethod;
@@ -16,5 +19,8 @@ pub struct UdpServer {
     pub(crate) tracker: Arc<TorrentTracker>,
     pub(crate) use_payload_ip: bool,
     pub(crate) simple_proxy_protocol: bool,
+    /// Sources permitted to prepend a Simple Proxy Protocol header. Empty means "any",
+    /// which is the legacy behaviour.
+    pub(crate) proxy_addrs: Arc<Vec<IpAddr>>,
     pub(crate) receive_method: UdpReceiveMethod,
 }

@@ -13,7 +13,47 @@ use log::info;
 use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 
+/// How many entries to sample when choosing an eviction victim.
+const EVICTION_SAMPLE: usize = 8;
+
+/// Makes room in a peer map before inserting `peer_id`, evicting an entry when the map is at
+/// `cap`. Peer ids are client-chosen, so an uncapped map grows once per id announced.
+///
+/// Returns the number of entries evicted, so the caller can keep the global counters exact.
+///
+/// ponytail: samples `EVICTION_SAMPLE` entries and evicts the stalest of them rather than
+/// scanning for the true oldest, which would be O(map len) under the shard write lock on
+/// exactly the path a flood of made-up peer ids drives. Expiry is the cleanup task's job; this
+/// is only a safety valve. If eviction accuracy matters, add an updated-ordered index.
+#[inline]
+fn enforce_peer_cap(map: &mut AHashMap<PeerId, TorrentPeer>, peer_id: PeerId, cap: usize) -> i64 {
+    if cap == 0 || map.len() < cap || map.contains_key(&peer_id) {
+        return 0;
+    }
+    let mut evicted = 0i64;
+    // Normally evicts exactly one entry; loops only if `cap` was lowered at runtime.
+    while map.len() >= cap {
+        let victim = map
+            .iter()
+            .take(EVICTION_SAMPLE)
+            .min_by_key(|(_, peer)| peer.updated)
+            .map(|(id, _)| *id);
+        let Some(victim) = victim else {
+            break;
+        };
+        map.remove(&victim);
+        evicted += 1;
+    }
+    evicted
+}
+
 impl TorrentTracker {
+    /// Returns the configured per-map peer cap (`0` means unlimited).
+    #[inline]
+    fn peer_cap(&self) -> usize {
+        self.config.tracker_config.max_peers_per_torrent as usize
+    }
+
     /// Returns up to `amount` seeds and peers of a torrent, filtered by IP family and excluding
     /// `self_peer_id`. Returns `None` when the torrent is unknown.
     pub fn get_torrent_peers(&self, info_hash: InfoHash, amount: usize, ip_type: TorrentPeersType, self_peer_id: Option<PeerId>) -> Option<TorrentPeers>
@@ -185,38 +225,32 @@ impl TorrentTracker {
                     self.update_stats(StatsEvent::Completed, 1);
                     entry.completed += 1;
                 }
+                let cap = self.peer_cap();
                 if torrent_peer.is_rtctorrent() {
-                    if torrent_peer.left == NumberOfBytes(0) {
-                        self.update_stats(StatsEvent::Seeds, 1);
-                        let mut new_peer = torrent_peer;
-                        if !old_rtc_pending_answers.is_empty()
-                            && let Some(ref mut rtc) = new_peer.rtc_data {
-                            rtc.pending_answers = old_rtc_pending_answers;
-                        }
-                        entry.rtc_seeds.insert(peer_id, new_peer);
-                    } else {
-                        self.update_stats(StatsEvent::Peers, 1);
-                        let mut new_peer = torrent_peer;
-                        if !old_rtc_pending_answers.is_empty()
-                            && let Some(ref mut rtc) = new_peer.rtc_data {
-                            rtc.pending_answers = old_rtc_pending_answers;
-                        }
-                        entry.rtc_peers.insert(peer_id, new_peer);
+                    let is_seed = torrent_peer.left == NumberOfBytes(0);
+                    let mut new_peer = torrent_peer;
+                    if !old_rtc_pending_answers.is_empty()
+                        && let Some(ref mut rtc) = new_peer.rtc_data {
+                        rtc.pending_answers = old_rtc_pending_answers;
                     }
-                } else if torrent_peer.left == NumberOfBytes(0) {
-                    self.update_stats(StatsEvent::Seeds, 1);
-                    if torrent_peer.peer_addr.is_ipv4() {
-                        entry.seeds.insert(peer_id, torrent_peer);
-                    } else {
-                        entry.seeds_ipv6.insert(peer_id, torrent_peer);
-                    }
+                    let target = if is_seed { &mut entry.rtc_seeds } else { &mut entry.rtc_peers };
+                    let evicted = enforce_peer_cap(target, peer_id, cap);
+                    target.insert(peer_id, new_peer);
+                    let event = if is_seed { StatsEvent::Seeds } else { StatsEvent::Peers };
+                    self.update_stats(event, 1 - evicted);
                 } else {
-                    self.update_stats(StatsEvent::Peers, 1);
-                    if torrent_peer.peer_addr.is_ipv4() {
-                        entry.peers.insert(peer_id, torrent_peer);
-                    } else {
-                        entry.peers_ipv6.insert(peer_id, torrent_peer);
-                    }
+                    let is_seed = torrent_peer.left == NumberOfBytes(0);
+                    let is_ipv4 = torrent_peer.peer_addr.is_ipv4();
+                    let target = match (is_seed, is_ipv4) {
+                        (true, true) => &mut entry.seeds,
+                        (true, false) => &mut entry.seeds_ipv6,
+                        (false, true) => &mut entry.peers,
+                        (false, false) => &mut entry.peers_ipv6,
+                    };
+                    let evicted = enforce_peer_cap(target, peer_id, cap);
+                    target.insert(peer_id, torrent_peer);
+                    let event = if is_seed { StatsEvent::Seeds } else { StatsEvent::Peers };
+                    self.update_stats(event, 1 - evicted);
                 }
                 entry.updated = std::time::Instant::now();
                 AnnounceEntry::from_entry(entry)
