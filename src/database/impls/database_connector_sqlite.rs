@@ -359,7 +359,7 @@ impl DatabaseConnectorSQLite {
             if (handled as f64 / 1000f64).fract() == 0.0 || torrents.len() as u64 == handled {
                 info!("{LOG_PREFIX} Handled {handled} torrents");
             }
-            self.commit_chunk(&mut transaction_db, &mut in_chunk, chunk_size).await?;
+            transaction_db = self.commit_chunk(transaction_db, &mut in_chunk, chunk_size).await?;
         }
         info!("{LOG_PREFIX} Handled {handled} torrents");
         if let Some(txn) = transaction {
@@ -873,7 +873,7 @@ impl DatabaseConnectorSQLite {
             if (handled as f64 / 1000f64).fract() == 0.0 || users.len() as u64 == handled {
                 info!("{LOG_PREFIX} Handled {handled} users");
             }
-            self.commit_chunk(&mut transaction, &mut in_chunk, chunk_size).await?;
+            transaction = self.commit_chunk(transaction, &mut in_chunk, chunk_size).await?;
         }
         info!("{LOG_PREFIX} Handled {handled} users");
         self.commit(transaction).await
@@ -899,18 +899,20 @@ impl DatabaseConnectorSQLite {
         Ok(())
     }
 
-    async fn commit_chunk(&self, transaction: &mut Transaction<'_, Sqlite>, in_chunk: &mut u64, chunk_size: u64) -> Result<(), Error> {
+    /// Commits and reopens the transaction every `chunk_size` rows.
+    ///
+    /// Commits the old transaction *before* opening the new one. The reverse
+    /// order held two pool connections at once, so a handful of concurrent sync
+    /// tasks could exhaust the pool and fail with an acquire timeout instead of
+    /// the real error.
+    async fn commit_chunk<'a>(&self, transaction: Transaction<'a, Sqlite>, in_chunk: &mut u64, chunk_size: u64) -> Result<Transaction<'a, Sqlite>, Error> {
         *in_chunk += 1;
-        if chunk_size != 0 && *in_chunk >= chunk_size {
-            let new_tx = self.pool.begin().await?;
-            let old_tx = std::mem::replace(transaction, new_tx);
-            if let Err(e) = old_tx.commit().await {
-                error!("{LOG_PREFIX} Error: {e}");
-                return Err(e);
-            }
-            *in_chunk = 0;
+        if chunk_size == 0 || *in_chunk < chunk_size {
+            return Ok(transaction);
         }
-        Ok(())
+        self.commit(transaction).await?;
+        *in_chunk = 0;
+        self.pool.begin().await.inspect_err(|e| error!("{LOG_PREFIX} Error: {e}"))
     }
 
     /// Commits the given transaction, logging and returning any failure.

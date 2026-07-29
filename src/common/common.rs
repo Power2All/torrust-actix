@@ -216,7 +216,18 @@ pub fn setup_logging(config: &Configuration) {
             ));
         })
         .level(level)
-        .chain(std::io::stdout())
+        // ERROR goes to stderr, everything else to stdout, so `2>` / a supervisor's
+        // error stream captures only the failures.
+        .chain(
+            fern::Dispatch::new()
+                .filter(|metadata| metadata.level() == log::Level::Error)
+                .chain(std::io::stderr())
+        )
+        .chain(
+            fern::Dispatch::new()
+                .filter(|metadata| metadata.level() != log::Level::Error)
+                .chain(std::io::stdout())
+        )
         .apply()
         .unwrap_or_else(|_| panic!("Failed to initialize logging."));
     info!("logging initialized.");
