@@ -52,15 +52,6 @@ cd torrust-actix
 cargo build --release
 ```
 
-> **Note:** `lib/torrust-client` (the optional desktop GUI) is **excluded from the default build**.
-> It requires the `fontconfig` system library and a graphical environment (Slint UI framework).
-> See [lib/torrust-client — Optional GUI](#optional-gui-torrust-client) below for details.
-
-### Optional GUI: torrust-client
-
-`lib/torrust-client` is a desktop GUI front-end built with the [Slint](https://slint.dev/) UI framework.
-It is a workspace member but is **not compiled by default** (`default-members` excludes it).
-
 #### System requirements (Linux)
 
 ```bash
@@ -77,11 +68,8 @@ sudo pacman -S fontconfig
 #### Building
 
 ```bash
-# Build only the GUI client
-cargo build --release -p torrust-client
-
-# Or build the entire workspace including the GUI
-cargo build --release --workspace
+# Build the project
+cargo build --release
 ```
 
 ### Usage
@@ -609,6 +597,9 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 ---
 
 ### ChangeLog
+
+#### v4.2.18
+* Bugfix: A database connection loss or error, could freeze and lock up the update thread, should be fixed now.
 
 #### v4.2.17
 * Full code auditing, and found some possible security issues in the future.
