@@ -138,12 +138,15 @@ impl TorrentTracker {
                     }
                 }
             }
-            for (hash, (_, action)) in &torrents_to_save {
-                if *action == UpdatesAction::Remove
-                    && let Err(e) = cache.delete_torrent(hash).await {
-                        warn!("[Cache] Failed to delete torrent {hash}: {e}");
-                    }
-            }
+            let removals: Vec<InfoHash> = torrents_to_save
+                .iter()
+                .filter(|(_, (_, action))| *action == UpdatesAction::Remove)
+                .map(|(hash, _)| *hash)
+                .collect();
+            if !removals.is_empty()
+                && let Err(e) = cache.delete_torrents(&removals).await {
+                    warn!("[Cache] Failed to delete {} torrents: {e}", removals.len());
+                }
         }
         if let Ok(()) = db_result {
             if is_persistent {

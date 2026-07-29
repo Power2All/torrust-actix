@@ -108,6 +108,26 @@ impl CacheBackend for CacheConnector {
         }
     }
 
+    async fn delete_torrents(&self, info_hashes: &[InfoHash]) -> Result<(), CacheError> {
+        match self.engine.as_ref() {
+            Some(CacheEngine::redis) => {
+                if let Some(ref redis) = self.redis {
+                    redis.delete_torrents(info_hashes).await
+                } else {
+                    Err(CacheError::ConnectionError("Redis not connected".to_string()))
+                }
+            }
+            Some(CacheEngine::memcache) => {
+                if let Some(ref memcache) = self.memcache {
+                    memcache.delete_torrents(info_hashes).await
+                } else {
+                    Err(CacheError::ConnectionError("Memcache not connected".to_string()))
+                }
+            }
+            None => Err(CacheError::ConnectionError("No cache engine configured".to_string())),
+        }
+    }
+
     async fn set_torrent_peers_batch(
         &self,
         data: &[(InfoHash, TorrentPeerCounts)],

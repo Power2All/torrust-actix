@@ -130,6 +130,19 @@ impl CacheBackend for CacheConnectorRedis {
         Ok(())
     }
 
+    async fn delete_torrents(&self, info_hashes: &[InfoHash]) -> Result<(), CacheError> {
+        if info_hashes.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.conn().await?;
+        let keys: Vec<String> = info_hashes.iter().map(|hash| self.torrent_key(hash)).collect();
+        conn.del::<_, ()>(keys)
+            .await
+            .map_err(CacheError::RedisError)?;
+        debug!("[Redis] Deleted {} torrents", info_hashes.len());
+        Ok(())
+    }
+
     async fn set_torrent_peers_batch(
         &self,
         data: &[(InfoHash, TorrentPeerCounts)],
