@@ -102,50 +102,59 @@ impl TorrentTracker {
         } else {
             Ok(())
         };
+        // The cache flush is deliberately *not* gated on `db_result`: the two are
+        // independent sinks, and while the database was unreachable this used to
+        // stop refreshing the peer counts in Redis/memcache as well, so scrapes
+        // served stale numbers for as long as the outage lasted. Writing absolute
+        // counts is idempotent, so a batch the database rejected and re-queued
+        // simply gets written to the cache again on the next flush.
+        if let Some(ref cache) = self.cache {
+            let cache_ttl = self.config.cache.as_ref().and_then(|c| {
+                if c.ttl > 0 { Some(c.ttl) } else { None }
+            });
+            let cache_data: Vec<(InfoHash, TorrentPeerCounts)> = torrents_to_save
+                .iter()
+                .filter(|(_, (_, action))| *action != UpdatesAction::Remove)
+                .map(|(hash, (entry, _))| {
+                    let counts = TorrentPeerCounts {
+                        bt_seeds_ipv4: entry.seeds_ipv4,
+                        bt_seeds_ipv6: entry.seeds_ipv6,
+                        rtc_seeds:     entry.rtc_seeds,
+                        bt_peers_ipv4: entry.peers_ipv4,
+                        bt_peers_ipv6: entry.peers_ipv6,
+                        rtc_peers:     entry.rtc_peers,
+                        completed:     entry.completed,
+                    };
+                    (*hash, counts)
+                })
+                .collect();
+            if !cache_data.is_empty() {
+                match cache.set_torrent_peers_batch(&cache_data, cache_ttl).await {
+                    Ok(()) => {
+                        debug!("[Cache] Updated {} torrent peer counts", cache_data.len());
+                    }
+                    Err(e) => {
+                        warn!("[Cache] Failed to update peer counts: {e}");
+                    }
+                }
+            }
+            let removals: Vec<InfoHash> = torrents_to_save
+                .iter()
+                .filter(|(_, (_, action))| *action == UpdatesAction::Remove)
+                .map(|(hash, _)| *hash)
+                .collect();
+            if !removals.is_empty()
+                && let Err(e) = cache.delete_torrents(&removals).await {
+                    warn!("[Cache] Failed to delete {} torrents: {e}", removals.len());
+                }
+        }
         if let Ok(()) = db_result {
             if is_persistent {
                 info!("[SYNC TORRENT UPDATES] Synced {mapping_len} torrents");
             }
-            if let Some(ref cache) = self.cache {
-                let cache_ttl = self.config.cache.as_ref().and_then(|c| {
-                    if c.ttl > 0 { Some(c.ttl) } else { None }
-                });
-                let cache_data: Vec<(InfoHash, TorrentPeerCounts)> = torrents_to_save
-                    .iter()
-                    .filter(|(_, (_, action))| *action != UpdatesAction::Remove)
-                    .map(|(hash, (entry, _))| {
-                        let counts = TorrentPeerCounts {
-                            bt_seeds_ipv4: entry.seeds_ipv4,
-                            bt_seeds_ipv6: entry.seeds_ipv6,
-                            rtc_seeds:     entry.rtc_seeds,
-                            bt_peers_ipv4: entry.peers_ipv4,
-                            bt_peers_ipv6: entry.peers_ipv6,
-                            rtc_peers:     entry.rtc_peers,
-                            completed:     entry.completed,
-                        };
-                        (*hash, counts)
-                    })
-                    .collect();
-                if !cache_data.is_empty() {
-                    match cache.set_torrent_peers_batch(&cache_data, cache_ttl).await {
-                        Ok(()) => {
-                            debug!("[Cache] Updated {} torrent peer counts", cache_data.len());
-                        }
-                        Err(e) => {
-                            warn!("[Cache] Failed to update peer counts: {e}");
-                        }
-                    }
-                }
-                for (hash, (_, action)) in &torrents_to_save {
-                    if *action == UpdatesAction::Remove
-                        && let Err(e) = cache.delete_torrent(hash).await {
-                            warn!("[Cache] Failed to delete torrent {hash}: {e}");
-                        }
-                }
-            }
             Ok(())
         } else {
-            error!("[SYNC TORRENT UPDATES] Unable to sync {mapping_len} torrents");
+            error!("[SYNC TORRENT UPDATES] Unable to sync {mapping_len} torrents, re-queued for the next flush");
             let restored = self.torrents_updates.restore(drained_updates);
             self.update_stats(StatsEvent::TorrentsUpdates, restored);
             Err(())

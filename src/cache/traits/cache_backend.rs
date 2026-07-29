@@ -21,6 +21,15 @@ pub trait CacheBackend: Send + Sync {
 
     async fn delete_torrent(&self, info_hash: &InfoHash) -> Result<(), CacheError>;
 
+    /// Deletes several torrents at once. Backends that cannot do better fall back to
+    /// deleting one by one.
+    async fn delete_torrents(&self, info_hashes: &[InfoHash]) -> Result<(), CacheError> {
+        for info_hash in info_hashes {
+            self.delete_torrent(info_hash).await?;
+        }
+        Ok(())
+    }
+
     async fn set_torrent_peers_batch(
         &self,
         data: &[(InfoHash, TorrentPeerCounts)],

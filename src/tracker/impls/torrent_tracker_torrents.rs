@@ -16,8 +16,12 @@ impl TorrentTracker {
     /// Loads all torrents (and their completion counts) from the configured database at startup.
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>)
     {
-        if let Ok((torrents, completes)) = self.sqlx.load_torrents(tracker).await {
-            info!("Loaded {torrents} torrents with {completes} completes");
+        match self.sqlx.load_torrents(tracker).await {
+            Ok((torrents, completes)) => info!("Loaded {torrents} torrents with {completes} completes"),
+            // Used to be swallowed silently, which is the worst possible outcome:
+            // the tracker comes up believing the database is empty and the next
+            // flush writes those empty counts back over the real rows.
+            Err(e) => error!("[LOAD TORRENTS] Unable to load torrents from the database: {e}"),
         }
     }
 

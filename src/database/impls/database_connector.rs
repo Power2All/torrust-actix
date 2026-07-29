@@ -11,9 +11,59 @@ use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
+use log::{
+    error,
+    warn
+};
 use sqlx::Error;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+
+/// True when the failure is about the connection rather than the statement.
+///
+/// `Error::Io` is what a pooled connection closed by the server surfaces as
+/// ("error communicating with database: peer closed connection without sending
+/// TLS close_notify"): MySQL/PostgreSQL can drop a connection at any point
+/// during a long batch — restart, `wait_timeout`, `KILL`, a proxy in between —
+/// and the pool only tests liveness at acquire time, not mid-transaction.
+/// Retrying such a failure gets a fresh connection; retrying a rejected
+/// statement would just fail identically, so those are not retried.
+fn is_transient(e: &Error) -> bool {
+    matches!(
+        e,
+        Error::Io(_) | Error::Tls(_) | Error::Protocol(_) | Error::PoolTimedOut | Error::WorkerCrashed
+    )
+}
+
+/// Runs a database operation, retrying it once on a dropped connection.
+///
+/// Also the single place every failure is logged: the engine backends propagate
+/// `self.pool.begin()` and `commit_chunk()` failures with a bare `?`, so before
+/// this a flush could fail completely silently and the only trace was the
+/// caller's "Unable to sync N torrents".
+///
+/// Engine-agnostic on purpose — MySQL, PostgreSQL and SQLite all route through
+/// here, so none of them can take down its sync task with a connection error.
+///
+/// A macro rather than a function taking an async closure: the resulting future
+/// has to stay `Send` for `tokio::spawn`, and an `AsyncFnMut` bound is not
+/// higher-ranked enough over the closure's borrows for that to hold. The body is
+/// expanded twice, so anything it moves must be cloned per attempt.
+macro_rules! with_retry {
+    ($what:literal, $body:expr) => {
+        match $body {
+            Ok(value) => Ok(value),
+            Err(e) if is_transient(&e) => {
+                warn!("[DATABASE] {}: connection failed ({e}), retrying once on a fresh connection", $what);
+                $body.inspect_err(|e| error!("[DATABASE] {}: failed after retry: {e}", $what))
+            }
+            Err(e) => {
+                error!("[DATABASE] {}: failed: {e}", $what);
+                Err(e)
+            }
+        }
+    };
+}
 
 impl DatabaseConnector {
     /// Connects to the engine selected in the configuration (SQLite 3, MySQL or PostgreSQL),
@@ -36,30 +86,30 @@ impl DatabaseConnector {
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("db_load_torrents", "database");
-        let result: Result<(u64, u64), Error> = match self.engine.as_ref() {
+        let result: Result<(u64, u64), Error> = with_retry!("load_torrents", match self.engine.as_ref() {
             Some(DatabaseDrivers::sqlite3) => {
                 if let Some(ref sqlite) = self.sqlite {
-                    sqlite.load_torrents(tracker).await
+                    sqlite.load_torrents(tracker.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::mysql) => {
                 if let Some(ref mysql) = self.mysql {
-                    mysql.load_torrents(tracker).await
+                    mysql.load_torrents(tracker.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
-                    pgsql.load_torrents(tracker).await
+                    pgsql.load_torrents(tracker.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             None => Err(Error::RowNotFound)
-        };
+        });
         if let Some(txn) = transaction {
             match &result {
                 Ok((loaded, completed)) => {
@@ -224,30 +274,30 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
-        match self.engine.as_ref() {
+        with_retry!("save_whitelist", match self.engine.as_ref() {
             Some(DatabaseDrivers::sqlite3) => {
                 if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_whitelist(tracker, whitelists).await
+                    sqlite.save_whitelist(tracker.clone(), whitelists.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::mysql) => {
                 if let Some(ref mysql) = self.mysql {
-                    mysql.save_whitelist(tracker, whitelists).await
+                    mysql.save_whitelist(tracker.clone(), whitelists.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_whitelist(tracker, whitelists).await
+                    pgsql.save_whitelist(tracker.clone(), whitelists.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             None => Err(Error::RowNotFound)
-        }
+        })
     }
 
     /// Persists blacklist additions/removals; returns the number of rows written.
@@ -258,30 +308,30 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
-        match self.engine.as_ref() {
+        with_retry!("save_blacklist", match self.engine.as_ref() {
             Some(DatabaseDrivers::sqlite3) => {
                 if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_blacklist(tracker, blacklists).await
+                    sqlite.save_blacklist(tracker.clone(), blacklists.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::mysql) => {
                 if let Some(ref mysql) = self.mysql {
-                    mysql.save_blacklist(tracker, blacklists).await
+                    mysql.save_blacklist(tracker.clone(), blacklists.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_blacklist(tracker, blacklists).await
+                    pgsql.save_blacklist(tracker.clone(), blacklists.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             None => Err(Error::RowNotFound)
-        }
+        })
     }
 
     /// Persists announce-key additions/removals with their expiry timestamps.
@@ -292,30 +342,30 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<u64, Error>
     {
-        match self.engine.as_ref() {
+        with_retry!("save_keys", match self.engine.as_ref() {
             Some(DatabaseDrivers::sqlite3) => {
                 if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_keys(tracker, keys).await
+                    sqlite.save_keys(tracker.clone(), keys.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::mysql) => {
                 if let Some(ref mysql) = self.mysql {
-                    mysql.save_keys(tracker, keys).await
+                    mysql.save_keys(tracker.clone(), keys.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_keys(tracker, keys).await
+                    pgsql.save_keys(tracker.clone(), keys.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             None => Err(Error::RowNotFound)
-        }
+        })
     }
 
     /// Persists a batch of torrent updates, committing in `chunk_size` chunks to keep
@@ -328,30 +378,30 @@ impl DatabaseConnector {
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), Error>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("db_save_torrents", "database");
-        let result: Result<(), Error> = match self.engine.as_ref() {
+        let result: Result<(), Error> = with_retry!("save_torrents", match self.engine.as_ref() {
             Some(DatabaseDrivers::sqlite3) => {
                 if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_torrents(tracker, torrents).await
+                    sqlite.save_torrents(tracker.clone(), torrents).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::mysql) => {
                 if let Some(ref mysql) = self.mysql {
-                    mysql.save_torrents(tracker, torrents).await
+                    mysql.save_torrents(tracker.clone(), torrents).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_torrents(tracker, torrents).await
+                    pgsql.save_torrents(tracker.clone(), torrents).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             None => Err(Error::RowNotFound)
-        };
+        });
         if let Some(txn) = transaction {
             match &result {
                 Ok(()) => {
@@ -380,30 +430,30 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), Error>
     {
-        match self.engine.as_ref() {
+        with_retry!("save_users", match self.engine.as_ref() {
             Some(DatabaseDrivers::sqlite3) => {
                 if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_users(tracker, users).await
+                    sqlite.save_users(tracker.clone(), users.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::mysql) => {
                 if let Some(ref mysql) = self.mysql {
-                    mysql.save_users(tracker, users).await
+                    mysql.save_users(tracker.clone(), users.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             Some(DatabaseDrivers::pgsql) => {
                 if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_users(tracker, users).await
+                    pgsql.save_users(tracker.clone(), users.clone()).await
                 } else {
                     Err(Error::RowNotFound)
                 }
             }
             None => Err(Error::RowNotFound)
-        }
+        })
     }
 
     /// Deletes all rows from the given table.
@@ -476,5 +526,30 @@ impl DatabaseConnector {
             }
             None => Err(Error::RowNotFound)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_transient;
+    use sqlx::Error;
+
+    /// A misclassification here is silent and costly either way: too narrow and a
+    /// dropped connection wastes a whole sync cycle, too wide and a permanently
+    /// rejected statement gets sent twice on every flush, forever.
+    #[test]
+    fn dropped_connections_retry_but_rejected_statements_do_not() {
+        // Exactly what the reported MySQL failure surfaces as.
+        assert!(is_transient(&Error::Io(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "peer closed connection without sending TLS close_notify",
+        ))));
+        assert!(is_transient(&Error::PoolTimedOut));
+        assert!(is_transient(&Error::Protocol("unexpected packet".into())));
+
+        // Retrying these would fail identically, so they must not be retried.
+        assert!(!is_transient(&Error::RowNotFound));
+        assert!(!is_transient(&Error::PoolClosed));
+        assert!(!is_transient(&Error::ColumnNotFound("info_hash".into())));
     }
 }
