@@ -953,6 +953,10 @@ impl Configuration {
         let sc = &config.sentry_config;
         if sc.enabled {
             assert!(!sc.dsn.is_empty(), "[VALIDATE CONFIG] sentry.enabled=true but sentry.dsn is not set");
+            // sentry's sample_rate/traces_sample_rate builders panic outside [0.0, 1.0]; fail here
+            // with a config-shaped message instead of aborting inside sentry::init.
+            assert!((0.0..=1.0).contains(&sc.sample_rate), "[VALIDATE CONFIG] sentry.sample_rate must be between 0.0 and 1.0, got {}", sc.sample_rate);
+            assert!((0.0..=1.0).contains(&sc.traces_sample_rate), "[VALIDATE CONFIG] sentry.traces_sample_rate must be between 0.0 and 1.0, got {}", sc.traces_sample_rate);
             println!("[VALIDATE] Sentry enabled: dsn configured, sample_rate={}, traces_sample_rate={}", sc.sample_rate, sc.traces_sample_rate);
         } else {
             println!("[VALIDATE] Sentry: disabled");

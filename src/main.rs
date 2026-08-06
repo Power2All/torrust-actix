@@ -56,18 +56,20 @@ fn main() -> std::io::Result<()>
     #[warn(unused_variables)]
     let _sentry_guard: ClientInitGuard;
     if config.sentry_config.enabled {
-        _sentry_guard = sentry::init((config.sentry_config.dsn.clone(), sentry::ClientOptions {
-            release: sentry::release_name!(),
-            debug: config.sentry_config.debug,
-            sample_rate: config.sentry_config.sample_rate,
-            max_breadcrumbs: config.sentry_config.max_breadcrumbs,
-            attach_stacktrace: config.sentry_config.attach_stacktrace,
-            send_default_pii: config.sentry_config.send_default_pii,
-            traces_sample_rate: config.sentry_config.traces_sample_rate,
-            session_mode: sentry::SessionMode::Request,
-            auto_session_tracking: true,
-            ..Default::default()
-        }));
+        // sentry 0.49 made ClientOptions #[non_exhaustive] (no struct literal) and replaced the
+        // sample_rate/traces_sample_rate fields with sampling strategies set via these builders.
+        // validate_sentry has already range-checked both rates -- the builders panic otherwise.
+        let mut sentry_options = sentry::ClientOptions::default()
+            .sample_rate(config.sentry_config.sample_rate)
+            .traces_sample_rate(config.sentry_config.traces_sample_rate);
+        sentry_options.release = sentry::release_name!();
+        sentry_options.debug = config.sentry_config.debug;
+        sentry_options.max_breadcrumbs = config.sentry_config.max_breadcrumbs;
+        sentry_options.attach_stacktrace = config.sentry_config.attach_stacktrace;
+        sentry_options.send_default_pii = config.sentry_config.send_default_pii;
+        sentry_options.session_mode = sentry::SessionMode::Request;
+        sentry_options.auto_session_tracking = true;
+        _sentry_guard = sentry::init((config.sentry_config.dsn.clone(), sentry_options));
     }
 
     Builder::new_multi_thread()
