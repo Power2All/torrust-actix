@@ -93,6 +93,41 @@ async fn test_config_sentry_disabled_by_default() {
     assert!(!config.sentry_config.enabled, "Sentry should be disabled by default");
 }
 
+#[test]
+fn test_validate_sentry_accepts_rates_in_range() {
+    let config = common::build_test_config(|c| {
+        c.sentry_config.enabled = true;
+        c.sentry_config.dsn = "https://key@example.invalid/1".to_string();
+        c.sentry_config.sample_rate = 0.0;
+        c.sentry_config.traces_sample_rate = 1.0;
+    });
+    Configuration::validate_sentry(&config);
+}
+
+#[test]
+#[should_panic(expected = "sentry.sample_rate must be between 0.0 and 1.0")]
+fn test_validate_sentry_rejects_out_of_range_sample_rate() {
+    // sentry 0.49's ClientOptions::sample_rate builder panics outside [0.0, 1.0],
+    // so this must be caught at config-validation time instead.
+    let config = common::build_test_config(|c| {
+        c.sentry_config.enabled = true;
+        c.sentry_config.dsn = "https://key@example.invalid/1".to_string();
+        c.sentry_config.sample_rate = 1.5;
+    });
+    Configuration::validate_sentry(&config);
+}
+
+#[test]
+#[should_panic(expected = "sentry.traces_sample_rate must be between 0.0 and 1.0")]
+fn test_validate_sentry_rejects_out_of_range_traces_sample_rate() {
+    let config = common::build_test_config(|c| {
+        c.sentry_config.enabled = true;
+        c.sentry_config.dsn = "https://key@example.invalid/1".to_string();
+        c.sentry_config.traces_sample_rate = -0.1;
+    });
+    Configuration::validate_sentry(&config);
+}
+
 #[tokio::test]
 async fn test_config_validation() {
     let config: common::TestConfig = common::create_test_config().await;

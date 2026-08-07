@@ -4,7 +4,7 @@
   "description": "WebRTC-enabled BitTorrent client library",
   "main": "src/rtctorrent.js",
   "module": "src/rtctorrent.js",
-  "browser": "dist/rtctorrent.min.js",
+  "browser": "dist/rtctorrent.browser.js",
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack --mode development --watch",
@@ -27,25 +27,22 @@
   "author": "Torrust Team",
   "license": "MIT",
   "dependencies": {
-    "bencode": "^2.0",
-    "graceful-fs": "^4.2",
-    "js-yaml": "^4.1",
-    "simple-sha1": "^3.1"
+    "bencode": "^2.0.3",
+    "graceful-fs": "^4.2.11",
+    "js-yaml": "^5.2.3",
+    "simple-sha1": "^3.1.0"
   },
   "optionalDependencies": {
-    "@roamhq/wrtc": "^0.9"
+    "@roamhq/wrtc": "^0.10.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.24",
-    "@babel/preset-env": "^7.24",
-    "babel-loader": "^9.1",
-    "crypto-browserify": "^3.12",
-    "jest": "^29.7",
-    "node-polyfill-webpack-plugin": "^4.1",
-    "path-browserify": "^1.0",
-    "stream-browserify": "^3.0",
-    "webpack": "^5.94",
-    "webpack-cli": "^5.1"
+    "@babel/core": "^8.0.1",
+    "@babel/preset-env": "^8.0.2",
+    "babel-loader": "^10.1.1",
+    "buffer": "^6.0.3",
+    "jest": "^30.4.2",
+    "webpack": "^5.109.2",
+    "webpack-cli": "^7.2.2"
   },
   "engines": {
     "node": ">=12.0"
