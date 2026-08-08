@@ -246,7 +246,11 @@ impl Configuration {
             config.tracker_config.max_rtc_pending_answers = parse_env_num::<u64>("TRACKER__MAX_RTC_PENDING_ANSWERS", &value, 32);
         }
         if let Ok(value) = env::var("TRACKER__MAX_TORRENTS") {
-            config.tracker_config.max_torrents = parse_env_num::<u64>("TRACKER__MAX_TORRENTS", &value, 0);
+            // Falls back to the value already loaded, not to the `0` default: `0` means
+            // unlimited, so a typo in this variable would otherwise silently switch the limit
+            // off rather than leave the configured one in place.
+            let current = config.tracker_config.max_torrents;
+            config.tracker_config.max_torrents = parse_env_num::<u64>("TRACKER__MAX_TORRENTS", &value, current);
         }
         if let Ok(value) = env::var("TRACKER__PROMETHEUS_ID") {
             config.tracker_config.prometheus_id = value;

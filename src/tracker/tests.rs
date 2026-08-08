@@ -88,6 +88,44 @@ mod tracker_tests {
         assert_eq!(entry.seeds.len() + entry.peers.len(), 2);
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn max_torrents_holds_under_concurrent_distinct_info_hashes() {
+        // A cap of 1 puts every task on the boundary at once, which is what makes the race
+        // observable: distinct info-hashes land on distinct shards, so nothing serialises the
+        // admission check behind a shared lock. Read-then-increment lets most of these through.
+        const CAP: u64 = 1;
+        const TASKS: u8 = 128;
+        // Repeated because a lost race is probabilistic, not guaranteed on any single pass.
+        for round in 0..20u8 {
+            let tracker = Arc::new(tracker(CAP).await);
+            let barrier = Arc::new(tokio::sync::Barrier::new(TASKS as usize));
+            let mut tasks = Vec::with_capacity(TASKS as usize);
+            for slot in 0..TASKS {
+                let tracker = Arc::clone(&tracker);
+                let barrier = Arc::clone(&barrier);
+                tasks.push(tokio::spawn(async move {
+                    let mut raw = [0u8; 20];
+                    raw[0] = slot;
+                    barrier.wait().await;
+                    tracker.add_torrent_peer(InfoHash(raw), PeerId(raw), peer(0), false);
+                }));
+            }
+            for task in tasks {
+                task.await.unwrap();
+            }
+
+            let tracked = (0..TASKS)
+                .filter(|&slot| {
+                    let mut raw = [0u8; 20];
+                    raw[0] = slot;
+                    tracker.get_torrent(InfoHash(raw)).is_some()
+                })
+                .count() as u64;
+            assert_eq!(tracked, CAP, "round {round}: admitted {tracked} torrents against a cap of {CAP}");
+            assert_eq!(tracker.get_stats().torrents, CAP as i64, "round {round}: counter drifted from the map");
+        }
+    }
+
     #[tokio::test]
     async fn max_torrents_zero_is_unlimited() {
         let tracker = tracker(0).await;

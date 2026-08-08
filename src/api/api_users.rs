@@ -37,24 +37,39 @@ fn is_uuid(s: &str) -> bool {
     })
 }
 
-/// Builds the tombstone entry enqueued for a user removal.
+/// Validates `id` against the configured identifier form and builds the tombstone entry
+/// enqueued for a user removal, returning `None` when it does not match.
 ///
 /// The database connectors locate the row by `user_uuid` or `user_id` depending on the
 /// `id_uuid` setting, so the matching field has to be populated here: an entry with both
-/// unset leaves them nothing to build a `DELETE` from.
-fn user_removal_entry(id: &str, id_uuid: bool) -> UserEntryItem
+/// unset leaves them nothing to build a `DELETE` from. Validating is what makes that safe —
+/// `id` arrives straight from a path segment or a JSON array, and this is the only gate
+/// between it and the removal statement.
+///
+/// The accepted forms match [`api_service_user_post`] exactly, so a user can always be deleted
+/// by the same identifier it was created with. `is_uuid` already requires lowercase, which is
+/// why the value is stored verbatim rather than case-folded.
+fn user_removal_entry(id: &str, id_uuid: bool) -> Option<UserEntryItem>
 {
-    UserEntryItem {
+    let (user_id, user_uuid) = if id_uuid {
+        if !is_uuid(id) {
+            return None;
+        }
+        (None, Some(id.to_string()))
+    } else {
+        (Some(id.parse::<u64>().ok()?), None)
+    };
+    Some(UserEntryItem {
         key: UserId([0u8; 20]),
-        user_id: if id_uuid { None } else { id.parse::<u64>().ok() },
-        user_uuid: if id_uuid { Some(id.to_lowercase()) } else { None },
+        user_id,
+        user_uuid,
         uploaded: 0,
         downloaded: 0,
         completed: 0,
         updated: 0,
         active: 0,
         torrents_active: BTreeMap::new(),
-    }
+    })
 }
 
 /// `GET /api/user/{id}` — returns a user entry as JSON; `{id}` is the user id or UUID.
@@ -217,8 +232,10 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
     let id = path.into_inner();
     let id_hash = UserId(hash_id(&id));
     if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-        let removal = user_removal_entry(&id, data.torrent_tracker.config.database_structure.users.id_uuid);
-        let _ = data.torrent_tracker.add_user_update(id_hash, removal, UpdatesAction::Remove);
+        match user_removal_entry(&id, data.torrent_tracker.config.database_structure.users.id_uuid) {
+            Some(removal) => { let _ = data.torrent_tracker.add_user_update(id_hash, removal, UpdatesAction::Remove); }
+            None => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid id"})),
+        }
     }
     match data.torrent_tracker.remove_user(id_hash) {
         None => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "unknown user_hash"})),
@@ -246,7 +263,13 @@ pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payloa
     for id in ids {
         let id_hash = UserId(hash_id(&id));
         if users_persistent {
-            let _ = data.torrent_tracker.add_user_update(id_hash, user_removal_entry(&id, id_uuid), UpdatesAction::Remove);
+            match user_removal_entry(&id, id_uuid) {
+                Some(removal) => { let _ = data.torrent_tracker.add_user_update(id_hash, removal, UpdatesAction::Remove); }
+                None => {
+                    users_output.insert(id, json!({"status": "invalid id"}));
+                    continue;
+                }
+            }
         }
         let status = match data.torrent_tracker.remove_user(id_hash) {
             None => json!({"status": "unknown user_hash"}),

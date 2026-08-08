@@ -600,7 +600,7 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 #### v4.2.20
 * Applied full audit and security scan on code, and applied recommended solutions.
-* Optimalisation of over-engineered code, applied recommended alternatives.
+* Optimization of over-engineered code, applied recommended alternatives.
 
 #### v4.2.19
 * Bumped versions.

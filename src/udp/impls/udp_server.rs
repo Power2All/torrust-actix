@@ -574,6 +574,13 @@ impl UdpServer {
             debug!("[UDP ERROR] Peer Key Not Valid");
             return Err(ServerError::PeerKeyNotValid);
         }
+        // BEP 15 lets a client send -1 for "tracker's choice"; casting that straight to u64 would
+        // land at u64::MAX, so it goes through the same 1..=72 clamp as the HTTP path. Held in a
+        // local because the response below is sized and truncated by it.
+        let want = match request.peers_wanted.0 {
+            wanted @ 1..=72 => wanted as usize,
+            _ => 72,
+        };
         let announce_request = AnnounceQueryRequest {
             info_hash: InfoHash(request.info_hash.0),
             peer_id: PeerId(request.peer_id.0),
@@ -585,12 +592,7 @@ impl UdpServer {
             no_peer_id: false,
             event: request.event,
             remote_addr: effective_remote_addr.ip(),
-            // BEP 15 lets a client send -1 for "tracker's choice"; casting that straight to u64
-            // would land at u64::MAX, so it goes through the same 1..=72 clamp as the HTTP path.
-            numwant: match request.peers_wanted.0 {
-                want @ 1..=72 => want as u64,
-                _ => 72,
-            },
+            numwant: want as u64,
             rtctorrent: None,
             rtcoffer: None,
             rtcrequest: None,
@@ -605,12 +607,12 @@ impl UdpServer {
             }
         };
         let self_peer_id = PeerId(request.peer_id.0);
-        let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::with_capacity(72);
-        let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(72);
+        let mut peers: Vec<ResponsePeer<Ipv4Addr>> = Vec::with_capacity(want);
+        let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(want);
         if request.bytes_left.0 != 0 {
             if effective_remote_addr.is_ipv4() {
                 for (peer_id, torrent_peer) in &torrent.seeds {
-                    if peers.len() >= 72 { break; }
+                    if peers.len() >= want { break; }
                     if *peer_id == self_peer_id { continue; }
                     if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                         peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
@@ -618,7 +620,7 @@ impl UdpServer {
                 }
             } else {
                 for (peer_id, torrent_peer) in &torrent.seeds_ipv6 {
-                    if peers6.len() >= 72 { break; }
+                    if peers6.len() >= want { break; }
                     if *peer_id == self_peer_id { continue; }
                     if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                         peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
@@ -628,7 +630,7 @@ impl UdpServer {
         }
         if effective_remote_addr.is_ipv4() {
             for (peer_id, torrent_peer) in &torrent.peers {
-                if peers.len() >= 72 { break; }
+                if peers.len() >= want { break; }
                 if *peer_id == self_peer_id { continue; }
                 if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                     peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
@@ -636,7 +638,7 @@ impl UdpServer {
             }
         } else {
             for (peer_id, torrent_peer) in &torrent.peers_ipv6 {
-                if peers6.len() >= 72 { break; }
+                if peers6.len() >= want { break; }
                 if *peer_id == self_peer_id { continue; }
                 if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                     peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });

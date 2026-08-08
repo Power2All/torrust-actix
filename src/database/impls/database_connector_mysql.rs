@@ -666,8 +666,12 @@ impl DatabaseConnectorMySQL {
                 structure.table_name,
                 limit_offset(ENGINE, start, length)
             );
+            // Counts rows returned, not users built: a skipped malformed row must still advance
+            // the cursor or the loop stops early and silently drops every later page.
+            let mut fetched = 0u64;
             let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
+                fetched += 1;
                 let hash = if is_uuid {
                     let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
                     let mut hasher = Sha1::new();
@@ -711,10 +715,10 @@ impl DatabaseConnectorMySQL {
                 );
                 hashes += 1;
             }
-            start += length;
-            if hashes < start {
+            if fetched < length {
                 break;
             }
+            start += length;
             info!("{LOG_PREFIX} Loaded {hashes} users");
         }
         info!("{LOG_PREFIX} Loaded {hashes} users");
@@ -747,9 +751,9 @@ impl DatabaseConnectorMySQL {
             // an `id_uuid` flip) gives every branch below nothing to target. Unwrapping it
             // would take the whole process down, since the release profile sets
             // `panic = 'abort'`.
-            let (id_col, id_val) = if is_uuid {
+            let (id_col, id_val, id_uuid_raw) = if is_uuid {
                 match user_entry_item.user_uuid.as_ref() {
-                    Some(uuid) => (&structure.column_uuid, format!("'{uuid}'")),
+                    Some(uuid) => (&structure.column_uuid, format!("'{uuid}'"), Some(uuid.clone())),
                     None => {
                         warn!("{LOG_PREFIX} Skipping user update with no uuid set");
                         continue;
@@ -757,7 +761,7 @@ impl DatabaseConnectorMySQL {
                 }
             } else {
                 match user_entry_item.user_id {
-                    Some(user_id) => (&structure.column_id, user_id.to_string()),
+                    Some(user_id) => (&structure.column_id, user_id.to_string(), None),
                     None => {
                         warn!("{LOG_PREFIX} Skipping user update with no id set");
                         continue;
@@ -767,13 +771,21 @@ impl DatabaseConnectorMySQL {
             match updates_action {
                 UpdatesAction::Remove => {
                     if db_config.remove_action {
+                        // The UUID is the only identifier that is a string, so it is bound
+                        // rather than interpolated: a `DELETE` is the statement least worth
+                        // trusting to upstream validation. The numeric id is a `u64` and
+                        // cannot render as anything but digits.
                         let query = format!(
                             "DELETE FROM `{}` WHERE `{}`={}",
                             structure.table_name,
                             id_col,
-                            id_val
+                            if id_uuid_raw.is_some() { "?" } else { id_val.as_str() }
                         );
-                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
+                        let mut statement = sqlx::query(sqlx::AssertSqlSafe(query));
+                        if let Some(uuid) = id_uuid_raw {
+                            statement = statement.bind(uuid);
+                        }
+                        if let Err(e) = statement.execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }

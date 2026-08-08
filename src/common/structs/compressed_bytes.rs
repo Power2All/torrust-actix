@@ -45,4 +45,17 @@ pub(crate) static COMPRESSION: OnceLock<CompressionState> = OnceLock::new();
 /// assert_eq!(sdp, "v=0\r\na=...");
 /// ```
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
-pub struct CompressedBytes(pub Arc<[u8]>);
+pub struct CompressedBytes(pub(crate) Arc<[u8]>);
+
+impl CompressedBytes {
+    /// Borrows the stored bytes, still in their compressed form.
+    ///
+    /// Use [`CompressedBytes::decompress`] for the original string. The field itself is crate
+    /// private: sharing an [`Arc`] makes the buffer cheap to clone, not immutable, and a public
+    /// tuple field would invite callers to build values that skip [`CompressedBytes::compress`]
+    /// and so disagree with the process-wide compression settings that `decompress` reads.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}

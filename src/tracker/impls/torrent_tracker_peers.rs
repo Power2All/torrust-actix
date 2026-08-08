@@ -57,21 +57,31 @@ impl TorrentTracker {
         self.config.tracker_config.max_peers_per_torrent as usize
     }
 
-    /// Whether a torrent that is not tracked yet may still be created.
+    /// Claims a slot for a torrent that is not tracked yet, incrementing the torrent counter.
     ///
     /// `max_peers_per_torrent` bounds each swarm but nothing bounds how many swarms exist, and
     /// info-hashes are client-chosen: without a whitelist, an announce flood of random hashes
     /// grows the sharded map until `peers_timeout` catches up. `0` keeps the old unlimited
     /// behaviour.
     ///
-    /// ponytail: reads the global counter rather than summing the shards, so concurrent
-    /// announces can overshoot the limit by roughly the number of in-flight inserts. This is a
-    /// safety valve against unbounded growth, not a quota — an exact bound would need the
-    /// count under the same lock as the insert.
+    /// The check and the increment are one atomic step, because announces for distinct
+    /// info-hashes land on distinct shards and so hold distinct locks — a plain read-then-insert
+    /// lets every thread sitting at `cap - 1` pass at once. The caller inserts unconditionally
+    /// once this returns `true`, so a claim never has to be handed back; callers that gain a
+    /// failure path between here and the insert must release it.
     #[inline]
-    fn may_create_torrent(&self) -> bool {
+    fn try_claim_torrent_slot(&self) -> bool {
+        use std::sync::atomic::Ordering;
         let cap = self.config.tracker_config.max_torrents;
-        cap == 0 || (self.stats.torrents.load(std::sync::atomic::Ordering::Relaxed) as u64) < cap
+        if cap == 0 {
+            self.stats.torrents.fetch_add(1, Ordering::Release);
+            return true;
+        }
+        self.stats.torrents
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                ((current as u64) < cap).then_some(current + 1)
+            })
+            .is_ok()
     }
 
     /// Returns up to `amount` seeds and peers of a torrent, filtered by IP family and excluding
@@ -167,7 +177,9 @@ impl TorrentTracker {
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
-                if !self.may_create_torrent() {
+                // Claims the slot and bumps the torrent counter in one step; the insert below
+                // cannot fail, so the claim is never released.
+                if !self.try_claim_torrent_slot() {
                     debug!("[PEERS] Refusing new torrent {info_hash}: max_torrents reached");
                     return AnnounceEntry::default();
                 }
@@ -185,7 +197,6 @@ impl TorrentTracker {
                     self.update_stats(StatsEvent::Completed, 1);
                     torrent_entry.completed = 1;
                 }
-                self.update_stats(StatsEvent::Torrents, 1);
                 if torrent_peer.is_rtctorrent() {
                     if torrent_peer.left == NumberOfBytes(0) {
                         self.update_stats(StatsEvent::Seeds, 1);
@@ -215,17 +226,15 @@ impl TorrentTracker {
             }
             Entry::Occupied(mut o) => {
                 let entry = o.get_mut();
-                let (seeds_removed, peers_removed) = if torrent_peer.peer_addr.is_ipv4() {
-                    (
-                        i64::from(entry.seeds.remove(&peer_id).is_some()),
-                        i64::from(entry.peers.remove(&peer_id).is_some()),
-                    )
-                } else {
-                    (
-                        i64::from(entry.seeds_ipv6.remove(&peer_id).is_some()),
-                        i64::from(entry.peers_ipv6.remove(&peer_id).is_some()),
-                    )
-                };
+                // Both families are cleared regardless of the address this announce arrived on:
+                // a peer that switches between IPv4 and IPv6 would otherwise stay in the map it
+                // left, counted twice and served to clients at a stale address. `remove_torrent_peer`
+                // already sweeps both, and the completion check below reads `seeds_removed` to
+                // decide whether this peer was already seeding.
+                let seeds_removed = i64::from(entry.seeds.remove(&peer_id).is_some())
+                    + i64::from(entry.seeds_ipv6.remove(&peer_id).is_some());
+                let peers_removed = i64::from(entry.peers.remove(&peer_id).is_some())
+                    + i64::from(entry.peers_ipv6.remove(&peer_id).is_some());
                 let old_rtc_pending_answers = entry.rtc_seeds.get(&peer_id)
                     .or_else(|| entry.rtc_peers.get(&peer_id))
                     .and_then(|p| p.rtc_data.as_ref())
