@@ -9,7 +9,10 @@ use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::types::ahash_map::AHashMap;
-use log::info;
+use log::{
+    debug,
+    info
+};
 use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 
@@ -52,6 +55,33 @@ impl TorrentTracker {
     #[inline]
     fn peer_cap(&self) -> usize {
         self.config.tracker_config.max_peers_per_torrent as usize
+    }
+
+    /// Claims a slot for a torrent that is not tracked yet, incrementing the torrent counter.
+    ///
+    /// `max_peers_per_torrent` bounds each swarm but nothing bounds how many swarms exist, and
+    /// info-hashes are client-chosen: without a whitelist, an announce flood of random hashes
+    /// grows the sharded map until `peers_timeout` catches up. `0` keeps the old unlimited
+    /// behaviour.
+    ///
+    /// The check and the increment are one atomic step, because announces for distinct
+    /// info-hashes land on distinct shards and so hold distinct locks — a plain read-then-insert
+    /// lets every thread sitting at `cap - 1` pass at once. The caller inserts unconditionally
+    /// once this returns `true`, so a claim never has to be handed back; callers that gain a
+    /// failure path between here and the insert must release it.
+    #[inline]
+    fn try_claim_torrent_slot(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        let cap = self.config.tracker_config.max_torrents;
+        if cap == 0 {
+            self.stats.torrents.fetch_add(1, Ordering::Release);
+            return true;
+        }
+        self.stats.torrents
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                ((current as u64) < cap).then_some(current + 1)
+            })
+            .is_ok()
     }
 
     /// Returns up to `amount` seeds and peers of a torrent, filtered by IP family and excluding
@@ -140,13 +170,24 @@ impl TorrentTracker {
     /// previous classification of the same peer id is removed first so statistics stay exact.
     /// Pending RTC answers survive re-announces. Set `completed` to also count a finished download.
     ///
-    /// Returns a bounded [`AnnounceEntry`] snapshot for building the response.
-    pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> AnnounceEntry
+    /// Returns a bounded [`AnnounceEntry`] snapshot for building the response, or `None` when
+    /// the announce named an untracked info-hash and `max_torrents` is already reached.
+    ///
+    /// `None` is distinct from an empty snapshot on purpose: the caller must not treat a refused
+    /// announce as a tracked torrent with no peers, or it will queue persistence and user
+    /// updates for an info-hash this tracker deliberately declined to hold.
+    pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> Option<AnnounceEntry>
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
+                // Claims the slot and bumps the torrent counter in one step; the insert below
+                // cannot fail, so the claim is never released.
+                if !self.try_claim_torrent_slot() {
+                    debug!("[PEERS] Refusing new torrent {info_hash}: max_torrents reached");
+                    return None;
+                }
                 let mut torrent_entry = TorrentEntry {
                     seeds: AHashMap::default(),
                     seeds_ipv6: AHashMap::default(),
@@ -161,7 +202,6 @@ impl TorrentTracker {
                     self.update_stats(StatsEvent::Completed, 1);
                     torrent_entry.completed = 1;
                 }
-                self.update_stats(StatsEvent::Torrents, 1);
                 if torrent_peer.is_rtctorrent() {
                     if torrent_peer.left == NumberOfBytes(0) {
                         self.update_stats(StatsEvent::Seeds, 1);
@@ -187,21 +227,19 @@ impl TorrentTracker {
                 }
                 let snapshot = AnnounceEntry::from_entry(&torrent_entry);
                 v.insert(torrent_entry);
-                snapshot
+                Some(snapshot)
             }
             Entry::Occupied(mut o) => {
                 let entry = o.get_mut();
-                let (seeds_removed, peers_removed) = if torrent_peer.peer_addr.is_ipv4() {
-                    (
-                        i64::from(entry.seeds.remove(&peer_id).is_some()),
-                        i64::from(entry.peers.remove(&peer_id).is_some()),
-                    )
-                } else {
-                    (
-                        i64::from(entry.seeds_ipv6.remove(&peer_id).is_some()),
-                        i64::from(entry.peers_ipv6.remove(&peer_id).is_some()),
-                    )
-                };
+                // Both families are cleared regardless of the address this announce arrived on:
+                // a peer that switches between IPv4 and IPv6 would otherwise stay in the map it
+                // left, counted twice and served to clients at a stale address. `remove_torrent_peer`
+                // already sweeps both, and the completion check below reads `seeds_removed` to
+                // decide whether this peer was already seeding.
+                let seeds_removed = i64::from(entry.seeds.remove(&peer_id).is_some())
+                    + i64::from(entry.seeds_ipv6.remove(&peer_id).is_some());
+                let peers_removed = i64::from(entry.peers.remove(&peer_id).is_some())
+                    + i64::from(entry.peers_ipv6.remove(&peer_id).is_some());
                 let old_rtc_pending_answers = entry.rtc_seeds.get(&peer_id)
                     .or_else(|| entry.rtc_peers.get(&peer_id))
                     .and_then(|p| p.rtc_data.as_ref())
@@ -221,9 +259,14 @@ impl TorrentTracker {
                 if was_rtc_peer {
                     self.update_stats(StatsEvent::Peers, -1);
                 }
-                if completed {
+                // Count a download only when this peer actually crosses into seeding. `completed`
+                // comes from a client-supplied `event=completed`, and this used to fire on every
+                // such announce with no `left == 0` check (unlike the vacant branch above), so a
+                // single client could drive the figure up without limit — silently wrapping,
+                // since the release profile disables overflow checks.
+                if completed && torrent_peer.left == NumberOfBytes(0) && seeds_removed == 0 && !was_rtc_seed {
                     self.update_stats(StatsEvent::Completed, 1);
-                    entry.completed += 1;
+                    entry.completed = entry.completed.saturating_add(1);
                 }
                 let cap = self.peer_cap();
                 if torrent_peer.is_rtctorrent() {
@@ -253,7 +296,7 @@ impl TorrentTracker {
                     self.update_stats(event, 1 - evicted);
                 }
                 entry.updated = std::time::Instant::now();
-                AnnounceEntry::from_entry(entry)
+                Some(AnnounceEntry::from_entry(entry))
             }
         }
     }

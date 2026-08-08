@@ -2,8 +2,8 @@ use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::common::types::QueryValues;
 use crate::security::security::{
+    validate_peer_message,
     MAX_OFFER_ID_LENGTH,
-    MAX_PEER_MESSAGE_SIZE,
     MAX_SCRAPE_TORRENTS
 };
 use crate::tracker::enums::announce_event::AnnounceEvent;
@@ -119,11 +119,11 @@ impl TorrentTracker {
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .map(std::string::ToString::to_string);
-        if let Some(ref offer) = rtcoffer_string && offer.len() > MAX_PEER_MESSAGE_SIZE {
-            return Err(CustomError::new("rtcoffer exceeds maximum size"));
+        if let Some(ref offer) = rtcoffer_string {
+            validate_peer_message(offer).map_err(|_| CustomError::new("rtcoffer exceeds maximum size"))?;
         }
-        if let Some(ref answer) = rtcanswer_string && answer.len() > MAX_PEER_MESSAGE_SIZE {
-            return Err(CustomError::new("rtcanswer exceeds maximum size"));
+        if let Some(ref answer) = rtcanswer_string {
+            validate_peer_message(answer).map_err(|_| CustomError::new("rtcanswer exceeds maximum size"))?;
         }
         if let Some(ref answer_for) = rtcanswerfor_string && answer_for.len() > MAX_OFFER_ID_LENGTH {
             return Err(CustomError::new("rtcanswerfor exceeds maximum size"));
@@ -187,7 +187,12 @@ impl TorrentTracker {
                 None
             },
         };
-        if let Some(ref sdp_answer) = announce_query.rtcanswer
+        // Gated on `rtctorrent` like the offer path below: the caller only checks its listener's
+        // `rtctorrent` setting against this flag, so without it an announce carrying just
+        // `rtcanswer` + `rtcanswerfor` writes into RTC state through a listener that has the
+        // feature switched off.
+        if announce_query.rtctorrent.unwrap_or(false)
+            && let Some(ref sdp_answer) = announce_query.rtcanswer
             && let Some(ref target_hex) = announce_query.rtcanswerfor
             && let Ok(bytes) = hex::decode(target_hex)
             && let Some(arr) = bytes.get(..20).and_then(|s| <[u8; 20]>::try_from(s).ok()) {
@@ -218,12 +223,18 @@ impl TorrentTracker {
                 torrent_peer.event = AnnounceEvent::Started;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
                 let is_rtctorrent = announce_query.rtctorrent.unwrap_or(false);
-                let torrent_entry = data.add_torrent_peer(
+                // A refused announce returns before any of the work below. Queueing a
+                // persistence or cache update for an info-hash the tracker declined to hold
+                // would just move an announce flood from memory into the database, and crediting
+                // user activity for it would grow `torrents_active` just as unboundedly.
+                let Some(torrent_entry) = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer,
                     false
-                );
+                ) else {
+                    return Err(CustomError::new("torrent limit reached"));
+                };
                 let torrent_entry = if is_rtctorrent {
                     data.get_rtctorrent_peers(
                         announce_query.info_hash,
@@ -265,8 +276,12 @@ impl TorrentTracker {
                         if users_enabled && let Some(user_id) = user_key {
                             let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                             if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
-                                user.uploaded += announce_query.uploaded;
-                                user.downloaded += announce_query.downloaded;
+                                // Both values are whatever the client claims, so they saturate
+                                // rather than wrap: the release profile turns overflow checks
+                                // off, and a peer reporting u64::MAX would otherwise roll the
+                                // running total back over zero.
+                                user.uploaded = user.uploaded.saturating_add(announce_query.uploaded);
+                                user.downloaded = user.downloaded.saturating_add(announce_query.downloaded);
                                 user.updated = timestamp;
                                 user.torrents_active.remove(&announce_query.info_hash);
                             }) {
@@ -292,12 +307,16 @@ impl TorrentTracker {
                 torrent_peer.event = AnnounceEvent::Completed;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
                 let is_rtctorrent = announce_query.rtctorrent.unwrap_or(false);
-                let torrent_entry = data.add_torrent_peer(
+                // See the `Started` arm: a refused announce must not reach the update queue or
+                // the user counters, and `completed` in particular must not be credited.
+                let Some(torrent_entry) = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer,
                     true
-                );
+                ) else {
+                    return Err(CustomError::new("torrent limit reached"));
+                };
                 let torrent_entry = if is_rtctorrent {
                     data.get_rtctorrent_peers(
                         announce_query.info_hash,
@@ -317,7 +336,7 @@ impl TorrentTracker {
                 if users_enabled && let Some(user_id) = user_key {
                     let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                     if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
-                        user.completed += 1;
+                        user.completed = user.completed.saturating_add(1);
                         user.updated = timestamp;
                     }) {
                         data.add_user_update(user_id, user, UpdatesAction::Add);

@@ -87,11 +87,19 @@ impl ParsePool {
                                 } else {
                                     (packet.remote_addr, packet.data.as_slice())
                                 };
+                                // The announce packet's IP field is unauthenticated, exactly like
+                                // the SPP header, so it gets the same allowlist: honouring it from
+                                // an arbitrary sender lets any client register a third party's
+                                // address as a peer and point the swarm at it. An empty list keeps
+                                // the legacy trust-anyone behaviour that config validation warns
+                                // about at startup.
+                                let payload_ip_allowed = use_payload_ip
+                                    && (proxy_addrs.is_empty() || proxy_addrs.contains(&packet.remote_addr.ip()));
                                 let response = UdpServer::handle_packet(
                                     effective_addr,
                                     payload_slice,
                                     tracker_cloned.clone(),
-                                    use_payload_ip
+                                    payload_ip_allowed
                                 ).await;
                                 UdpServer::send_response(
                                     tracker_cloned.clone(),

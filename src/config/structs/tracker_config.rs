@@ -46,6 +46,14 @@ pub struct TrackerConfig {
     /// Maximum SDP answers queued for a single RtcTorrent peer before the oldest is dropped.
     #[serde(default = "crate::config::config::default_max_rtc_pending_answers")]
     pub max_rtc_pending_answers: u64,
+    /// Maximum distinct torrents held in memory. Announces for info-hashes that are not
+    /// already tracked are refused once the limit is reached; known torrents keep working.
+    /// `0` disables the limit.
+    ///
+    /// Info-hashes are chosen by the client, so with `whitelist_enabled = false` this is the
+    /// only bound on how many swarms an announce flood can create.
+    #[serde(default = "crate::config::config::default_max_torrents")]
+    pub max_torrents: u64,
     /// Cumulative download count loaded from (or persisted to) the database.
     pub total_downloads: u64,
     /// Enable the built-in Swagger UI at `<api>/swagger-ui/`.

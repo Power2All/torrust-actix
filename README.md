@@ -598,6 +598,10 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 ### ChangeLog
 
+#### v4.2.20
+* Applied full audit and security scan on code, and applied recommended solutions.
+* Optimization of over-engineered code, applied recommended alternatives.
+
 #### v4.2.19
 * Bumped versions.
 * Fixed an exploit issue with fast-uri on the RtcTorrent library

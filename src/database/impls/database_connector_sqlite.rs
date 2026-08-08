@@ -25,7 +25,8 @@ use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use log::{
     error,
-    info
+    info,
+    warn
 };
 use sha1::{
     Digest,
@@ -691,8 +692,12 @@ impl DatabaseConnectorSQLite {
                 structure.table_name,
                 limit_offset(ENGINE, start, length)
             );
+            // Counts rows returned, not users built: a skipped malformed row must still advance
+            // the cursor or the loop stops early and silently drops every later page.
+            let mut fetched = 0u64;
             let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
+                fetched += 1;
                 let hash = if is_uuid {
                     let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
                     let mut hasher = Sha1::new();
@@ -704,10 +709,16 @@ impl DatabaseConnectorSQLite {
                     hasher.update(id_data);
                     <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                 };
+                // A malformed key column would otherwise abort the process at boot; skip the row
+                // and let the operator see which user is broken.
+                let Ok(user_key) = UserId::from_str(result.get(structure.column_key.as_str())) else {
+                    warn!("{LOG_PREFIX} Skipping user with an unparsable key column");
+                    continue;
+                };
                 tracker.add_user(
                     UserId(hash),
                     UserEntryItem {
-                        key: UserId::from_str(result.get(structure.column_key.as_str())).unwrap(),
+                        key: user_key,
                         user_id: if is_uuid {
                             None
                         } else {
@@ -728,10 +739,10 @@ impl DatabaseConnectorSQLite {
                 );
                 hashes += 1;
             }
-            start += length;
-            if hashes < start {
+            if fetched < length {
                 break;
             }
+            start += length;
             info!("{LOG_PREFIX} Handled {hashes} users");
         }
         info!("{LOG_PREFIX} Handled {hashes} users");
@@ -759,31 +770,55 @@ impl DatabaseConnectorSQLite {
         let mut in_chunk = 0u64;
         for (user_entry_item, updates_action) in users.values() {
             handled += 1;
+            // Resolve the row identifier once. Rows are addressed by UUID or by numeric id
+            // depending on `id_uuid`, and an entry carrying neither (or the other one, after
+            // an `id_uuid` flip) gives every branch below nothing to target. Unwrapping it
+            // would take the whole process down, since the release profile sets
+            // `panic = 'abort'`.
+            let (id_col, id_val, id_uuid_raw) = if is_uuid {
+                match user_entry_item.user_uuid.as_ref() {
+                    Some(uuid) => (&structure.column_uuid, format!("'{uuid}'"), Some(uuid.clone())),
+                    None => {
+                        warn!("{LOG_PREFIX} Skipping user update with no uuid set");
+                        continue;
+                    }
+                }
+            } else {
+                match user_entry_item.user_id {
+                    Some(user_id) => (&structure.column_id, user_id.to_string(), None),
+                    None => {
+                        warn!("{LOG_PREFIX} Skipping user update with no id set");
+                        continue;
+                    }
+                }
+            };
             match updates_action {
                 UpdatesAction::Remove => {
                     if db_config.remove_action {
-                        let query = if is_uuid {
-                            format!(
-                                "DELETE FROM `{}` WHERE `{}`='{}'",
-                                structure.table_name,
-                                structure.column_uuid,
-                                user_entry_item.user_uuid.clone().unwrap()
-                            )
-                        } else {
-                            format!(
-                                "DELETE FROM `{}` WHERE `{}`='{}'",
-                                structure.table_name,
-                                structure.column_id,
-                                user_entry_item.user_id.unwrap()
-                            )
-                        };
-                        if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
+                        // The UUID is the only identifier that is a string, so it is bound
+                        // rather than interpolated: a `DELETE` is the statement least worth
+                        // trusting to upstream validation. The numeric id is a `u64` and
+                        // cannot render as anything but digits.
+                        let query = format!(
+                            "DELETE FROM `{}` WHERE `{}`={}",
+                            structure.table_name,
+                            id_col,
+                            if id_uuid_raw.is_some() { "?" } else { id_val.as_str() }
+                        );
+                        let mut statement = sqlx::query(sqlx::AssertSqlSafe(query));
+                        if let Some(uuid) = id_uuid_raw {
+                            statement = statement.bind(uuid);
+                        }
+                        if let Err(e) = statement.execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
                         }
                     }
                 }
                 UpdatesAction::Add | UpdatesAction::Update => {
+                    // Bound on the same terms as the removal path above, so every statement that
+                    // carries a user identifier treats the UUID as data rather than as SQL.
+                    let id_placeholder = if id_uuid_raw.is_some() { "?" } else { id_val.as_str() };
                     let key_value = if is_binary_key {
                         format!("X'{}'", user_entry_item.key)
                     } else {
@@ -791,17 +826,6 @@ impl DatabaseConnectorSQLite {
                     };
 
                     let query = if db_config.insert_vacant {
-                        let (id_col, id_val) = if is_uuid {
-                            (
-                                &structure.column_uuid,
-                                format!("'{}'", user_entry_item.user_uuid.clone().unwrap()),
-                            )
-                        } else {
-                            (
-                                &structure.column_id,
-                                format!("{}", user_entry_item.user_id.unwrap()),
-                            )
-                        };
                         let conflict_clause = upsert_conflict_clause(
                             ENGINE,
                             id_col,
@@ -824,7 +848,7 @@ impl DatabaseConnectorSQLite {
                             structure.column_key,
                             structure.column_uploaded,
                             structure.column_updated,
-                            id_val,
+                            id_placeholder,
                             user_entry_item.completed,
                             user_entry_item.active,
                             user_entry_item.downloaded,
@@ -834,17 +858,6 @@ impl DatabaseConnectorSQLite {
                             conflict_clause
                         )
                     } else {
-                        let (where_col, where_val) = if is_uuid {
-                            (
-                                &structure.column_uuid,
-                                format!("'{}'", user_entry_item.user_uuid.clone().unwrap()),
-                            )
-                        } else {
-                            (
-                                &structure.column_id,
-                                format!("{}", user_entry_item.user_id.unwrap()),
-                            )
-                        };
                         format!(
                             "UPDATE OR IGNORE `{}` SET `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={}, `{}`={} WHERE `{}`={}",
                             structure.table_name,
@@ -860,11 +873,15 @@ impl DatabaseConnectorSQLite {
                             user_entry_item.uploaded,
                             structure.column_updated,
                             user_entry_item.updated,
-                            where_col,
-                            where_val
+                            id_col,
+                            id_placeholder
                         )
                     };
-                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
+                    let mut statement = sqlx::query(sqlx::AssertSqlSafe(query));
+                    if let Some(uuid) = id_uuid_raw {
+                        statement = statement.bind(uuid);
+                    }
+                    if let Err(e) = statement.execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }

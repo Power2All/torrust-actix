@@ -16,6 +16,7 @@ pub(crate) fn default_keys_cleanup_interval() -> u64 { 60 }
 pub(crate) fn default_max_peers_per_torrent() -> u64 { 10_000 }
 /// Serde default cap on SDP answers queued for one RtcTorrent peer: `32`.
 pub(crate) fn default_max_rtc_pending_answers() -> u64 { 32 }
+pub(crate) fn default_max_torrents() -> u64 { 0 }
 /// Serde default Prometheus metric namespace: `torrust_actix`.
 pub(crate) fn default_prometheus_id() -> String { String::from("torrust_actix") }
 /// Serde default cluster mode: standalone (no clustering).

@@ -255,7 +255,9 @@ pub fn build_compact_announce_response(
     announce: &crate::tracker::structs::announce_query_request::AnnounceQueryRequest,
     stats: &AnnounceResponseStats,
 ) -> Vec<u8> {
-    let mut peers_list: Vec<u8> = Vec::with_capacity(72 * 6);
+    // Already clamped to 1..=72 by `validate_announce`, so it is safe to size buffers with.
+    let want = announce.numwant as usize;
+    let mut peers_list: Vec<u8> = Vec::with_capacity(want * 6);
     match client_ip {
         IpAddr::V4(_) => {
             if announce.left != 0 {
@@ -263,7 +265,7 @@ pub fn build_compact_announce_response(
                     &torrent_entry.seeds,
                     TorrentPeersType::IPv4,
                     Some(announce.peer_id),
-                    72
+                    want
                 );
                 for torrent_peer in seeds.values() {
                     if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
@@ -272,15 +274,15 @@ pub fn build_compact_announce_response(
                     }
                 }
             }
-            if peers_list.len() < 72 * 6 {
+            if peers_list.len() < want * 6 {
                 let peers = tracker.get_peers(
                     &torrent_entry.peers,
                     TorrentPeersType::IPv4,
                     Some(announce.peer_id),
-                    72
+                    want
                 );
                 for torrent_peer in peers.values() {
-                    if peers_list.len() >= 72 * 6 {
+                    if peers_list.len() >= want * 6 {
                         break;
                     }
                     if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
@@ -304,7 +306,7 @@ pub fn build_compact_announce_response(
                     &torrent_entry.seeds_ipv6,
                     TorrentPeersType::IPv6,
                     Some(announce.peer_id),
-                    72
+                    want
                 );
                 for torrent_peer in seeds.values() {
                     if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
@@ -313,15 +315,15 @@ pub fn build_compact_announce_response(
                     }
                 }
             }
-            if peers_list.len() < 72 * 18 {
+            if peers_list.len() < want * 18 {
                 let peers = tracker.get_peers(
                     &torrent_entry.peers_ipv6,
                     TorrentPeersType::IPv6,
                     Some(announce.peer_id),
-                    72
+                    want
                 );
                 for torrent_peer in peers.values() {
-                    if peers_list.len() >= 72 * 18 {
+                    if peers_list.len() >= want * 18 {
                         break;
                     }
                     if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
@@ -351,6 +353,8 @@ pub fn build_extended_announce_response(
     announce: &crate::tracker::structs::announce_query_request::AnnounceQueryRequest,
     stats: &AnnounceResponseStats,
 ) -> Vec<u8> {
+    // Already clamped to 1..=72 by `validate_announce`.
+    let want = announce.numwant as usize;
     let mut peers_list = ben_list!();
     let peers_list_mut = peers_list.list_mut().unwrap();
     match client_ip {
@@ -360,7 +364,7 @@ pub fn build_extended_announce_response(
                     &torrent_entry.seeds,
                     TorrentPeersType::IPv4,
                     Some(announce.peer_id),
-                    72
+                    want
                 );
                 for (peer_id, torrent_peer) in &seeds {
                     peers_list_mut.push(ben_map! {
@@ -370,15 +374,15 @@ pub fn build_extended_announce_response(
                     });
                 }
             }
-            if peers_list_mut.len() < 72 {
+            if peers_list_mut.len() < want {
                 let peers = tracker.get_peers(
                     &torrent_entry.peers,
                     TorrentPeersType::IPv4,
                     Some(announce.peer_id),
-                    72
+                    want
                 );
                 for (peer_id, torrent_peer) in &peers {
-                    if peers_list_mut.len() >= 72 {
+                    if peers_list_mut.len() >= want {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
@@ -403,7 +407,7 @@ pub fn build_extended_announce_response(
                     &torrent_entry.seeds_ipv6,
                     TorrentPeersType::IPv6,
                     Some(announce.peer_id),
-                    72
+                    want
                 );
                 for (peer_id, torrent_peer) in &seeds {
                     peers_list_mut.push(ben_map! {
@@ -413,15 +417,15 @@ pub fn build_extended_announce_response(
                     });
                 }
             }
-            if peers_list_mut.len() < 72 {
+            if peers_list_mut.len() < want {
                 let peers = tracker.get_peers(
                     &torrent_entry.peers_ipv6,
                     TorrentPeersType::IPv6,
                     Some(announce.peer_id),
-                    72
+                    want
                 );
                 for (peer_id, torrent_peer) in &peers {
-                    if peers_list_mut.len() >= 72 {
+                    if peers_list_mut.len() >= want {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
@@ -963,13 +967,10 @@ pub fn create_cluster_error_response_json(error: &ForwardError) -> String {
 }
 
 /// Compares two strings in constant time (for token checks), returning `true` on equality.
+///
+/// Kept as a re-export of [`constant_time_eq`] so the cluster handshake and the API token
+/// check share one implementation: this one used to return early on a length mismatch, which
+/// leaks the length of `cluster_token` to anyone who can attempt a handshake.
 pub fn constant_time_compare(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut result = 0u8;
-    for (x, y) in a.bytes().zip(b.bytes()) {
-        result |= x ^ y;
-    }
-    result == 0
+    crate::security::security::constant_time_eq(a, b)
 }

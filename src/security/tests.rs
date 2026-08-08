@@ -44,19 +44,22 @@ mod security_tests {
     #[test]
     fn test_validate_file_path_reject_traversal() {
         assert!(validate_file_path("../../../etc/passwd").is_err());
-        assert!(validate_file_path("./config").is_err());
-        assert!(validate_file_path(".\\config").is_err());
+        assert!(validate_file_path("certs/../../etc/passwd").is_err());
+        assert!(validate_file_path("cert\0.pem").is_err());
     }
 
     #[test]
-    fn test_validate_file_path_reject_absolute() {
-        assert!(validate_file_path("/etc/cert.pem").is_err());
-        assert!(validate_file_path("C:\\certs\\cert.pem").is_err());
+    fn test_validate_file_path_accept_absolute() {
+        // Certificates normally live outside the working directory; these paths come from the
+        // configuration file, never from a request.
+        assert!(validate_file_path("/etc/ssl/certs/cert.pem").is_ok());
+        assert!(validate_file_path("C:\\certs\\cert.pem").is_ok());
     }
 
     #[test]
     fn test_validate_file_path_accept_valid() {
         assert!(validate_file_path("certs/cert.pem").is_ok());
+        assert!(validate_file_path("./certs/cert.pem").is_ok());
         assert!(validate_file_path("cert.pem").is_ok());
     }
 

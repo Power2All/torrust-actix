@@ -58,6 +58,7 @@ use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
 use crate::security::security::{
     constant_time_eq,
+    validate_info_hash_hex,
     validate_remote_ip
 };
 use crate::ssl::enums::server_identifier::ServerIdentifier;
@@ -434,8 +435,17 @@ pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceDat
 }
 
 /// `GET /api/openapi.json` — serves the generated OpenAPI specification for Swagger UI.
-pub async fn api_service_openapi_json() -> HttpResponse
+///
+/// Behind the same token as the rest of the API: the specification enumerates every management
+/// endpoint, and there is no reason for it to be the one route that answers anonymously.
+pub async fn api_service_openapi_json(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
+    if let Some(error_return) = api_validation(&request, &data).await {
+        return error_return;
+    }
+    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await {
+        return response;
+    }
     let openapi_file = include_str!("../openapi.json");
     HttpResponse::Ok().content_type(ContentType::json()).body(openapi_file)
 }
@@ -466,7 +476,7 @@ pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, Custo
 /// Returns a JSON error response describing the malformed value.
 pub fn parse_info_hash(info: &str) -> Result<InfoHash, HttpResponse>
 {
-    if info.len() != 40 {
+    if validate_info_hash_hex(info).is_err() {
         return Err(HttpResponse::BadRequest()
             .content_type(ContentType::json())
             .json(json!({"status": "bad info_hash"})));
