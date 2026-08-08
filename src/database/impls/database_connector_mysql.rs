@@ -792,6 +792,9 @@ impl DatabaseConnectorMySQL {
                     }
                 }
                 UpdatesAction::Add | UpdatesAction::Update => {
+                    // Bound on the same terms as the removal path above, so every statement that
+                    // carries a user identifier treats the UUID as data rather than as SQL.
+                    let id_placeholder = if id_uuid_raw.is_some() { "?" } else { id_val.as_str() };
                     let key_value = if is_binary_key {
                         format!("UNHEX('{}')", user_entry_item.key)
                     } else {
@@ -820,7 +823,7 @@ impl DatabaseConnectorMySQL {
                             structure.column_completed,
                             structure.column_active,
                             structure.column_updated,
-                            id_val,
+                            id_placeholder,
                             key_value,
                             user_entry_item.uploaded,
                             user_entry_item.downloaded,
@@ -846,10 +849,14 @@ impl DatabaseConnectorMySQL {
                             structure.column_updated,
                             user_entry_item.updated,
                             id_col,
-                            id_val
+                            id_placeholder
                         )
                     };
-                    if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
+                    let mut statement = sqlx::query(sqlx::AssertSqlSafe(query));
+                    if let Some(uuid) = id_uuid_raw {
+                        statement = statement.bind(uuid);
+                    }
+                    if let Err(e) = statement.execute(&mut *transaction).await {
                         error!("{LOG_PREFIX} Error: {e}");
                         return Err(e);
                     }

@@ -223,12 +223,18 @@ impl TorrentTracker {
                 torrent_peer.event = AnnounceEvent::Started;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
                 let is_rtctorrent = announce_query.rtctorrent.unwrap_or(false);
-                let torrent_entry = data.add_torrent_peer(
+                // A refused announce returns before any of the work below. Queueing a
+                // persistence or cache update for an info-hash the tracker declined to hold
+                // would just move an announce flood from memory into the database, and crediting
+                // user activity for it would grow `torrents_active` just as unboundedly.
+                let Some(torrent_entry) = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer,
                     false
-                );
+                ) else {
+                    return Err(CustomError::new("torrent limit reached"));
+                };
                 let torrent_entry = if is_rtctorrent {
                     data.get_rtctorrent_peers(
                         announce_query.info_hash,
@@ -301,12 +307,16 @@ impl TorrentTracker {
                 torrent_peer.event = AnnounceEvent::Completed;
                 debug!("[HANDLE ANNOUNCE] Adding to infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
                 let is_rtctorrent = announce_query.rtctorrent.unwrap_or(false);
-                let torrent_entry = data.add_torrent_peer(
+                // See the `Started` arm: a refused announce must not reach the update queue or
+                // the user counters, and `completed` in particular must not be credited.
+                let Some(torrent_entry) = data.add_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     torrent_peer,
                     true
-                );
+                ) else {
+                    return Err(CustomError::new("torrent limit reached"));
+                };
                 let torrent_entry = if is_rtctorrent {
                     data.get_rtctorrent_peers(
                         announce_query.info_hash,

@@ -6,18 +6,71 @@ mod tracker_tests {
     use crate::tracker::structs::info_hash::InfoHash;
     use crate::tracker::structs::peer_id::PeerId;
     use crate::tracker::structs::torrent_peer::TorrentPeer;
+    use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
     use crate::tracker::structs::torrent_tracker::TorrentTracker;
-    use std::net::SocketAddr;
+    use crate::tracker::structs::user_entry_item::UserEntryItem;
+    use crate::tracker::structs::user_id::UserId;
+    use std::collections::BTreeMap;
+    use std::net::{
+        IpAddr,
+        SocketAddr
+    };
     use std::str::FromStr;
     use std::sync::Arc;
 
     /// Builds an in-memory tracker. `max_torrents` of 0 keeps the unlimited default.
     async fn tracker(max_torrents: u64) -> TorrentTracker {
+        tracker_with(max_torrents, false).await
+    }
+
+    /// As [`tracker`], but `persistent` turns on the update queue so a test can assert that a
+    /// refused announce never reaches it.
+    async fn tracker_with(max_torrents: u64, persistent: bool) -> TorrentTracker {
         let mut config = Configuration::init();
         config.database.path = "sqlite::memory:".to_string();
-        config.database.persistent = false;
+        config.database.persistent = persistent;
         config.tracker_config.max_torrents = max_torrents;
+        config.tracker_config.users_enabled = true;
         TorrentTracker::new(Arc::new(config), false).await
+    }
+
+    /// Adds a user and returns its lookup id, for asserting that refused announces leave the
+    /// user's activity and counters alone.
+    fn add_test_user(tracker: &TorrentTracker) -> UserId {
+        let user_id = UserId([7u8; 20]);
+        tracker.add_user(user_id, UserEntryItem {
+            key: user_id,
+            user_id: Some(1),
+            user_uuid: None,
+            uploaded: 0,
+            downloaded: 0,
+            completed: 0,
+            updated: 0,
+            active: 1,
+            torrents_active: BTreeMap::new(),
+        });
+        user_id
+    }
+
+    fn announce(info_hash: InfoHash, peer_id: PeerId, event: AnnounceEvent, left: u64) -> AnnounceQueryRequest {
+        AnnounceQueryRequest {
+            info_hash,
+            peer_id,
+            port: 6881,
+            uploaded: 0,
+            downloaded: 0,
+            left,
+            compact: false,
+            no_peer_id: false,
+            event,
+            remote_addr: IpAddr::from_str("10.0.0.1").unwrap(),
+            numwant: 72,
+            rtctorrent: None,
+            rtcoffer: None,
+            rtcrequest: None,
+            rtcanswer: None,
+            rtcanswerfor: None,
+        }
     }
 
     fn peer(left: u64) -> TorrentPeer {
@@ -124,6 +177,45 @@ mod tracker_tests {
             assert_eq!(tracked, CAP, "round {round}: admitted {tracked} torrents against a cap of {CAP}");
             assert_eq!(tracker.get_stats().torrents, CAP as i64, "round {round}: counter drifted from the map");
         }
+    }
+
+    #[tokio::test]
+    async fn refused_started_announce_touches_no_persistence_or_user_state() {
+        let tracker = tracker_with(1, true).await;
+        let user_id = add_test_user(&tracker);
+
+        // Fill the single slot, then measure from there.
+        tracker.handle_announce(&announce(hash(1), PeerId([1u8; 20]), AnnounceEvent::Started, 100), Some(user_id)).await.unwrap();
+        let updates_before = tracker.get_stats().torrents_updates;
+
+        let refused = tracker.handle_announce(&announce(hash(2), PeerId([2u8; 20]), AnnounceEvent::Started, 100), Some(user_id)).await;
+        assert!(refused.is_err(), "an announce past max_torrents must be reported to the client");
+
+        assert!(tracker.get_torrent(hash(2)).is_none());
+        // The whole point of the cap: a refused announce must not turn into a queued database
+        // write, or a flood just moves from memory into the persistence queue.
+        assert_eq!(tracker.get_stats().torrents_updates, updates_before, "refused announce queued a persistence update");
+        let user = tracker.get_user(user_id).unwrap();
+        assert!(!user.torrents_active.contains_key(&hash(2)), "refused announce recorded user activity");
+        assert_eq!(user.torrents_active.len(), 1, "only the admitted torrent belongs in torrents_active");
+    }
+
+    #[tokio::test]
+    async fn refused_completed_announce_credits_nothing() {
+        let tracker = tracker_with(1, true).await;
+        let user_id = add_test_user(&tracker);
+
+        tracker.handle_announce(&announce(hash(1), PeerId([1u8; 20]), AnnounceEvent::Started, 100), Some(user_id)).await.unwrap();
+        let updates_before = tracker.get_stats().torrents_updates;
+        let completed_before = tracker.get_stats().completed;
+
+        let refused = tracker.handle_announce(&announce(hash(2), PeerId([2u8; 20]), AnnounceEvent::Completed, 0), Some(user_id)).await;
+        assert!(refused.is_err());
+
+        assert!(tracker.get_torrent(hash(2)).is_none());
+        assert_eq!(tracker.get_stats().torrents_updates, updates_before);
+        assert_eq!(tracker.get_stats().completed, completed_before, "refused announce counted a download");
+        assert_eq!(tracker.get_user(user_id).unwrap().completed, 0, "refused announce credited the user");
     }
 
     #[tokio::test]

@@ -170,8 +170,13 @@ impl TorrentTracker {
     /// previous classification of the same peer id is removed first so statistics stay exact.
     /// Pending RTC answers survive re-announces. Set `completed` to also count a finished download.
     ///
-    /// Returns a bounded [`AnnounceEntry`] snapshot for building the response.
-    pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> AnnounceEntry
+    /// Returns a bounded [`AnnounceEntry`] snapshot for building the response, or `None` when
+    /// the announce named an untracked info-hash and `max_torrents` is already reached.
+    ///
+    /// `None` is distinct from an empty snapshot on purpose: the caller must not treat a refused
+    /// announce as a tracked torrent with no peers, or it will queue persistence and user
+    /// updates for an info-hash this tracker deliberately declined to hold.
+    pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> Option<AnnounceEntry>
     {
         let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
         let mut lock = shard.write();
@@ -181,7 +186,7 @@ impl TorrentTracker {
                 // cannot fail, so the claim is never released.
                 if !self.try_claim_torrent_slot() {
                     debug!("[PEERS] Refusing new torrent {info_hash}: max_torrents reached");
-                    return AnnounceEntry::default();
+                    return None;
                 }
                 let mut torrent_entry = TorrentEntry {
                     seeds: AHashMap::default(),
@@ -222,7 +227,7 @@ impl TorrentTracker {
                 }
                 let snapshot = AnnounceEntry::from_entry(&torrent_entry);
                 v.insert(torrent_entry);
-                snapshot
+                Some(snapshot)
             }
             Entry::Occupied(mut o) => {
                 let entry = o.get_mut();
@@ -291,7 +296,7 @@ impl TorrentTracker {
                     self.update_stats(event, 1 - evicted);
                 }
                 entry.updated = std::time::Instant::now();
-                AnnounceEntry::from_entry(entry)
+                Some(AnnounceEntry::from_entry(entry))
             }
         }
     }
