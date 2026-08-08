@@ -585,7 +585,12 @@ impl UdpServer {
             no_peer_id: false,
             event: request.event,
             remote_addr: effective_remote_addr.ip(),
-            numwant: request.peers_wanted.0 as u64,
+            // BEP 15 lets a client send -1 for "tracker's choice"; casting that straight to u64
+            // would land at u64::MAX, so it goes through the same 1..=72 clamp as the HTTP path.
+            numwant: match request.peers_wanted.0 {
+                want @ 1..=72 => want as u64,
+                _ => 72,
+            },
             rtctorrent: None,
             rtcoffer: None,
             rtcrequest: None,

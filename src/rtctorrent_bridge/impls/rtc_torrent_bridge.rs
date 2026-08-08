@@ -3,6 +3,17 @@ use crate::rtctorrent_bridge::structs::rtc_torrent_bridge::RtcTorrentBridge;
 use serde_json::Value;
 use std::process::Command;
 
+/// Renders a value as a JavaScript string literal, quotes included.
+///
+/// These scripts are handed to `node -e` as plain text, so anything interpolated into them has
+/// to arrive already quoted and escaped: a single `'` in a file path or torrent name would
+/// otherwise close the literal and let the remainder run as code. JSON string syntax is a
+/// subset of JavaScript's, so serialising through `serde_json` gives exactly the right
+/// escaping.
+fn js_string(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
+}
+
 impl RtcTorrentBridge {
     /// Creates a bridge to the `rtctorrent` Node.js tooling, announcing against `tracker_url`.
     pub fn new(tracker_url: String) -> Self {
@@ -30,16 +41,16 @@ impl RtcTorrentBridge {
             (async () => {{
                 try {{
                     const client = new RtcTorrent({{
-                        trackerUrl: '{}'
+                        trackerUrl: {}
                     }});
-                    const stat = fs.statSync('{}');
+                    const stat = fs.statSync({});
                     const fileObj = {{
-                        path: '{}',
-                        name: path.basename('{}'),
+                        path: {},
+                        name: path.basename({}),
                         size: stat.size
                     }};
                     const result = await client.create([fileObj], {{
-                        name: '{}'
+                        name: {}
                     }});
                     console.log(JSON.stringify(result));
                 }} catch (error) {{
@@ -48,11 +59,11 @@ impl RtcTorrentBridge {
                 }}
             }})();
             ",
-            self.tracker_url,
-            file_path,
-            file_path,
-            file_path,
-            torrent_name.unwrap_or("Generated Torrent")
+            js_string(&self.tracker_url),
+            js_string(file_path),
+            js_string(file_path),
+            js_string(file_path),
+            js_string(torrent_name.unwrap_or("Generated Torrent"))
         );
         let output = Command::new("node")
             .arg("-e")
@@ -90,11 +101,11 @@ impl RtcTorrentBridge {
             (async () => {{
                 try {{
                     const client = new RtcTorrent({{
-                        trackerUrl: '{}',
+                        trackerUrl: {},
                         announceInterval: 30000,
                         rtcInterval: 10000
                     }});
-                    const torrentBuffer = fs.readFileSync('{}');
+                    const torrentBuffer = fs.readFileSync({});
                     const torrent = await client.seed(torrentBuffer);
                     console.log(JSON.stringify({{
                         success: true,
@@ -107,8 +118,8 @@ impl RtcTorrentBridge {
                 }}
             }})();
             ",
-            self.tracker_url,
-            torrent_path
+            js_string(&self.tracker_url),
+            js_string(torrent_path)
         );
         let output = Command::new("node")
             .arg("-e")
@@ -141,11 +152,11 @@ impl RtcTorrentBridge {
                 (async () => {{
                     try {{
                         const client = new RtcTorrent({{
-                            trackerUrl: '{}',
+                            trackerUrl: {},
                             announceInterval: 30000,
                             rtcInterval: 10000
                         }});
-                        const torrent = await client.download('{}');
+                        const torrent = await client.download({});
                         console.log(JSON.stringify({{
                             success: true,
                             infoHash: torrent.data.infoHash,
@@ -158,8 +169,8 @@ impl RtcTorrentBridge {
                     }}
                 }})();
                 ",
-                self.tracker_url,
-                torrent_identifier
+                js_string(&self.tracker_url),
+                js_string(torrent_identifier)
             )
         } else {
             if !std::path::Path::new(torrent_identifier).exists() {
@@ -175,11 +186,11 @@ impl RtcTorrentBridge {
                 (async () => {{
                     try {{
                         const client = new RtcTorrent({{
-                            trackerUrl: '{}',
+                            trackerUrl: {},
                             announceInterval: 30000,
                             rtcInterval: 10000
                         }});
-                        const torrentBuffer = fs.readFileSync('{}');
+                        const torrentBuffer = fs.readFileSync({});
                         const torrent = await client.download(torrentBuffer);
                         console.log(JSON.stringify({{
                             success: true,
@@ -193,8 +204,8 @@ impl RtcTorrentBridge {
                     }}
                 }})();
                 ",
-                self.tracker_url,
-                torrent_identifier
+                js_string(&self.tracker_url),
+                js_string(torrent_identifier)
             )
         };
         let output = Command::new("node")

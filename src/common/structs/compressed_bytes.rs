@@ -3,7 +3,10 @@ use serde::{
     Deserialize,
     Serialize
 };
-use std::sync::OnceLock;
+use std::sync::{
+    Arc,
+    OnceLock
+};
 
 /// Process-wide compression configuration, initialised once at startup.
 ///
@@ -23,6 +26,15 @@ pub(crate) static COMPRESSION: OnceLock<CompressionState> = OnceLock::new();
 /// When compression is disabled the raw bytes are stored as-is, so callers
 /// never need to handle both cases explicitly.
 ///
+/// The buffer is behind an [`Arc`] because these values are cloned wholesale on
+/// every announce (see [`AnnounceEntry::from_entry`]): a peer's SDP offer, its
+/// answer and its whole pending-answer queue are copied into the response
+/// snapshot. With an owned `Vec` a swarm full of RtcTorrent peers turns each
+/// announce into tens of megabytes of `memcpy`; sharing makes the clone a
+/// refcount bump. The contents are never mutated in place, only replaced.
+///
+/// [`AnnounceEntry::from_entry`]: crate::tracker::structs::announce_entry::AnnounceEntry
+///
 /// # Example
 ///
 /// ```no_run
@@ -33,4 +45,4 @@ pub(crate) static COMPRESSION: OnceLock<CompressionState> = OnceLock::new();
 /// assert_eq!(sdp, "v=0\r\na=...");
 /// ```
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
-pub struct CompressedBytes(pub Vec<u8>);
+pub struct CompressedBytes(pub Arc<[u8]>);

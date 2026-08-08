@@ -54,15 +54,17 @@ pub fn constant_time_eq(a: &str, b: &str) -> bool {
 
 /// Rejects file paths containing traversal sequences or unexpected characters.
 ///
+/// Absolute paths are allowed: these values come from the configuration file, not from a
+/// request, and `/etc/ssl/...` is where a certificate normally lives. Refusing them only forced
+/// operators into relative paths without closing anything, since nothing reachable from the
+/// network chooses this string.
+///
 /// # Errors
 ///
 /// Returns a [`CustomError`] describing the violation.
 pub fn validate_file_path(path: &str) -> Result<(), CustomError> {
-    if path.contains("..") || path.contains("./") || path.contains(".\\") {
+    if path.contains("..") {
         return Err(CustomError::new("Path traversal detected in file path"));
-    }
-    if path.starts_with('/') || path.as_bytes().get(1..3) == Some(b":\\".as_slice()) {
-        return Err(CustomError::new("Absolute paths not allowed in certificate configuration"));
     }
     if path.contains('\0') {
         return Err(CustomError::new("Null byte detected in file path"));

@@ -25,7 +25,8 @@ use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use log::{
     error,
-    info
+    info,
+    warn
 };
 use sha1::{
     Digest,
@@ -686,10 +687,16 @@ impl DatabaseConnectorPgSQL {
                     hasher.update(id_data.to_string().as_bytes());
                     <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
                 };
+                // A malformed key column would otherwise abort the process at boot; skip the row
+                // and let the operator see which user is broken.
+                let Ok(user_key) = UserId::from_str(result.get(structure.column_key.as_str())) else {
+                    warn!("{LOG_PREFIX} Skipping user with an unparsable key column");
+                    continue;
+                };
                 tracker.add_user(
                     UserId(hash),
                     UserEntryItem {
-                        key: UserId::from_str(result.get(structure.column_key.as_str())).unwrap(),
+                        key: user_key,
                         user_id: if is_uuid {
                             None
                         } else {
@@ -743,24 +750,37 @@ impl DatabaseConnectorPgSQL {
         let mut in_chunk = 0u64;
         for (user_entry_item, updates_action) in users.values() {
             handled += 1;
+            // Resolve the row identifier once. Rows are addressed by UUID or by numeric id
+            // depending on `id_uuid`, and an entry carrying neither (or the other one, after
+            // an `id_uuid` flip) gives every branch below nothing to target. Unwrapping it
+            // would take the whole process down, since the release profile sets
+            // `panic = 'abort'`.
+            let (id_col, id_val) = if is_uuid {
+                match user_entry_item.user_uuid.as_ref() {
+                    Some(uuid) => (&structure.column_uuid, format!("'{uuid}'")),
+                    None => {
+                        warn!("{LOG_PREFIX} Skipping user update with no uuid set");
+                        continue;
+                    }
+                }
+            } else {
+                match user_entry_item.user_id {
+                    Some(user_id) => (&structure.column_id, user_id.to_string()),
+                    None => {
+                        warn!("{LOG_PREFIX} Skipping user update with no id set");
+                        continue;
+                    }
+                }
+            };
             match updates_action {
                 UpdatesAction::Remove => {
                     if db_config.remove_action {
-                        let query = if is_uuid {
-                            format!(
-                                "DELETE FROM {} WHERE {}='{}'",
-                                structure.table_name,
-                                structure.column_uuid,
-                                user_entry_item.user_uuid.clone().unwrap()
-                            )
-                        } else {
-                            format!(
-                                "DELETE FROM {} WHERE {}='{}'",
-                                structure.table_name,
-                                structure.column_id,
-                                user_entry_item.user_id.unwrap()
-                            )
-                        };
+                        let query = format!(
+                            "DELETE FROM {} WHERE {}={}",
+                            structure.table_name,
+                            id_col,
+                            id_val
+                        );
                         if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {
                             error!("{LOG_PREFIX} Error: {e}");
                             return Err(e);
@@ -774,17 +794,6 @@ impl DatabaseConnectorPgSQL {
                         format!("'{}'", user_entry_item.key)
                     };
                     let query = if db_config.insert_vacant {
-                        let (id_col, id_val) = if is_uuid {
-                            (
-                                &structure.column_uuid,
-                                format!("'{}'", user_entry_item.user_uuid.clone().unwrap()),
-                            )
-                        } else {
-                            (
-                                &structure.column_id,
-                                format!("{}", user_entry_item.user_id.unwrap()),
-                            )
-                        };
                         let conflict_clause = upsert_conflict_clause(
                             ENGINE,
                             id_col,
@@ -817,17 +826,6 @@ impl DatabaseConnectorPgSQL {
                             conflict_clause
                         )
                     } else {
-                        let (where_col, where_val) = if is_uuid {
-                            (
-                                &structure.column_uuid,
-                                format!("'{}'", user_entry_item.user_uuid.clone().unwrap()),
-                            )
-                        } else {
-                            (
-                                &structure.column_id,
-                                format!("{}", user_entry_item.user_id.unwrap()),
-                            )
-                        };
                         format!(
                             "UPDATE {} SET {}={}, {}={}, {}={}, {}={}, {}={}, {}={} WHERE {}={}",
                             structure.table_name,
@@ -843,8 +841,8 @@ impl DatabaseConnectorPgSQL {
                             user_entry_item.active,
                             structure.column_updated,
                             user_entry_item.updated,
-                            where_col,
-                            where_val
+                            id_col,
+                            id_val
                         )
                     };
                     if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mut *transaction).await {

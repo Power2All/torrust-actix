@@ -9,7 +9,10 @@ use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::types::ahash_map::AHashMap;
-use log::info;
+use log::{
+    debug,
+    info
+};
 use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 
@@ -52,6 +55,23 @@ impl TorrentTracker {
     #[inline]
     fn peer_cap(&self) -> usize {
         self.config.tracker_config.max_peers_per_torrent as usize
+    }
+
+    /// Whether a torrent that is not tracked yet may still be created.
+    ///
+    /// `max_peers_per_torrent` bounds each swarm but nothing bounds how many swarms exist, and
+    /// info-hashes are client-chosen: without a whitelist, an announce flood of random hashes
+    /// grows the sharded map until `peers_timeout` catches up. `0` keeps the old unlimited
+    /// behaviour.
+    ///
+    /// ponytail: reads the global counter rather than summing the shards, so concurrent
+    /// announces can overshoot the limit by roughly the number of in-flight inserts. This is a
+    /// safety valve against unbounded growth, not a quota — an exact bound would need the
+    /// count under the same lock as the insert.
+    #[inline]
+    fn may_create_torrent(&self) -> bool {
+        let cap = self.config.tracker_config.max_torrents;
+        cap == 0 || (self.stats.torrents.load(std::sync::atomic::Ordering::Relaxed) as u64) < cap
     }
 
     /// Returns up to `amount` seeds and peers of a torrent, filtered by IP family and excluding
@@ -147,6 +167,10 @@ impl TorrentTracker {
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
+                if !self.may_create_torrent() {
+                    debug!("[PEERS] Refusing new torrent {info_hash}: max_torrents reached");
+                    return AnnounceEntry::default();
+                }
                 let mut torrent_entry = TorrentEntry {
                     seeds: AHashMap::default(),
                     seeds_ipv6: AHashMap::default(),
@@ -221,9 +245,14 @@ impl TorrentTracker {
                 if was_rtc_peer {
                     self.update_stats(StatsEvent::Peers, -1);
                 }
-                if completed {
+                // Count a download only when this peer actually crosses into seeding. `completed`
+                // comes from a client-supplied `event=completed`, and this used to fire on every
+                // such announce with no `left == 0` check (unlike the vacant branch above), so a
+                // single client could drive the figure up without limit — silently wrapping,
+                // since the release profile disables overflow checks.
+                if completed && torrent_peer.left == NumberOfBytes(0) && seeds_removed == 0 && !was_rtc_seed {
                     self.update_stats(StatsEvent::Completed, 1);
-                    entry.completed += 1;
+                    entry.completed = entry.completed.saturating_add(1);
                 }
                 let cap = self.peer_cap();
                 if torrent_peer.is_rtctorrent() {

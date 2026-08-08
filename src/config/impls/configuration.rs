@@ -50,6 +50,7 @@ impl Configuration {
                 peers_cleanup_threads: 256,
                 max_peers_per_torrent: 10_000,
                 max_rtc_pending_answers: 32,
+                max_torrents: 0,
                 total_downloads: 0,
                 swagger: false,
                 prometheus_id: String::from("torrust_actix"),
@@ -243,6 +244,9 @@ impl Configuration {
         }
         if let Ok(value) = env::var("TRACKER__MAX_RTC_PENDING_ANSWERS") {
             config.tracker_config.max_rtc_pending_answers = parse_env_num::<u64>("TRACKER__MAX_RTC_PENDING_ANSWERS", &value, 32);
+        }
+        if let Ok(value) = env::var("TRACKER__MAX_TORRENTS") {
+            config.tracker_config.max_torrents = parse_env_num::<u64>("TRACKER__MAX_TORRENTS", &value, 0);
         }
         if let Ok(value) = env::var("TRACKER__PROMETHEUS_ID") {
             config.tracker_config.prometheus_id = value;
@@ -904,8 +908,8 @@ impl Configuration {
                 if udp_server.simple_proxy_protocol && udp_server.proxy_addrs.is_empty() {
                     eprintln!("[SECURITY WARNING] udp_server[{index}] simple_proxy_protocol=true with an empty proxy_addresses list: the SPP header is trusted from any sender, so anyone can choose the client address the tracker records. Set proxy_addresses to your load balancer addresses.");
                 }
-                if udp_server.use_payload_ip {
-                    eprintln!("[SECURITY WARNING] udp_server[{index}] use_payload_ip=true lets a UDP client choose the IP address recorded for it, which can be used to point swarms at a third party. Only enable this behind a trusted proxy.");
+                if udp_server.use_payload_ip && udp_server.proxy_addrs.is_empty() {
+                    eprintln!("[SECURITY WARNING] udp_server[{index}] use_payload_ip=true with an empty proxy_addresses list: the announce IP field is honoured from any sender, so a client can have its peer entry point at a third party. Set proxy_addresses to your load balancer addresses.");
                 }
             }
         }
@@ -941,6 +945,13 @@ impl Configuration {
             println!("[VALIDATE] max_peers_per_torrent: {} per peer map", tc.max_peers_per_torrent);
         }
         assert!(tc.max_rtc_pending_answers > 0, "[VALIDATE CONFIG] max_rtc_pending_answers must be > 0");
+        if tc.max_torrents == 0 {
+            if !tc.whitelist_enabled {
+                eprintln!("[SECURITY WARNING] max_torrents=0 with whitelist_enabled=false: info_hashes are client-chosen, so nothing bounds how many swarms an announce flood can create. Set max_torrents to what this host can hold.");
+            }
+        } else {
+            println!("[VALIDATE] max_torrents: {}", tc.max_torrents);
+        }
         println!("[VALIDATE] rtc_interval: {}s, rtc_peers_timeout: {}s", tc.rtc_interval, tc.rtc_peers_timeout);
     }
 
@@ -1092,7 +1103,8 @@ impl Configuration {
         remarks.insert(("tracker_config", "users_enabled"), "# Optional: defaults to false -- enable per-user statistics");
         remarks.insert(("tracker_config", "max_peers_per_torrent"), "# Optional: defaults to 10000 -- max peers per torrent in EACH of its 6 peer maps, so up to 6x this per torrent (0 = unlimited, not recommended)");
         remarks.insert(("tracker_config", "max_rtc_pending_answers"), "# Optional: defaults to 32 -- max SDP answers queued for one RtcTorrent peer");
-        remarks.insert(("tracker_config", "swagger"), "# Optional: defaults to false -- expose Swagger UI at <api>/swagger-ui/");
+        remarks.insert(("tracker_config", "max_torrents"), "# Optional: defaults to 0 (unlimited) -- max distinct torrents held in memory; new info_hashes are refused above it, known ones keep working");
+        remarks.insert(("tracker_config", "swagger"), "# Optional: defaults to false -- expose Swagger UI at <api>/swagger-ui/ (the UI assets are served without a token; the spec it loads is not)");
         remarks.insert(("tracker_config", "prometheus_id"), "# Optional: defaults to \"torrust_actix\" -- Prometheus metric label");
         remarks.insert(("tracker_config", "cluster"), "# Optional: defaults to \"standalone\" -- cluster mode: standalone | master | slave");
         remarks.insert(("tracker_config", "cluster_encoding"), "# Optional: defaults to \"binary\" -- cluster wire format: binary | json | msgpack");
