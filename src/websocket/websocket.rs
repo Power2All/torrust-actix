@@ -553,8 +553,12 @@ pub async fn websocket_master_service(
         HttpServer
     };
     use log::error;
+    use rustls::pki_types::pem::PemObject;
+    use rustls::pki_types::{
+        CertificateDer,
+        PrivateKeyDer
+    };
     use std::fs::File;
-    use std::io::BufReader;
     use std::process::exit;
     use std::time::Duration;
 
@@ -579,29 +583,29 @@ pub async fn websocket_master_service(
             error!("[WEBSOCKET MASTER] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
-        let key_file = &mut BufReader::new(match File::open(ssl_key) {
+        let key_file = match File::open(ssl_key) {
             Ok(data) => data,
             Err(e) => {
                 sentry::capture_error(&e);
                 panic!("[WEBSOCKET MASTER] SSL key unreadable: {e}");
             }
-        });
-        let certs_file = &mut BufReader::new(match File::open(ssl_cert) {
+        };
+        let certs_file = match File::open(ssl_cert) {
             Ok(data) => data,
             Err(e) => panic!("[WEBSOCKET MASTER] SSL cert unreadable: {e}"),
-        });
-        let tls_certs = match rustls_pemfile::certs(certs_file).collect::<Result<Vec<_>, _>>() {
+        };
+        let tls_certs = match CertificateDer::pem_reader_iter(certs_file).collect::<Result<Vec<_>, _>>() {
             Ok(data) => data,
             Err(e) => panic!("[WEBSOCKET MASTER] SSL cert couldn't be extracted: {e}"),
         };
-        let tls_key = match rustls_pemfile::pkcs8_private_keys(key_file).next() {
-            Some(Ok(data)) => data,
-            Some(Err(e)) => panic!("[WEBSOCKET MASTER] SSL key couldn't be extracted: {e}"),
-            None => panic!("[WEBSOCKET MASTER] No PKCS#8 private key found in {ssl_key}; expected a PEM-encoded PKCS#8 key (RSA / EC keys are not supported here)"),
+        // Accepts PKCS#8, PKCS#1 and SEC1 keys; the section kind decides which.
+        let tls_key = match PrivateKeyDer::from_pem_reader(key_file) {
+            Ok(data) => data,
+            Err(e) => panic!("[WEBSOCKET MASTER] SSL key couldn't be extracted from {ssl_key}: {e}"),
         };
         let tls_config = match rustls::ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key))
+            .with_single_cert(tls_certs, tls_key)
         {
             Ok(data) => data,
             Err(e) => panic!("[WEBSOCKET MASTER] SSL config couldn't be created: {e}"),

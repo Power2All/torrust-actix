@@ -4,12 +4,15 @@ use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::ssl::structs::certificate_bundle::CertificateBundle;
 use crate::ssl::structs::certificate_paths::CertificatePaths;
 use crate::ssl::structs::certificate_store::CertificateStore;
+use rustls::pki_types::pem::{
+    Error as PemError,
+    PemObject
+};
 use rustls::pki_types::{
     CertificateDer,
     PrivateKeyDer
 };
 use std::fs::File;
-use std::io::BufReader;
 
 impl std::fmt::Debug for CertificateStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -162,11 +165,9 @@ impl CertificateStore {
             .map_err(|e: CustomError| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(e.to_string()))?;
         let key_file = File::open(key_path)
             .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{key_path}: {e}")))?;
-        let mut key_reader = BufReader::new(key_file);
         let certs_file = File::open(cert_path)
             .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::CertFileNotFound(format!("{cert_path}: {e}")))?;
-        let mut certs_reader = BufReader::new(certs_file);
-        let tls_certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut certs_reader)
+        let tls_certs: Vec<CertificateDer<'static>> = CertificateDer::pem_reader_iter(certs_file)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::CertParseError(e.to_string()))?;
         if tls_certs.is_empty() {
@@ -174,7 +175,11 @@ impl CertificateStore {
                 "No certificates found in file".to_string(),
             ));
         }
-        let tls_key = Self::parse_private_key(&mut key_reader, key_path)?;
+        // One pass over the file: the PEM section kind picks PKCS#8, PKCS#1 or SEC1.
+        let tls_key = PrivateKeyDer::from_pem_reader(key_file).map_err(|e| match e {
+            PemError::NoItemsFound => crate::ssl::enums::certificate_error::CertificateError::NoKeyFound,
+            other => crate::ssl::enums::certificate_error::CertificateError::KeyParseError(other.to_string()),
+        })?;
         Ok(CertificateBundle {
             certs: tls_certs,
             key: tls_key,
@@ -182,33 +187,5 @@ impl CertificateStore {
             cert_path: cert_path.to_string(),
             key_path: key_path.to_string(),
         })
-    }
-
-    fn parse_private_key(
-        reader: &mut BufReader<File>,
-        key_path: &str,
-    ) -> Result<PrivateKeyDer<'static>, crate::ssl::enums::certificate_error::CertificateError> {
-        if let Some(key_result) = rustls_pemfile::pkcs8_private_keys(reader).next() {
-            return key_result
-                .map(PrivateKeyDer::Pkcs8)
-                .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyParseError(e.to_string()));
-        }
-        let key_file = File::open(key_path)
-            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{key_path}: {e}")))?;
-        let mut reader = BufReader::new(key_file);
-        if let Some(key_result) = rustls_pemfile::rsa_private_keys(&mut reader).next() {
-            return key_result
-                .map(PrivateKeyDer::Pkcs1)
-                .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyParseError(e.to_string()));
-        }
-        let key_file = File::open(key_path)
-            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyFileNotFound(format!("{key_path}: {e}")))?;
-        let mut reader = BufReader::new(key_file);
-        if let Some(key_result) = rustls_pemfile::ec_private_keys(&mut reader).next() {
-            return key_result
-                .map(PrivateKeyDer::Sec1)
-                .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::KeyParseError(e.to_string()));
-        }
-        Err(crate::ssl::enums::certificate_error::CertificateError::NoKeyFound)
     }
 }

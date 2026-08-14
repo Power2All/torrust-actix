@@ -118,6 +118,18 @@ struct WakeHandle(HANDLE);
 unsafe impl Send for WakeHandle {}
 unsafe impl Sync for WakeHandle {}
 
+impl Drop for WakeHandle {
+    fn drop(&mut self) {
+        // `RioSender` clones travel with packets that are still queued in the parse pool, so the
+        // event outlives `run`. Owning the close here means the last holder releases it; closing
+        // it from the loop would leave `SetEvent` pointing at a handle value Windows has since
+        // recycled for an unrelated object.
+        if !self.0.is_null() {
+            unsafe { CloseHandle(self.0); }
+        }
+    }
+}
+
 /// Probes Winsock for Registered I/O (RIO) support.
 pub fn is_available() -> bool {
     unsafe {
@@ -180,16 +192,20 @@ struct RioContext {
 impl Drop for RioContext {
     fn drop(&mut self) {
         unsafe {
+            // Order matters: up to RECV_SLOTS receives are still posted, and the kernel writes
+            // into the registered buffers until they are cancelled. Closing the socket cancels
+            // them first; deregistering (and then freeing the backing `Vec`s) before that is a
+            // use-after-free the NIC gets to win.
+            closesocket(self.socket);
+            if let Some(close_cq) = self.table.RIOCloseCompletionQueue {
+                close_cq(self.cq);
+            }
             if let Some(dereg) = self.table.RIODeregisterBuffer {
                 dereg(self.recv_data.id);
                 dereg(self.recv_addr.id);
                 dereg(self.send_data.id);
                 dereg(self.send_addr.id);
             }
-            if let Some(close_cq) = self.table.RIOCloseCompletionQueue {
-                close_cq(self.cq);
-            }
-            closesocket(self.socket);
         }
     }
 }
@@ -204,28 +220,24 @@ pub fn run(
     parse_pool: Arc<ParsePool>,
     rx: tokio::sync::watch::Receiver<bool>,
 ) {
-    let send_wake = unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) };
-    let cq_event = unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) };
-    if send_wake.is_null() || cq_event.is_null() {
+    let send_wake = WakeHandle(unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) });
+    let cq_event = WakeHandle(unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) });
+    if send_wake.0.is_null() || cq_event.0.is_null() {
         error!("[UDP RIO] failed to create wait events; receiver not started");
         return;
     }
 
-    let mut ctx = match unsafe { setup(bind_address, recv_buffer_size, send_buffer_size, reuse_address, cq_event) } {
+    let mut ctx = match unsafe { setup(bind_address, recv_buffer_size, send_buffer_size, reuse_address, cq_event.0) } {
         Ok(ctx) => ctx,
         Err(e) => {
             error!("[UDP RIO] setup failed for {bind_address}: {e}; receiver not started");
-            unsafe {
-                CloseHandle(cq_event);
-                CloseHandle(send_wake);
-            }
             return;
         }
     };
 
     let sender = Arc::new(RioSender {
         queue: ArrayQueue::new(SEND_QUEUE_CAPACITY),
-        wake: WakeHandle(send_wake),
+        wake: send_wake,
     });
 
     let mut send_free: Vec<usize> = (0..SEND_SLOTS).collect();
@@ -233,10 +245,6 @@ pub fn run(
     for slot in 0..RECV_SLOTS {
         if !unsafe { post_receive(&ctx, slot) } {
             error!("[UDP RIO] initial RIOReceiveEx failed; receiver not started");
-            unsafe {
-                CloseHandle(cq_event);
-                CloseHandle(send_wake);
-            }
             return;
         }
     }
@@ -248,7 +256,7 @@ pub fn run(
 
     info!("[UDP RIO] receive backend started on {bind_address}");
 
-    let handles = [cq_event, send_wake];
+    let handles = [cq_event.0, sender.wake.0];
     let mut results: [RIORESULT; 256] = unsafe { std::mem::zeroed() };
 
     loop {
@@ -262,10 +270,6 @@ pub fn run(
             let count = unsafe { dequeue(ctx.cq, results.as_mut_ptr(), results.len() as u32) };
             if count == RIO_CORRUPT_CQ {
                 error!("[UDP RIO] completion queue corrupt; stopping receiver");
-                unsafe {
-                    CloseHandle(cq_event);
-                    CloseHandle(send_wake);
-                }
                 return;
             }
             if count == 0 {
@@ -292,10 +296,6 @@ pub fn run(
                     }
                     if !unsafe { post_receive(&ctx, slot) } {
                         error!("[UDP RIO] RIOReceiveEx re-post failed; stopping receiver");
-                        unsafe {
-                            CloseHandle(cq_event);
-                            CloseHandle(send_wake);
-                        }
                         return;
                     }
                 } else {
@@ -321,10 +321,6 @@ pub fn run(
         }
     }
 
-    unsafe {
-        CloseHandle(cq_event);
-        CloseHandle(send_wake);
-    }
     info!("Stopping UDP server: {bind_address}...");
 }
 
@@ -528,36 +524,42 @@ unsafe fn post_send(ctx: &mut RioContext, slot: usize, remote_addr: SocketAddr, 
     rc != 0
 }
 
+// `buf` points at a slot inside a flat byte buffer (a registered `Vec<u8>`, or a `[u8; ADDR_SIZE]`
+// on the stack), which carries no alignment guarantee for the sockaddr types. Building the value
+// separately and storing it unaligned avoids forming a misaligned reference, which is undefined
+// behaviour even on x86 where the load itself would have worked.
 unsafe fn write_sockaddr(buf: *mut u8, addr: &SocketAddr) -> u32 {
     match addr {
         SocketAddr::V4(v4) => {
-            let sa = buf as *mut SOCKADDR_IN;
-            (*sa).sin_family = AF_INET as ADDRESS_FAMILY;
-            (*sa).sin_port = htons(v4.port());
-            (*sa).sin_addr = IN_ADDR { S_un: IN_ADDR_0 { S_addr: u32::from_ne_bytes(v4.ip().octets()) } };
+            let mut sa: SOCKADDR_IN = std::mem::zeroed();
+            sa.sin_family = AF_INET as ADDRESS_FAMILY;
+            sa.sin_port = htons(v4.port());
+            sa.sin_addr = IN_ADDR { S_un: IN_ADDR_0 { S_addr: u32::from_ne_bytes(v4.ip().octets()) } };
+            std::ptr::write_unaligned(buf as *mut SOCKADDR_IN, sa);
             std::mem::size_of::<SOCKADDR_IN>() as u32
         }
         SocketAddr::V6(v6) => {
-            let sa = buf as *mut SOCKADDR_IN6;
-            (*sa).sin6_family = AF_INET6 as ADDRESS_FAMILY;
-            (*sa).sin6_port = htons(v6.port());
-            (*sa).sin6_flowinfo = v6.flowinfo();
-            (*sa).sin6_addr = IN6_ADDR { u: IN6_ADDR_0 { Byte: v6.ip().octets() } };
-            (*sa).Anonymous.sin6_scope_id = v6.scope_id();
+            let mut sa: SOCKADDR_IN6 = std::mem::zeroed();
+            sa.sin6_family = AF_INET6 as ADDRESS_FAMILY;
+            sa.sin6_port = htons(v6.port());
+            sa.sin6_flowinfo = v6.flowinfo();
+            sa.sin6_addr = IN6_ADDR { u: IN6_ADDR_0 { Byte: v6.ip().octets() } };
+            sa.Anonymous.sin6_scope_id = v6.scope_id();
+            std::ptr::write_unaligned(buf as *mut SOCKADDR_IN6, sa);
             std::mem::size_of::<SOCKADDR_IN6>() as u32
         }
     }
 }
 
 unsafe fn read_sockaddr(buf: *const u8) -> Option<SocketAddr> {
-    let family = (*(buf as *const SOCKADDR)).sa_family;
+    let family = std::ptr::read_unaligned(buf as *const SOCKADDR).sa_family;
     if family == AF_INET as ADDRESS_FAMILY {
-        let sa = &*(buf as *const SOCKADDR_IN);
+        let sa = std::ptr::read_unaligned(buf as *const SOCKADDR_IN);
         let ip = Ipv4Addr::from(sa.sin_addr.S_un.S_addr.to_ne_bytes());
         let port = u16::from_be(sa.sin_port);
         Some(SocketAddr::V4(SocketAddrV4::new(ip, port)))
     } else if family == AF_INET6 as ADDRESS_FAMILY {
-        let sa = &*(buf as *const SOCKADDR_IN6);
+        let sa = std::ptr::read_unaligned(buf as *const SOCKADDR_IN6);
         let ip = Ipv6Addr::from(sa.sin6_addr.u.Byte);
         let port = u16::from_be(sa.sin6_port);
         let scope = sa.Anonymous.sin6_scope_id;

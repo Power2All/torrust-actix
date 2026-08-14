@@ -446,8 +446,10 @@ impl UdpServer {
     ///
     /// Returns a [`ServerError`] describing why the request was refused.
     pub async fn handle_request(request: Request, remote_addr: SocketAddr, tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Result<Response, ServerError> {
-        let transaction = sentry::TransactionContext::new("udp server", "handle packet");
-        let transaction_guard = sentry::start_transaction(transaction);
+        // Gated like every other instrumented site: the tag values below allocate five Strings
+        // per datagram (one of them a hex encode of the info-hash), which is not something the
+        // UDP hot path should pay for when nothing is collecting traces.
+        let transaction_guard = crate::utils::sentry_tracing::start_trace_transaction("udp server", "handle packet");
         let result = match &request {
             Request::Connect(connect_request) => {
                 UdpServer::handle_udp_connect(remote_addr, connect_request, tracker).await
@@ -459,26 +461,28 @@ impl UdpServer {
                 UdpServer::handle_udp_scrape(remote_addr, scrape_request, tracker).await
             }
         };
-        match &request {
-            Request::Connect(_) => {
-                transaction_guard.set_tag("request_type", "connect");
+        if let Some(transaction_guard) = transaction_guard {
+            match &request {
+                Request::Connect(_) => {
+                    transaction_guard.set_tag("request_type", "connect");
+                }
+                Request::Announce(announce_request) => {
+                    transaction_guard.set_tag("request_type", "announce");
+                    transaction_guard.set_tag("info_hash", hex::encode(announce_request.info_hash.0));
+                }
+                Request::Scrape(scrape_request) => {
+                    transaction_guard.set_tag("request_type", "scrape");
+                    transaction_guard.set_tag("num_info_hashes", scrape_request.info_hashes.len().to_string());
+                }
             }
-            Request::Announce(announce_request) => {
-                transaction_guard.set_tag("request_type", "announce");
-                transaction_guard.set_tag("info_hash", hex::encode(announce_request.info_hash.0));
+            transaction_guard.set_tag("remote_addr", remote_addr.to_string());
+            transaction_guard.set_tag("use_payload_ip", use_payload_ip.to_string());
+            match &result {
+                Ok(_) => transaction_guard.set_tag("result", "success"),
+                Err(e) => transaction_guard.set_tag("result", format!("error: {e:?}")),
             }
-            Request::Scrape(scrape_request) => {
-                transaction_guard.set_tag("request_type", "scrape");
-                transaction_guard.set_tag("num_info_hashes", scrape_request.info_hashes.len().to_string());
-            }
+            transaction_guard.finish();
         }
-        transaction_guard.set_tag("remote_addr", remote_addr.to_string());
-        transaction_guard.set_tag("use_payload_ip", use_payload_ip.to_string());
-        match &result {
-            Ok(_) => transaction_guard.set_tag("result", "success"),
-            Err(e) => transaction_guard.set_tag("result", format!("error: {e:?}")),
-        }
-        transaction_guard.finish();
         result
     }
 

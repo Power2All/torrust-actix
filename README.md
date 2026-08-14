@@ -598,6 +598,15 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 ### ChangeLog
 
+#### v4.2.21
+* Bumped versions.
+* Dropped the unmaintained `rustls-pemfile` (RUSTSEC-2025-0134) for the PEM support already in `rustls-pki-types`; TLS key files may now be PKCS#8, PKCS#1 or SEC1 everywhere, including the cluster master.
+* Security: `/scrape` without a key is now refused when `keys_enabled` is set, matching `/announce`.
+* Security: cluster WebSocket connections that never complete the handshake are dropped after 30 seconds instead of holding a connection slot forever.
+* Fixed two lifetime bugs and an alignment bug in the Windows RIO receive backend.
+* The UDP hot path no longer builds a Sentry transaction per datagram when tracing is off.
+* `hex2bin` rejects over-long input instead of silently truncating it to the first 20 bytes.
+
 #### v4.2.20
 * Applied full audit and security scan on code, and applied recommended solutions.
 * Optimization of over-engineered code, applied recommended alternatives.

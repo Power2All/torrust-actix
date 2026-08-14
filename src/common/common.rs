@@ -164,20 +164,22 @@ pub fn bin20_to_hex(data: &[u8; 20]) -> Hex20 {
 
 /// Decodes a 40-character hex string into a 20-byte binary hash.
 ///
+/// Anything longer is rejected rather than truncated: taking the first 20 bytes made
+/// `<40 hex chars>` and `<those same 40 chars plus more>` name the same torrent, so two
+/// different API inputs silently addressed one record.
+///
+/// A malformed value is a client mistake, not an application fault, so it is not reported to
+/// Sentry — a bulk endpoint fed bad hashes would otherwise emit one event per entry.
+///
 /// # Errors
 ///
-/// Returns a [`CustomError`] when the input is not valid hex or is too short.
+/// Returns a [`CustomError`] when the input is not valid hex or is not exactly 40 characters.
 pub fn hex2bin(data: String) -> Result<[u8; 20], CustomError> {
     hex::decode(data)
-        .map_err(|data| {
-            sentry::capture_error(&data);
-            CustomError::new("error converting hex to bin")
-        })
+        .map_err(|_| CustomError::new("error converting hex to bin"))
         .and_then(|hash_result| {
-            hash_result
-                .get(..20)
-                .and_then(|slice| slice.try_into().ok())
-                .ok_or_else(|| CustomError::new("invalid hex length"))
+            <[u8; 20]>::try_from(hash_result.as_slice())
+                .map_err(|_| CustomError::new("invalid hex length"))
         })
 }
 
@@ -294,7 +296,18 @@ pub fn init_compression(enabled: bool, algorithm: CompressionAlgorithm, level: u
 }
 #[cfg(test)]
 mod tests {
-    use super::{hex_to_id, HexParseError};
+    use super::{hex2bin, hex_to_id, HexParseError};
+
+    #[test]
+    fn hex2bin_requires_exactly_twenty_bytes() {
+        let valid = "aabbccddeeff00112233445566778899aabbccdd";
+        assert_eq!(hex2bin(valid.to_string()).unwrap()[0], 0xAA);
+        // A longer value used to decode and then silently keep its first 20 bytes, so this
+        // string and `valid` addressed the same torrent through the API.
+        assert!(hex2bin(format!("{valid}aabbccdd")).is_err());
+        assert!(hex2bin("aabbccdd".to_string()).is_err());
+        assert!(hex2bin("zz".repeat(20)).is_err());
+    }
 
     #[test]
     fn hex_to_id_accepts_mixed_case_and_rejects_bad_input() {

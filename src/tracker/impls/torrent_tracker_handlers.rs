@@ -28,7 +28,6 @@ use std::net::{
     SocketAddr
 };
 use std::sync::Arc;
-use std::time::SystemTime;
 
 impl TorrentTracker {
     /// Parses and validates an announce query string into an [`AnnounceQueryRequest`].
@@ -252,7 +251,7 @@ impl TorrentTracker {
                     );
                 }
                 if users_enabled && let Some(user_id) = user_key {
-                    let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let timestamp = crate::common::common::current_time();
                     if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
                         user.updated = timestamp;
                         user.torrents_active.insert(announce_query.info_hash, timestamp);
@@ -274,7 +273,7 @@ impl TorrentTracker {
                 ) {
                     (true, Some(new_torrent)) => {
                         if users_enabled && let Some(user_id) = user_key {
-                            let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                            let timestamp = crate::common::common::current_time();
                             if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
                                 // Both values are whatever the client claims, so they saturate
                                 // rather than wrap: the release profile turns overflow checks
@@ -334,7 +333,7 @@ impl TorrentTracker {
                     );
                 }
                 if users_enabled && let Some(user_id) = user_key {
-                    let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                    let timestamp = crate::common::common::current_time();
                     if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
                         user.completed = user.completed.saturating_add(1);
                         user.updated = timestamp;
