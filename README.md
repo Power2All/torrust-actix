@@ -1,7 +1,7 @@
 # Torrust-Actix Tracker
 ![Test](https://github.com/Power2All/torrust-actix/actions/workflows/rust.yml/badge.svg)
 [<img src="https://img.shields.io/badge/DockerHub-link-blue.svg">](<https://hub.docker.com/r/power2all/torrust-actix>)
-[<img src="https://img.shields.io/discord/1476196704163201059?label=Discord">](<https://discord.gg/zMyZJz4U2D>)
+[<img src="https://img.shields.io/discord/1476196704163201059?label=Discord">](<https://discord.gg/rC7aEtpwMX>)
 
 ## Project Description
 Torrust-Actix Tracker is a lightweight but incredibly powerful and feature-rich BitTorrent Tracker made using Rust.
@@ -605,7 +605,9 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 * Security: cluster WebSocket connections that never complete the handshake are dropped after 30 seconds instead of holding a connection slot forever.
 * Fixed two lifetime bugs and an alignment bug in the Windows RIO receive backend.
 * The UDP hot path no longer builds a Sentry transaction per datagram when tracing is off.
-* `hex2bin` rejects over-long input instead of silently truncating it to the first 20 bytes.
+* `hex2bin` rejects over-long input instead of silently truncating it to the first 20 bytes, and no longer reports malformed client input to Sentry.
+* The announce path no longer aborts the process when the system clock sits before the UNIX epoch; it now uses the shared `current_time()` helper.
+* Added the official Discord server: https://discord.gg/rC7aEtpwMX
 
 #### v4.2.20
 * Applied full audit and security scan on code, and applied recommended solutions.

@@ -40,7 +40,7 @@ actix-web = { version = "4.14.1", features = ["rustls-0_23", "compress-gzip"] }
 actix-web-actors = "4.3.1"
 tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
 rmp-serde = "1.3.1"
-uuid = { version = "1.24.0", features = ["v4"] }
+uuid = { version = "1.24.1", features = ["v4"] }
 bip_bencode = "0.4.4"
 chrono = "0.4.45"
 clap = { version = "4.6.6", features = ["derive"] }
@@ -62,7 +62,7 @@ sha1 = "0.11.0"
 socket2 = "0.6.5"
 sqlx = { version = "0.9.0", features = ["mysql", "mysql-rsa", "postgres", "sqlite", "runtime-tokio", "tls-rustls-ring-webpki"] }
 async-trait = "0.1.92"
-redis = { version = "1.5.0", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.6.0", features = ["tokio-comp", "connection-manager"] }
 memcache = { version = "0.20.0", default-features = false }
 thiserror = "2.0.20"
 tokio = { version = "1.53.1", features = ["full"] }
