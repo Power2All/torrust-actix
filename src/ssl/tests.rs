@@ -7,7 +7,6 @@ mod ssl_tests {
         generate_simple_self_signed,
         CertifiedKey
     };
-    use rustls::pki_types::pem::PemObject;
     use rustls::pki_types::PrivateKeyDer;
     use std::path::PathBuf;
 
@@ -90,18 +89,40 @@ mod ssl_tests {
         // The old loader reopened the key file once per format and only ever reached PKCS#1 and
         // SEC1 by falling through two earlier passes. One pass now covers all three, so the
         // section label alone has to select the right variant.
+        //
+        // This goes through `load_certificate` on purpose: asserting on `PrivateKeyDer` directly
+        // would only re-test rustls' parser and would still pass if the loader regressed to
+        // PKCS#8-only. The DER body is never decoded here (no key/certificate check happens until
+        // rustls builds a `ServerConfig`), so one shared body is enough to prove the dispatch.
+        let dir = tempfile::tempdir().unwrap();
+        let (cert_path, _) = write_self_signed(&dir);
         let body = "MC4CAQAwBQYDK2VwBCIEIL9lYlNMIL6NBnLcnLXRJmYqHJqNMoLpBnGkKcJ0y7Ei\n";
-        for (label, expect_pkcs8, expect_pkcs1, expect_sec1) in [
-            ("PRIVATE KEY", true, false, false),
-            ("RSA PRIVATE KEY", false, true, false),
-            ("EC PRIVATE KEY", false, false, true),
+        let store = CertificateStore::new();
+        for (port, label, expect_pkcs8, expect_pkcs1, expect_sec1) in [
+            (8081, "PRIVATE KEY", true, false, false),
+            (8082, "RSA PRIVATE KEY", false, true, false),
+            (8083, "EC PRIVATE KEY", false, false, true),
         ] {
-            let pem = format!("-----BEGIN {label}-----\n{body}-----END {label}-----\n");
-            let key = PrivateKeyDer::from_pem_slice(pem.as_bytes())
-                .unwrap_or_else(|e| panic!("{label} should parse: {e}"));
-            assert_eq!(matches!(key, PrivateKeyDer::Pkcs8(_)), expect_pkcs8, "{label}");
-            assert_eq!(matches!(key, PrivateKeyDer::Pkcs1(_)), expect_pkcs1, "{label}");
-            assert_eq!(matches!(key, PrivateKeyDer::Sec1(_)), expect_sec1, "{label}");
+            let key_path = dir.path().join(format!("{}.pem", label.replace(' ', "-")));
+            std::fs::write(
+                &key_path,
+                format!("-----BEGIN {label}-----\n{body}-----END {label}-----\n"),
+            )
+            .unwrap();
+
+            let server_id = ServerIdentifier::ApiServer(format!("127.0.0.1:{port}"));
+            store
+                .load_certificate(
+                    server_id.clone(),
+                    cert_path.to_str().unwrap(),
+                    key_path.to_str().unwrap(),
+                )
+                .unwrap_or_else(|e| panic!("{label} should load: {e:?}"));
+
+            let bundle = store.get_certificate(&server_id).expect("bundle registered");
+            assert_eq!(matches!(bundle.key, PrivateKeyDer::Pkcs8(_)), expect_pkcs8, "{label}");
+            assert_eq!(matches!(bundle.key, PrivateKeyDer::Pkcs1(_)), expect_pkcs1, "{label}");
+            assert_eq!(matches!(bundle.key, PrivateKeyDer::Sec1(_)), expect_sec1, "{label}");
         }
     }
 }
