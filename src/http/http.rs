@@ -792,6 +792,13 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<HttpServic
         }
     };
     debug!("[DEBUG] Request from {ip}: Scrape");
+    // Same gate as `http_service_announce`: with keys on, an unkeyed scrape would be the one
+    // route that still reports swarm sizes for arbitrary info-hashes to anyone who asks.
+    // Keyed clients have `/{key}/scrape`.
+    if data.torrent_tracker.config.tracker_config.keys_enabled {
+        http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_MISSING_KEY.clone());
+    }
     http_service_scrape_handler(request, ip, data.torrent_tracker.clone()).await
 }
 
@@ -836,7 +843,9 @@ pub async fn http_service_decode_hex_hash(hash: String) -> Result<InfoHash, Http
 {
     hex::decode(&hash)
         .ok()
-        .and_then(|bytes| bytes.get(..20).and_then(|slice| <[u8; 20]>::try_from(slice).ok()))
+        // Exactly 20 bytes, not "the first 20": a longer key would otherwise be accepted as
+        // its own prefix. Callers validate the length first, so this only closes the hazard.
+        .and_then(|bytes| <[u8; 20]>::try_from(bytes.as_slice()).ok())
         .map(InfoHash)
         .ok_or_else(|| HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
 }
@@ -851,7 +860,7 @@ pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, Htt
 {
     hex::decode(&hash)
         .ok()
-        .and_then(|bytes| bytes.get(..20).and_then(|slice| <[u8; 20]>::try_from(slice).ok()))
+        .and_then(|bytes| <[u8; 20]>::try_from(bytes.as_slice()).ok())
         .map(UserId)
         .ok_or_else(|| HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
 }

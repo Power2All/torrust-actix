@@ -27,6 +27,13 @@ use log::{
     warn
 };
 
+/// How long a freshly accepted cluster socket may stay unauthenticated before it is dropped.
+///
+/// The HTTP-level `client_request_timeout` stops applying once the connection is upgraded, so
+/// without this a socket that never sends a handshake lives forever and keeps one of the
+/// `cluster_max_connections` slots away from a real slave.
+const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 impl ClusterConnection {
     /// Creates a master-side connection actor for a newly accepted slave WebSocket.
     pub fn new(data: std::sync::Arc<crate::websocket::structs::websocket_service_data::WebSocketServiceData>) -> Self {
@@ -138,7 +145,13 @@ impl ClusterConnection {
 impl Actor for ClusterConnection {
     type Context = ws::WebsocketContext<Self>;
 
-    fn started(&mut self, _ctx: &mut Self::Context) {
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.run_later(HANDSHAKE_TIMEOUT, |act, ctx| {
+            if !act.authenticated {
+                warn!("[WEBSOCKET MASTER] Dropping connection that never completed the handshake");
+                ctx.stop();
+            }
+        });
         debug!("[WEBSOCKET MASTER] New connection started");
     }
 

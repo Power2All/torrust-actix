@@ -91,6 +91,57 @@ async fn test_http_scrape_endpoint() {
 }
 
 #[actix_web::test]
+async fn scrape_without_a_key_is_refused_when_keys_are_enabled() {
+    let config = Arc::new(common::build_test_config(|config| {
+        config.tracker_config.keys_enabled = true;
+    }));
+    let tracker = Arc::new(
+        torrust_actix::tracker::structs::torrent_tracker::TorrentTracker::new(config, false).await,
+    );
+    let http_config = Arc::new(common::create_test_http_config().as_ref().clone());
+    let app = test::init_service(
+        App::new()
+            .wrap(http_service_cors())
+            .configure(http_service_routes(Arc::new(HttpServiceData {
+                torrent_tracker: tracker.clone(),
+                http_trackers_config: http_config,
+            }))),
+    )
+    .await;
+    let info_hash = common::random_info_hash();
+
+    // `/announce` already answers "missing key" in this mode; `/scrape` used to report swarm
+    // sizes for any info-hash to anyone, which is the whole thing keys exist to prevent.
+    let peer: std::net::SocketAddr = "127.0.0.1:12345".parse().unwrap();
+    let req = test::TestRequest::get()
+        .uri(&format!("/scrape?info_hash={}", hex::encode(info_hash.0)))
+        .peer_addr(peer)
+        .to_request();
+    let body = test::call_and_read_body(&app, req).await;
+    assert!(
+        response_has_key(&body, b"missing key"),
+        "got {:?}",
+        String::from_utf8_lossy(&body)
+    );
+
+    // The keyed route still reaches key validation rather than being swallowed by the guard.
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/{}/scrape?info_hash={}",
+            "a".repeat(40),
+            hex::encode(info_hash.0)
+        ))
+        .peer_addr(peer)
+        .to_request();
+    let body = test::call_and_read_body(&app, req).await;
+    assert!(
+        response_has_key(&body, b"unknown key"),
+        "got {:?}",
+        String::from_utf8_lossy(&body)
+    );
+}
+
+#[actix_web::test]
 async fn test_http_cors_headers() {
     let tracker: common::TestTracker = common::create_test_tracker().await;
     let http_config = std::sync::Arc::new(common::create_test_http_config().as_ref().clone());
