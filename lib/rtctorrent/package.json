@@ -29,7 +29,7 @@
   "dependencies": {
     "bencode": "^2.0.3",
     "graceful-fs": "^4.2.11",
-    "js-yaml": "^5.2.3",
+    "js-yaml": "^5.4.1",
     "simple-sha1": "^3.1.0"
   },
   "optionalDependencies": {
@@ -40,9 +40,9 @@
     "@babel/preset-env": "^8.0.2",
     "babel-loader": "^10.1.1",
     "buffer": "^6.0.3",
-    "jest": "^30.4.2",
-    "webpack": "^5.109.2",
-    "webpack-cli": "^7.2.2"
+    "jest": "^30.5.0",
+    "webpack": "^5.110.2",
+    "webpack-cli": "^7.2.3"
   },
   "engines": {
     "node": ">=12.0"

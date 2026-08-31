@@ -598,6 +598,11 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 ### ChangeLog
 
+#### v4.2.22
+* Bumped versions.
+* Security: moved off the yanked `chacha20` 0.10.1 that `rand`, `sqlx` and `tungstenite` pulled in.
+* Bumped `rtctorrent`'s npm dependencies and rebuilt the shipped bundles.
+
 #### v4.2.21
 * Bumped versions.
 * Dropped the unmaintained `rustls-pemfile` (RUSTSEC-2025-0134) for the PEM support already in `rustls-pki-types`; TLS key files may now be PKCS#8, PKCS#1 or SEC1 everywhere, including the cluster master.
