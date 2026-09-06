@@ -8,9 +8,11 @@ use log::{
     error,
     info
 };
+use crate::tracker::types::ahash_map::AHashMap;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 impl TorrentTracker {
     /// Loads all torrents (and their completion counts) from the configured database at startup.
@@ -98,6 +100,50 @@ impl TorrentTracker {
                 current.rtc_seeds = torrent_entry.rtc_seeds;
                 current.rtc_peers = torrent_entry.rtc_peers;
                 current.updated = torrent_entry.updated;
+                (current.clone(), false)
+            }
+        }
+    }
+
+    /// Registers a torrent, or — when it is already known — sets only its completed count and
+    /// leaves the live peer maps alone.
+    ///
+    /// [`TorrentTracker::add_torrent`] replaces the *whole* entry, so handing it a freshly built
+    /// peer-less entry silently disconnects every peer currently on the torrent. That is fine for
+    /// the database loader (which owns the entry it just built) but wrong for the API, where
+    /// registering a known info-hash must not wipe its swarm.
+    ///
+    /// Returns the stored entry and `true` when the torrent was newly inserted.
+    pub fn set_torrent_completed(&self, info_hash: InfoHash, completed: u64) -> (TorrentEntry, bool)
+    {
+        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let mut lock = shard.write();
+        match lock.entry(info_hash) {
+            Entry::Vacant(v) => {
+                self.update_stats(StatsEvent::Torrents, 1);
+                self.update_stats(StatsEvent::Completed, completed as i64);
+                let torrent_entry = TorrentEntry {
+                    seeds: AHashMap::default(),
+                    seeds_ipv6: AHashMap::default(),
+                    peers: AHashMap::default(),
+                    peers_ipv6: AHashMap::default(),
+                    rtc_seeds: AHashMap::default(),
+                    rtc_peers: AHashMap::default(),
+                    completed,
+                    updated: Instant::now(),
+                };
+                let entry_clone = torrent_entry.clone();
+                v.insert(torrent_entry);
+                (entry_clone, true)
+            }
+            Entry::Occupied(mut o) => {
+                let current = o.get_mut();
+                let completed_delta = completed as i64 - current.completed as i64;
+                if completed_delta != 0 {
+                    self.update_stats(StatsEvent::Completed, completed_delta);
+                }
+                current.completed = completed;
+                current.updated = Instant::now();
                 (current.clone(), false)
             }
         }

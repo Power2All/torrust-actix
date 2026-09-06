@@ -226,4 +226,40 @@ mod tracker_tests {
             assert!(tracker.get_torrent(hash(i)).is_some());
         }
     }
+
+    /// `POST /api/torrent/{info_hash}/{completed}` re-registering a known info-hash used to hand
+    /// `add_torrent` a freshly built, peer-less entry, which replaced the whole swarm with empty
+    /// maps and reset `completed`. A client re-registering on a timer therefore wiped the peer
+    /// counts on every pass, and flushed the zeroes on to the database and the cache.
+    #[tokio::test]
+    async fn registering_a_known_torrent_keeps_its_swarm() {
+        let tracker = tracker(0).await;
+        let info_hash = hash(3);
+
+        tracker.add_torrent_peer(info_hash, PeerId([1u8; 20]), peer(0), false);   // seeder
+        tracker.add_torrent_peer(info_hash, PeerId([2u8; 20]), peer(100), false); // leecher
+        let seeds_before = tracker.get_stats().seeds;
+        let peers_before = tracker.get_stats().peers;
+
+        let (entry, inserted) = tracker.set_torrent_completed(info_hash, 7);
+        assert!(!inserted, "known info-hash reported as a fresh insert");
+        assert_eq!(entry.seeds.len(), 1, "seeder dropped by the re-registration");
+        assert_eq!(entry.peers.len(), 1, "leecher dropped by the re-registration");
+        assert_eq!(entry.completed, 7);
+
+        // The returned entry is what gets queued for the database and the cache, so the counts
+        // it carries have to be the live ones rather than zeroes.
+        let stored = tracker.get_torrent(info_hash).unwrap();
+        assert_eq!(stored.seeds.len(), 1);
+        assert_eq!(stored.peers.len(), 1);
+        assert_eq!(tracker.get_stats().seeds, seeds_before, "swarm stats drifted");
+        assert_eq!(tracker.get_stats().peers, peers_before, "swarm stats drifted");
+        assert_eq!(tracker.get_stats().completed, 7);
+
+        // An unknown info-hash still registers, and still reports the insert.
+        let (fresh, inserted) = tracker.set_torrent_completed(hash(4), 2);
+        assert!(inserted);
+        assert_eq!(fresh.completed, 2);
+        assert!(fresh.seeds.is_empty());
+    }
 }
