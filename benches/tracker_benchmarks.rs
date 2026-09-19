@@ -168,6 +168,8 @@ fn bench_contended_stats(c: &mut Criterion) {
     let tracker = rt.block_on(create_tracker());
     // Pre-create the torrents so the measured loop takes the occupied branch and never allocates
     // a new swarm, leaving the counters as the dominant shared write.
+    const THREADS: usize = 8;
+    // A multiple of THREADS so the per-task slices below divide evenly.
     let hashes: Arc<Vec<(InfoHash, PeerId)>> = Arc::new((0..64u8)
         .map(|i| {
             let mut raw = [0u8; 20];
@@ -184,13 +186,20 @@ fn bench_contended_stats(c: &mut Criterion) {
     c.bench_function("contended_stats_8_threads", |b| {
         b.iter(|| {
             rt.block_on(async {
-                let mut handles = Vec::with_capacity(8);
-                for thread in 0..8usize {
+                let mut handles = Vec::with_capacity(THREADS);
+                for thread in 0..THREADS {
                     let tracker = tracker.clone();
                     let hashes = Arc::clone(&hashes);
                     handles.push(tokio::spawn(async move {
+                        // Each task owns a disjoint slice of the hashes, so no two tasks ever
+                        // touch the same info-hash and the shard write locks stay uncontended.
+                        // Cycling the whole set instead — as this did — put every task on every
+                        // shard, and the lock contention swamped the counter traffic this is
+                        // meant to isolate.
+                        let per_thread = hashes.len() / THREADS;
+                        let owned = &hashes[thread * per_thread..(thread + 1) * per_thread];
                         for step in 0..250usize {
-                            let (info_hash, peer_id) = hashes[(thread * 250 + step) % hashes.len()];
+                            let (info_hash, peer_id) = owned[step % owned.len()];
                             let peer = create_test_peer(
                                 IpAddr::V4(Ipv4Addr::new(10, 2, 1, thread as u8)),
                                 6881,

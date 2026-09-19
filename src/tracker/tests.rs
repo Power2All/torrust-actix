@@ -265,5 +265,14 @@ mod tracker_tests {
         // A client-supplied `completed` past i64::MAX must not wrap the global counter negative.
         tracker.set_torrent_completed(hash(5), u64::MAX);
         assert!(tracker.get_stats().completed > 0, "completed counter wrapped negative");
+
+        // Both sides above i64::MAX: converting each separately saturates them to the same
+        // number and reports no change at all, however far apart they really are.
+        let before = tracker.get_stats().completed;
+        tracker.set_torrent_completed(hash(5), u64::MAX - 1000);
+        assert!(
+            tracker.get_stats().completed < before,
+            "a decrease between two values past i64::MAX must still move the counter down"
+        );
     }
 }

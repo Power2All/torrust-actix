@@ -140,8 +140,14 @@ impl TorrentTracker {
             }
             Entry::Occupied(mut o) => {
                 let current = o.get_mut();
-                let completed_delta = i64::try_from(completed).unwrap_or(i64::MAX)
-                    .saturating_sub(i64::try_from(current.completed).unwrap_or(i64::MAX));
+                // Difference first in `u64`, then clamped and signed. Converting each side
+                // separately collapses to a delta of 0 whenever both exceed `i64::MAX`, because
+                // both saturate to the same number however far apart they actually are.
+                let completed_delta = if completed >= current.completed {
+                    i64::try_from(completed - current.completed).unwrap_or(i64::MAX)
+                } else {
+                    -i64::try_from(current.completed - completed).unwrap_or(i64::MAX)
+                };
                 if completed_delta != 0 {
                     self.update_stats(StatsEvent::Completed, completed_delta);
                 }
