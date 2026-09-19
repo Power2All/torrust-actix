@@ -64,7 +64,7 @@ impl TorrentTracker {
     /// Returns the stored entry and `true` when the torrent was newly inserted.
     pub fn add_torrent(&self, info_hash: InfoHash, torrent_entry: TorrentEntry) -> (TorrentEntry, bool)
     {
-        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.shard_for(info_hash);
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
@@ -113,16 +113,20 @@ impl TorrentTracker {
     /// the database loader (which owns the entry it just built) but wrong for the API, where
     /// registering a known info-hash must not wipe its swarm.
     ///
-    /// Returns the stored entry and `true` when the torrent was newly inserted.
-    pub fn set_torrent_completed(&self, info_hash: InfoHash, completed: u64) -> (TorrentEntry, bool)
+    /// Returns the counts to queue for the database and the cache, and `true` when the torrent was
+    /// newly inserted. Deliberately *not* the entry itself: the only caller wants the counts, and
+    /// cloning a hot torrent's peer maps under the shard write lock would stall every announce
+    /// sharing that shard.
+    pub fn set_torrent_completed(&self, info_hash: InfoHash, completed: u64) -> (TorrentUpdateData, bool)
     {
-        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.shard_for(info_hash);
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
                 self.update_stats(StatsEvent::Torrents, 1);
-                self.update_stats(StatsEvent::Completed, completed as i64);
-                let torrent_entry = TorrentEntry {
+                // `completed` is client-supplied, so a plain `as i64` would wrap negative.
+                self.update_stats(StatsEvent::Completed, i64::try_from(completed).unwrap_or(i64::MAX));
+                v.insert(TorrentEntry {
                     seeds: AHashMap::default(),
                     seeds_ipv6: AHashMap::default(),
                     peers: AHashMap::default(),
@@ -131,20 +135,19 @@ impl TorrentTracker {
                     rtc_peers: AHashMap::default(),
                     completed,
                     updated: Instant::now(),
-                };
-                let entry_clone = torrent_entry.clone();
-                v.insert(torrent_entry);
-                (entry_clone, true)
+                });
+                (TorrentUpdateData { completed, ..TorrentUpdateData::default() }, true)
             }
             Entry::Occupied(mut o) => {
                 let current = o.get_mut();
-                let completed_delta = completed as i64 - current.completed as i64;
+                let completed_delta = i64::try_from(completed).unwrap_or(i64::MAX)
+                    .saturating_sub(i64::try_from(current.completed).unwrap_or(i64::MAX));
                 if completed_delta != 0 {
                     self.update_stats(StatsEvent::Completed, completed_delta);
                 }
                 current.completed = completed;
                 current.updated = Instant::now();
-                (current.clone(), false)
+                (TorrentUpdateData::from(&*current), false)
             }
         }
     }
@@ -166,7 +169,7 @@ impl TorrentTracker {
     #[inline]
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
-        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.shard_for(info_hash);
         let lock = shard.read_recursive();
         lock.get(&info_hash).cloned()
     }
@@ -177,20 +180,9 @@ impl TorrentTracker {
     #[inline]
     pub fn get_torrent_counts(&self, info_hash: InfoHash) -> Option<crate::tracker::structs::torrent_counts::TorrentCounts>
     {
-        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.shard_for(info_hash);
         let lock = shard.read_recursive();
         lock.get(&info_hash).map(crate::tracker::structs::torrent_counts::TorrentCounts::from_entry)
-    }
-
-    /// Returns full clones of multiple torrent entries; absent torrents map to `None`.
-    pub fn get_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
-    {
-        hashes.into_iter()
-            .map(|info_hash| {
-                let entry = self.get_torrent(info_hash);
-                (info_hash, entry)
-            })
-            .collect()
     }
 
     /// Removes a torrent and subtracts its seeds/peers from the global statistics.
@@ -201,7 +193,7 @@ impl TorrentTracker {
         if !self.torrents_sharding.contains_torrent(info_hash) {
             return None;
         }
-        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.shard_for(info_hash);
         let mut lock = shard.write();
         if let Some(data) = lock.remove(&info_hash) {
             self.update_stats(StatsEvent::Torrents, -1);

@@ -65,6 +65,21 @@ macro_rules! with_retry {
     };
 }
 
+/// Forwards each call to the connected engine.
+///
+/// Every method is the same three-arm match, because [`DatabaseConnector`] is always exactly one
+/// engine — there is no "configured but not connected" state left to answer for. Note `with_retry!`
+/// expands its body twice, so arguments passed through here must be cloned per attempt.
+macro_rules! dispatch {
+    ($self:ident, $method:ident $(, $arg:expr)*) => {
+        match $self {
+            DatabaseConnector::SQLite(backend) => backend.$method($($arg),*).await,
+            DatabaseConnector::MySQL(backend) => backend.$method($($arg),*).await,
+            DatabaseConnector::PgSQL(backend) => backend.$method($($arg),*).await,
+        }
+    };
+}
+
 impl DatabaseConnector {
     /// Connects to the engine selected in the configuration (SQLite 3, MySQL or PostgreSQL),
     /// optionally creating the database schema first.
@@ -86,30 +101,7 @@ impl DatabaseConnector {
     pub async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("db_load_torrents", "database");
-        let result: Result<(u64, u64), Error> = with_retry!("load_torrents", match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.load_torrents(tracker.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.load_torrents(tracker.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.load_torrents(tracker.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        });
+        let result: Result<(u64, u64), Error> = with_retry!("load_torrents", dispatch!(self, load_torrents, tracker.clone()));
         if let Some(txn) = transaction {
             match &result {
                 Ok((loaded, completed)) => {
@@ -122,9 +114,7 @@ impl DatabaseConnector {
                     txn.set_tag("error", e.to_string());
                 }
             }
-            if let Some(engine) = &self.engine {
-                txn.set_tag("database_engine", format!("{engine:?}"));
-            }
+            txn.set_tag("database_engine", format!("{:?}", self.engine()));
             txn.finish();
         }
         result
@@ -138,30 +128,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.load_whitelist(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.load_whitelist(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.load_whitelist(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        }
+        dispatch!(self, load_whitelist, tracker)
     }
 
     /// Loads the persisted blacklist into the tracker; returns the number of entries.
@@ -172,30 +139,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.load_blacklist(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.load_blacklist(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.load_blacklist(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        }
+        dispatch!(self, load_blacklist, tracker)
     }
 
     /// Loads the persisted announce keys into the tracker; returns the number of entries.
@@ -206,30 +150,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.load_keys(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.load_keys(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.load_keys(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        }
+        dispatch!(self, load_keys, tracker)
     }
 
     /// Loads the persisted users into the tracker; returns the number of entries.
@@ -240,30 +161,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error>
     {
-        match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.load_users(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.load_users(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.load_users(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        }
+        dispatch!(self, load_users, tracker)
     }
 
     /// Persists whitelist additions/removals; returns the number of rows written.
@@ -274,30 +172,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_whitelist(&self, tracker: Arc<TorrentTracker>, whitelists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
-        with_retry!("save_whitelist", match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_whitelist(tracker.clone(), whitelists.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.save_whitelist(tracker.clone(), whitelists.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_whitelist(tracker.clone(), whitelists.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        })
+        with_retry!("save_whitelist", dispatch!(self, save_whitelist, tracker.clone(), whitelists.clone()))
     }
 
     /// Persists blacklist additions/removals; returns the number of rows written.
@@ -308,30 +183,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, blacklists: Vec<(InfoHash, UpdatesAction)>) -> Result<u64, Error>
     {
-        with_retry!("save_blacklist", match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_blacklist(tracker.clone(), blacklists.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.save_blacklist(tracker.clone(), blacklists.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_blacklist(tracker.clone(), blacklists.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        })
+        with_retry!("save_blacklist", dispatch!(self, save_blacklist, tracker.clone(), blacklists.clone()))
     }
 
     /// Persists announce-key additions/removals with their expiry timestamps.
@@ -342,30 +194,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<u64, Error>
     {
-        with_retry!("save_keys", match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_keys(tracker.clone(), keys.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.save_keys(tracker.clone(), keys.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_keys(tracker.clone(), keys.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        })
+        with_retry!("save_keys", dispatch!(self, save_keys, tracker.clone(), keys.clone()))
     }
 
     /// Persists a batch of torrent updates, committing in `chunk_size` chunks to keep
@@ -378,30 +207,7 @@ impl DatabaseConnector {
     pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), Error>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("db_save_torrents", "database");
-        let result: Result<(), Error> = with_retry!("save_torrents", match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_torrents(tracker.clone(), torrents).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.save_torrents(tracker.clone(), torrents).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_torrents(tracker.clone(), torrents).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        });
+        let result: Result<(), Error> = with_retry!("save_torrents", dispatch!(self, save_torrents, tracker.clone(), torrents));
         if let Some(txn) = transaction {
             match &result {
                 Ok(()) => {
@@ -412,9 +218,7 @@ impl DatabaseConnector {
                     txn.set_tag("error", e.to_string());
                 }
             }
-            if let Some(engine) = &self.engine {
-                txn.set_tag("database_engine", format!("{engine:?}"));
-            }
+            txn.set_tag("database_engine", format!("{:?}", self.engine()));
             txn.set_extra("torrents_to_save", (torrents.len() as i64).into());
             txn.finish();
         }
@@ -430,30 +234,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), Error>
     {
-        with_retry!("save_users", match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.save_users(tracker.clone(), users.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.save_users(tracker.clone(), users.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.save_users(tracker.clone(), users.clone()).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        })
+        with_retry!("save_users", dispatch!(self, save_users, tracker.clone(), users.clone()))
     }
 
     /// Deletes all rows from the given table.
@@ -464,33 +245,13 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn clear_table(&self, table_name: &str) -> Result<(), Error>
     {
-        let query = match self.engine.as_ref() {
-            Some(engine) => format!("DELETE FROM {}", quote_identifier(*engine, table_name)),
-            None => return Err(Error::RowNotFound),
-        };
-        match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlx::query(sqlx::AssertSqlSafe(query)).execute(&sqlite.pool).await.map(|_| ())
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    sqlx::query(sqlx::AssertSqlSafe(query)).execute(&mysql.pool).await.map(|_| ())
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    sqlx::query(sqlx::AssertSqlSafe(query)).execute(&pgsql.pool).await.map(|_| ())
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
+        let query = format!("DELETE FROM {}", quote_identifier(self.engine(), table_name));
+        // Not the `dispatch!` macro: each pool is a different sqlx type, so `sqlx::query` has to
+        // be built inside the arm rather than once outside it.
+        match self {
+            DatabaseConnector::SQLite(backend) => sqlx::query(sqlx::AssertSqlSafe(query)).execute(&backend.pool).await.map(|_| ()),
+            DatabaseConnector::MySQL(backend) => sqlx::query(sqlx::AssertSqlSafe(query)).execute(&backend.pool).await.map(|_| ()),
+            DatabaseConnector::PgSQL(backend) => sqlx::query(sqlx::AssertSqlSafe(query)).execute(&backend.pool).await.map(|_| ()),
         }
     }
 
@@ -502,30 +263,7 @@ impl DatabaseConnector {
     /// `Error::RowNotFound` when no backend is initialised for the configured engine.
     pub async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error>
     {
-        match self.engine.as_ref() {
-            Some(DatabaseDrivers::sqlite3) => {
-                if let Some(ref sqlite) = self.sqlite {
-                    sqlite.reset_seeds_peers(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::mysql) => {
-                if let Some(ref mysql) = self.mysql {
-                    mysql.reset_seeds_peers(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            Some(DatabaseDrivers::pgsql) => {
-                if let Some(ref pgsql) = self.pgsql {
-                    pgsql.reset_seeds_peers(tracker).await
-                } else {
-                    Err(Error::RowNotFound)
-                }
-            }
-            None => Err(Error::RowNotFound)
-        }
+        dispatch!(self, reset_seeds_peers, tracker)
     }
 }
 

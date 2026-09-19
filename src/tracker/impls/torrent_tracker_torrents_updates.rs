@@ -41,26 +41,6 @@ impl TorrentTracker {
         }
     }
 
-    /// Queues a batch of torrent updates.
-    ///
-    /// Returns, per info-hash, whether the insert created a new slot.
-    pub fn add_torrent_updates(&self, hashes: BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> BTreeMap<InfoHash, bool>
-    {
-        let mut returned_data = BTreeMap::new();
-        let mut success_count = 0i64;
-        for (info_hash, (torrent_entry, updates_action)) in hashes {
-            let success = self.torrents_updates.insert(next_seq(), info_hash, torrent_entry, updates_action);
-            if success {
-                success_count += 1;
-            }
-            returned_data.insert(info_hash, success);
-        }
-        if success_count > 0 {
-            self.update_stats(StatsEvent::TorrentsUpdates, success_count);
-        }
-        returned_data
-    }
-
     /// Returns a copy of the pending torrent-update queue, keyed by info-hash.
     pub fn get_torrent_updates(&self) -> BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>
     {

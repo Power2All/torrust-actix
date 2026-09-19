@@ -17,6 +17,13 @@ pub(crate) fn default_max_peers_per_torrent() -> u64 { 10_000 }
 /// Serde default cap on SDP answers queued for one RtcTorrent peer: `32`.
 pub(crate) fn default_max_rtc_pending_answers() -> u64 { 32 }
 pub(crate) fn default_max_torrents() -> u64 { 0 }
+/// Serde default depth of the UDP receive-to-parse queue: `65536` slots.
+///
+/// `ArrayQueue` allocates its whole ring up front, and a `UdpPacket` is 312 bytes, so this
+/// reserves ~20 MB per UDP listener. It was 1,000,000 (~312 MB per listener, doubled when an
+/// IPv4 and an IPv6 server both run) — far more buffer than is useful, since a queue that deep
+/// only hoards packets the parse workers were never going to catch up on.
+pub(crate) fn default_parse_queue_size() -> usize { 65_536 }
 /// Serde default Prometheus metric namespace: `torrust_actix`.
 pub(crate) fn default_prometheus_id() -> String { String::from("torrust_actix") }
 /// Serde default cluster mode: standalone (no clustering).
@@ -37,8 +44,10 @@ pub(crate) fn default_cluster_reconnect_interval() -> u64 { 5 }
 pub(crate) fn default_cluster_max_connections() -> u64 { 25000 }
 /// Serde default cluster worker threads: the machine's available parallelism (fallback 4).
 pub(crate) fn default_cluster_threads() -> u64 { available_parallelism().map(|n| n.get() as u64).unwrap_or(4) }
-/// Serde default maximum TLS handshakes per second on the cluster listener: `256`.
-pub(crate) fn default_cluster_tls_connection_rate() -> u64 { 256 }
+/// Serde default maximum concurrent TLS handshakes per worker thread: `256`.
+///
+/// Matches `actix-tls`'s own default, which this value replaces process-wide.
+pub(crate) fn default_tls_connection_rate() -> u64 { 256 }
 
 /// Serde default number of rows per database transaction chunk during syncs: `1000`.
 ///

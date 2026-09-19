@@ -88,18 +88,11 @@ impl DatabaseConnectorPgSQL {
             error!("{LOG_PREFIX} Message: {pgsql_connect}");
             exit(1);
         }
-        let mut structure = DatabaseConnector {
-            mysql: None,
-            sqlite: None,
-            pgsql: None,
-            engine: None,
-        };
-        structure.pgsql = Some(DatabaseConnectorPgSQL {
+        let backend = DatabaseConnectorPgSQL {
             pool: pgsql_connect.unwrap(),
-        });
-        structure.engine = Some(DatabaseDrivers::pgsql);
+        };
         if create_database {
-            let pool = &structure.pgsql.clone().unwrap().pool;
+            let pool = &backend.pool;
             info!("[BOOT] Database creation triggered for PgSQL.");
             let ts = &config.database_structure.torrents;
             let hash_type = if ts.bin_type_infohash { "bytea" } else { "character(40)" };
@@ -163,7 +156,7 @@ impl DatabaseConnectorPgSQL {
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
         }
-        structure
+        DatabaseConnector::PgSQL(backend)
     }
 
     /// Loads all persisted torrents in pages into the tracker; returns `(torrents, completed)` counts.

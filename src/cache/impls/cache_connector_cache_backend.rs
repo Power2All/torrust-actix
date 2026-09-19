@@ -1,4 +1,3 @@
-use crate::cache::enums::cache_engine::CacheEngine;
 use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::cache::structs::torrent_peer_counts::TorrentPeerCounts;
@@ -6,35 +5,30 @@ use crate::cache::traits::cache_backend::CacheBackend;
 use crate::tracker::structs::info_hash::InfoHash;
 use async_trait::async_trait;
 
+/// Forwards each call to the connected engine.
+///
+/// Every method is the same two-arm match, because [`CacheConnector`] can only ever be one engine
+/// or the other — there is no "configured but not connected" state left to handle.
+macro_rules! dispatch {
+    ($self:ident, $method:ident $(, $arg:expr)*) => {
+        match $self {
+            CacheConnector::Redis(backend) => backend.$method($($arg),*).await,
+            CacheConnector::Memcache(backend) => backend.$method($($arg),*).await,
+        }
+    };
+}
+
 #[async_trait]
 impl CacheBackend for CacheConnector {
     async fn ping(&self) -> Result<(), CacheError> {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("cache_ping", "cache");
-        let result: Result<(), CacheError> = match self.engine.as_ref() {
-            Some(CacheEngine::redis) => {
-                if let Some(ref redis) = self.redis {
-                    redis.ping().await
-                } else {
-                    Err(CacheError::ConnectionError("Redis not connected".to_string()))
-                }
-            }
-            Some(CacheEngine::memcache) => {
-                if let Some(ref memcache) = self.memcache {
-                    memcache.ping().await
-                } else {
-                    Err(CacheError::ConnectionError("Memcache not connected".to_string()))
-                }
-            }
-            None => Err(CacheError::ConnectionError("No cache engine configured".to_string())),
-        };
+        let result = dispatch!(self, ping);
         if let Some(txn) = transaction {
             match &result {
                 Ok(()) => txn.set_tag("result", "success"),
                 Err(e) => txn.set_tag("result", format!("error: {e:?}")),
             }
-            if let Some(engine) = &self.engine {
-                txn.set_tag("engine", format!("{engine:?}"));
-            }
+            txn.set_tag("engine", format!("{:?}", self.engine()));
             txn.finish();
         }
         result
@@ -46,86 +40,22 @@ impl CacheBackend for CacheConnector {
         counts: &TorrentPeerCounts,
         ttl: Option<u64>,
     ) -> Result<(), CacheError> {
-        match self.engine.as_ref() {
-            Some(CacheEngine::redis) => {
-                if let Some(ref redis) = self.redis {
-                    redis.set_torrent_peers(info_hash, counts, ttl).await
-                } else {
-                    Err(CacheError::ConnectionError("Redis not connected".to_string()))
-                }
-            }
-            Some(CacheEngine::memcache) => {
-                if let Some(ref memcache) = self.memcache {
-                    memcache.set_torrent_peers(info_hash, counts, ttl).await
-                } else {
-                    Err(CacheError::ConnectionError("Memcache not connected".to_string()))
-                }
-            }
-            None => Err(CacheError::ConnectionError("No cache engine configured".to_string())),
-        }
+        dispatch!(self, set_torrent_peers, info_hash, counts, ttl)
     }
 
     async fn get_torrent_peers(
         &self,
         info_hash: &InfoHash,
     ) -> Result<Option<TorrentPeerCounts>, CacheError> {
-        match self.engine.as_ref() {
-            Some(CacheEngine::redis) => {
-                if let Some(ref redis) = self.redis {
-                    redis.get_torrent_peers(info_hash).await
-                } else {
-                    Err(CacheError::ConnectionError("Redis not connected".to_string()))
-                }
-            }
-            Some(CacheEngine::memcache) => {
-                if let Some(ref memcache) = self.memcache {
-                    memcache.get_torrent_peers(info_hash).await
-                } else {
-                    Err(CacheError::ConnectionError("Memcache not connected".to_string()))
-                }
-            }
-            None => Err(CacheError::ConnectionError("No cache engine configured".to_string())),
-        }
+        dispatch!(self, get_torrent_peers, info_hash)
     }
 
     async fn delete_torrent(&self, info_hash: &InfoHash) -> Result<(), CacheError> {
-        match self.engine.as_ref() {
-            Some(CacheEngine::redis) => {
-                if let Some(ref redis) = self.redis {
-                    redis.delete_torrent(info_hash).await
-                } else {
-                    Err(CacheError::ConnectionError("Redis not connected".to_string()))
-                }
-            }
-            Some(CacheEngine::memcache) => {
-                if let Some(ref memcache) = self.memcache {
-                    memcache.delete_torrent(info_hash).await
-                } else {
-                    Err(CacheError::ConnectionError("Memcache not connected".to_string()))
-                }
-            }
-            None => Err(CacheError::ConnectionError("No cache engine configured".to_string())),
-        }
+        dispatch!(self, delete_torrent, info_hash)
     }
 
     async fn delete_torrents(&self, info_hashes: &[InfoHash]) -> Result<(), CacheError> {
-        match self.engine.as_ref() {
-            Some(CacheEngine::redis) => {
-                if let Some(ref redis) = self.redis {
-                    redis.delete_torrents(info_hashes).await
-                } else {
-                    Err(CacheError::ConnectionError("Redis not connected".to_string()))
-                }
-            }
-            Some(CacheEngine::memcache) => {
-                if let Some(ref memcache) = self.memcache {
-                    memcache.delete_torrents(info_hashes).await
-                } else {
-                    Err(CacheError::ConnectionError("Memcache not connected".to_string()))
-                }
-            }
-            None => Err(CacheError::ConnectionError("No cache engine configured".to_string())),
-        }
+        dispatch!(self, delete_torrents, info_hashes)
     }
 
     async fn set_torrent_peers_batch(
@@ -133,22 +63,6 @@ impl CacheBackend for CacheConnector {
         data: &[(InfoHash, TorrentPeerCounts)],
         ttl: Option<u64>,
     ) -> Result<(), CacheError> {
-        match self.engine.as_ref() {
-            Some(CacheEngine::redis) => {
-                if let Some(ref redis) = self.redis {
-                    redis.set_torrent_peers_batch(data, ttl).await
-                } else {
-                    Err(CacheError::ConnectionError("Redis not connected".to_string()))
-                }
-            }
-            Some(CacheEngine::memcache) => {
-                if let Some(ref memcache) = self.memcache {
-                    memcache.set_torrent_peers_batch(data, ttl).await
-                } else {
-                    Err(CacheError::ConnectionError("Memcache not connected".to_string()))
-                }
-            }
-            None => Err(CacheError::ConnectionError("No cache engine configured".to_string())),
-        }
+        dispatch!(self, set_torrent_peers_batch, data, ttl)
     }
 }

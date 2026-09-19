@@ -87,12 +87,12 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
         Ok(h) => h,
         Err(r) => return r,
     };
-    // Register first, then queue the update built from the *stored* entry: for a torrent that
-    // already exists the entry carries its live peer counts, and queueing a peer-less one would
-    // flush zeroed seed/peer numbers to the database and the cache.
-    let (torrent_entry, inserted) = data.torrent_tracker.set_torrent_completed(info_hash, completed);
+    // Register first, then queue the update built from the *stored* counts: for a torrent that
+    // already exists those are its live peer counts, and queueing a peer-less entry would flush
+    // zeroed seed/peer numbers to the database and the cache.
+    let (torrent_update, inserted) = data.torrent_tracker.set_torrent_completed(info_hash, completed);
     if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentUpdateData::from(&torrent_entry), UpdatesAction::Add);
+        let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_update, UpdatesAction::Add);
     }
     if inserted {
         HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
@@ -119,9 +119,9 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
         if info.len() == 40 {
             match parse_info_hash(&info) {
                 Ok(info_hash) => {
-                    let (torrent_entry, inserted) = data.torrent_tracker.set_torrent_completed(info_hash, completed);
+                    let (torrent_update, inserted) = data.torrent_tracker.set_torrent_completed(info_hash, completed);
                     if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-                        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentUpdateData::from(&torrent_entry), UpdatesAction::Add);
+                        let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_update, UpdatesAction::Add);
                     }
                     let status = if inserted {
                         json!({"status": "ok"})

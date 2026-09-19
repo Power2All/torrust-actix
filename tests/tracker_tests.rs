@@ -709,3 +709,42 @@ async fn test_rtc_peers_expire_while_bt_cutoff_unavailable() {
     assert!(entry.rtc_peers.is_empty(), "RTC peers must expire on their own cutoff");
     assert_eq!(entry.peers.len(), 1, "BT peers must survive an unavailable BT cutoff");
 }
+
+/// The RtcTorrent signalling response in `http.rs` never consults `numwant` — it emits every RTC
+/// seeder holding an offer — so its snapshot cap is a separate contract from the BitTorrent one,
+/// which is bounded at `numwant + 1`. Unifying the two constants would silently cut how many
+/// signalling partners a WebRTC peer can see, which is what this guards.
+#[tokio::test]
+async fn test_rtc_snapshot_cap_is_independent_of_the_bittorrent_cap() {
+    use torrust_actix::tracker::structs::announce_entry::{SNAPSHOT_PEER_CAP, SNAPSHOT_RTC_PEER_CAP};
+
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let leecher_id = common::random_peer_id();
+    let offer = "v=0 s=offer".to_string();
+
+    // More seeders than the BitTorrent cap would allow through.
+    let total = SNAPSHOT_PEER_CAP + 20;
+    for i in 0..total {
+        let seeder_id = common::random_peer_id();
+        let peer = common::create_rtc_peer(
+            seeder_id,
+            IpAddr::V4(Ipv4Addr::new(10, 9, (i / 256) as u8, (i % 256) as u8)),
+            6881,
+            Some(offer.clone()),
+            0,
+        );
+        tracker.add_torrent_peer(info_hash, seeder_id, peer, false);
+    }
+
+    let entry = tracker.get_rtctorrent_peers(info_hash, false, leecher_id);
+    assert!(
+        entry.rtc_seeds.len() > SNAPSHOT_PEER_CAP,
+        "RTC snapshot was clipped to the BitTorrent cap: got {} seeders",
+        entry.rtc_seeds.len()
+    );
+    assert!(
+        entry.rtc_seeds.len() <= SNAPSHOT_RTC_PEER_CAP,
+        "RTC snapshot exceeded its own cap"
+    );
+}

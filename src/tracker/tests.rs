@@ -241,14 +241,14 @@ mod tracker_tests {
         let seeds_before = tracker.get_stats().seeds;
         let peers_before = tracker.get_stats().peers;
 
-        let (entry, inserted) = tracker.set_torrent_completed(info_hash, 7);
+        let (update, inserted) = tracker.set_torrent_completed(info_hash, 7);
         assert!(!inserted, "known info-hash reported as a fresh insert");
-        assert_eq!(entry.seeds.len(), 1, "seeder dropped by the re-registration");
-        assert_eq!(entry.peers.len(), 1, "leecher dropped by the re-registration");
-        assert_eq!(entry.completed, 7);
+        assert_eq!(update.seeds_ipv4, 1, "seeder dropped by the re-registration");
+        assert_eq!(update.peers_ipv4, 1, "leecher dropped by the re-registration");
+        assert_eq!(update.completed, 7);
 
-        // The returned entry is what gets queued for the database and the cache, so the counts
-        // it carries have to be the live ones rather than zeroes.
+        // The returned counts are what get queued for the database and the cache, so they have to
+        // be the live ones rather than zeroes.
         let stored = tracker.get_torrent(info_hash).unwrap();
         assert_eq!(stored.seeds.len(), 1);
         assert_eq!(stored.peers.len(), 1);
@@ -260,6 +260,10 @@ mod tracker_tests {
         let (fresh, inserted) = tracker.set_torrent_completed(hash(4), 2);
         assert!(inserted);
         assert_eq!(fresh.completed, 2);
-        assert!(fresh.seeds.is_empty());
+        assert_eq!(fresh.seeds_ipv4, 0);
+
+        // A client-supplied `completed` past i64::MAX must not wrap the global counter negative.
+        tracker.set_torrent_completed(hash(5), u64::MAX);
+        assert!(tracker.get_stats().completed > 0, "completed counter wrapped negative");
     }
 }

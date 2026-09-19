@@ -227,6 +227,7 @@ pub async fn api_service(
     let request_timeout = api_server_object.request_timeout;
     let disconnect_timeout = api_server_object.disconnect_timeout;
     let worker_threads = api_server_object.threads as usize;
+    let tls_connection_rate = data.config.tracker_config.tls_connection_rate as usize;
     let api_service_data = Arc::new(ApiServiceData {
         torrent_tracker: Arc::clone(&data),
         api_trackers_config: Arc::new(api_server_object.clone()),
@@ -268,6 +269,9 @@ pub async fn api_service(
             .client_request_timeout(Duration::from_secs(request_timeout))
             .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
             .workers(worker_threads)
+            // Caps in-flight TLS handshakes per worker. Writes one process-global in
+            // `actix-tls`, which is why every TLS listener here passes the same value.
+            .max_connection_rate(tls_connection_rate)
             .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
             .unwrap_or_else(|e| {
                 error!("[APIS] Unable to bind to {addr}: {e}");

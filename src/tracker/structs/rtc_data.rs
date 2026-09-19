@@ -22,8 +22,6 @@ pub struct RtcData {
     pub sdp_offer: Option<CompressedBytes>,
     /// The accepted SDP answer from a leecher, compressed in memory.
     pub sdp_answer: Option<CompressedBytes>,
-    /// Human-readable connection state (e.g. `"pending"`, `"connected"`).
-    pub connection_status: String,
     /// Queue of `(leecher_peer_id, compressed_sdp_answer)` pairs waiting to
     /// be delivered to the seeder on its next announce poll.
     pub pending_answers: Vec<(PeerId, CompressedBytes)>,

@@ -25,6 +25,5 @@ pub struct ApiTrackersConfig {
     pub threads: u64,
     pub ssl: bool,
     pub ssl_key: String,
-    pub ssl_cert: String,
-    pub tls_connection_rate: u64
+    pub ssl_cert: String
 }

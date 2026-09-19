@@ -60,11 +60,6 @@ impl DynamicCertificateResolver {
         Ok(())
     }
 
-    /// Returns `true` when the resolver currently holds a usable certificate.
-    pub fn has_certificate(&self) -> bool {
-        self.cached_key.read().is_some()
-    }
-
     fn bundle_to_certified_key(bundle: &Arc<CertificateBundle>) -> Result<rustls::sign::CertifiedKey, CertificateError> {
         let signing_key = rustls::crypto::ring::sign::any_supported_type(&bundle.key)
             .map_err(|e| CertificateError::CertifiedKeyError(format!("{e}")))?;
