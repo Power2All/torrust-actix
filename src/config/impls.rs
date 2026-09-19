@@ -1,5 +1,4 @@
 pub mod cache_config;
-pub mod cluster_mode;
 pub mod configuration;
 pub mod configuration_error;
 pub mod database_structure_config_blacklist;

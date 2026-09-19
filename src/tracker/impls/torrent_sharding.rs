@@ -22,7 +22,6 @@ impl Default for TorrentSharding {
     }
 }
 
-#[allow(dead_code)]
 impl TorrentSharding {
     /// Creates an empty sharded torrent store with 256 independently locked shards.
     ///
@@ -319,17 +318,14 @@ impl TorrentSharding {
             .unwrap_or(false)
     }
 
-    /// Returns the shard (an `Arc<RwLock<..>>` map) that stores torrents whose info-hash starts with `shard`.
+    /// Borrows the shard holding `info_hash`, without touching a refcount.
+    ///
+    /// `shards` is a fixed `[_; 256]` indexed by the info-hash's first byte, so the lookup cannot
+    /// fail and there is no `Option` to unwrap. Mirrors `TorrentUpdateQueue::shard`, which does
+    /// the same thing over the same 256-shard layout.
     #[inline]
-    pub fn get_shard(&self, shard: u8) -> Option<Arc<RwLock<AHashMap<InfoHash, TorrentEntry>>>> {
-        self.shards.get(shard as usize).cloned()
-    }
-
-    /// Returns a cloned, ordered snapshot of every torrent in the given shard.
-    pub fn get_shard_content(&self, shard: u8) -> BTreeMap<InfoHash, TorrentEntry> {
-        self.shards.get(shard as usize)
-            .map(|s| s.read().iter().map(|(k, v)| (*k, v.clone())).collect())
-            .unwrap_or_default()
+    pub fn shard_for(&self, info_hash: InfoHash) -> &RwLock<AHashMap<InfoHash, TorrentEntry>> {
+        &self.shards[info_hash.0[0] as usize]
     }
 
     /// Returns a cloned, ordered snapshot of every tracked torrent across all shards.
@@ -353,67 +349,4 @@ impl TorrentSharding {
             .sum()
     }
 
-    /// Fetches multiple torrents in one pass, grouping the lookups per shard to minimise locking.
-    ///
-    /// Absent torrents map to `None`.
-    pub fn get_multiple_torrents(&self, info_hashes: &[InfoHash]) -> BTreeMap<InfoHash, Option<TorrentEntry>> {
-        let mut results = BTreeMap::new();
-        let mut shard_groups: [Vec<InfoHash>; 256] = std::array::from_fn(|_| Vec::new());
-        for &info_hash in info_hashes {
-            shard_groups[info_hash.0[0] as usize].push(info_hash);
-        }
-        for (shard_index, hashes) in shard_groups.iter().enumerate() {
-            if !hashes.is_empty() {
-                let shard = self.shards[shard_index].read();
-                for &hash in hashes {
-                    results.insert(hash, shard.get(&hash).cloned());
-                }
-            }
-        }
-        results
-    }
-
-    /// Checks `(info_hash, peer_id)` pairs in one pass, grouping the lookups per shard.
-    ///
-    /// The result vector matches the order of `queries`.
-    pub fn batch_contains_peers(&self, queries: &[(InfoHash, PeerId)]) -> Vec<bool> {
-        let mut results = vec![false; queries.len()];
-        let mut shard_groups: [Vec<usize>; 256] = std::array::from_fn(|_| Vec::new());
-        for (idx, &(info_hash, _)) in queries.iter().enumerate() {
-            shard_groups[info_hash.0[0] as usize].push(idx);
-        }
-        for (shard_index, indices) in shard_groups.iter().enumerate() {
-            if !indices.is_empty() {
-                let shard = self.shards[shard_index].read();
-                for &idx in indices {
-                    let (info_hash, peer_id) = queries[idx];
-                    results[idx] = shard.get(&info_hash)
-                        .is_some_and(|entry| {
-                            entry.seeds.contains_key(&peer_id)
-                                || entry.seeds_ipv6.contains_key(&peer_id)
-                                || entry.peers.contains_key(&peer_id)
-                                || entry.peers_ipv6.contains_key(&peer_id)
-                                || entry.rtc_seeds.contains_key(&peer_id)
-                                || entry.rtc_peers.contains_key(&peer_id)
-                        });
-                }
-            }
-        }
-        results
-    }
-
-    /// Invokes `f` for every tracked torrent, shard by shard, without cloning entries.
-    ///
-    /// Each shard's read lock is held while its entries are visited.
-    pub fn iter_all_torrents<F>(&self, mut f: F)
-    where
-        F: FnMut(&InfoHash, &TorrentEntry)
-    {
-        for shard in &self.shards {
-            let shard_data = shard.read();
-            for (k, v) in shard_data.iter() {
-                f(k, v);
-            }
-        }
-    }
 }

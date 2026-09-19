@@ -23,4 +23,6 @@ pub struct UdpServer {
     /// which is the legacy behaviour.
     pub(crate) proxy_addrs: Arc<Vec<IpAddr>>,
     pub(crate) receive_method: UdpReceiveMethod,
+    /// Slots in the receive-to-parse queue; preallocated in full at 312 bytes each.
+    pub(crate) parse_queue_size: usize,
 }

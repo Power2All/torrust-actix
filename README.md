@@ -114,6 +114,7 @@ TRACKER__PEERS_TIMEOUT <UINT64>
 TRACKER__PEERS_CLEANUP_INTERVAL <UINT64>
 TRACKER__PEERS_CLEANUP_THREADS <UINT64>
 TRACKER__PROMETHEUS_ID <STRING>
+TRACKER__TLS_CONNECTION_RATE <UINT64>
 TRACKER__RTC_INTERVAL <UINT64>
 TRACKER__RTC_PEERS_TIMEOUT <UINT64>
 TRACKER__TOTAL_DOWNLOADS <UINT64>
@@ -135,7 +136,6 @@ TRACKER__CLUSTER_THREADS <UINT64>
 TRACKER__CLUSTER_SSL <true | false>
 TRACKER__CLUSTER_SSL_KEY <STRING>
 TRACKER__CLUSTER_SSL_CERT <STRING>
-TRACKER__CLUSTER_TLS_CONNECTION_RATE <UINT64>
 
 CACHE__ENABLED <true | false>
 CACHE__ENGINE <redis | memcache>
@@ -211,7 +211,6 @@ API_0_REQUEST_TIMEOUT <UINT64>
 API_0_DISCONNECT_TIMEOUT <UINT64>
 API_0_MAX_CONNECTIONS <UINT64>
 API_0_THREADS <UINT64>
-API_0_TLS_CONNECTION_RATE <UINT64>
 
 HTTP_0_ENABLED <true | false>
 HTTP_0_SSL <true | false>
@@ -224,7 +223,6 @@ HTTP_0_REQUEST_TIMEOUT <UINT64>
 HTTP_0_DISCONNECT_TIMEOUT <UINT64>
 HTTP_0_MAX_CONNECTIONS <UINT64>
 HTTP_0_THREADS <UINT64>
-HTTP_0_TLS_CONNECTION_RATE <UINT64>
 HTTP_0_RTCTORRENT = <true | false>
 
 UDP_0_ENABLED <true | false>
@@ -237,6 +235,7 @@ UDP_0_REUSE_ADDRESS <true | false>
 UDP_0_USE_PAYLOAD_IP <true | false>
 UDP_0_SIMPLE_PROXY_PROTOCOL <true | false>
 UDP_0_RECEIVE_METHOD <auto | recvmmsg | io_uring | rio>
+UDP_0_PARSE_QUEUE_SIZE <UINT64>
 ```
 
 #### Database commit chunk size
@@ -597,6 +596,35 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 ---
 
 ### ChangeLog
+
+#### v4.2.23
+* Bumped versions.
+* Fixed `POST /api/torrent/{info_hash}/{completed}` (and the bulk variant) wiping the swarm of an already known info-hash: it handed `add_torrent` a freshly built, peer-less entry, which replaced the live peer maps with empty ones and flushed those zeroes on to the database and the cache.
+* Security: bumped `rustls` to 0.23.45 for RUSTSEC-2026-0285 (TLS 1.3 handshake messages accepted across encryption level boundaries).
+* Security: the global statistics counters now saturate instead of wrapping. `update_counter` used `fetch_add`/`fetch_sub`, so a client-supplied magnitude — `completed` off the API path, a user's `uploaded`/`downloaded` off an announce — could drive a counter negative; `-value` also overflowed on `i64::MIN`.
+* `set_torrent_completed` returns the counts to queue rather than the stored entry, so registering a hot torrent no longer clones its whole swarm under the shard write lock.
+* The Swagger page's reported API version no longer lags the release; `version.bat` now bumps it too.
+
+##### Cleanup (v4.2.23)
+* **Deleted the `rtctorrent_bridge` module** (9 files). It shelled out to the RtcTorrent node CLI to create, seed and download torrents, and was reachable only through `create_rtctorrent`, which had no callers — as did `seed_torrent` and `download_torrent`. **Library API change.**
+* **Deleted `QueryBuilder`** (187 lines). Sixteen of its seventeen methods had no callers at all and the seventeenth was only reached by its own tests; the database layer builds SQL with `format!` + `AssertSqlSafe` directly. **Library API change.**
+* **`DatabaseConnector` and `CacheConnector` are enums instead of one `Option` per engine plus an `Option<engine>` discriminant.** Each had exactly one constructor filling exactly one engine, so "engine set but not connected", "two engines at once" and "no engine" were unreachable states that every method still answered for — 36 and 18 dead error arms between them. `database_connector.rs` drops 554 lines to 292 and `cache_connector_cache_backend.rs` 154 to 68, with the invalid combinations now unrepresentable. **Library API change.**
+* **Deleted 13 public methods with no callers anywhere, including tests** (214 lines): `batch_contains_peers`, `clean_user_active_torrents`, `get_peers_ref`, `get_multiple_torrents`, `add_torrent_updates`, `add_user_active_torrent`, `create_rtctorrent`, `iter_all_torrents`, `get_torrents`, `backend`, `get_shard_content`, `get_shard` and `has_certificate`. The `#[allow(dead_code)]` on `impl TorrentSharding` that had been hiding most of them is gone too. **Library API change.**
+* Deleted `ClusterMode::is_master`/`is_slave`/`is_standalone` — every caller already used `==` or `match` — and the `Ip` marker trait, whose zero methods only bounded two structs that are never instantiated with anything but `Ipv4Addr`/`Ipv6Addr`.
+* `bin20_to_hex` hand-rolled a hex lookup table and loop eight lines below `bin2hex`, which already used `hex::encode_to_slice` from the same crate. It uses it now too.
+
+##### Performance (v4.2.23)
+* **Announce is no longer O(swarm size).** `AnnounceEntry::from_entry` cloned all six peer maps — up to 768 whole `TorrentPeer` values — inside the shard write lock, while a response reads at most two of them and only wants each peer's address and id. The BitTorrent maps now carry a 56-byte `ResponsePeer` in a `Vec` instead of a 104-byte `TorrentPeer` in a hash map (no per-peer hashing, one exact-size allocation), the caller says which half it needs, and the BitTorrent per-map cap drops from 128 to 73 because `numwant` is clamped to 72. The RtcTorrent maps keep their own `SNAPSHOT_RTC_PEER_CAP` of 128: the signalling response never consults `numwant`, so the number of signalling partners a WebRTC peer can see is unchanged. Measured on the new `announce_into_populated_swarm` benchmark: **about 7x faster at a 1000-peer swarm** (7.96 µs → 1.10 µs) and 2.8x at 200. The more useful figure is the scaling: growing a swarm from 200 to 1000 peers used to take an announce from 3.02 µs to 7.96 µs and now takes it from 1.09 µs to 1.11 µs, because the work is finally bounded by `numwant` rather than by swarm size.
+* **The UDP parse queue no longer reserves 312 MB per listener.** `parse_queue_size` is now configurable under `[[udp_server]]` (env `UDP_n_PARSE_QUEUE_SIZE`) and defaults to 65536 slots — about 20 MB, down from a preallocated 1,000,000 — freeing ~292 MB per UDP listener, doubled when IPv4 and IPv6 servers both run.
+* Reaching a shard no longer costs an atomic refcount round-trip: `TorrentSharding::shard_for` borrows the shard instead of cloning its `Arc`, on the thirteen call sites that immediately lock and drop it.
+* The cluster announce builders used the cloning `get_peers`, so a forwarded announce copied its peers a second time; they now read the snapshot directly. Their unused `tracker` parameter is gone.
+* Removed `RtcData::connection_status` and `update_rtc_connection_status`. The field held one of three literals, was allocated per RtcTorrent peer, reallocated on every state change and cloned on every announce — and nothing ever read it. **Library API change.**
+* Dropped the dead `is_rtc_request` branches in the HTTP announce response builder; RtcTorrent requests return earlier and never reached them.
+* Fixed a bug in `set_torrent_completed`'s statistics delta: converting each side to `i64` separately meant two `completed` values both above `i64::MAX` saturated to the same number and reported no change at all, however far apart they were. The difference is now taken in `u64` and only its magnitude clamped before the sign is applied.
+* `parse_query` moved off SipHash to the project's `AHashMap` and skips percent-decoding for values holding no escape: about 11% off an announce query parse (1.49 µs → 1.32 µs). What remains is per-key allocation, which would need a borrowed key type to remove. Safe despite the keys coming off the wire — see below.
+* Tried and reverted: giving each statistics counter its own cache line showed **no measurable difference** on an 8-thread announce benchmark (p = 0.91), so the ~3.2 KB and the extra indirection buy nothing at this core count. An earlier run of that benchmark suggested it was 6.5% slower, but the benchmark itself was at fault — every task cycled the whole info-hash set, so shard-lock contention swamped the counter traffic it was supposed to isolate. Fixed to give each task a disjoint slice, which is what produced the honest result.
+* `tls_connection_rate` now actually does something. It was plumbed through config, documented and defaulted, but never read by anything. It is the cap on concurrent TLS handshakes per worker thread — the expensive half of a TLS connection — and is now passed to `HttpServer::max_connection_rate` on every TLS listener (HTTP, API and cluster master). **Config change:** `actix-tls` stores this in a single process-global, so three separate keys could never each take effect; `tracker_config.cluster_tls_connection_rate` is now `tracker_config.tls_connection_rate` (env `TRACKER__TLS_CONNECTION_RATE`) and the unreachable `[[http_server]]`/`[[api_server]]` keys of the same name are removed. Existing config files keep parsing — unknown keys are ignored — and pick up the 256 default, which is what they effectively had all along.
+* Investigated and found to be a non-issue: `AHashMap` is `BuildHasherDefault<AHasher>`, which ahash's documentation calls "fixed keys" — but with the `std`/`runtime-rng` features (both on by default) those keys come from `getrandom` on first use and live in a process-wide `OnceBox`. "Fixed" means identical across every map within one run, not hardcoded: three runs of the test binary hash the same 20-byte value to three different results. Info-hash and peer-id collisions therefore cannot be precomputed, and no hasher change is needed.
 
 #### v4.2.22
 * Bumped versions.

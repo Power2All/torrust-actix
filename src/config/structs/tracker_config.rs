@@ -104,9 +104,17 @@ pub struct TrackerConfig {
     /// Path to the TLS certificate file for cluster connections.
     #[serde(default)]
     pub cluster_ssl_cert: String,
-    /// Maximum new TLS cluster connections accepted per second.
-    #[serde(default = "crate::config::config::default_cluster_tls_connection_rate")]
-    pub cluster_tls_connection_rate: u64,
+    /// Maximum TLS handshakes a worker thread will have in flight at once.
+    ///
+    /// A handshake is the expensive part of a TLS connection, so this caps the CPU a
+    /// connection flood can burn: listeners stop accepting once a worker is at the limit.
+    /// Despite the name it is not a per-second rate.
+    ///
+    /// `actix-tls` keeps this in one process-global that every listener seeds its workers
+    /// from, so it cannot be set per listener - this one value covers the HTTP, API and
+    /// cluster TLS servers alike. The effective ceiling is this times the worker count.
+    #[serde(default = "crate::config::config::default_tls_connection_rate")]
+    pub tls_connection_rate: u64,
     /// Interval in seconds between RtcTorrent peer-state polls.
     #[serde(default = "crate::config::config::default_rtc_interval")]
     pub rtc_interval: u64,

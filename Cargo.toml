@@ -5,7 +5,7 @@ resolver = "3"
 
 [package]
 name = "torrust-actix"
-version = "4.2.22"
+version = "4.2.23"
 edition = "2024"
 rust-version = "1.88.0"
 license = "MIT"
@@ -40,10 +40,10 @@ actix-web = { version = "4.15.0", features = ["rustls-0_23", "compress-gzip"] }
 actix-web-actors = "4.3.1"
 tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
 rmp-serde = "1.3.1"
-uuid = { version = "1.26.0", features = ["v4"] }
+uuid = { version = "1.26.1", features = ["v4"] }
 bip_bencode = "0.4.4"
 chrono = "0.4.45"
-clap = { version = "4.6.6", features = ["derive"] }
+clap = { version = "4.6.7", features = ["derive"] }
 fern = { version = "0.7.1", features = ["colored"] }
 futures-util = "0.3.34"
 hex = "0.4.3"
@@ -52,7 +52,7 @@ parking_lot = { version = "0.12.5", features = ["arc_lock", "hardware-lock-elisi
 percent-encoding = "2.3.2"
 rcgen = "0.14.10"
 ring = "0.17.14"
-rustls = { version = "0.23.43", default-features = false, features = ["std", "ring"] }
+rustls = { version = "0.23.45", default-features = false, features = ["std", "ring"] }
 sentry = { version = "0.49.2", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport", "debug-images", "reqwest"] }
 sentry-actix = "0.49.2"
 serde = { version = "1.0.229", features = ["derive", "rc"] }
@@ -62,17 +62,17 @@ sha1 = "0.11.0"
 socket2 = "0.6.5"
 sqlx = { version = "0.9.0", features = ["mysql", "mysql-rsa", "postgres", "sqlite", "runtime-tokio", "tls-rustls-ring-webpki"] }
 async-trait = "0.1.92"
-redis = { version = "1.6.0", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.7.0", features = ["tokio-comp", "connection-manager"] }
 memcache = { version = "0.21.0", default-features = false }
 thiserror = "2.0.20"
 tokio = { version = "1.53.1", features = ["full"] }
 rand = "0.10.2"
 base64 = "0.23.0"
 tokio-shutdown = "0.1.5"
-toml = "1.1.4"
+toml = "1.1.6"
 utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
-crossbeam-queue = "0.3.13"
-smallvec = { version = "1.15.2", features = ["union", "const_generics"] }
+crossbeam-queue = "0.3.14"
+smallvec = { version = "1.16.1", features = ["union", "const_generics"] }
 ahash = "0.8.12"
 lz4_flex = { version = "0.14.0", default-features = false, features = ["std"] }
 zstd = { version = "0.13.3", default-features = false }
@@ -80,7 +80,7 @@ zstd = { version = "0.13.3", default-features = false }
 [dev-dependencies]
 tempfile = "3.27.0"
 criterion = { version = "0.8.2", features = ["async_tokio"] }
-reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
@@ -106,7 +106,7 @@ harness = false
 name = "Torrust Actix"
 identifier = "com.power2all.torrust-actix"
 icon = ["icon.ico"]
-version = "4.2.22"
+version = "4.2.23"
 copyright = "Copyright (c) 2024-2026 Power2All"
 category = "Public Utility"
 short_description = "BitTorrent Tracker"

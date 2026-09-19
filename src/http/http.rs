@@ -15,7 +15,6 @@ use crate::security::security::{
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
@@ -135,6 +134,7 @@ pub async fn http_service(
     let request_timeout = http_server_object.request_timeout;
     let disconnect_timeout = http_server_object.disconnect_timeout;
     let worker_threads = http_server_object.threads as usize;
+    let tls_connection_rate = data.config.tracker_config.tls_connection_rate as usize;
     if http_server_object.ssl {
         info!("[HTTPS] Starting server listener with SSL on {addr}");
         if http_server_object.ssl_key.is_empty() || http_server_object.ssl_cert.is_empty() {
@@ -176,6 +176,7 @@ pub async fn http_service(
                 .client_request_timeout(Duration::from_secs(request_timeout))
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
                 .workers(worker_threads)
+                .max_connection_rate(tls_connection_rate)
                 .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
                 .unwrap_or_else(|e| {
                     error!("[HTTPS] Unable to bind to {addr}: {e}");
@@ -194,6 +195,7 @@ pub async fn http_service(
                 .client_request_timeout(Duration::from_secs(request_timeout))
                 .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
                 .workers(worker_threads)
+                .max_connection_rate(tls_connection_rate)
                 .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
                 .unwrap_or_else(|e| {
                     error!("[HTTPS] Unable to bind to {addr}: {e}");
@@ -480,14 +482,10 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         return match ip {
             IpAddr::V4(_) => {
                 if announce_unwrapped.left != 0 {
-                    let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds };
-                    let seeds = data.get_peers_ref(
-                        peers_to_use,
-                        TorrentPeersType::IPv4,
-                        Some(announce_unwrapped.peer_id),
-                        want
-                    );
-                    for &(_, torrent_peer) in &seeds {
+                    let seeds = torrent_entry.seeds.iter()
+                        .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
+                        .take(want);
+                    for torrent_peer in seeds {
 
                         if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                             peers_list.extend_from_slice(&ipv4.octets());
@@ -496,14 +494,10 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     }
                 }
                 if peers_list.len() < want * 6 {
-                    let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers };
-                    let peers = data.get_peers_ref(
-                        peers_to_use,
-                        TorrentPeersType::IPv4,
-                        Some(announce_unwrapped.peer_id),
-                        want
-                    );
-                    for &(_, torrent_peer) in &peers {
+                    let peers = torrent_entry.peers.iter()
+                        .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
+                        .take(want);
+                    for torrent_peer in peers {
                         if peers_list.len() >= want * 6 {
                             break;
                         }
@@ -526,14 +520,10 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
             }
             IpAddr::V6(_) => {
                 if announce_unwrapped.left != 0 {
-                    let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds_ipv6 };
-                    let seeds = data.get_peers_ref(
-                        peers_to_use,
-                        TorrentPeersType::IPv6,
-                        Some(announce_unwrapped.peer_id),
-                        want
-                    );
-                    for &(_, torrent_peer) in &seeds {
+                    let seeds = torrent_entry.seeds_ipv6.iter()
+                        .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
+                        .take(want);
+                    for torrent_peer in seeds {
                         if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                             peers_list.extend_from_slice(&ipv6.octets());
                             peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
@@ -541,14 +531,10 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     }
                 }
                 if peers_list.len() < want * 18 {
-                    let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers_ipv6 };
-                    let peers = data.get_peers_ref(
-                        peers_to_use,
-                        TorrentPeersType::IPv6,
-                        Some(announce_unwrapped.peer_id),
-                        want
-                    );
-                    for &(_, torrent_peer) in &peers {
+                    let peers = torrent_entry.peers_ipv6.iter()
+                        .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
+                        .take(want);
+                    for torrent_peer in peers {
                         if peers_list.len() >= want * 18 {
                             break;
                         }
@@ -575,35 +561,27 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     match ip {
         IpAddr::V4(_) => {
             if announce_unwrapped.left != 0 {
-                let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds };
-                let seeds = data.get_peers_ref(
-                    peers_to_use,
-                    TorrentPeersType::IPv4,
-                    Some(announce_unwrapped.peer_id),
-                    want
-                );
-                for &(peer_id, torrent_peer) in &seeds {
+                let seeds = torrent_entry.seeds.iter()
+                    .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
+                    .take(want);
+                for torrent_peer in seeds {
                     peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                         "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
             if peers_list_mut.len() < want {
-                let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers };
-                let peers = data.get_peers_ref(
-                    peers_to_use,
-                    TorrentPeersType::IPv4,
-                    Some(announce_unwrapped.peer_id),
-                    want
-                );
-                for &(peer_id, torrent_peer) in &peers {
+                let peers = torrent_entry.peers.iter()
+                    .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
+                    .take(want);
+                for torrent_peer in peers {
                     if peers_list_mut.len() >= want {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                         "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
@@ -621,35 +599,27 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         }
         IpAddr::V6(_) => {
             if announce_unwrapped.left != 0 {
-                let peers_to_use = if is_rtc_request { &torrent_entry.rtc_seeds } else { &torrent_entry.seeds_ipv6 };
-                let seeds = data.get_peers_ref(
-                    peers_to_use,
-                    TorrentPeersType::IPv6,
-                    Some(announce_unwrapped.peer_id),
-                    want
-                );
-                for &(peer_id, torrent_peer) in &seeds {
+                let seeds = torrent_entry.seeds_ipv6.iter()
+                    .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
+                    .take(want);
+                for torrent_peer in seeds {
                     peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                         "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
             if peers_list_mut.len() < want {
-                let peers_to_use = if is_rtc_request { &torrent_entry.rtc_peers } else { &torrent_entry.peers_ipv6 };
-                let peers = data.get_peers_ref(
-                    peers_to_use,
-                    TorrentPeersType::IPv6,
-                    Some(announce_unwrapped.peer_id),
-                    want
-                );
-                for &(peer_id, torrent_peer) in &peers {
+                let peers = torrent_entry.peers_ipv6.iter()
+                    .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
+                    .take(want);
+                for torrent_peer in peers {
                     if peers_list_mut.len() >= want {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                         "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });

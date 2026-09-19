@@ -9,7 +9,6 @@ use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
-use crate::tracker::types::ahash_map::AHashMap;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
 use actix_web::{
@@ -88,22 +87,17 @@ pub async fn api_service_torrent_post(request: HttpRequest, path: web::Path<(Str
         Ok(h) => h,
         Err(r) => return r,
     };
-    let torrent_entry = TorrentEntry {
-        seeds: AHashMap::default(),
-        seeds_ipv6: AHashMap::default(),
-        peers: AHashMap::default(),
-        peers_ipv6: AHashMap::default(),
-        rtc_seeds: AHashMap::default(),
-        rtc_peers: AHashMap::default(),
-        completed,
-        updated: std::time::Instant::now(),
-    };
+    // Register first, then queue the update built from the *stored* counts: for a torrent that
+    // already exists those are its live peer counts, and queueing a peer-less entry would flush
+    // zeroed seed/peer numbers to the database and the cache.
+    let (torrent_update, inserted) = data.torrent_tracker.set_torrent_completed(info_hash, completed);
     if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentUpdateData::from(&torrent_entry), UpdatesAction::Add);
+        let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_update, UpdatesAction::Add);
     }
-    match data.torrent_tracker.add_torrent(info_hash, torrent_entry) {
-        (_, true) => HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"})),
-        (_, false) => HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "info_hash updated"})),
+    if inserted {
+        HttpResponse::Ok().content_type(ContentType::json()).json(json!({"status": "ok"}))
+    } else {
+        HttpResponse::NotModified().content_type(ContentType::json()).json(json!({"status": "info_hash updated"}))
     }
 }
 
@@ -125,22 +119,14 @@ pub async fn api_service_torrents_post(request: HttpRequest, payload: web::Paylo
         if info.len() == 40 {
             match parse_info_hash(&info) {
                 Ok(info_hash) => {
-                    let torrent_entry = TorrentEntry {
-                        seeds: AHashMap::default(),
-                        seeds_ipv6: AHashMap::default(),
-                        peers: AHashMap::default(),
-                        peers_ipv6: AHashMap::default(),
-                        rtc_seeds: AHashMap::default(),
-                        rtc_peers: AHashMap::default(),
-                        completed,
-                        updated: std::time::Instant::now(),
-                    };
+                    let (torrent_update, inserted) = data.torrent_tracker.set_torrent_completed(info_hash, completed);
                     if data.torrent_tracker.config.database_structure.torrents.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-                        let _ = data.torrent_tracker.add_torrent_update(info_hash, TorrentUpdateData::from(&torrent_entry), UpdatesAction::Add);
+                        let _ = data.torrent_tracker.add_torrent_update(info_hash, torrent_update, UpdatesAction::Add);
                     }
-                    let status = match data.torrent_tracker.add_torrent(info_hash, torrent_entry) {
-                        (_, true) => json!({"status": "ok"}),
-                        (_, false) => json!({"status": "info_hash updated"}),
+                    let status = if inserted {
+                        json!({"status": "ok"})
+                    } else {
+                        json!({"status": "info_hash updated"})
                     };
                     torrents_output.insert(info, status);
                 }

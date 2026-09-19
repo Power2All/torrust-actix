@@ -11,7 +11,6 @@ use log::{
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 impl TorrentTracker {
     /// Loads all users from the configured database into memory at startup.
@@ -61,24 +60,6 @@ impl TorrentTracker {
                 index.insert(user_entry_item.key, user_id);
                 o.insert(user_entry_item);
                 false
-            }
-        }
-    }
-
-    /// Marks a torrent as actively seeded/leeched by the user, stamped with the current time.
-    ///
-    /// Returns `false` when the user does not exist.
-    pub fn add_user_active_torrent(&self, user_id: UserId, info_hash: InfoHash) -> bool
-    {
-        let mut lock = self.users.write();
-        match lock.entry(user_id) {
-            Entry::Vacant(_) => {
-                false
-            }
-            Entry::Occupied(mut o) => {
-                let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-                o.get_mut().torrents_active.insert(info_hash, timestamp);
-                true
             }
         }
     }
@@ -171,35 +152,4 @@ impl TorrentTracker {
         if return_clone { Some(user.clone()) } else { None }
     }
 
-    /// Removes active-torrent references older than `peer_timeout` from every user.
-    ///
-    /// Runs periodically from the cleanup task to drop torrents whose peers have timed out.
-    pub fn clean_user_active_torrents(&self, peer_timeout: Duration)
-    {
-        let current_time = SystemTime::now();
-        let timeout_threshold = current_time.duration_since(UNIX_EPOCH).unwrap().as_secs() - peer_timeout.as_secs();
-        let remove_active_torrents = {
-            let lock = self.users.read_recursive();
-            info!("[USERS] Scanning {} users with dead active torrents", lock.len());
-            let mut to_remove = Vec::new();
-            for (user_id, user_entry_item) in lock.iter() {
-                for (info_hash, &updated) in &user_entry_item.torrents_active {
-                    if updated < timeout_threshold {
-                        to_remove.push((*user_id, *info_hash));
-                    }
-                }
-            }
-            to_remove
-        };
-        let torrents_cleaned = remove_active_torrents.len() as u64;
-        if !remove_active_torrents.is_empty() {
-            let mut lock = self.users.write();
-            for (user_id, info_hash) in remove_active_torrents {
-                if let Entry::Occupied(mut o) = lock.entry(user_id) {
-                    o.get_mut().torrents_active.remove(&info_hash);
-                }
-            }
-        }
-        info!("[USERS] Removed {torrents_cleaned} active torrents in users");
-    }
 }

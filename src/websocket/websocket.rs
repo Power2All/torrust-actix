@@ -1,7 +1,6 @@
 use crate::common::common::parse_query;
 use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::udp::structs::udp_server::UdpServer;
 use crate::websocket::enums::encoding_error::EncodingError;
@@ -228,7 +227,6 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
     };
     let response_bytes = if announce.compact {
         build_compact_announce_response(
-            tracker,
             &request.client_ip,
             &torrent_entry,
             &announce,
@@ -236,7 +234,6 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
         )
     } else {
         build_extended_announce_response(
-            tracker,
             &request.client_ip,
             &torrent_entry,
             &announce,
@@ -249,7 +246,6 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
 /// Builds the bencoded compact announce response (packed 6/18-byte peer strings) for a
 /// cluster-forwarded announce.
 pub fn build_compact_announce_response(
-    tracker: &Arc<TorrentTracker>,
     client_ip: &IpAddr,
     torrent_entry: &crate::tracker::structs::announce_entry::AnnounceEntry,
     announce: &crate::tracker::structs::announce_query_request::AnnounceQueryRequest,
@@ -261,13 +257,10 @@ pub fn build_compact_announce_response(
     match client_ip {
         IpAddr::V4(_) => {
             if announce.left != 0 {
-                let seeds = tracker.get_peers(
-                    &torrent_entry.seeds,
-                    TorrentPeersType::IPv4,
-                    Some(announce.peer_id),
-                    want
-                );
-                for torrent_peer in seeds.values() {
+                let seeds = torrent_entry.seeds.iter()
+                    .filter(|peer| peer.peer_id != announce.peer_id)
+                    .take(want);
+                for torrent_peer in seeds {
                     if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
                         let _ = peers_list.write(&ipv4.octets());
                         let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
@@ -275,13 +268,10 @@ pub fn build_compact_announce_response(
                 }
             }
             if peers_list.len() < want * 6 {
-                let peers = tracker.get_peers(
-                    &torrent_entry.peers,
-                    TorrentPeersType::IPv4,
-                    Some(announce.peer_id),
-                    want
-                );
-                for torrent_peer in peers.values() {
+                let peers = torrent_entry.peers.iter()
+                    .filter(|peer| peer.peer_id != announce.peer_id)
+                    .take(want);
+                for torrent_peer in peers {
                     if peers_list.len() >= want * 6 {
                         break;
                     }
@@ -302,13 +292,10 @@ pub fn build_compact_announce_response(
         }
         IpAddr::V6(_) => {
             if announce.left != 0 {
-                let seeds = tracker.get_peers(
-                    &torrent_entry.seeds_ipv6,
-                    TorrentPeersType::IPv6,
-                    Some(announce.peer_id),
-                    want
-                );
-                for torrent_peer in seeds.values() {
+                let seeds = torrent_entry.seeds_ipv6.iter()
+                    .filter(|peer| peer.peer_id != announce.peer_id)
+                    .take(want);
+                for torrent_peer in seeds {
                     if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
                         let _ = peers_list.write(&ipv6.octets());
                         let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
@@ -316,13 +303,10 @@ pub fn build_compact_announce_response(
                 }
             }
             if peers_list.len() < want * 18 {
-                let peers = tracker.get_peers(
-                    &torrent_entry.peers_ipv6,
-                    TorrentPeersType::IPv6,
-                    Some(announce.peer_id),
-                    want
-                );
-                for torrent_peer in peers.values() {
+                let peers = torrent_entry.peers_ipv6.iter()
+                    .filter(|peer| peer.peer_id != announce.peer_id)
+                    .take(want);
+                for torrent_peer in peers {
                     if peers_list.len() >= want * 18 {
                         break;
                     }
@@ -347,7 +331,6 @@ pub fn build_compact_announce_response(
 /// Builds the bencoded dictionary-style announce response (peer id/ip/port entries) for a
 /// cluster-forwarded announce.
 pub fn build_extended_announce_response(
-    tracker: &Arc<TorrentTracker>,
     client_ip: &IpAddr,
     torrent_entry: &crate::tracker::structs::announce_entry::AnnounceEntry,
     announce: &crate::tracker::structs::announce_query_request::AnnounceQueryRequest,
@@ -360,33 +343,27 @@ pub fn build_extended_announce_response(
     match client_ip {
         IpAddr::V4(_) => {
             if announce.left != 0 {
-                let seeds = tracker.get_peers(
-                    &torrent_entry.seeds,
-                    TorrentPeersType::IPv4,
-                    Some(announce.peer_id),
-                    want
-                );
-                for (peer_id, torrent_peer) in &seeds {
+                let seeds = torrent_entry.seeds.iter()
+                    .filter(|peer| peer.peer_id != announce.peer_id)
+                    .take(want);
+                for torrent_peer in seeds {
                     peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                         "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
             if peers_list_mut.len() < want {
-                let peers = tracker.get_peers(
-                    &torrent_entry.peers,
-                    TorrentPeersType::IPv4,
-                    Some(announce.peer_id),
-                    want
-                );
-                for (peer_id, torrent_peer) in &peers {
+                let peers = torrent_entry.peers.iter()
+                    .filter(|peer| peer.peer_id != announce.peer_id)
+                    .take(want);
+                for torrent_peer in peers {
                     if peers_list_mut.len() >= want {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                         "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
@@ -403,33 +380,27 @@ pub fn build_extended_announce_response(
         }
         IpAddr::V6(_) => {
             if announce.left != 0 {
-                let seeds = tracker.get_peers(
-                    &torrent_entry.seeds_ipv6,
-                    TorrentPeersType::IPv6,
-                    Some(announce.peer_id),
-                    want
-                );
-                for (peer_id, torrent_peer) in &seeds {
+                let seeds = torrent_entry.seeds_ipv6.iter()
+                    .filter(|peer| peer.peer_id != announce.peer_id)
+                    .take(want);
+                for torrent_peer in seeds {
                     peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                         "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
                 }
             }
             if peers_list_mut.len() < want {
-                let peers = tracker.get_peers(
-                    &torrent_entry.peers_ipv6,
-                    TorrentPeersType::IPv6,
-                    Some(announce.peer_id),
-                    want
-                );
-                for (peer_id, torrent_peer) in &peers {
+                let peers = torrent_entry.peers_ipv6.iter()
+                    .filter(|peer| peer.peer_id != announce.peer_id)
+                    .take(want);
+                for torrent_peer in peers {
                     if peers_list_mut.len() >= want {
                         break;
                     }
                     peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(peer_id.to_string()),
+                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
                         "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
                         "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
                     });
@@ -568,6 +539,7 @@ pub async fn websocket_master_service(
     let disconnect_timeout = config.tracker_config.cluster_disconnect_timeout;
     let worker_threads = config.tracker_config.cluster_threads as usize;
     let max_connections = config.tracker_config.cluster_max_connections as usize;
+    let tls_connection_rate = config.tracker_config.tls_connection_rate as usize;
     let master_id = uuid::Uuid::new_v4().to_string();
     info!("[WEBSOCKET MASTER] Master UUID: {master_id}");
     let service_data = Arc::new(WebSocketServiceData {
@@ -620,6 +592,7 @@ pub async fn websocket_master_service(
         .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
         .workers(worker_threads)
         .max_connections(max_connections)
+        .max_connection_rate(tls_connection_rate)
         .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
         .unwrap()
         .disable_signals()

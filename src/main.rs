@@ -252,6 +252,7 @@ fn main() -> std::io::Result<()>
                         udp_server_object.simple_proxy_protocol,
                         Arc::new(udp_server_object.proxy_addrs.clone()),
                         udp_server_object.receive_method,
+                        udp_server_object.parse_queue_size,
                         tracker.clone(),
                         udp_rx.clone(),
                         tokio_udp.clone()

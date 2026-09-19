@@ -391,10 +391,13 @@ impl TorrentTracker {
 
     #[inline(always)]
     fn update_counter(&self, counter: &std::sync::atomic::AtomicI64, value: i64) {
-        if value > 0 {
-            counter.fetch_add(value, Ordering::Release);
-        } else if value < 0 {
-            counter.fetch_sub(-value, Ordering::Release);
+        if value != 0 {
+            // Saturating, not `fetch_add`/`fetch_sub`: some deltas carry client-supplied magnitudes
+            // (`completed` off the API path, a user's uploaded/downloaded bytes off an announce), so
+            // a wrapping counter can be driven negative. `-value` also overflowed on `i64::MIN`.
+            // ponytail: a CAS loop rather than `lock xadd`; only matters if a counter ever becomes
+            // the announce bottleneck, which it is not next to the shard lock.
+            let _ = counter.fetch_update(Ordering::Release, Ordering::Acquire, |current| Some(current.saturating_add(value)));
         }
     }
 }

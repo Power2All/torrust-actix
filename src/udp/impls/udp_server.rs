@@ -80,7 +80,7 @@ impl UdpServer {
     ///
     /// Returns the I/O error when the socket cannot be bound or configured.
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, proxy_addrs: Arc<Vec<std::net::IpAddr>>, receive_method: UdpReceiveMethod) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, proxy_addrs: Arc<Vec<std::net::IpAddr>>, receive_method: UdpReceiveMethod, parse_queue_size: usize) -> tokio::io::Result<UdpServer>
     {
         #[cfg(windows)]
         let use_rio = receive_method == UdpReceiveMethod::rio && {
@@ -111,6 +111,7 @@ impl UdpServer {
             simple_proxy_protocol,
             proxy_addrs,
             receive_method,
+            parse_queue_size,
         })
     }
 
@@ -151,7 +152,7 @@ impl UdpServer {
 
     /// Runs the UDP receive/parse/respond loops until the shutdown watch channel fires.
     pub async fn start(&self, mut rx: tokio::sync::watch::Receiver<bool>) {
-        let parse_pool = Arc::new(ParsePool::new(1_000_000, self.worker_threads));
+        let parse_pool = Arc::new(ParsePool::new(self.parse_queue_size, self.worker_threads));
         parse_pool.start_thread(self.worker_threads, self.tracker.clone(), rx.clone(), self.use_payload_ip, self.simple_proxy_protocol, self.proxy_addrs.clone()).await;
         let payload = parse_pool.payload.clone();
         let tracker_queue = self.tracker.clone();
@@ -615,17 +616,17 @@ impl UdpServer {
         let mut peers6: Vec<ResponsePeer<Ipv6Addr>> = Vec::with_capacity(want);
         if request.bytes_left.0 != 0 {
             if effective_remote_addr.is_ipv4() {
-                for (peer_id, torrent_peer) in &torrent.seeds {
+                for torrent_peer in &torrent.seeds {
                     if peers.len() >= want { break; }
-                    if *peer_id == self_peer_id { continue; }
+                    if torrent_peer.peer_id == self_peer_id { continue; }
                     if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                         peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
                 }
             } else {
-                for (peer_id, torrent_peer) in &torrent.seeds_ipv6 {
+                for torrent_peer in &torrent.seeds_ipv6 {
                     if peers6.len() >= want { break; }
-                    if *peer_id == self_peer_id { continue; }
+                    if torrent_peer.peer_id == self_peer_id { continue; }
                     if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                         peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                     }
@@ -633,17 +634,17 @@ impl UdpServer {
             }
         }
         if effective_remote_addr.is_ipv4() {
-            for (peer_id, torrent_peer) in &torrent.peers {
+            for torrent_peer in &torrent.peers {
                 if peers.len() >= want { break; }
-                if *peer_id == self_peer_id { continue; }
+                if torrent_peer.peer_id == self_peer_id { continue; }
                 if let std::net::IpAddr::V4(ip) = torrent_peer.peer_addr.ip() {
                     peers.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                 }
             }
         } else {
-            for (peer_id, torrent_peer) in &torrent.peers_ipv6 {
+            for torrent_peer in &torrent.peers_ipv6 {
                 if peers6.len() >= want { break; }
-                if *peer_id == self_peer_id { continue; }
+                if torrent_peer.peer_id == self_peer_id { continue; }
                 if let std::net::IpAddr::V6(ip) = torrent_peer.peer_addr.ip() {
                     peers6.push(ResponsePeer { ip_address: ip, port: Port(torrent_peer.peer_addr.port()) });
                 }

@@ -3,7 +3,6 @@ use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::cache::structs::cache_connector_memcache::CacheConnectorMemcache;
 use crate::cache::structs::cache_connector_redis::CacheConnectorRedis;
-use crate::cache::traits::cache_backend::CacheBackend;
 use crate::config::structs::cache_config::CacheConfig;
 use log::info;
 
@@ -20,20 +19,12 @@ impl CacheConnector {
             CacheEngine::redis => {
                 let redis_connector = CacheConnectorRedis::connect(&connection_url, &config.prefix, config.split_peers).await?;
                 info!("[Cache] Connected to Redis at {} (split_peers={})", config.address, config.split_peers);
-                Ok(CacheConnector {
-                    redis: Some(redis_connector),
-                    memcache: None,
-                    engine: Some(CacheEngine::redis),
-                })
+                Ok(CacheConnector::Redis(redis_connector))
             }
             CacheEngine::memcache => {
                 let memcache_connector = CacheConnectorMemcache::connect(&connection_url, &config.prefix, config.split_peers)?;
                 info!("[Cache] Connected to Memcache at {} (split_peers={})", config.address, config.split_peers);
-                Ok(CacheConnector {
-                    redis: None,
-                    memcache: Some(memcache_connector),
-                    engine: Some(CacheEngine::memcache),
-                })
+                Ok(CacheConnector::Memcache(memcache_connector))
             }
         };
         if let Some(txn) = transaction {
@@ -48,11 +39,4 @@ impl CacheConnector {
         result
     }
 
-    /// Returns the active cache backend, when one is connected.
-    pub fn backend(&self) -> Option<&dyn CacheBackend> {
-        match self.engine.as_ref()? {
-            CacheEngine::redis => self.redis.as_ref().map(|r| r as &dyn CacheBackend),
-            CacheEngine::memcache => self.memcache.as_ref().map(|m| m as &dyn CacheBackend),
-        }
-    }
 }

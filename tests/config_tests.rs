@@ -538,3 +538,92 @@ tls_connection_rate = 256
     assert!(config.http_server[0].trusted_proxy_ips.is_empty());
     assert!(config.udp_server[0].proxy_addresses.is_empty());
 }
+
+/// `tls_connection_rate` caps in-flight TLS handshakes per worker. It is a single
+/// `tracker_config` key on purpose: `actix-tls` holds the limit in one process-global that every
+/// listener seeds its workers from, so per-listener values could not each take effect - the old
+/// `[[http_server]]`/`[[api_server]]` keys of the same name were unreachable and are gone. Note
+/// the fixture below still carries those removed keys, proving an existing file keeps parsing.
+#[tokio::test]
+async fn test_tls_connection_rate_is_a_single_tracker_wide_key() {
+    fn config_with(tracker_extra: &str) -> Configuration {
+        let toml_str = format!(r#"
+log_level = "info"
+log_console_interval = 60
+
+[tracker_config]
+api_key = "SomeVeryStrongApiKey123456789abc"
+request_interval = 1800
+request_interval_minimum = 1800
+peers_timeout = 2700
+peers_cleanup_interval = 900
+peers_cleanup_threads = 256
+total_downloads = 0
+{tracker_extra}
+
+[database]
+engine = "sqlite3"
+path = "sqlite://data.db"
+persistent = false
+persistent_interval = 60
+insert_vacant = false
+remove_action = false
+update_completed = true
+update_peers = false
+
+[database_structure]
+
+[[http_server]]
+enabled = true
+bind_address = "0.0.0.0:6969"
+real_ip = "X-Real-IP"
+keep_alive = 60
+request_timeout = 15
+disconnect_timeout = 15
+max_connections = 25000
+threads = 4
+ssl = false
+ssl_key = ""
+ssl_cert = ""
+tls_connection_rate = 256
+
+[[udp_server]]
+enabled = true
+bind_address = "0.0.0.0:6969"
+udp_threads = 2
+worker_threads = 4
+receive_buffer_size = 134217728
+send_buffer_size = 67108864
+reuse_address = true
+
+[[api_server]]
+enabled = true
+bind_address = "0.0.0.0:8080"
+real_ip = "X-Real-IP"
+keep_alive = 60
+request_timeout = 30
+disconnect_timeout = 30
+max_connections = 25000
+threads = 4
+ssl = false
+ssl_key = ""
+ssl_cert = ""
+tls_connection_rate = 256
+"#);
+        toml::from_str(&toml_str).expect("config must parse")
+    }
+
+    // Absent: falls back to actix-tls's own default rather than an unlimited handshake rate.
+    assert_eq!(config_with("").tracker_config.tls_connection_rate, 256);
+
+    // Present: honoured.
+    assert_eq!(config_with("tls_connection_rate = 32").tracker_config.tls_connection_rate, 32);
+
+    // The pre-rename key is ignored rather than rejected, so an old file still boots - on the
+    // default, which is what it always effectively had, since nothing ever read it.
+    assert_eq!(
+        config_with("cluster_tls_connection_rate = 32").tracker_config.tls_connection_rate,
+        256,
+        "the old key must not silently appear to work under its new name"
+    );
+}

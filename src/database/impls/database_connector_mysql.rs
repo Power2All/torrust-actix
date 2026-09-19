@@ -91,18 +91,11 @@ impl DatabaseConnectorMySQL {
             error!("{LOG_PREFIX} Message: {mysql_connect}");
             exit(1);
         }
-        let mut structure = DatabaseConnector {
-            mysql: None,
-            sqlite: None,
-            pgsql: None,
-            engine: None,
-        };
-        structure.mysql = Some(DatabaseConnectorMySQL {
+        let backend = DatabaseConnectorMySQL {
             pool: mysql_connect.unwrap(),
-        });
-        structure.engine = Some(DatabaseDrivers::mysql);
+        };
         if create_database {
-            let pool = &structure.mysql.clone().unwrap().pool;
+            let pool = &backend.pool;
             info!("[BOOT] Database creation triggered for MySQL.");
             let ts = &config.database_structure.torrents;
             let hash_type = if ts.bin_type_infohash { "BINARY(20)" } else { "VARCHAR(40)" };
@@ -168,7 +161,7 @@ impl DatabaseConnectorMySQL {
             }
             info!("[BOOT] Created the database and tables, restart without the parameter to start the app.");
         }
-        structure
+        DatabaseConnector::MySQL(backend)
     }
 
     /// Loads all persisted torrents in pages into the tracker; returns `(torrents, completed)` counts.

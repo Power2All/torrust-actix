@@ -68,7 +68,7 @@ impl Configuration {
                 cluster_ssl: false,
                 cluster_ssl_key: String::new(),
                 cluster_ssl_cert: String::new(),
-                cluster_tls_connection_rate: 256,
+                tls_connection_rate: 256,
                 rtc_interval: 30,
                 rtc_peers_timeout: 120,
                 rtc_compression_enabled: true,
@@ -157,7 +157,6 @@ impl Configuration {
                     ssl: false,
                     ssl_key: String::new(),
                     ssl_cert: String::new(),
-                    tls_connection_rate: 256,
                     rtctorrent: false
                 }
             ),
@@ -175,6 +174,7 @@ impl Configuration {
                     proxy_addresses: Vec::new(),
                     proxy_addrs: Vec::new(),
                     receive_method: UdpReceiveMethod::recvmmsg,
+                    parse_queue_size: crate::config::config::default_parse_queue_size(),
                 }
             ),
             api_server: vec!(
@@ -193,7 +193,6 @@ impl Configuration {
                     ssl: false,
                     ssl_key: String::new(),
                     ssl_cert: String::new(),
-                    tls_connection_rate: 256
                 }
             ),
         }
@@ -307,8 +306,8 @@ impl Configuration {
         if let Ok(value) = env::var("TRACKER__CLUSTER_SSL_CERT") {
             config.tracker_config.cluster_ssl_cert = value;
         }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_TLS_CONNECTION_RATE") {
-            config.tracker_config.cluster_tls_connection_rate = parse_env_num::<u64>("TRACKER__CLUSTER_TLS_CONNECTION_RATE", &value, 256);
+        if let Ok(value) = env::var("TRACKER__TLS_CONNECTION_RATE") {
+            config.tracker_config.tls_connection_rate = parse_env_num::<u64>("TRACKER__TLS_CONNECTION_RATE", &value, 256);
         }
         if let Ok(value) = env::var("TRACKER__RTC_INTERVAL") {
             config.tracker_config.rtc_interval = parse_env_num::<u64>("TRACKER__RTC_INTERVAL", &value, 30);
@@ -589,9 +588,6 @@ impl Configuration {
                     if let Ok(value) = env::var(format!("API_{api_iteration}_THREADS")) {
                         block.threads = parse_env_num::<u64>(format!("API_{api_iteration}_THREADS"), &value, available_parallelism().unwrap().get() as u64);
                     }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_TLS_CONNECTION_RATE")) {
-                        block.tls_connection_rate = parse_env_num::<u64>(format!("API_{api_iteration}_TLS_CONNECTION_RATE"), &value, 256);
-                    }
                 }
             }
             api_iteration += 1;
@@ -636,9 +632,6 @@ impl Configuration {
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_THREADS")) {
                         block.threads = parse_env_num::<u64>(format!("HTTP_{http_iteration}_THREADS"), &value, available_parallelism().unwrap().get() as u64);
                     }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_TLS_CONNECTION_RATE")) {
-                        block.tls_connection_rate = parse_env_num::<u64>(format!("HTTP_{http_iteration}_TLS_CONNECTION_RATE"), &value, 256);
-                    }
                     if let Ok(value) = env::var(format!("HTTP_{http_iteration}_RTCTORRENT")) {
                         block.rtctorrent = parse_env_bool(format!("HTTP_{http_iteration}_RTCTORRENT"), &value, false);
                     }
@@ -673,6 +666,9 @@ impl Configuration {
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
                         block.reuse_address = parse_env_bool(format!("UDP_{udp_iteration}_REUSE_ADDRESS"), &value, true);
+                    }
+                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_PARSE_QUEUE_SIZE")) {
+                        block.parse_queue_size = parse_env_num::<usize>(format!("UDP_{udp_iteration}_PARSE_QUEUE_SIZE"), &value, crate::config::config::default_parse_queue_size());
                     }
                     if let Ok(value) = env::var(format!("UDP_{udp_iteration}_USE_PAYLOAD_IP")) {
                         block.use_payload_ip = parse_env_bool(format!("UDP_{udp_iteration}_USE_PAYLOAD_IP"), &value, false);
@@ -909,6 +905,9 @@ impl Configuration {
                 );
                 assert!(udp_server.udp_threads > 0, "[VALIDATE CONFIG] udp_server[{index}] udp_threads must be > 0");
                 assert!(udp_server.worker_threads > 0, "[VALIDATE CONFIG] udp_server[{index}] worker_threads must be > 0");
+                // `ArrayQueue::new(0)` panics, and a queue shallower than one receive batch
+                // drops packets the backend has already read off the socket.
+                assert!(udp_server.parse_queue_size >= 1024, "[VALIDATE CONFIG] udp_server[{index}] parse_queue_size must be >= 1024");
                 if udp_server.simple_proxy_protocol && udp_server.proxy_addrs.is_empty() {
                     eprintln!("[SECURITY WARNING] udp_server[{index}] simple_proxy_protocol=true with an empty proxy_addresses list: the SPP header is trusted from any sender, so anyone can choose the client address the tracker records. Set proxy_addresses to your load balancer addresses.");
                 }
@@ -1124,7 +1123,7 @@ impl Configuration {
         remarks.insert(("tracker_config", "cluster_ssl"), "# Optional: defaults to false -- enable TLS for cluster WebSocket");
         remarks.insert(("tracker_config", "cluster_ssl_key"), "# Optional: defaults to \"\" -- required when cluster_ssl = true");
         remarks.insert(("tracker_config", "cluster_ssl_cert"), "# Optional: defaults to \"\" -- required when cluster_ssl = true");
-        remarks.insert(("tracker_config", "cluster_tls_connection_rate"), "# Optional: defaults to 256 -- max new TLS cluster connections per second");
+        remarks.insert(("tracker_config", "tls_connection_rate"), "# Optional: defaults to 256 -- max concurrent TLS handshakes per worker thread, process-wide (HTTP, API and cluster)");
         remarks.insert(("tracker_config", "rtc_interval"), "# Optional: defaults to 30 -- RtcTorrent signalling poll interval (seconds)");
         remarks.insert(("tracker_config", "rtc_peers_timeout"), "# Optional: defaults to 120 -- RtcTorrent peer inactivity timeout (seconds)");
         remarks.insert(("tracker_config", "rtc_compression_enabled"), "# Optional: defaults to true -- compress RTC SDP strings in memory");
@@ -1168,6 +1167,7 @@ impl Configuration {
         remarks.insert(("http_server", "trusted_proxy_ips"), "# Optional: defaults to [] -- source IPs allowed to set real_ip; empty trusts any sender, which allows IP spoofing");
         remarks.insert(("api_server", "trusted_proxy_ips"), "# Optional: defaults to [] -- source IPs allowed to set real_ip; empty trusts any sender, which allows IP spoofing");
         remarks.insert(("udp_server", "proxy_addresses"), "# Optional: defaults to [] -- source IPs allowed to send a Simple Proxy Protocol header; empty trusts any sender");
+        remarks.insert(("udp_server", "parse_queue_size"), "# Optional: defaults to 65536 -- slots between the receive backend and the parse workers, preallocated at 312 bytes each (~20 MB)");
         let mut section_remarks: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
         section_remarks.insert("sentry_config", "# Optional section: the entire [sentry_config] block can be omitted (defaults to disabled)");
         section_remarks.insert("database_structure.torrents", "# Optional section: omit to use default table/column names for torrents");

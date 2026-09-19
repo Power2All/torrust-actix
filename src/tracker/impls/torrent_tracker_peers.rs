@@ -1,5 +1,6 @@
 use crate::common::structs::number_of_bytes::NumberOfBytes;
 use crate::stats::enums::stats_event::StatsEvent;
+use crate::tracker::enums::snapshot_maps::SnapshotMaps;
 use crate::tracker::enums::torrent_peers_type::TorrentPeersType;
 use crate::tracker::structs::announce_entry::AnnounceEntry;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -141,29 +142,6 @@ impl TorrentTracker {
         result
     }
 
-    /// Borrowing variant of [`TorrentTracker::get_peers`]: returns references instead of clones,
-    /// for building responses without copying peer data. An `amount` of 0 means unlimited.
-    #[inline]
-    pub fn get_peers_ref<'a>(&self, peers: &'a AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_peer_id: Option<PeerId>, amount: usize) -> Vec<(&'a PeerId, &'a TorrentPeer)>
-    {
-        let mut result = Vec::with_capacity(amount.min(peers.len()));
-        for (peer_id, torrent_peer) in peers {
-            if amount != 0 && result.len() >= amount {
-                break;
-            }
-            let peer_addr = &torrent_peer.peer_addr;
-            let ip_type_match = match type_ip {
-                TorrentPeersType::All => peer_addr.is_ipv4() || peer_addr.is_ipv6(),
-                TorrentPeersType::IPv4 => peer_addr.is_ipv4(),
-                TorrentPeersType::IPv6 => peer_addr.is_ipv6(),
-            };
-            if ip_type_match && self_peer_id.is_none_or(|id| id != *peer_id) {
-                result.push((peer_id, torrent_peer));
-            }
-        }
-        result
-    }
-
     /// Inserts or refreshes a peer in the torrent's swarm, creating the torrent when needed.
     ///
     /// The peer is classified as seed or leecher (`left == 0` -> seed), IPv4/IPv6 or RTC, and any
@@ -178,7 +156,7 @@ impl TorrentTracker {
     /// updates for an info-hash this tracker deliberately declined to hold.
     pub fn add_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, torrent_peer: TorrentPeer, completed: bool) -> Option<AnnounceEntry>
     {
-        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.shard_for(info_hash);
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(v) => {
@@ -225,7 +203,7 @@ impl TorrentTracker {
                         torrent_entry.peers_ipv6.insert(peer_id, torrent_peer);
                     }
                 }
-                let snapshot = AnnounceEntry::from_entry(&torrent_entry);
+                let snapshot = AnnounceEntry::from_entry(&torrent_entry, SnapshotMaps::Bt);
                 v.insert(torrent_entry);
                 Some(snapshot)
             }
@@ -296,7 +274,7 @@ impl TorrentTracker {
                     self.update_stats(event, 1 - evicted);
                 }
                 entry.updated = std::time::Instant::now();
-                Some(AnnounceEntry::from_entry(entry))
+                Some(AnnounceEntry::from_entry(entry, SnapshotMaps::Bt))
             }
         }
     }
@@ -310,7 +288,7 @@ impl TorrentTracker {
         if !self.torrents_sharding.contains_peer(info_hash, peer_id) {
             return (false, None);
         }
-        let shard = self.torrents_sharding.get_shard(info_hash.0[0]).unwrap();
+        let shard = self.torrents_sharding.shard_for(info_hash);
         let mut lock = shard.write();
         match lock.entry(info_hash) {
             Entry::Vacant(_) => (false, None),
@@ -342,7 +320,7 @@ impl TorrentTracker {
                     self.update_stats(StatsEvent::Torrents, -1);
                     (true, None)
                 } else {
-                    (true, Some(AnnounceEntry::from_entry(entry)))
+                    (true, Some(AnnounceEntry::from_entry(entry, SnapshotMaps::Both)))
                 }
             }
         }

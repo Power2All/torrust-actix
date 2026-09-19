@@ -1,6 +1,6 @@
 use crate::common::structs::custom_error::CustomError;
 use crate::common::structs::number_of_bytes::NumberOfBytes;
-use crate::common::types::QueryValues;
+use crate::common::types::QueryMap;
 use crate::security::security::{
     validate_peer_message,
     MAX_OFFER_ID_LENGTH,
@@ -19,10 +19,7 @@ use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::user_id::UserId;
 use log::debug;
-use std::collections::{
-    BTreeMap,
-    HashMap
-};
+use std::collections::BTreeMap;
 use std::net::{
     IpAddr,
     SocketAddr
@@ -38,14 +35,14 @@ impl TorrentTracker {
     /// # Errors
     ///
     /// Returns a [`CustomError`] describing the first missing or invalid field.
-    pub async fn validate_announce(&self, remote_addr: IpAddr, query: HashMap<String, QueryValues>) -> Result<AnnounceQueryRequest, CustomError>
+    pub async fn validate_announce(&self, remote_addr: IpAddr, query: QueryMap) -> Result<AnnounceQueryRequest, CustomError>
     {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("validate_announce", "tracker");
 
         let now = std::time::Instant::now();
 
         #[inline]
-        fn get_required_bytes<'a>(query: &'a HashMap<String, QueryValues>, field: &str, expected_len: Option<usize>) -> Result<&'a [u8], CustomError> {
+        fn get_required_bytes<'a>(query: &'a QueryMap, field: &str, expected_len: Option<usize>) -> Result<&'a [u8], CustomError> {
             let value = query.get(field)
                 .ok_or_else(|| CustomError::new(&format!("missing {field}")))?
                 .first()
@@ -57,7 +54,7 @@ impl TorrentTracker {
         }
 
         #[inline]
-        fn parse_integer<T: std::str::FromStr>(query: &HashMap<String, QueryValues>, field: &str) -> Result<T, CustomError> {
+        fn parse_integer<T: std::str::FromStr>(query: &QueryMap, field: &str) -> Result<T, CustomError> {
             let bytes = get_required_bytes(query, field, None)?;
             let str_value = std::str::from_utf8(bytes)
                 .map_err(|_| CustomError::new(&format!("invalid {field}")))?;
@@ -365,7 +362,7 @@ impl TorrentTracker {
     /// # Errors
     ///
     /// Returns a [`CustomError`] when no info-hash is supplied or one has an invalid length.
-    pub async fn validate_scrape(&self, query: HashMap<String, QueryValues>) -> Result<ScrapeQueryRequest, CustomError>
+    pub async fn validate_scrape(&self, query: QueryMap) -> Result<ScrapeQueryRequest, CustomError>
     {
         let now = std::time::Instant::now();
         match query.get("info_hash") {

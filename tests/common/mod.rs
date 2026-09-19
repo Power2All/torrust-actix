@@ -43,7 +43,6 @@ pub fn create_test_http_config_with_rtctorrent(rtctorrent: bool) -> Arc<HttpTrac
         ssl: false,
         ssl_key: String::new(),
         ssl_cert: String::new(),
-        tls_connection_rate: 100,
         rtctorrent,
     })
 }
@@ -64,7 +63,6 @@ pub fn create_test_api_config() -> Arc<ApiTrackersConfig> {
         ssl: false,
         ssl_key: String::new(),
         ssl_cert: String::new(),
-        tls_connection_rate: 100,
     })
 }
 
@@ -131,7 +129,6 @@ pub fn create_rtc_peer(
         rtc_data: Some(Box::new(RtcData {
             sdp_offer: sdp_offer.as_deref().map(CompressedBytes::compress),
             sdp_answer: None,
-            connection_status: "pending".to_string(),
             pending_answers: Vec::new(),
         })),
     }

@@ -1,7 +1,7 @@
 use crate::common::structs::compressed_bytes::COMPRESSION;
 use crate::common::structs::compression_state::CompressionState;
 use crate::common::structs::custom_error::CustomError;
-use crate::common::types::QueryValues;
+use crate::common::types::QueryMap;
 use crate::config::enums::compression_algorithm::CompressionAlgorithm;
 use crate::config::structs::configuration::Configuration;
 use crate::security::security::{
@@ -14,7 +14,6 @@ use fern::colors::{
 };
 use log::info;
 use sha1::Digest;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::{
@@ -33,8 +32,8 @@ use tokio_shutdown::Shutdown;
 /// Returns a [`CustomError`] when the query string exceeds `MAX_QUERY_STRING_LENGTH` or a
 /// decoded value exceeds `MAX_PERCENT_DECODED_SIZE`.
 #[inline]
-pub fn parse_query(query: Option<&str>) -> Result<HashMap<String, QueryValues>, CustomError> {
-    let mut queries: HashMap<String, QueryValues> = HashMap::with_capacity(12);
+pub fn parse_query(query: Option<&str>) -> Result<QueryMap, CustomError> {
+    let mut queries: QueryMap = QueryMap::with_capacity_and_hasher(12, Default::default());
     if let Some(result) = query {
         validate_query_string_length(result)?;
         for query_item in result.split('&') {
@@ -55,7 +54,13 @@ pub fn parse_query(query: Option<&str>) -> Result<HashMap<String, QueryValues>, 
                 if key_name.is_empty() {
                     continue;
                 }
-                let value_data = percent_encoding::percent_decode_str(value_data_raw).collect::<Vec<u8>>();
+                // `percent_decode_str` only rewrites `%XX`; without one it is a byte-by-byte
+                // iterator doing the work of a memcpy. Most announce values have no escape.
+                let value_data = if value_data_raw.contains('%') {
+                    percent_encoding::percent_decode_str(value_data_raw).collect::<Vec<u8>>()
+                } else {
+                    value_data_raw.as_bytes().to_vec()
+                };
                 if value_data.len() > MAX_PERCENT_DECODED_SIZE {
                     return Err(CustomError::new(&format!(
                         "Percent-decoded value exceeds maximum size of {MAX_PERCENT_DECODED_SIZE} bytes"
@@ -152,13 +157,10 @@ impl Hex20 {
 /// Converts a 20-byte binary hash into a stack-allocated 40-character lowercase hex buffer.
 #[inline]
 pub fn bin20_to_hex(data: &[u8; 20]) -> Hex20 {
-    const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
     let mut buffer = [0u8; 40];
-    for (i, &byte) in data.iter().enumerate() {
-        let idx = i * 2;
-        buffer[idx] = HEX_CHARS[(byte >> 4) as usize];
-        buffer[idx + 1] = HEX_CHARS[(byte & 0xf) as usize];
-    }
+    // Same `hex` crate `bin2hex` above already uses; it writes lowercase ASCII only, which is
+    // what `Hex20::as_str`'s `from_utf8_unchecked` relies on.
+    hex::encode_to_slice(data, &mut buffer).expect("40 == 2 * 20");
     Hex20(buffer)
 }
 

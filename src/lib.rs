@@ -55,5 +55,3 @@ pub mod udp;
 pub mod utils;
 /// WebSocket cluster communication (master ↔ slave).
 pub mod websocket;
-/// Bridge between the HTTP announce endpoint and the RtcTorrent WebRTC signalling layer.
-pub mod rtctorrent_bridge;

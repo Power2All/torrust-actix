@@ -27,4 +27,10 @@ pub struct UdpTrackersConfig {
     pub proxy_addrs: Vec<IpAddr>,
     #[serde(default)]
     pub receive_method: UdpReceiveMethod,
+    /// Slots in the queue between the receive backend and the parse workers.
+    ///
+    /// Preallocated in full, at 312 bytes per slot. Raise it only if the receive backend is
+    /// actually outrunning the workers in bursts; a deeper queue buys latency, not throughput.
+    #[serde(default = "crate::config::config::default_parse_queue_size")]
+    pub parse_queue_size: usize,
 }
