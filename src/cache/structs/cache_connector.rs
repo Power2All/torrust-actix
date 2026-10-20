@@ -1,4 +1,3 @@
-use crate::cache::enums::cache_engine::CacheEngine;
 use crate::cache::structs::cache_connector_redis::CacheConnectorRedis;
 use crate::cache::structs::cache_connector_memcache::CacheConnectorMemcache;
 
@@ -12,14 +11,4 @@ use crate::cache::structs::cache_connector_memcache::CacheConnectorMemcache;
 pub enum CacheConnector {
     Redis(CacheConnectorRedis),
     Memcache(CacheConnectorMemcache),
-}
-
-impl CacheConnector {
-    /// The engine this connector talks to, for logging and tracing tags.
-    pub(crate) fn engine(&self) -> CacheEngine {
-        match self {
-            CacheConnector::Redis(_) => CacheEngine::redis,
-            CacheConnector::Memcache(_) => CacheEngine::memcache,
-        }
-    }
 }

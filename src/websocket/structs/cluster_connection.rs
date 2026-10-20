@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 pub struct ClusterConnection {
     pub data: Arc<WebSocketServiceData>,
-    pub authenticated: bool,
+    /// Set once the slave's handshake is accepted; `None` means not yet authenticated.
     pub slave_id: Option<String>,
     pub encoding: ClusterEncoding,
 }

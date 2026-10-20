@@ -11,13 +11,4 @@ impl AnnounceEvent {
         }
     }
 
-    #[inline]
-    pub const fn to_i32(self) -> i32 {
-        match self {
-            AnnounceEvent::None => 0,
-            AnnounceEvent::Completed => 1,
-            AnnounceEvent::Started => 2,
-            AnnounceEvent::Stopped => 3,
-        }
-    }
 }

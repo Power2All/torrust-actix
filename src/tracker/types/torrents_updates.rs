@@ -108,15 +108,6 @@ impl TorrentUpdateQueue {
         }
     }
 
-    /// Returns the number of pending updates across all shards.
-    pub fn len(&self) -> usize {
-        self.shards.iter().map(|shard| shard.read().len()).sum()
-    }
-
-    /// Returns `true` when no update is pending.
-    pub fn is_empty(&self) -> bool {
-        self.shards.iter().all(|shard| shard.read().is_empty())
-    }
 }
 
 pub type TorrentsUpdates = Arc<TorrentUpdateQueue>;

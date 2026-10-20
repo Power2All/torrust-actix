@@ -8,5 +8,4 @@ pub enum ProtocolType {
     Http,
     Https,
     Udp,
-    Api,
 }

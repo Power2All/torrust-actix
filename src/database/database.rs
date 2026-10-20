@@ -229,11 +229,14 @@ pub fn build_update_ignore_torrent_query(
     )
 }
 
-/// Returns the human-readable engine name used in log prefixes.
-pub fn engine_name(engine: DatabaseDrivers) -> &'static str {
-    match engine {
-        DatabaseDrivers::sqlite3 => "SQLite",
-        DatabaseDrivers::mysql => "MySQL",
-        DatabaseDrivers::pgsql => "PgSQL",
+/// The DSN with its password masked, for logs: `mysql://user:secret@host/db` becomes
+/// `mysql://user:***@host/db`. A failed connect used to log the DSN whole, password included.
+pub fn redact_dsn(dsn: &str) -> String {
+    if let Some(start) = dsn.find("://").map(|i| i + 3)
+        && let Some(at) = dsn[start..].rfind('@').map(|i| i + start)
+        && let Some(colon) = dsn[start..at].find(':').map(|i| i + start)
+    {
+        return format!("{}***{}", &dsn[..=colon], &dsn[at..]);
     }
+    dsn.to_string()
 }

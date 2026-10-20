@@ -140,7 +140,7 @@ async fn test_stats_torrent_lifecycle() {
     let stats_after_add = tracker.get_stats();
     assert_eq!(stats_after_add.torrents, 1, "Torrents should be 1");
     assert_eq!(stats_after_add.peers, 1, "Peers should be 1");
-    tracker.remove_torrent_peer(info_hash, peer_id, false, false);
+    tracker.remove_torrent_peer(info_hash, peer_id, false, false, None);
     let stats_after_remove = tracker.get_stats();
     assert_eq!(stats_after_remove.torrents, 0, "Torrents should be 0");
     assert_eq!(stats_after_remove.peers, 0, "Peers should be 0");

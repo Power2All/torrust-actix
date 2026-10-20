@@ -1,7 +1,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 use crate::common::common::bin2hex;
-use crate::common::common::hex_to_nibble;
 use crate::tracker::structs::info_hash::InfoHash;
 
 impl fmt::Display for InfoHash {
@@ -40,55 +39,8 @@ impl serde::ser::Serialize for InfoHash {
 }
 
 impl<'de> serde::de::Deserialize<'de> for InfoHash {
+    /// Parses the 40-character hex form [`Serialize`](serde::Serialize) writes, through `FromStr`.
     fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
-        struct InfoHashVisitor;
-
-        impl serde::de::Visitor<'_> for InfoHashVisitor {
-            type Value = InfoHash;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a 40 character hex string")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                if v.len() != 40 {
-                    return Err(E::custom("expected 40 character hex string"));
-                }
-                let mut result = InfoHash([0u8; 20]);
-                let bytes = v.as_bytes();
-                for (i, chunk) in bytes.chunks_exact(2).enumerate() {
-                    let high = hex_to_nibble(chunk[0]);
-                    let low = hex_to_nibble(chunk[1]);
-                    if high == 0xFF || low == 0xFF {
-                        return Err(E::custom("invalid hex character"));
-                    }
-                    result.0[i] = (high << 4) | low;
-                }
-                Ok(result)
-            }
-
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                if v.len() != 40 {
-                    return Err(E::custom("expected 40 byte hex string"));
-                }
-                let mut result = InfoHash([0u8; 20]);
-                for (i, chunk) in v.chunks_exact(2).enumerate() {
-                    let high = hex_to_nibble(chunk[0]);
-                    let low = hex_to_nibble(chunk[1]);
-                    if high == 0xFF || low == 0xFF {
-                        return Err(E::custom("invalid hex character"));
-                    }
-                    result.0[i] = (high << 4) | low;
-                }
-                Ok(result)
-            }
-        }
-        des.deserialize_str(InfoHashVisitor)
+        <std::borrow::Cow<'de, str>>::deserialize(des)?.parse().map_err(serde::de::Error::custom)
     }
 }

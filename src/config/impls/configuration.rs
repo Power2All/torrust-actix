@@ -25,10 +25,28 @@ use crate::security::security::{
     validate_api_key_strength
 };
 use std::env;
-use std::fs::File;
 use std::io::Write;
-use std::sync::Arc;
 use std::thread::available_parallelism;
+
+/// Overrides `$field` from the environment variable `$name` when it is set. A string field takes
+/// the value as-is; a `bool` or `num` field keeps its loaded value (with a warning) when the value
+/// does not parse, so a typo cannot silently reset a setting such as `max_torrents` (`0` =
+/// unlimited) to its default; an `opt_bool` field is left unset. The warnings go to stderr: this
+/// runs while the configuration is read, before the logger exists.
+macro_rules! env_override {
+    ($name:expr, $field:expr) => {
+        if let Ok(value) = env::var($name) { $field = value; }
+    };
+    ($name:expr, $field:expr, bool) => {
+        if let Ok(value) = env::var($name) { $field = parse_env_bool($name, &value, $field); }
+    };
+    ($name:expr, $field:expr, num) => {
+        if let Ok(value) = env::var($name) { $field = parse_env_num($name, &value, $field); }
+    };
+    ($name:expr, $field:expr, opt_bool) => {
+        if let Ok(value) = env::var($name) { $field = parse_env_optional_bool($name, &value); }
+    };
+}
 
 impl Configuration {
     /// Builds the built-in default configuration, including a freshly generated secure API key.
@@ -148,7 +166,6 @@ impl Configuration {
                     real_ip: String::from("X-Real-IP"),
                     trusted_proxies: false,
                     trusted_proxy_ips: Vec::new(),
-                    trusted_proxy_addrs: Vec::new(),
                     keep_alive: 60,
                     request_timeout: 15,
                     disconnect_timeout: 15,
@@ -172,7 +189,6 @@ impl Configuration {
                     use_payload_ip: false,
                     simple_proxy_protocol: false,
                     proxy_addresses: Vec::new(),
-                    proxy_addrs: Vec::new(),
                     receive_method: UdpReceiveMethod::recvmmsg,
                     parse_queue_size: crate::config::config::default_parse_queue_size(),
                 }
@@ -184,7 +200,6 @@ impl Configuration {
                     real_ip: String::from("X-Real-IP"),
                     trusted_proxies: false,
                     trusted_proxy_ips: Vec::new(),
-                    trusted_proxy_addrs: Vec::new(),
                     keep_alive: 60,
                     request_timeout: 30,
                     disconnect_timeout: 30,
@@ -200,60 +215,24 @@ impl Configuration {
     /// Applies `SECTION__FIELD`-style environment variable overrides on top of the loaded
     /// configuration (for example `TRACKER__API_KEY` or `DATABASE__CHUNK_SIZE`).
     pub fn env_overrides(config: &mut Configuration) -> &mut Configuration {
-        if let Ok(value) = env::var("LOG_LEVEL") { config.log_level = value; }
-        if let Ok(value) = env::var("LOG_CONSOLE_INTERVAL") { config.log_console_interval = parse_env_num::<u64>("LOG_CONSOLE_INTERVAL", &value, 60); }
-        if let Ok(value) = env::var("TRACKER__API_KEY") {
-            config.tracker_config.api_key = value;
-        }
-        if let Ok(value) = env::var("TRACKER__WHITELIST_ENABLED") {
-            config.tracker_config.whitelist_enabled = parse_env_bool("TRACKER__WHITELIST_ENABLED", &value, false);
-        }
-        if let Ok(value) = env::var("TRACKER__BLACKLIST_ENABLED") {
-            config.tracker_config.blacklist_enabled = parse_env_bool("TRACKER__BLACKLIST_ENABLED", &value, false);
-        }
-        if let Ok(value) = env::var("TRACKER__KEYS_ENABLED") {
-            config.tracker_config.keys_enabled = parse_env_bool("TRACKER__KEYS_ENABLED", &value, false);
-        }
-        if let Ok(value) = env::var("TRACKER__USERS_ENABLED") {
-            config.tracker_config.users_enabled = parse_env_bool("TRACKER__USERS_ENABLED", &value, false);
-        }
-        if let Ok(value) = env::var("TRACKER__SWAGGER") {
-            config.tracker_config.swagger = parse_env_bool("TRACKER__SWAGGER", &value, false);
-        }
-        if let Ok(value) = env::var("TRACKER__KEYS_CLEANUP_INTERVAL") {
-            config.tracker_config.keys_cleanup_interval = parse_env_num::<u64>("TRACKER__KEYS_CLEANUP_INTERVAL", &value, 60);
-        }
-        if let Ok(value) = env::var("TRACKER__REQUEST_INTERVAL") {
-            config.tracker_config.request_interval = parse_env_num::<u64>("TRACKER__REQUEST_INTERVAL", &value, 1800);
-        }
-        if let Ok(value) = env::var("TRACKER__REQUEST_INTERVAL_MINIMUM") {
-            config.tracker_config.request_interval_minimum = parse_env_num::<u64>("TRACKER__REQUEST_INTERVAL_MINIMUM", &value, 1800);
-        }
-        if let Ok(value) = env::var("TRACKER__PEERS_TIMEOUT") {
-            config.tracker_config.peers_timeout = parse_env_num::<u64>("TRACKER__PEERS_TIMEOUT", &value, 2700);
-        }
-        if let Ok(value) = env::var("TRACKER__PEERS_CLEANUP_INTERVAL") {
-            config.tracker_config.peers_cleanup_interval = parse_env_num::<u64>("TRACKER__PEERS_CLEANUP_INTERVAL", &value, 900);
-        }
-        if let Ok(value) = env::var("TRACKER__PEERS_CLEANUP_THREADS") {
-            config.tracker_config.peers_cleanup_threads = parse_env_num::<u64>("TRACKER__PEERS_CLEANUP_THREADS", &value, 256);
-        }
-        if let Ok(value) = env::var("TRACKER__MAX_PEERS_PER_TORRENT") {
-            config.tracker_config.max_peers_per_torrent = parse_env_num::<u64>("TRACKER__MAX_PEERS_PER_TORRENT", &value, 10_000);
-        }
-        if let Ok(value) = env::var("TRACKER__MAX_RTC_PENDING_ANSWERS") {
-            config.tracker_config.max_rtc_pending_answers = parse_env_num::<u64>("TRACKER__MAX_RTC_PENDING_ANSWERS", &value, 32);
-        }
-        if let Ok(value) = env::var("TRACKER__MAX_TORRENTS") {
-            // Falls back to the value already loaded, not to the `0` default: `0` means
-            // unlimited, so a typo in this variable would otherwise silently switch the limit
-            // off rather than leave the configured one in place.
-            let current = config.tracker_config.max_torrents;
-            config.tracker_config.max_torrents = parse_env_num::<u64>("TRACKER__MAX_TORRENTS", &value, current);
-        }
-        if let Ok(value) = env::var("TRACKER__PROMETHEUS_ID") {
-            config.tracker_config.prometheus_id = value;
-        }
+        env_override!("LOG_LEVEL", config.log_level);
+        env_override!("LOG_CONSOLE_INTERVAL", config.log_console_interval, num);
+        env_override!("TRACKER__API_KEY", config.tracker_config.api_key);
+        env_override!("TRACKER__WHITELIST_ENABLED", config.tracker_config.whitelist_enabled, bool);
+        env_override!("TRACKER__BLACKLIST_ENABLED", config.tracker_config.blacklist_enabled, bool);
+        env_override!("TRACKER__KEYS_ENABLED", config.tracker_config.keys_enabled, bool);
+        env_override!("TRACKER__USERS_ENABLED", config.tracker_config.users_enabled, bool);
+        env_override!("TRACKER__SWAGGER", config.tracker_config.swagger, bool);
+        env_override!("TRACKER__KEYS_CLEANUP_INTERVAL", config.tracker_config.keys_cleanup_interval, num);
+        env_override!("TRACKER__REQUEST_INTERVAL", config.tracker_config.request_interval, num);
+        env_override!("TRACKER__REQUEST_INTERVAL_MINIMUM", config.tracker_config.request_interval_minimum, num);
+        env_override!("TRACKER__PEERS_TIMEOUT", config.tracker_config.peers_timeout, num);
+        env_override!("TRACKER__PEERS_CLEANUP_INTERVAL", config.tracker_config.peers_cleanup_interval, num);
+        env_override!("TRACKER__PEERS_CLEANUP_THREADS", config.tracker_config.peers_cleanup_threads, num);
+        env_override!("TRACKER__MAX_PEERS_PER_TORRENT", config.tracker_config.max_peers_per_torrent, num);
+        env_override!("TRACKER__MAX_RTC_PENDING_ANSWERS", config.tracker_config.max_rtc_pending_answers, num);
+        env_override!("TRACKER__MAX_TORRENTS", config.tracker_config.max_torrents, num);
+        env_override!("TRACKER__PROMETHEUS_ID", config.tracker_config.prometheus_id);
         if let Ok(value) = env::var("TRACKER__CLUSTER") {
             config.tracker_config.cluster = match value.as_str() {
                 "standalone" => ClusterMode::standalone,
@@ -270,108 +249,44 @@ impl Configuration {
                 _ => ClusterEncoding::binary
             };
         }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_TOKEN") {
-            config.tracker_config.cluster_token = value;
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_BIND_ADDRESS") {
-            config.tracker_config.cluster_bind_address = value;
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_MASTER_ADDRESS") {
-            config.tracker_config.cluster_master_address = value;
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_KEEP_ALIVE") {
-            config.tracker_config.cluster_keep_alive = parse_env_num::<u64>("TRACKER__CLUSTER_KEEP_ALIVE", &value, 60);
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_REQUEST_TIMEOUT") {
-            config.tracker_config.cluster_request_timeout = parse_env_num::<u64>("TRACKER__CLUSTER_REQUEST_TIMEOUT", &value, 15);
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_DISCONNECT_TIMEOUT") {
-            config.tracker_config.cluster_disconnect_timeout = parse_env_num::<u64>("TRACKER__CLUSTER_DISCONNECT_TIMEOUT", &value, 15);
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_RECONNECT_INTERVAL") {
-            config.tracker_config.cluster_reconnect_interval = parse_env_num::<u64>("TRACKER__CLUSTER_RECONNECT_INTERVAL", &value, 5);
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_MAX_CONNECTIONS") {
-            config.tracker_config.cluster_max_connections = parse_env_num::<u64>("TRACKER__CLUSTER_MAX_CONNECTIONS", &value, 25000);
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_THREADS") {
-            config.tracker_config.cluster_threads = parse_env_num::<u64>("TRACKER__CLUSTER_THREADS", &value, available_parallelism().unwrap().get() as u64);
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL") {
-            config.tracker_config.cluster_ssl = parse_env_bool("TRACKER__CLUSTER_SSL", &value, false);
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL_KEY") {
-            config.tracker_config.cluster_ssl_key = value;
-        }
-        if let Ok(value) = env::var("TRACKER__CLUSTER_SSL_CERT") {
-            config.tracker_config.cluster_ssl_cert = value;
-        }
-        if let Ok(value) = env::var("TRACKER__TLS_CONNECTION_RATE") {
-            config.tracker_config.tls_connection_rate = parse_env_num::<u64>("TRACKER__TLS_CONNECTION_RATE", &value, 256);
-        }
-        if let Ok(value) = env::var("TRACKER__RTC_INTERVAL") {
-            config.tracker_config.rtc_interval = parse_env_num::<u64>("TRACKER__RTC_INTERVAL", &value, 30);
-        }
-        if let Ok(value) = env::var("TRACKER__RTC_PEERS_TIMEOUT") {
-            config.tracker_config.rtc_peers_timeout = parse_env_num::<u64>("TRACKER__RTC_PEERS_TIMEOUT", &value, 120);
-        }
-        if let Ok(value) = env::var("TRACKER__TOTAL_DOWNLOADS") {
-            config.tracker_config.total_downloads = parse_env_num::<u64>("TRACKER__TOTAL_DOWNLOADS", &value, 0);
-        }
-        if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_ENABLED") {
-            config.tracker_config.rtc_compression_enabled = parse_env_bool("TRACKER__RTC_COMPRESSION_ENABLED", &value, true);
-        }
+        env_override!("TRACKER__CLUSTER_TOKEN", config.tracker_config.cluster_token);
+        env_override!("TRACKER__CLUSTER_BIND_ADDRESS", config.tracker_config.cluster_bind_address);
+        env_override!("TRACKER__CLUSTER_MASTER_ADDRESS", config.tracker_config.cluster_master_address);
+        env_override!("TRACKER__CLUSTER_KEEP_ALIVE", config.tracker_config.cluster_keep_alive, num);
+        env_override!("TRACKER__CLUSTER_REQUEST_TIMEOUT", config.tracker_config.cluster_request_timeout, num);
+        env_override!("TRACKER__CLUSTER_DISCONNECT_TIMEOUT", config.tracker_config.cluster_disconnect_timeout, num);
+        env_override!("TRACKER__CLUSTER_RECONNECT_INTERVAL", config.tracker_config.cluster_reconnect_interval, num);
+        env_override!("TRACKER__CLUSTER_MAX_CONNECTIONS", config.tracker_config.cluster_max_connections, num);
+        env_override!("TRACKER__CLUSTER_THREADS", config.tracker_config.cluster_threads, num);
+        env_override!("TRACKER__CLUSTER_SSL", config.tracker_config.cluster_ssl, bool);
+        env_override!("TRACKER__CLUSTER_SSL_KEY", config.tracker_config.cluster_ssl_key);
+        env_override!("TRACKER__CLUSTER_SSL_CERT", config.tracker_config.cluster_ssl_cert);
+        env_override!("TRACKER__TLS_CONNECTION_RATE", config.tracker_config.tls_connection_rate, num);
+        env_override!("TRACKER__RTC_INTERVAL", config.tracker_config.rtc_interval, num);
+        env_override!("TRACKER__RTC_PEERS_TIMEOUT", config.tracker_config.rtc_peers_timeout, num);
+        env_override!("TRACKER__TOTAL_DOWNLOADS", config.tracker_config.total_downloads, num);
+        env_override!("TRACKER__RTC_COMPRESSION_ENABLED", config.tracker_config.rtc_compression_enabled, bool);
         if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_ALGORITHM") {
             config.tracker_config.rtc_compression_algorithm = match value.to_lowercase().as_str() {
                 "zstd" => CompressionAlgorithm::Zstd,
                 _ => CompressionAlgorithm::Lz4,
             };
         }
-        if let Ok(value) = env::var("TRACKER__RTC_COMPRESSION_LEVEL") {
-            config.tracker_config.rtc_compression_level = parse_env_num::<u32>("TRACKER__RTC_COMPRESSION_LEVEL", &value, 1);
-        }
-        if let Ok(value) = env::var("SENTRY__ENABLED") {
-            config.sentry_config.enabled = parse_env_bool("SENTRY__ENABLED", &value, false);
-        }
-        if let Ok(value) = env::var("SENTRY__DEBUG") {
-            config.sentry_config.debug = parse_env_bool("SENTRY__DEBUG", &value, false);
-        }
-        if let Ok(value) = env::var("SENTRY__ATTACH_STACKTRACE") {
-            config.sentry_config.attach_stacktrace = parse_env_bool("SENTRY__ATTACH_STACKTRACE", &value, true);
-        }
-        if let Ok(value) = env::var("SENTRY__SEND_DEFAULT_PII") {
-            config.sentry_config.send_default_pii = parse_env_bool("SENTRY__SEND_DEFAULT_PII", &value, false);
-        }
-        if let Ok(value) = env::var("SENTRY__DSN") {
-            config.sentry_config.dsn = value;
-        }
-        if let Ok(value) = env::var("SENTRY__MAX_BREADCRUMBS") {
-            config.sentry_config.max_breadcrumbs = parse_env_num::<usize>("SENTRY__MAX_BREADCRUMBS", &value, 100);
-        }
-        if let Ok(value) = env::var("SENTRY__SAMPLE_RATE") {
-            config.sentry_config.sample_rate = parse_env_num::<f32>("SENTRY__SAMPLE_RATE", &value, 1.0);
-        }
-        if let Ok(value) = env::var("SENTRY__TRACES_SAMPLE_RATE") {
-            config.sentry_config.traces_sample_rate = parse_env_num::<f32>("SENTRY__TRACES_SAMPLE_RATE", &value, 1.0);
-        }
-        if let Ok(value) = env::var("DATABASE__PERSISTENT") {
-            config.database.persistent = parse_env_bool("DATABASE__PERSISTENT", &value, false);
-        }
-        if let Ok(value) = env::var("DATABASE__INSERT_VACANT") {
-            config.database.insert_vacant = parse_env_bool("DATABASE__INSERT_VACANT", &value, false);
-        }
-        if let Ok(value) = env::var("DATABASE__REMOVE_ACTION") {
-            config.database.remove_action = parse_env_bool("DATABASE__REMOVE_ACTION", &value, false);
-        }
-        if let Ok(value) = env::var("DATABASE__UPDATE_COMPLETED") {
-            config.database.update_completed = parse_env_bool("DATABASE__UPDATE_COMPLETED", &value, true);
-        }
-        if let Ok(value) = env::var("DATABASE__UPDATE_PEERS") {
-            config.database.update_peers = parse_env_bool("DATABASE__UPDATE_PEERS", &value, false);
-        }
-        if let Ok(value) = env::var("DATABASE__PATH") {
-            config.database.path = value;
-        }
+        env_override!("TRACKER__RTC_COMPRESSION_LEVEL", config.tracker_config.rtc_compression_level, num);
+        env_override!("SENTRY__ENABLED", config.sentry_config.enabled, bool);
+        env_override!("SENTRY__DEBUG", config.sentry_config.debug, bool);
+        env_override!("SENTRY__ATTACH_STACKTRACE", config.sentry_config.attach_stacktrace, bool);
+        env_override!("SENTRY__SEND_DEFAULT_PII", config.sentry_config.send_default_pii, bool);
+        env_override!("SENTRY__DSN", config.sentry_config.dsn);
+        env_override!("SENTRY__MAX_BREADCRUMBS", config.sentry_config.max_breadcrumbs, num);
+        env_override!("SENTRY__SAMPLE_RATE", config.sentry_config.sample_rate, num);
+        env_override!("SENTRY__TRACES_SAMPLE_RATE", config.sentry_config.traces_sample_rate, num);
+        env_override!("DATABASE__PERSISTENT", config.database.persistent, bool);
+        env_override!("DATABASE__INSERT_VACANT", config.database.insert_vacant, bool);
+        env_override!("DATABASE__REMOVE_ACTION", config.database.remove_action, bool);
+        env_override!("DATABASE__UPDATE_COMPLETED", config.database.update_completed, bool);
+        env_override!("DATABASE__UPDATE_PEERS", config.database.update_peers, bool);
+        env_override!("DATABASE__PATH", config.database.path);
         if let Ok(value) = env::var("DATABASE__ENGINE") {
             config.database.engine = match value.as_str() {
                 "sqlite3" => { DatabaseDrivers::sqlite3 }
@@ -380,313 +295,103 @@ impl Configuration {
                 _ => { DatabaseDrivers::sqlite3 }
             };
         }
-        if let Ok(value) = env::var("DATABASE__PERSISTENT_INTERVAL") {
-            config.database.persistent_interval = parse_env_num::<u64>("DATABASE__PERSISTENT_INTERVAL", &value, 60);
-        }
-        if let Ok(value) = env::var("DATABASE__CHUNK_SIZE") {
-            config.database.chunk_size = parse_env_num::<u64>("DATABASE__CHUNK_SIZE", &value, 1000);
-        }
+        env_override!("DATABASE__PERSISTENT_INTERVAL", config.database.persistent_interval, num);
+        env_override!("DATABASE__CHUNK_SIZE", config.database.chunk_size, num);
         if let Ok(value) = env::var("CACHE__ENABLED") {
             let enabled = parse_env_bool("CACHE__ENABLED", &value, false);
-            if let Some(ref mut cache) = config.cache {
-                cache.enabled = enabled;
-            } else if enabled {
-                config.cache = Some(CacheConfig::default());
-                config.cache.as_mut().unwrap().enabled = enabled;
+            // Only `true` creates a missing [cache] section; the other cache variables always do.
+            if enabled || config.cache.is_some() {
+                config.cache.get_or_insert_with(CacheConfig::default).enabled = enabled;
             }
         }
         if let Ok(value) = env::var("CACHE__ENGINE") {
-            let engine = match value.as_str() {
+            config.cache.get_or_insert_with(CacheConfig::default).engine = match value.as_str() {
                 "redis" => CacheEngine::redis,
                 "memcache" => CacheEngine::memcache,
                 _ => CacheEngine::redis
             };
-            if let Some(ref mut cache) = config.cache {
-                cache.engine = engine;
-            } else {
-                config.cache = Some(CacheConfig {
-                    engine,
-                    ..Default::default()
-                });
+        }
+        env_override!("CACHE__ADDRESS", config.cache.get_or_insert_with(CacheConfig::default).address);
+        env_override!("CACHE__PREFIX", config.cache.get_or_insert_with(CacheConfig::default).prefix);
+        env_override!("CACHE__TTL", config.cache.get_or_insert_with(CacheConfig::default).ttl, num);
+        env_override!("CACHE__SPLIT_PEERS", config.cache.get_or_insert_with(CacheConfig::default).split_peers, bool);
+        env_override!("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH", config.database_structure.torrents.bin_type_infohash, bool);
+        env_override!("DATABASE_STRUCTURE__TORRENTS__TABLE_NAME", config.database_structure.torrents.table_name);
+        env_override!("DATABASE_STRUCTURE__TORRENTS__COLUMN_INFOHASH", config.database_structure.torrents.column_infohash);
+        env_override!("DATABASE_STRUCTURE__TORRENTS__COLUMN_SEEDS", config.database_structure.torrents.column_seeds);
+        env_override!("DATABASE_STRUCTURE__TORRENTS__COLUMN_PEERS", config.database_structure.torrents.column_peers);
+        env_override!("DATABASE_STRUCTURE__TORRENTS__COLUMN_COMPLETED", config.database_structure.torrents.column_completed);
+        env_override!("DATABASE_STRUCTURE__TORRENTS__PERSISTENT", config.database_structure.torrents.persistent, opt_bool);
+        env_override!("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH", config.database_structure.whitelist.bin_type_infohash, bool);
+        env_override!("DATABASE_STRUCTURE__WHITELIST__TABLE_NAME", config.database_structure.whitelist.table_name);
+        env_override!("DATABASE_STRUCTURE__WHITELIST__COLUMN_INFOHASH", config.database_structure.whitelist.column_infohash);
+        env_override!("DATABASE_STRUCTURE__WHITELIST__PERSISTENT", config.database_structure.whitelist.persistent, opt_bool);
+        env_override!("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH", config.database_structure.blacklist.bin_type_infohash, bool);
+        env_override!("DATABASE_STRUCTURE__BLACKLIST__TABLE_NAME", config.database_structure.blacklist.table_name);
+        env_override!("DATABASE_STRUCTURE__BLACKLIST__COLUMN_INFOHASH", config.database_structure.blacklist.column_infohash);
+        env_override!("DATABASE_STRUCTURE__BLACKLIST__PERSISTENT", config.database_structure.blacklist.persistent, opt_bool);
+        env_override!("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH", config.database_structure.keys.bin_type_hash, bool);
+        env_override!("DATABASE_STRUCTURE__KEYS__TABLE_NAME", config.database_structure.keys.table_name);
+        env_override!("DATABASE_STRUCTURE__KEYS__COLUMN_HASH", config.database_structure.keys.column_hash);
+        env_override!("DATABASE_STRUCTURE__KEYS__COLUMN_TIMEOUT", config.database_structure.keys.column_timeout);
+        env_override!("DATABASE_STRUCTURE__KEYS__PERSISTENT", config.database_structure.keys.persistent, opt_bool);
+        env_override!("DATABASE_STRUCTURE__USERS__ID_UUID", config.database_structure.users.id_uuid, bool);
+        env_override!("DATABASE_STRUCTURE__USERS__BIN_TYPE_KEY", config.database_structure.users.bin_type_key, bool);
+        env_override!("DATABASE_STRUCTURE__USERS__TABLE_NAME", config.database_structure.users.table_name);
+        env_override!("DATABASE_STRUCTURE__USERS__COLUMN_UUID", config.database_structure.users.column_uuid);
+        env_override!("DATABASE_STRUCTURE__USERS__COLUMN_ID", config.database_structure.users.column_id);
+        env_override!("DATABASE_STRUCTURE__USERS__COLUMN_ACTIVE", config.database_structure.users.column_active);
+        env_override!("DATABASE_STRUCTURE__USERS__COLUMN_KEY", config.database_structure.users.column_key);
+        env_override!("DATABASE_STRUCTURE__USERS__COLUMN_UPLOADED", config.database_structure.users.column_uploaded);
+        env_override!("DATABASE_STRUCTURE__USERS__COLUMN_DOWNLOADED", config.database_structure.users.column_downloaded);
+        env_override!("DATABASE_STRUCTURE__USERS__COLUMN_COMPLETED", config.database_structure.users.column_completed);
+        env_override!("DATABASE_STRUCTURE__USERS__COLUMN_UPDATED", config.database_structure.users.column_updated);
+        env_override!("DATABASE_STRUCTURE__USERS__PERSISTENT", config.database_structure.users.persistent, opt_bool);
+        for (api_iteration, block) in config.api_server.iter_mut().enumerate() {
+            env_override!(format!("API_{api_iteration}_ENABLED"), block.enabled, bool);
+            env_override!(format!("API_{api_iteration}_SSL"), block.ssl, bool);
+            env_override!(format!("API_{api_iteration}_BIND_ADDRESS"), block.bind_address);
+            env_override!(format!("API_{api_iteration}_REAL_IP"), block.real_ip);
+            env_override!(format!("API_{api_iteration}_SSL_KEY"), block.ssl_key);
+            env_override!(format!("API_{api_iteration}_SSL_CERT"), block.ssl_cert);
+            env_override!(format!("API_{api_iteration}_KEEP_ALIVE"), block.keep_alive, num);
+            env_override!(format!("API_{api_iteration}_REQUEST_TIMEOUT"), block.request_timeout, num);
+            env_override!(format!("API_{api_iteration}_DISCONNECT_TIMEOUT"), block.disconnect_timeout, num);
+            env_override!(format!("API_{api_iteration}_MAX_CONNECTIONS"), block.max_connections, num);
+            env_override!(format!("API_{api_iteration}_THREADS"), block.threads, num);
+        }
+        for (http_iteration, block) in config.http_server.iter_mut().enumerate() {
+            env_override!(format!("HTTP_{http_iteration}_ENABLED"), block.enabled, bool);
+            env_override!(format!("HTTP_{http_iteration}_SSL"), block.ssl, bool);
+            env_override!(format!("HTTP_{http_iteration}_BIND_ADDRESS"), block.bind_address);
+            env_override!(format!("HTTP_{http_iteration}_REAL_IP"), block.real_ip);
+            env_override!(format!("HTTP_{http_iteration}_SSL_KEY"), block.ssl_key);
+            env_override!(format!("HTTP_{http_iteration}_SSL_CERT"), block.ssl_cert);
+            env_override!(format!("HTTP_{http_iteration}_KEEP_ALIVE"), block.keep_alive, num);
+            env_override!(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT"), block.request_timeout, num);
+            env_override!(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT"), block.disconnect_timeout, num);
+            env_override!(format!("HTTP_{http_iteration}_MAX_CONNECTIONS"), block.max_connections, num);
+            env_override!(format!("HTTP_{http_iteration}_THREADS"), block.threads, num);
+            env_override!(format!("HTTP_{http_iteration}_RTCTORRENT"), block.rtctorrent, bool);
+        }
+        for (udp_iteration, block) in config.udp_server.iter_mut().enumerate() {
+            env_override!(format!("UDP_{udp_iteration}_ENABLED"), block.enabled, bool);
+            env_override!(format!("UDP_{udp_iteration}_BIND_ADDRESS"), block.bind_address);
+            env_override!(format!("UDP_{udp_iteration}_UDP_THREADS"), block.udp_threads, num);
+            env_override!(format!("UDP_{udp_iteration}_WORKER_THREADS"), block.worker_threads, num);
+            env_override!(format!("UDP_{udp_iteration}_RECEIVE_BUFFER_SIZE"), block.receive_buffer_size, num);
+            env_override!(format!("UDP_{udp_iteration}_SEND_BUFFER_SIZE"), block.send_buffer_size, num);
+            env_override!(format!("UDP_{udp_iteration}_REUSE_ADDRESS"), block.reuse_address, bool);
+            env_override!(format!("UDP_{udp_iteration}_PARSE_QUEUE_SIZE"), block.parse_queue_size, num);
+            env_override!(format!("UDP_{udp_iteration}_USE_PAYLOAD_IP"), block.use_payload_ip, bool);
+            env_override!(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL"), block.simple_proxy_protocol, bool);
+            if let Ok(value) = env::var(format!("UDP_{udp_iteration}_RECEIVE_METHOD")) {
+                block.receive_method = match value.to_lowercase().as_str() {
+                    "io_uring" => UdpReceiveMethod::io_uring,
+                    "rio" => UdpReceiveMethod::rio,
+                    _ => UdpReceiveMethod::recvmmsg,
+                };
             }
-        }
-        if let Ok(value) = env::var("CACHE__ADDRESS") {
-            if let Some(ref mut cache) = config.cache {
-                cache.address = value;
-            } else {
-                config.cache = Some(CacheConfig {
-                    address: value,
-                    ..Default::default()
-                });
-            }
-        }
-        if let Ok(value) = env::var("CACHE__PREFIX") {
-            if let Some(ref mut cache) = config.cache {
-                cache.prefix = value;
-            } else {
-                config.cache = Some(CacheConfig {
-                    prefix: value,
-                    ..Default::default()
-                });
-            }
-        }
-        if let Ok(value) = env::var("CACHE__TTL") {
-            let ttl = parse_env_num::<u64>("CACHE__TTL", &value, 300);
-            if let Some(ref mut cache) = config.cache {
-                cache.ttl = ttl;
-            } else {
-                config.cache = Some(CacheConfig {
-                    ttl,
-                    ..Default::default()
-                });
-            }
-        }
-        if let Ok(value) = env::var("CACHE__SPLIT_PEERS") {
-            let split_peers = parse_env_bool("CACHE__SPLIT_PEERS", &value, false);
-            if let Some(ref mut cache) = config.cache {
-                cache.split_peers = split_peers;
-            } else {
-                config.cache = Some(CacheConfig {
-                    split_peers,
-                    ..Default::default()
-                });
-            }
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH") {
-            config.database_structure.torrents.bin_type_infohash = parse_env_bool("DATABASE_STRUCTURE__TORRENTS__BIN_TYPE_INFOHASH", &value, true);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__TABLE_NAME") {
-            config.database_structure.torrents.table_name = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_INFOHASH") {
-            config.database_structure.torrents.column_infohash = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_SEEDS") {
-            config.database_structure.torrents.column_seeds = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_PEERS") {
-            config.database_structure.torrents.column_peers = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__COLUMN_COMPLETED") {
-            config.database_structure.torrents.column_completed = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__TORRENTS__PERSISTENT") {
-            config.database_structure.torrents.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__TORRENTS__PERSISTENT", &value);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH") {
-            config.database_structure.whitelist.bin_type_infohash = parse_env_bool("DATABASE_STRUCTURE__WHITELIST__BIN_TYPE_INFOHASH", &value, true);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__TABLE_NAME") {
-            config.database_structure.whitelist.table_name = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__COLUMN_INFOHASH") {
-            config.database_structure.whitelist.column_infohash = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__WHITELIST__PERSISTENT") {
-            config.database_structure.whitelist.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__WHITELIST__PERSISTENT", &value);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH") {
-            config.database_structure.blacklist.bin_type_infohash = parse_env_bool("DATABASE_STRUCTURE__BLACKLIST__BIN_TYPE_INFOHASH", &value, true);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__TABLE_NAME") {
-            config.database_structure.blacklist.table_name = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__COLUMN_INFOHASH") {
-            config.database_structure.blacklist.column_infohash = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__BLACKLIST__PERSISTENT") {
-            config.database_structure.blacklist.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__BLACKLIST__PERSISTENT", &value);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH") {
-            config.database_structure.keys.bin_type_hash = parse_env_bool("DATABASE_STRUCTURE__KEYS__BIN_TYPE_HASH", &value, true);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__TABLE_NAME") {
-            config.database_structure.keys.table_name = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__COLUMN_HASH") {
-            config.database_structure.keys.column_hash = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__COLUMN_TIMEOUT") {
-            config.database_structure.keys.column_timeout = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__KEYS__PERSISTENT") {
-            config.database_structure.keys.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__KEYS__PERSISTENT", &value);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__ID_UUID") {
-            config.database_structure.users.id_uuid = parse_env_bool("DATABASE_STRUCTURE__USERS__ID_UUID", &value, true);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__BIN_TYPE_KEY") {
-            config.database_structure.users.bin_type_key = parse_env_bool("DATABASE_STRUCTURE__USERS__BIN_TYPE_KEY", &value, true);
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__TABLE_NAME") {
-            config.database_structure.users.table_name = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_UUID") {
-            config.database_structure.users.column_uuid = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_ID") {
-            config.database_structure.users.column_id = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_ACTIVE") {
-            config.database_structure.users.column_active = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_KEY") {
-            config.database_structure.users.column_key = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_UPLOADED") {
-            config.database_structure.users.column_uploaded = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_DOWNLOADED") {
-            config.database_structure.users.column_downloaded = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_COMPLETED") {
-            config.database_structure.users.column_completed = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__COLUMN_UPDATED") {
-            config.database_structure.users.column_updated = value;
-        }
-        if let Ok(value) = env::var("DATABASE_STRUCTURE__USERS__PERSISTENT") {
-            config.database_structure.users.persistent = parse_env_optional_bool("DATABASE_STRUCTURE__USERS__PERSISTENT", &value);
-        }
-        let mut api_iteration = 0;
-        loop {
-            match config.api_server.get_mut(api_iteration) {
-                None => {
-                    break;
-                }
-                Some(block) => {
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_ENABLED")) {
-                        block.enabled = parse_env_bool(format!("API_{api_iteration}_ENABLED"), &value, true);
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_SSL")) {
-                        block.ssl = parse_env_bool(format!("API_{api_iteration}_SSL"), &value, false);
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_BIND_ADDRESS")) {
-                        block.bind_address = value;
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_REAL_IP")) {
-                        block.real_ip = value;
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_SSL_KEY")) {
-                        block.ssl_key = value;
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_SSL_CERT")) {
-                        block.ssl_cert = value;
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_KEEP_ALIVE")) {
-                        block.keep_alive = parse_env_num::<u64>(format!("API_{api_iteration}_KEEP_ALIVE"), &value, 60);
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_REQUEST_TIMEOUT")) {
-                        block.request_timeout = parse_env_num::<u64>(format!("API_{api_iteration}_REQUEST_TIMEOUT"), &value, 30);
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_DISCONNECT_TIMEOUT")) {
-                        block.disconnect_timeout = parse_env_num::<u64>(format!("API_{api_iteration}_DISCONNECT_TIMEOUT"), &value, 30);
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_MAX_CONNECTIONS")) {
-                        block.max_connections = parse_env_num::<u64>(format!("API_{api_iteration}_MAX_CONNECTIONS"), &value, 25000);
-                    }
-                    if let Ok(value) = env::var(format!("API_{api_iteration}_THREADS")) {
-                        block.threads = parse_env_num::<u64>(format!("API_{api_iteration}_THREADS"), &value, available_parallelism().unwrap().get() as u64);
-                    }
-                }
-            }
-            api_iteration += 1;
-        }
-        let mut http_iteration = 0;
-        loop {
-            match config.http_server.get_mut(http_iteration) {
-                None => {
-                    break;
-                }
-                Some(block) => {
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_ENABLED")) {
-                        block.enabled = parse_env_bool(format!("HTTP_{http_iteration}_ENABLED"), &value, true);
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_SSL")) {
-                        block.ssl = parse_env_bool(format!("HTTP_{http_iteration}_SSL"), &value, false);
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_BIND_ADDRESS")) {
-                        block.bind_address = value;
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_REAL_IP")) {
-                        block.real_ip = value;
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_SSL_KEY")) {
-                        block.ssl_key = value;
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_SSL_CERT")) {
-                        block.ssl_cert = value;
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_KEEP_ALIVE")) {
-                        block.keep_alive = parse_env_num::<u64>(format!("HTTP_{http_iteration}_KEEP_ALIVE"), &value, 60);
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT")) {
-                        block.request_timeout = parse_env_num::<u64>(format!("HTTP_{http_iteration}_REQUEST_TIMEOUT"), &value, 15);
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT")) {
-                        block.disconnect_timeout = parse_env_num::<u64>(format!("HTTP_{http_iteration}_DISCONNECT_TIMEOUT"), &value, 15);
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_MAX_CONNECTIONS")) {
-                        block.max_connections = parse_env_num::<u64>(format!("HTTP_{http_iteration}_MAX_CONNECTIONS"), &value, 25000);
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_THREADS")) {
-                        block.threads = parse_env_num::<u64>(format!("HTTP_{http_iteration}_THREADS"), &value, available_parallelism().unwrap().get() as u64);
-                    }
-                    if let Ok(value) = env::var(format!("HTTP_{http_iteration}_RTCTORRENT")) {
-                        block.rtctorrent = parse_env_bool(format!("HTTP_{http_iteration}_RTCTORRENT"), &value, false);
-                    }
-                }
-            }
-            http_iteration += 1;
-        }
-        let mut udp_iteration = 0;
-        loop {
-            match config.udp_server.get_mut(udp_iteration) {
-                None => {
-                    break;
-                }
-                Some(block) => {
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_ENABLED")) {
-                        block.enabled = parse_env_bool(format!("UDP_{udp_iteration}_ENABLED"), &value, true);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_BIND_ADDRESS")) {
-                        block.bind_address = value;
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_UDP_THREADS")) {
-                        block.udp_threads = parse_env_num::<usize>(format!("UDP_{udp_iteration}_UDP_THREADS"), &value, 2);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_WORKER_THREADS")) {
-                        block.worker_threads = parse_env_num::<usize>(format!("UDP_{udp_iteration}_WORKER_THREADS"), &value, available_parallelism().unwrap().get());
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_RECEIVE_BUFFER_SIZE")) {
-                        block.receive_buffer_size = parse_env_num::<usize>(format!("UDP_{udp_iteration}_RECEIVE_BUFFER_SIZE"), &value, 134_217_728);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SEND_BUFFER_SIZE")) {
-                        block.send_buffer_size = parse_env_num::<usize>(format!("UDP_{udp_iteration}_SEND_BUFFER_SIZE"), &value, 67_108_864);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_REUSE_ADDRESS")) {
-                        block.reuse_address = parse_env_bool(format!("UDP_{udp_iteration}_REUSE_ADDRESS"), &value, true);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_PARSE_QUEUE_SIZE")) {
-                        block.parse_queue_size = parse_env_num::<usize>(format!("UDP_{udp_iteration}_PARSE_QUEUE_SIZE"), &value, crate::config::config::default_parse_queue_size());
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_USE_PAYLOAD_IP")) {
-                        block.use_payload_ip = parse_env_bool(format!("UDP_{udp_iteration}_USE_PAYLOAD_IP"), &value, false);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL")) {
-                        block.simple_proxy_protocol = parse_env_bool(format!("UDP_{udp_iteration}_SIMPLE_PROXY_PROTOCOL"), &value, false);
-                    }
-                    if let Ok(value) = env::var(format!("UDP_{udp_iteration}_RECEIVE_METHOD")) {
-                        block.receive_method = match value.to_lowercase().as_str() {
-                            "auto" => UdpReceiveMethod::auto,
-                            "io_uring" => UdpReceiveMethod::io_uring,
-                            "rio" => UdpReceiveMethod::rio,
-                            _ => UdpReceiveMethod::recvmmsg,
-                        };
-                    }
-                }
-            }
-            udp_iteration += 1;
         }
         config
     }
@@ -697,7 +402,13 @@ impl Configuration {
     ///
     /// Returns a [`ConfigurationError::IOError`] when the file cannot be created or written.
     pub fn save_file(path: &str, data: String) -> Result<(), ConfigurationError> {
-        match File::create(path) {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        // Owner-only: the file holds the API key, the cluster token and the database DSN, which
+        // the umask's usual 0644 left readable by every local user. Applies when it is created.
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        match options.open(path) {
             Ok(mut file) => {
                 match file.write_all(data.as_ref()) {
                     Ok(()) => Ok(()),
@@ -705,16 +416,6 @@ impl Configuration {
                 }
             }
             Err(e) => Err(ConfigurationError::IOError(e))
-        }
-    }
-
-    /// Serialises the configuration to TOML and saves it to `path`, logging the outcome.
-    pub fn save_from_config(config: Arc<Configuration>, path: &str)
-    {
-        let config_toml = toml::to_string(&config).unwrap();
-        match Self::save_file(path, config_toml) {
-            Ok(()) => { eprintln!("[CONFIG SAVE] Config file is saved"); }
-            Err(_) => { eprintln!("[CONFIG SAVE] Unable to save to {path}"); }
         }
     }
 
@@ -784,37 +485,9 @@ impl Configuration {
             }
         }
         Self::env_overrides(&mut config);
-        Self::resolve_proxy_lists(&mut config);
         println!("[VALIDATE] Validating configuration...");
         Self::validate(config.clone());
         Ok(config)
-    }
-
-    /// Parses the configured proxy address lists into [`IpAddr`]s once, so the request path
-    /// only has to compare already-parsed addresses.
-    ///
-    /// # Panics
-    ///
-    /// Panics when an entry is not a valid IP address.
-    pub fn resolve_proxy_lists(config: &mut Configuration) {
-        fn parse_list(label: &str, raw: &[String]) -> Vec<std::net::IpAddr> {
-            raw.iter()
-                .map(|entry| {
-                    entry.trim().parse::<std::net::IpAddr>().unwrap_or_else(|_| {
-                        panic!("[VALIDATE CONFIG] {label} contains an invalid IP address: \"{entry}\"")
-                    })
-                })
-                .collect()
-        }
-        for (index, server) in config.http_server.iter_mut().enumerate() {
-            server.trusted_proxy_addrs = parse_list(&format!("http_server[{index}].trusted_proxy_ips"), &server.trusted_proxy_ips);
-        }
-        for (index, server) in config.api_server.iter_mut().enumerate() {
-            server.trusted_proxy_addrs = parse_list(&format!("api_server[{index}].trusted_proxy_ips"), &server.trusted_proxy_ips);
-        }
-        for (index, server) in config.udp_server.iter_mut().enumerate() {
-            server.proxy_addrs = parse_list(&format!("udp_server[{index}].proxy_addresses"), &server.proxy_addresses);
-        }
     }
 
     /// Validates the complete configuration (API key strength, identifier patterns, tracker,
@@ -872,7 +545,7 @@ impl Configuration {
                     assert!(!api_server.ssl_key.is_empty(), "[VALIDATE CONFIG] api_server[{index}] ssl=true but ssl_key is not set");
                     assert!(!api_server.ssl_cert.is_empty(), "[VALIDATE CONFIG] api_server[{index}] ssl=true but ssl_cert is not set");
                 }
-                if api_server.trusted_proxies && api_server.trusted_proxy_addrs.is_empty() {
+                if api_server.trusted_proxies && api_server.trusted_proxy_ips.is_empty() {
                     eprintln!("[SECURITY WARNING] api_server[{index}] trusted_proxies=true with an empty trusted_proxy_ips list: the '{}' header is honoured from any source, so a client reaching this listener directly can spoof its IP. Set trusted_proxy_ips to your proxy addresses.", api_server.real_ip);
                 }
             }
@@ -892,7 +565,7 @@ impl Configuration {
                     assert!(!http_server.ssl_key.is_empty(), "[VALIDATE CONFIG] http_server[{index}] ssl=true but ssl_key is not set");
                     assert!(!http_server.ssl_cert.is_empty(), "[VALIDATE CONFIG] http_server[{index}] ssl=true but ssl_cert is not set");
                 }
-                if http_server.trusted_proxies && http_server.trusted_proxy_addrs.is_empty() {
+                if http_server.trusted_proxies && http_server.trusted_proxy_ips.is_empty() {
                     eprintln!("[SECURITY WARNING] http_server[{index}] trusted_proxies=true with an empty trusted_proxy_ips list: the '{}' header is honoured from any source, so a client reaching this listener directly can spoof its IP. Set trusted_proxy_ips to your proxy addresses.", http_server.real_ip);
                 }
             }
@@ -908,10 +581,10 @@ impl Configuration {
                 // `ArrayQueue::new(0)` panics, and a queue shallower than one receive batch
                 // drops packets the backend has already read off the socket.
                 assert!(udp_server.parse_queue_size >= 1024, "[VALIDATE CONFIG] udp_server[{index}] parse_queue_size must be >= 1024");
-                if udp_server.simple_proxy_protocol && udp_server.proxy_addrs.is_empty() {
+                if udp_server.simple_proxy_protocol && udp_server.proxy_addresses.is_empty() {
                     eprintln!("[SECURITY WARNING] udp_server[{index}] simple_proxy_protocol=true with an empty proxy_addresses list: the SPP header is trusted from any sender, so anyone can choose the client address the tracker records. Set proxy_addresses to your load balancer addresses.");
                 }
-                if udp_server.use_payload_ip && udp_server.proxy_addrs.is_empty() {
+                if udp_server.use_payload_ip && udp_server.proxy_addresses.is_empty() {
                     eprintln!("[SECURITY WARNING] udp_server[{index}] use_payload_ip=true with an empty proxy_addresses list: the announce IP field is honoured from any sender, so a client can have its peer entry point at a third party. Set proxy_addresses to your load balancer addresses.");
                 }
             }
@@ -982,7 +655,7 @@ impl Configuration {
         if let Some(ref cache) = config.cache {
             if cache.enabled {
                 println!("[VALIDATE] Cache enabled: {}", cache.engine);
-                Self::validate_socket_address("cache.address", &cache.address);
+                Self::validate_cache_address(&cache.engine.connection_url(&cache.address));
                 println!("[VALIDATE] Cache prefix: {}", cache.prefix);
                 println!("[VALIDATE] Cache TTL: {} seconds", cache.ttl);
                 println!("[VALIDATE] Cache split_peers: {}", cache.split_peers);
@@ -1050,6 +723,27 @@ impl Configuration {
                 println!("[VALIDATE] Cluster SSL: {}", if config.tracker_config.cluster_ssl { "wss" } else { "ws" });
             }
         }
+    }
+
+    /// Checks `cache.address` (as a URL) names a host and a numeric port. Credentials, a host name
+    /// and a database path are all allowed: it used to have to be a bare IP:port, which ruled out
+    /// Redis AUTH and Docker service names, so the Redis the website reads had to run open.
+    ///
+    /// # Panics
+    ///
+    /// Panics with a descriptive message when no host and port can be found.
+    pub fn validate_cache_address(url: &str) {
+        let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+        let host_port = rest.split('/').next().unwrap_or_default();
+        let host_port = host_port.rsplit_once('@').map_or(host_port, |(_, host_port)| host_port);
+        let valid = host_port.rsplit_once(':').is_some_and(|(host, port)| !host.is_empty() && port.parse::<u16>().is_ok());
+        assert!(
+            valid,
+            "[VALIDATE CONFIG] 'cache.address' has invalid format: '{}'. Expected 'host:port', \
+            optionally with credentials ('user:password@host:port') or as a URL ('redis://:password@host:6379/0')",
+            crate::database::database::redact_dsn(url)
+        );
+        println!("[VALIDATE] cache.address is valid: {}", crate::database::database::redact_dsn(url));
     }
 
     /// Validates that a string parses as an IPv4/IPv6 `host:port` socket address.
@@ -1210,7 +904,7 @@ fn parse_env_bool(name: impl std::fmt::Display, value: &str, default: bool) -> b
         "true" | "1" | "yes" | "on" => true,
         "false" | "0" | "no" | "off" => false,
         _ => {
-            log::warn!("[CONFIG] Invalid boolean for {name}={value:?}, using {default}");
+            eprintln!("[CONFIG] Invalid boolean for {name}={value:?}, keeping {default}");
             default
         }
     }
@@ -1221,7 +915,7 @@ fn parse_env_optional_bool(name: impl std::fmt::Display, value: &str) -> Option<
         "true" | "1" | "yes" | "on" => Some(true),
         "false" | "0" | "no" | "off" => Some(false),
         _ => {
-            log::warn!("[CONFIG] Invalid boolean for {name}={value:?}, leaving unset");
+            eprintln!("[CONFIG] Invalid boolean for {name}={value:?}, leaving unset");
             None
         }
     }
@@ -1234,8 +928,29 @@ where
     match value.parse::<T>() {
         Ok(v) => v,
         Err(_) => {
-            log::warn!("[CONFIG] Invalid numeric value for {name}={value:?}, using {default}");
+            eprintln!("[CONFIG] Invalid numeric value for {name}={value:?}, keeping {default}");
             default
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use super::{parse_env_bool, parse_env_num};
+
+    #[test]
+    fn env_override_applies_valid_values_and_keeps_the_loaded_one_on_bad_input() {
+        // SAFETY: names unique to this test, and no other test reads them.
+        unsafe {
+            env::set_var("TORRUST_TEST_ENV_OVERRIDE_BAD_NUM", "4x2");
+            env::set_var("TORRUST_TEST_ENV_OVERRIDE_NUM", "7");
+            env::set_var("TORRUST_TEST_ENV_OVERRIDE_BOOL", "off");
+        }
+        let (mut bad, mut good, mut flag) = (42u64, 0u64, true);
+        env_override!("TORRUST_TEST_ENV_OVERRIDE_BAD_NUM", bad, num);
+        env_override!("TORRUST_TEST_ENV_OVERRIDE_NUM", good, num);
+        env_override!("TORRUST_TEST_ENV_OVERRIDE_BOOL", flag, bool);
+        assert_eq!((bad, good, flag), (42, 7, false));
     }
 }

@@ -1,23 +1,10 @@
 use crate::udp::enums::response::Response;
-use crate::udp::structs::announce_interval::AnnounceInterval;
 use crate::udp::structs::announce_response::AnnounceResponse;
 use crate::udp::structs::connect_response::ConnectResponse;
-use crate::udp::structs::connection_id::ConnectionId;
 use crate::udp::structs::error_response::ErrorResponse;
-use crate::udp::structs::number_of_peers::NumberOfPeers;
 use crate::udp::structs::scrape_response::ScrapeResponse;
-use crate::udp::structs::transaction_id::TransactionId;
-use crate::udp::udp::{
-    parse_ipv4_peers,
-    parse_ipv6_peers,
-    parse_scrape_stats,
-    read_be
-};
 use std::io;
-use std::io::{
-    Cursor,
-    Write
-};
+use std::io::Write;
 use std::net::{
     Ipv4Addr,
     Ipv6Addr
@@ -120,83 +107,6 @@ impl Response {
             }
         }
         Ok(())
-    }
-
-    /// Parses a BEP 15 response datagram (connect, announce with `ipv4` peer format flag,
-    /// scrape or error).
-    ///
-    /// # Errors
-    ///
-    /// Returns an I/O error when the datagram is truncated. An unknown action is not an
-    /// error: it yields an `ErrorResponse` with the message `Invalid action`.
-    #[inline]
-    pub fn from_bytes(bytes: &[u8], ipv4: bool) -> Result<Self, io::Error> {
-        let mut cursor = Cursor::new(bytes);
-        let action = i32::from_be_bytes(read_be(&mut cursor)?);
-        let transaction_id = i32::from_be_bytes(read_be(&mut cursor)?);
-        match action {
-            0 => {
-                let connection_id = i64::from_be_bytes(read_be(&mut cursor)?);
-                Ok(ConnectResponse {
-                    connection_id: ConnectionId(connection_id),
-                    transaction_id: TransactionId(transaction_id),
-                }
-                    .into())
-            }
-            1 => {
-                let announce_interval = i32::from_be_bytes(read_be(&mut cursor)?);
-                let leechers = i32::from_be_bytes(read_be(&mut cursor)?);
-                let seeders = i32::from_be_bytes(read_be(&mut cursor)?);
-                let position = cursor.position() as usize;
-                let remaining_bytes = &bytes[position..];
-                if ipv4 {
-                    let peers = parse_ipv4_peers(remaining_bytes)?;
-                    Ok(AnnounceResponse {
-                        transaction_id: TransactionId(transaction_id),
-                        announce_interval: AnnounceInterval(announce_interval),
-                        leechers: NumberOfPeers(leechers),
-                        seeders: NumberOfPeers(seeders),
-                        peers,
-                    }
-                        .into())
-                } else {
-                    let peers = parse_ipv6_peers(remaining_bytes)?;
-                    Ok(AnnounceResponse {
-                        transaction_id: TransactionId(transaction_id),
-                        announce_interval: AnnounceInterval(announce_interval),
-                        leechers: NumberOfPeers(leechers),
-                        seeders: NumberOfPeers(seeders),
-                        peers,
-                    }
-                        .into())
-                }
-            }
-            2 => {
-                let position = cursor.position() as usize;
-                let remaining_bytes = &bytes[position..];
-                let torrent_stats = parse_scrape_stats(remaining_bytes)?;
-                Ok(ScrapeResponse {
-                    transaction_id: TransactionId(transaction_id),
-                    torrent_stats,
-                }
-                    .into())
-            }
-            3 => {
-                let position = cursor.position() as usize;
-                let message_bytes = &bytes[position..];
-                let message = String::from_utf8_lossy(message_bytes).into_owned();
-                Ok(ErrorResponse {
-                    transaction_id: TransactionId(transaction_id),
-                    message: message.into(),
-                }
-                    .into())
-            }
-            _ => Ok(ErrorResponse {
-                transaction_id: TransactionId(transaction_id),
-                message: "Invalid action".into(),
-            }
-                .into()),
-        }
     }
 
     /// Returns the exact encoded size in bytes, for pre-allocating the output buffer.

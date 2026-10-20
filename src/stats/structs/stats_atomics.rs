@@ -23,7 +23,7 @@ use std::sync::atomic::{
 /// | `ws_` | WebSocket cluster communication |
 ///
 /// [`Arc`]: std::sync::Arc
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct StatsAtomics {
     /// Unix timestamp (seconds) when the tracker process started.
     pub started: AtomicI64,

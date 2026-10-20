@@ -30,15 +30,6 @@ impl CacheConnectorMemcache {
         format!("{seeds}:{peers}:{completed}")
     }
 
-    /// Parses the aggregated `"seeds:peers:completed"` cache value.
-    pub(crate) fn deserialize_aggregated(value: &str) -> Option<(u64, u64, u64)> {
-        let mut parts = value.splitn(3, ':');
-        let seeds = parts.next()?.parse::<u64>().ok()?;
-        let peers = parts.next()?.parse::<u64>().ok()?;
-        let completed = parts.next().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
-        Some((seeds, peers, completed))
-    }
-
     /// Split format: `"bt_seeds_ipv4:bt_seeds_ipv6:rtc_seeds:bt_peers_ipv4:bt_peers_ipv6:rtc_peers:completed"`
     pub(crate) fn serialize_split(counts: &crate::cache::structs::torrent_peer_counts::TorrentPeerCounts) -> String {
         format!(
@@ -49,20 +40,4 @@ impl CacheConnectorMemcache {
         )
     }
 
-    /// Parses the split per-family/per-protocol cache value.
-    pub(crate) fn deserialize_split(value: &str) -> Option<crate::cache::structs::torrent_peer_counts::TorrentPeerCounts> {
-        let parts: Vec<&str> = value.split(':').collect();
-        if parts.len() < 7 {
-            return None;
-        }
-        Some(crate::cache::structs::torrent_peer_counts::TorrentPeerCounts {
-            bt_seeds_ipv4: parts[0].parse().ok()?,
-            bt_seeds_ipv6: parts[1].parse().ok()?,
-            rtc_seeds:     parts[2].parse().ok()?,
-            bt_peers_ipv4: parts[3].parse().ok()?,
-            bt_peers_ipv6: parts[4].parse().ok()?,
-            rtc_peers:     parts[5].parse().ok()?,
-            completed:     parts[6].parse().unwrap_or(0),
-        })
-    }
 }

@@ -1,5 +1,4 @@
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -8,7 +7,7 @@ use log::{
     error,
     info
 };
-use crate::tracker::types::ahash_map::AHashMap;
+use crate::tracker::types::peer_map::PeerMap;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -24,23 +23,6 @@ impl TorrentTracker {
             // the tracker comes up believing the database is empty and the next
             // flush writes those empty counts back over the real rows.
             Err(e) => error!("[LOAD TORRENTS] Unable to load torrents from the database: {e}"),
-        }
-    }
-
-    /// Persists the given batch of torrent updates to the database.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(())` when the database write fails; the caller re-queues the batch.
-    pub async fn save_torrents(&self, tracker: Arc<TorrentTracker>, torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>) -> Result<(), ()>
-    {
-        let torrents_count = torrents.len();
-        if let Ok(()) = self.sqlx.save_torrents(tracker, torrents).await {
-            info!("[SYNC TORRENTS] Synced {torrents_count} torrents");
-            Ok(())
-        } else {
-            error!("[SYNC TORRENTS] Unable to sync {torrents_count} torrents");
-            Err(())
         }
     }
 
@@ -127,12 +109,12 @@ impl TorrentTracker {
                 // `completed` is client-supplied, so a plain `as i64` would wrap negative.
                 self.update_stats(StatsEvent::Completed, i64::try_from(completed).unwrap_or(i64::MAX));
                 v.insert(TorrentEntry {
-                    seeds: AHashMap::default(),
-                    seeds_ipv6: AHashMap::default(),
-                    peers: AHashMap::default(),
-                    peers_ipv6: AHashMap::default(),
-                    rtc_seeds: AHashMap::default(),
-                    rtc_peers: AHashMap::default(),
+                    seeds: PeerMap::default(),
+                    seeds_ipv6: PeerMap::default(),
+                    peers: PeerMap::default(),
+                    peers_ipv6: PeerMap::default(),
+                    rtc_seeds: PeerMap::default(),
+                    rtc_peers: PeerMap::default(),
                     completed,
                     updated: Instant::now(),
                 });
@@ -211,14 +193,4 @@ impl TorrentTracker {
         }
     }
 
-    /// Removes multiple torrents; see [`TorrentTracker::remove_torrent`].
-    pub fn remove_torrents(&self, hashes: Vec<InfoHash>) -> BTreeMap<InfoHash, Option<TorrentEntry>>
-    {
-        hashes.into_iter()
-            .map(|info_hash| {
-                let result = self.remove_torrent(info_hash);
-                (info_hash, result)
-            })
-            .collect()
-    }
 }

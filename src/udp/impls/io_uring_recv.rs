@@ -23,9 +23,12 @@ const IN_FLIGHT: usize = 128;
 const RING_ENTRIES: u32 = 256;
 const SHUTDOWN_POLL: Duration = Duration::from_millis(250);
 
-/// Probes the running kernel for the `io_uring` features this backend needs.
+/// Probes the running kernel for the `io_uring` features this backend needs: the receive loop
+/// waits with `submit_with_args`, which needs `IORING_FEAT_EXT_ARG` (Linux 5.11). Without it every
+/// receive thread failed its first wait and exited, leaving the UDP tracker deaf instead of
+/// falling back to recvmmsg.
 pub fn is_available() -> bool {
-    IoUring::new(8).is_ok()
+    IoUring::new(8).is_ok_and(|ring| ring.params().is_feature_ext_arg())
 }
 
 struct Slots {
@@ -75,9 +78,13 @@ pub fn run(socket: Arc<UdpSocket>, parse_pool: Arc<ParsePool>, rx: tokio::sync::
             return;
         }
     };
-    let mut slots = Slots::new();
+    // Leaked, never dropped: once submitted, the kernel may write into these buffers until it has
+    // cancelled the posted reads, which dropping the ring only starts. Freeing them on the way out
+    // of this function was a use-after-free on every shutdown. One allocation per receive thread,
+    // alive until the process exits anyway (the RIO backend does the same).
+    let slots: &'static mut Slots = Box::leak(Box::new(Slots::new()));
 
-    if let Err(e) = submit_slots(&mut ring, &mut slots, 0..IN_FLIGHT, fd) {
+    if let Err(e) = submit_slots(&mut ring, slots, 0..IN_FLIGHT, fd) {
         error!("[UDP] io_uring initial submit failed: {e}; receiver not started");
         return;
     }
@@ -131,7 +138,7 @@ pub fn run(socket: Arc<UdpSocket>, parse_pool: Arc<ParsePool>, rx: tokio::sync::
 
         let slots_to_resubmit: Vec<usize> = completed.iter().map(|&(slot, _)| slot).filter(|&slot| slot < IN_FLIGHT).collect();
         if !slots_to_resubmit.is_empty()
-            && let Err(e) = submit_slots(&mut ring, &mut slots, slots_to_resubmit, fd) {
+            && let Err(e) = submit_slots(&mut ring, slots, slots_to_resubmit, fd) {
             error!("[UDP] io_uring resubmit failed: {e}; stopping receiver");
             break;
         }

@@ -3,7 +3,6 @@ mod common;
 use std::sync::Arc;
 use torrust_actix::ssl::enums::certificate_error::CertificateError;
 use torrust_actix::ssl::enums::server_identifier::ServerIdentifier;
-use torrust_actix::ssl::ssl::create_certificate_store;
 use torrust_actix::ssl::structs::certificate_paths::CertificatePaths;
 use torrust_actix::ssl::structs::certificate_store::CertificateStore;
 
@@ -34,14 +33,13 @@ async fn test_server_identifier_websocket_master() {
 #[tokio::test]
 async fn test_certificate_store_new() {
     let store = CertificateStore::new();
-    assert!(store.all_servers().is_empty());
     assert!(store.get_all_certificates().is_empty());
 }
 
 #[tokio::test]
 async fn test_certificate_store_default() {
     let store = CertificateStore::default();
-    assert!(store.all_servers().is_empty());
+    assert!(store.get_all_certificates().is_empty());
 }
 
 #[tokio::test]
@@ -55,8 +53,6 @@ async fn test_certificate_store_thread_safety() {
         let handle = thread::spawn(move || {
             let server_id = ServerIdentifier::HttpTracker(format!("0.0.0.0:{}", 443 + i));
             let _ = store_clone.get_certificate(&server_id);
-            let _ = store_clone.get_paths(&server_id);
-            let _ = store_clone.all_servers();
             let _ = store_clone.get_all_certificates();
         });
         handles.push(handle);
@@ -130,9 +126,4 @@ mod test_tracker_ssl_integration {
         assert!(result.is_err());
     }
 
-    #[tokio::test]
-    async fn test_create_certificate_store_helper() {
-        let store = create_certificate_store();
-        assert!(store.all_servers().is_empty());
-    }
 }

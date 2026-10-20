@@ -1,13 +1,8 @@
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::enums::updates_action::UpdatesAction;
-use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
-use log::{
-    error,
-    info
-};
+use log::info;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -18,23 +13,6 @@ impl TorrentTracker {
     {
         if let Ok(users) = self.sqlx.load_users(tracker).await {
             info!("Loaded {users} users");
-        }
-    }
-
-    /// Persists the given batch of user entries (and their add/remove actions) to the database.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(())` when the database write fails; the caller is expected to re-queue the batch.
-    pub async fn save_users(&self, tracker: Arc<TorrentTracker>, users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>) -> Result<(), ()>
-    {
-        let users_len = users.len();
-        if let Ok(()) = self.sqlx.save_users(tracker, users).await {
-            info!("[SYNC USERS] Synced {users_len} users");
-            Ok(())
-        } else {
-            error!("[SYNC USERS] Unable to sync {users_len} users");
-            Err(())
         }
     }
 
@@ -105,22 +83,6 @@ impl TorrentTracker {
         self.set_stats(StatsEvent::Users, 0);
     }
 
-    /// Removes a torrent from the user's active-torrent list.
-    ///
-    /// Returns `true` when the torrent was present and removed.
-    pub fn remove_user_active_torrent(&self, user_id: UserId, info_hash: InfoHash) -> bool
-    {
-        let mut lock = self.users.write();
-        match lock.entry(user_id) {
-            Entry::Vacant(_) => {
-                false
-            }
-            Entry::Occupied(mut o) => {
-                o.get_mut().torrents_active.remove(&info_hash).is_some()
-            }
-        }
-    }
-
     /// Resolves a user announce key to its [`UserId`] via the O(1) key index.
     ///
     /// Returns `None` when no user owns the given key, or when the owning user is not active.
@@ -152,4 +114,15 @@ impl TorrentTracker {
         if return_clone { Some(user.clone()) } else { None }
     }
 
+    /// Drops `torrents_active` entries not announced within `timeout`: a client that vanished
+    /// without sending `event=stopped` otherwise left them there for good. Runs after each peer
+    /// cleanup pass rather than per announce, where it would cost the user's whole map every time.
+    pub fn clean_user_active_torrents(&self, timeout: std::time::Duration)
+    {
+        let cutoff = crate::common::common::current_time().saturating_sub(timeout.as_secs());
+        let mut lock = self.users.write();
+        for user in lock.values_mut() {
+            user.torrents_active.retain(|_, announced| *announced >= cutoff);
+        }
+    }
 }

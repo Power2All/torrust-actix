@@ -7,6 +7,14 @@ mod database_tests {
         use super::*;
 
         #[test]
+        fn test_redact_dsn_masks_only_the_password() {
+            assert_eq!(database::redact_dsn("mysql://tracker:s3cr3t@db:3306/torrust"), "mysql://tracker:***@db:3306/torrust");
+            assert_eq!(database::redact_dsn("postgres://u:p@ss@host/db"), "postgres://u:***@host/db");
+            assert_eq!(database::redact_dsn("mysql://tracker@db/torrust"), "mysql://tracker@db/torrust");
+            assert_eq!(database::redact_dsn("sqlite://data.db"), "sqlite://data.db");
+        }
+
+        #[test]
         fn test_format_hash_value_binary() {
             let hash = "0123456789abcdef0123456789abcdef01234567";
             assert_eq!(

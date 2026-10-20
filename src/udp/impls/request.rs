@@ -19,8 +19,7 @@ use crate::udp::udp::{
 use std::io;
 use std::io::{
     Cursor,
-    Read,
-    Write
+    Read
 };
 use std::net::Ipv4Addr;
 
@@ -43,44 +42,6 @@ impl From<ScrapeRequest> for Request {
 }
 
 impl Request {
-    /// Serialises the request into BEP 15 wire format.
-    ///
-    /// # Errors
-    ///
-    /// Returns the underlying I/O error when writing fails.
-    pub fn write(self, bytes: &mut impl Write) -> Result<(), io::Error> {
-        match self {
-            Request::Connect(r) => {
-                bytes.write_all(&PROTOCOL_IDENTIFIER.to_be_bytes())?;
-                bytes.write_all(&0i32.to_be_bytes())?;
-                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
-            }
-            Request::Announce(r) => {
-                bytes.write_all(&r.connection_id.0.to_be_bytes())?;
-                bytes.write_all(&1i32.to_be_bytes())?;
-                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
-                bytes.write_all(&r.info_hash.0)?;
-                bytes.write_all(&r.peer_id.0)?;
-                bytes.write_all(&r.bytes_downloaded.0.to_be_bytes())?;
-                bytes.write_all(&r.bytes_left.0.to_be_bytes())?;
-                bytes.write_all(&r.bytes_uploaded.0.to_be_bytes())?;
-                bytes.write_all(&r.event.to_i32().to_be_bytes())?;
-                bytes.write_all(&r.ip_address.map_or([0; 4], |ip| ip.octets()))?;
-                bytes.write_all(&r.key.0.to_be_bytes())?;
-                bytes.write_all(&r.peers_wanted.0.to_be_bytes())?;
-                bytes.write_all(&r.port.0.to_be_bytes())?;
-            }
-            Request::Scrape(r) => {
-                bytes.write_all(&r.connection_id.0.to_be_bytes())?;
-                bytes.write_all(&2i32.to_be_bytes())?;
-                bytes.write_all(&r.transaction_id.0.to_be_bytes())?;
-                for info_hash in r.info_hashes {
-                    bytes.write_all(&info_hash.0)?;
-                }
-            }
-        }
-        Ok(())
-    }
 
     /// Parses a BEP 15 datagram into a connect, announce or scrape request.
     ///
@@ -200,16 +161,11 @@ impl Request {
                         transaction_id,
                     ));
                 }
-                let mut info_hashes = Vec::with_capacity(actual_hashes);
-                for chunk in remaining_bytes.chunks_exact(20).take(actual_hashes) {
-                    let hash_array: [u8; 20] = chunk.try_into()
-                        .map_err(|_| RequestParseError::sendable_text(
-                            "Invalid info hash format",
-                            connection_id,
-                            transaction_id,
-                        ))?;
-                    info_hashes.push(InfoHash(hash_array));
-                }
+                // Whole 20-byte chunks only, so there is no short hash left to reject.
+                let info_hashes: Vec<InfoHash> = remaining_bytes.as_chunks::<20>().0.iter()
+                    .take(actual_hashes)
+                    .map(|hash| InfoHash(*hash))
+                    .collect();
                 Ok(ScrapeRequest {
                     connection_id: ConnectionId(connection_id),
                     transaction_id: TransactionId(transaction_id),

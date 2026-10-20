@@ -46,7 +46,7 @@ git clone https://github.com/Power2All/torrust-actix.git
 cd torrust-actix
 ```
 
-2. Build the source code using Rust (make sure you have installed rustup with stable branch)
+2. Build the source code using Rust 1.94.0 or newer (make sure you have installed rustup with stable branch)
 #### Using build script
 ```bash
 cargo build --release
@@ -54,15 +54,17 @@ cargo build --release
 
 #### System requirements (Linux)
 
+A C compiler (for `ring`, `zstd` and the bundled SQLite) and `curl` (the Swagger UI bundle is downloaded at build time). TLS is rustls throughout, so no OpenSSL is needed:
+
 ```bash
 # Debian / Ubuntu
-sudo apt-get install libfontconfig-dev
+sudo apt-get install build-essential curl
 
 # Fedora / RHEL
-sudo dnf install fontconfig-devel
+sudo dnf install gcc make curl
 
 # Arch
-sudo pacman -S fontconfig
+sudo pacman -S base-devel curl
 ```
 
 #### Building
@@ -79,6 +81,13 @@ Run the code using `--help` argument for using in your environment:
 ```
 Before you can run the server, you need to either have persistence turned off, and when enabled, make sure your database is created and working. See the help argument above how to fix your setup as you wish.
 
+#### Upgrading a MySQL or PostgreSQL database created before v4.2.24
+Databases created with `--create-database` before v4.2.24 store the key expiry (`keys.timeout`) and the user's last update (`users.updated`) as 32-bit Unix timestamps, which cannot hold dates after 19 January 2038. Widen them to 64-bit once, with the tracker stopped:
+```bash
+./target/release/torrust-actix --migrate-database
+```
+It reads the table and column names from `config.toml`, is safe to run again, skips tables that do not exist and exits when done. SQLite databases need nothing: SQLite integers are already 64-bit.
+
 Swagger UI is introduced, and when enabled in the configuration, is accessible through the API via `/swagger-ui/`.
 
 Sentry.io support is introduced, you can enable it in the configuration and the URL where to push the data to.
@@ -86,12 +95,16 @@ Sentry.io support is introduced, you can enable it in the configuration and the 
 ### Run on Docker
 To run this application in Docker, we provided a Docker Compose file that you can use to run it locally or remotely.
 
-You can find it in the "docker" folder called "docker-compose.yml", and in order to deploy it, use the following commands:
+You can find it in the "docker" folder called "docker-compose.yml". The image is built from the checkout it sits in, and the compose file requires an API key from the environment:
 
 ```
-docker compose build .
-docker compose start
+cd docker
+export TRACKER__API_KEY="$(head -c 32 /dev/urandom | base64)"
+docker compose build
+docker compose up -d
 ```
+
+The API is published on `127.0.0.1:8080` only; publish it wider only behind TLS or a firewall. To build the image without compose, run `docker build -f docker/Dockerfile .` from the repository root. The container runs as an unprivileged `tracker` user.
 
 ### Environment Variable Overrides
 
@@ -485,11 +498,13 @@ Add a `[cache]` section to `config.toml`:
 [cache]
 enabled     = true
 engine      = "redis"       # "redis" or "memcache"
-address     = "127.0.0.1:6379"
+address     = "127.0.0.1:6379" # or "user:pass@redis:6379", or "redis://:pass@redis:6379/0"
 prefix      = "tracker:"    # key namespace prefix
 ttl         = 300           # seconds until a key expires (0 = no expiry)
 split_peers = false         # see "Key format" below
 ```
+
+`address` takes a host name or IP and a port, optionally with credentials, or a whole URL with a database number; the password is masked in the logs.
 
 The tracker connects to Redis/Memcache **only when it writes** (once per `persistent_interval` seconds).  No persistent connection is kept open between sync cycles.
 
@@ -596,6 +611,80 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 ---
 
 ### ChangeLog
+
+#### v4.2.24
+* Bumped versions, including two breaking ones that needed no code changes: `utoipa-swagger-ui` 9 → 10 (and `utoipa` 5 → 6 with it) and `zstd` 0.13 → 0.14.
+* Minimum Rust version is now 1.94.0. `sqlx` 0.9 already required it, so the declared 1.88.0 was wrong; `uuid` 1.28 and `actix-server` 2.10 need 1.89.
+* Bumped `rtctorrent`'s npm dependencies within their major versions and rebuilt the shipped bundles; `npm audit` reports no vulnerabilities in the runtime dependencies. `bencode` stays on 2.x because 3.x and later are ESM-only and the library is CommonJS.
+* Added `version.sh`, the Linux/macOS counterpart of `version.bat`. It updates the same files and leaves line endings and the final newline untouched.
+* Added a `.gitattributes` (`* text=auto`) so a checkout on Windows and one on Linux no longer show every file as modified.
+* The Linux build requirements in this README listed `fontconfig`, which nothing depends on anymore. They now list what the build actually needs: a C compiler and `curl`.
+* **Fixed the tracker aborting at boot while loading users or torrents from the database**, and then failing the same way on every later start:
+  * **SQLite:** a numeric-id user row aborted the load (the INTEGER id was decoded as bytes), and so did the first user past 4 GiB uploaded or downloaded (the counters were decoded as `u32`).
+  * **MySQL:** `--create-database` makes the counters and the id `BIGINT UNSIGNED`, which the signed decoders refuse. They are now read whether a column is signed or `UNSIGNED`, so tables created elsewhere (such as the website's `torrust_actix_torrents`, whose `completed` is a signed `BIGINT`) keep loading.
+  * **PgSQL:** the key `timeout` column is `integer` but was decoded as `bigint`.
+  * **Numeric user ids** loaded from SQLite and MySQL are now hashed the way the API and PgSQL already hash them (`hash_id(id)`), so a user loaded from the database and the same user posted over the API share one entry.
+* **Fixed announce keys added over the API getting the wrong expiry after a restart.** Memory held `now + timeout`, but the database was handed the bare `timeout` and read it back as an absolute timestamp, so a one-hour key was expired after any restart. A timeout of `0`, documented as permanent, expired immediately. Memory and the database now store the same absolute expiry, `0` stays permanent, and very large timeouts saturate instead of wrapping. `add_key` takes a `u64`. **Library API change.**
+* **SIGTERM now shuts the tracker down cleanly.** The background tasks already stopped on it, but the main loop only waited for Ctrl-C, so `docker stop` and `systemctl stop` left the process hanging until it was killed, without the final save to the database. `docker/init.sh` now `exec`s the binary so it receives the signal.
+* **Shutdown no longer rewrites `config.toml`.** It re-serialised the running configuration, which wrote secrets set through environment variables (`TRACKER__API_KEY`, the cluster token, the database DSN) into the file in plain text, dropped its comments and made temporary overrides permanent. Its stated purpose, carrying the completed count over without a database, never worked: it wrote the value from startup. `Configuration::save_from_config` is removed. **Library API change.**
+* **Added `--migrate-database`, a one-off migration of the key `timeout` and user `updated` columns from 32-bit to 64-bit on MySQL and PostgreSQL** (see *Upgrading a MySQL or PostgreSQL database created before v4.2.24* above). Both columns hold Unix timestamps and would have overflowed on 19 January 2038; a key added with a long timeout could not be stored at all. `--create-database` now creates them as `BIGINT`, and the PostgreSQL loader reads either width, so the tracker keeps working before and after the migration.
+* **Fixed every shutdown aborting before the final save to the database.** The UDP parse pool owns a tokio runtime, and the pool was released at the end of an async receive loop, where dropping a runtime panics. Under the release profile's `panic = 'abort'` the process died right there, after the listeners had stopped but before `Saving final data to database...`. The runtime is now disposed of with `shutdown_background()`.
+* **Certificate hot reload now takes effect.** The HTTP and API TLS listeners served a key cached once at startup, so `POST /api/certificate/reload` reported success while the old certificate stayed in use until a restart. Handshakes now read the current certificate from the store, and the cluster master's TLS listener goes through the same store instead of loading its PEM files once at startup, so a reload renews it too (filter with `{"server_type": "websocket"}`). The signing key is built when the files are loaded, so a reload with an unusable key now fails the reload request instead of breaking later handshakes. `DynamicCertificateResolver::refresh_cache` is removed. **Library API change.**
+
+
+##### Security (v4.2.24)
+* **HTTP announces now honour `users_enabled`.** `/announce`, and `/{key}/announce` with keys enabled, carry no user key and were served anyway; they now get `unknown user key`, as UDP already answered.
+* **A peer can no longer be stopped or moved by anyone who knows its peer id.** Peer ids are no secret (non-compact responses list them, and every BitTorrent handshake reveals one), so `event=stopped` with someone else's id emptied swarms, and a re-announce with it pointed the swarm at another address. A stored peer now only changes for a request from its own IP, or one carrying the same announce `key`, the parameter BitTorrent has for exactly this; clients that change address and send a key (libtorrent-based ones, and every UDP client) keep moving freely. A peer that has missed two announce intervals is no longer defended, so a client without a key that changed address gets through on its second announce from there; a live peer, which re-announces every interval, cannot be taken over.
+* **An empty `api_key` no longer opens the API.** `?token=` matched it; an empty token is now always refused.
+* **Removed HTTP/2** from the HTTP, API and cluster TLS listeners. actix offered it through ALPN, and the `h2` 0.3 underneath has RUSTSEC-2026-0258 (unbounded empty DATA frames) with no 0.3 fix. Everything a tracker serves is HTTP/1.1.
+* **One oversized request no longer disconnects a cluster slave.** The slave forwarded any query string, and the master closed the whole cluster link on a frame over 64 KiB; slaves now apply the 8 KiB query cap before forwarding and the master accepts frames up to 1 MiB.
+* **`rtctorrent = false` is now honoured in cluster mode**, where the slave used to forward WebRTC announces without checking it.
+* A failure on the cluster master now reaches the client as a `failure reason` (HTTP) or no datagram (UDP), instead of an empty 200 or an empty datagram.
+* UDP: a datagram too short to carry a transaction id gets no reply (it used to get 19 bytes back for 1 in, to an unverified source), malformed requests are answered with their own transaction id instead of 0, a refused request keeps its reason (`unknown key`, `torrent not on whitelist`, ...) instead of a generic `bad request`, and a UDP scrape is refused when `keys_enabled` is set, as an unkeyed HTTP scrape is.
+* The generated `config.toml` is created owner-only (`0600`); it holds the API key, the cluster token and the database DSN.
+* Database and cache connection strings are logged with the password masked.
+* `cache.address` now accepts credentials, a host name and a database (`user:pass@host:port`, or a URL such as `redis://:pass@redis:6379/0`), so the Redis the website reads no longer has to run without a password. The key format is unchanged.
+* Moved off `actix-web-actors`, which is deprecated upstream, to `actix-ws` for the cluster master's connections.
+* Dropped OpenSSL: Sentry's `transport` feature pulled in `native-tls` beside the rustls everything else uses. Sentry now sends over reqwest with rustls, and OpenSSL is no longer a build requirement.
+* Added `.cargo/audit.toml`, which ignores four advisories that were checked and found not to apply (`rsa`'s Marvin attack: sqlx only encrypts with the server's public key; three in `zip`, a build-only dependency whose affected functions are never called). The reasons sit next to each entry.
+
+##### Fixes (v4.2.24)
+* **The cache (and the website's peer counts) now follows peers leaving.** Peers that expired, and a `stopped` that emptied a torrent, never reached the update queue, so Redis kept showing them until its TTL (24 hours in a typical setup). Both now queue the new counts, or remove the key.
+* **A big swarm no longer hands every client the same peers.** The peer list always started at the front of the swarm's map, so in a large swarm everyone got the same 72 peers. It now starts at a uniformly random peer and wraps around. The peer maps are `IndexMap`s instead of `HashMap`s for this: access by position makes the random start O(1), so announce cost stays bounded by `numwant` rather than by swarm size. Measured on `announce_into_populated_swarm`: about 1.7 µs per announce at both 200 and 1000 peers on the test machine, which includes the new peer-identity check.
+* **The RtcTorrent signalling response honours `numwant`** (1..=72) like a BitTorrent peer list. It used to send every offer it had, up to 128 of up to 8 KiB each, while the client dials at most 8 per round.
+* **Queued key, user, whitelist and blacklist updates can no longer overwrite each other.** They were keyed by the wall-clock nanosecond, which two updates can share (Windows ticks every 100 ns) and which can step backwards; they now use the same sequence counter as torrent updates.
+* **The user update queue holds one entry per user**, instead of one full copy of the user per announce until the next flush.
+* `torrents_active` entries for torrents a client left without `event=stopped` now expire after the peer timeout, instead of staying forever.
+* Bulk `POST`/`DELETE /api/torrents` and `POST /api/users` validate the whole batch first: a bad entry used to return 400 after part of the batch (in map order) had already been applied.
+* A UUID is now the same user however it is cased; it was hashed as sent but stored lowercased, so an uppercase UUID became a different user after a restart.
+* Non-compact announce responses send `peer id` as the raw 20 bytes BEP 3 specifies (it went out as 40 hex characters) and leave it out for `no_peer_id`.
+* io_uring: kernels without `IORING_FEAT_EXT_ARG` (before 5.11) now fall back to recvmmsg instead of every receive thread exiting at its first wait, and the receive buffers are no longer freed while the kernel may still be writing into them.
+* `max_connections` under `[[http_server]]` and `[[api_server]]` is now applied; it was read, documented and ignored.
+* `cargo clippy --all-targets` is clean. The flush functions (`save_torrents`, `save_keys`, `save_users`, ... and their `_updates` variants) return the `sqlx::Error` they hit instead of `()`, and log it; the remote-IP lookups return `Option`; request helpers box their ready-made error response. **Library API change.** The UDP scrape parser loses an error branch that could not be reached.
+
+##### Docker and CI (v4.2.24)
+* **The image is built from the checkout it sits in** (`docker build -f docker/Dockerfile .` from the repository root) instead of cloning a git tag from GitHub, in two stages on pinned `rust:1.98-alpine3.24` / `alpine:3.24`: 108 MB instead of an image carrying the Rust toolchain and the whole build tree. A `.dockerignore` keeps `target/`, `config.toml` and databases out of the build context.
+* The container runs as an unprivileged `tracker` user, and `init.sh` `exec`s the tracker so `docker stop` reaches it.
+* **The healthcheck works.** The image copied `healthcheck.py` under the name of its PyInstaller build but had no Python, so the container was always unhealthy; the PyInstaller build itself was a one-directory build missing its `_internal/` folder, so it could not run either. The image now installs `python3` and runs the script, and the broken binary is removed.
+* `docker-compose.yml` takes the API key from the environment (`TRACKER__API_KEY`, required) instead of a hard-coded one, and publishes the API on `127.0.0.1` only.
+* GitHub Actions: workflows are read-only by default with write access only for the release job, checkouts no longer leave the token on disk for build scripts to find, third-party actions are pinned to commit SHAs and moved to their current majors (checkout v7, upload-artifact v7, download-artifact v8, which now fails on a hash mismatch, action-gh-release v3; all Node 24, none with an input change this workflow uses), the shell steps pass actionlint and shellcheck, and UPX is pinned to 5.2.1 and checked against its SHA-256. Dependabot targeted a `develop` branch that does not exist, so it never opened a PR; it now targets the default branch.
+* `version.bat`/`version.sh` no longer touch the Dockerfile, which has no version in it any more.
+
+##### RtcTorrent (v4.2.24)
+* **Pieces from peers are now verified or rejected, never accepted unchecked.** A piece was accepted when the torrent had no v1 hashes (every pure v2 torrent), when its index was out of range, or when hashing failed (always, in the browser bundle outside a secure context). Pure v2 torrents are now checked against their files' `piece layers`; out-of-range or wrongly sized pieces are dropped; and without a hash function pieces are rejected. **Behaviour change:** a page serving the browser bundle over plain `http://` (other than `localhost`) can no longer download, since it has no `crypto.subtle`; serve it over HTTPS.
+* A peer no longer decides how much memory a client allocates: piece chunks are only buffered for pieces this client requested, at exactly the piece's size.
+* `seed.js --torrent-file` refuses paths that leave the working directory (`../`, absolute paths), which a crafted torrent could use to have the seeder read and serve any file.
+* Failed and closed WebRTC connections are dropped, so a seeder that went away can be dialled again, and at most 8 new connections are opened per announce round.
+* A stopped torrent clears its timers, so a Node.js process exits once its last torrent stops.
+* Seeding from memory joins the files once instead of once per piece served.
+* The bundles build without webpack's two "Critical dependency" warnings: the Node.js WebRTC packages are now loaded with plain `require()` calls (externals in the Node bundle, stubbed out in the browser one) instead of passing `require` around as a value.
+* The demo server (`npm run serve`) streams files with HTTP range support (video seeking, and webseed fetches past the first piece, failed against it) and listens on `127.0.0.1` only.
+* **Multi-file pure v2 torrents use the v2 layout.** BEP 52 starts every file on a piece boundary, and its per-file hashes cover exactly that; this library laid the files out back to back as in v1, so their pieces matched no hash. Seeding (from disk, memory or browser `File`s) and downloading now both use the piece-aligned layout. **Behaviour change:** for multi-file pure v2 torrents only, peers on this version and older ones no longer understand each other's piece numbers.
+* **v2 torrents created by this library now follow BEP 52.** A file's final 16 KiB block was zero-padded before hashing, which libtorrent and other clients do not do, so they disagreed with this library's `pieces root` and info-hash for most files. Torrents created before this release still verify. `create()` also returns the info dictionary it actually encoded, so seeding the object it returns lays the data out as the torrent describes.
+* **Hybrid (v1 + v2) torrents created by this library are now valid for other clients.** Their v1 file list was in the caller's order with the files back to back, while the v2 file tree is sorted and starts each file on a piece boundary, so libtorrent refused multi-file hybrids outright ("the v1 and v2 file metadata does not match") and found single-file ones inconsistent. The v1 list now follows the file tree with BEP 47 pad files, and the v1 piece hashes cover that layout. Checked with libtorrent 2.1.1: hybrid and v2, single- and multi-file torrents from this release load and verify fully; the same torrents from v4.2.23 were rejected or failed verification. **Behaviour change:** multi-file hybrid torrents made by older versions keep their old layout and still download between peers of this library.
+* A seeder drops piece requests beyond twice what a leecher keeps in flight per connection, and ones outside the torrent, instead of queueing them without limit.
+* Stopping a seeder while its first WebRTC offer is still being gathered now closes that connection; it used to stay open and keep a Node.js process running.
+* `npm test` now runs a piece-verification suite (v1, hybrid, single- and multi-file v2 and hybrid with pad files, BEP 52 roots, the request cap) instead of failing with no tests.
 
 #### v4.2.23
 * Bumped versions.

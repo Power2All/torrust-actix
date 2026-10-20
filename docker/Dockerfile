@@ -1,18 +1,26 @@
-FROM rust:alpine
+# Builds the checkout this file belongs to, so build from the repository root:
+#   docker build -f docker/Dockerfile -t power2all/torrust-actix .
+# (docker/build.bat and docker-compose.yml already do.)
 
-RUN apk update --no-interactive
-RUN apk add git musl-dev curl pkgconfig openssl-dev openssl-libs-static --no-interactive
-RUN git clone https://github.com/Power2All/torrust-actix.git /app/torrust-actix
-RUN cd /app/torrust-actix && git checkout tags/v4.2.23
+FROM rust:1.98-alpine3.24 AS builder
+# curl: utoipa-swagger-ui downloads the Swagger UI bundle at build time. No OpenSSL: TLS is rustls.
+RUN apk add --no-cache musl-dev curl
+WORKDIR /src
+COPY . .
+RUN cargo build --release --locked
+
+# The runtime image carries only the binary: no toolchain, sources or build tree.
+FROM alpine:3.24
+# python3 runs the healthcheck (it reads the binds from config.toml with tomllib).
+RUN apk add --no-cache python3 && adduser -D -h /app/torrust-actix tracker
 WORKDIR /app/torrust-actix
-RUN cd /app/torrust-actix
-RUN cargo build --release && rm -Rf target/release/.fingerprint target/release/build target/release/deps target/release/examples target/release/incremental
-COPY init.sh /app/torrust-actix/target/release/init.sh
-COPY healthcheck.py /app/torrust-actix/healthcheck
-RUN chmod +x /app/torrust-actix/target/release/init.sh
-RUN chmod +x /app/torrust-actix/healthcheck
+COPY --from=builder /src/target/release/torrust-actix target/release/torrust-actix
+COPY docker/init.sh target/release/init.sh
+COPY docker/healthcheck.py healthcheck
+RUN chmod +x target/release/init.sh healthcheck && chown -R tracker:tracker target/release
+USER tracker
 EXPOSE 8080/tcp
 EXPOSE 6969/tcp
 EXPOSE 6969/udp
-CMD /app/torrust-actix/target/release/init.sh
+CMD ["/app/torrust-actix/target/release/init.sh"]
 HEALTHCHECK CMD /app/torrust-actix/healthcheck || exit 1

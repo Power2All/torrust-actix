@@ -81,24 +81,6 @@ impl TorrentTracker {
         Vec::new()
     }
 
-    /// Stores the accepted SDP answer on the peer.
-    ///
-    /// Returns `false` when the peer is not present or has no RTC state.
-    pub fn update_rtc_sdp_answer(&self, info_hash: InfoHash, peer_id: PeerId, sdp_answer: String) -> bool {
-        let shard = self.torrents_sharding.shard_for(info_hash);
-        let mut lock = shard.write();
-        if let Some(torrent_entry) = lock.get_mut(&info_hash) {
-            let peer = torrent_entry.rtc_seeds.get_mut(&peer_id)
-                .or_else(|| torrent_entry.rtc_peers.get_mut(&peer_id));
-            if let Some(torrent_peer) = peer
-                && let Some(ref mut rtc) = torrent_peer.rtc_data {
-                rtc.sdp_answer = Some(CompressedBytes::compress(&sdp_answer));
-                return true;
-            }
-        }
-        false
-    }
-
     /// Replaces the peer's SDP offer, compressed in memory.
     ///
     /// Returns `false` when the peer is not present or has no RTC state.

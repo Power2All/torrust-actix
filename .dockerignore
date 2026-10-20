@@ -1,0 +1,10 @@
+# Only what the image build reads; keeps target/, config.toml, databases and keys out of the context.
+*
+!Cargo.toml
+!Cargo.lock
+!build.rs
+!src
+!benches
+!tests
+!docker/init.sh
+!docker/healthcheck.py

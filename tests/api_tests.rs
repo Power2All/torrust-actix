@@ -213,3 +213,59 @@ async fn test_api_concurrent_operations() {
         assert!(resp.status().is_success(), "API requests should succeed");
     }
 }
+
+#[actix_web::test]
+async fn test_empty_api_key_never_authenticates() {
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+    let config = Arc::new(common::build_test_config(|c| c.tracker_config.api_key = String::new()));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let service_data = Arc::new(ApiServiceData {
+        torrent_tracker: tracker,
+        api_trackers_config: common::create_test_api_config(),
+    });
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(service_data))
+            .route("/api/torrent/{info_hash}", web::delete().to(api_service_torrent_delete)),
+    ).await;
+    let uri = format!("/api/torrent/{}?token=", common::random_info_hash());
+    let resp = test::call_service(&app, test::TestRequest::delete().uri(&uri).peer_addr("127.0.0.1:0".parse().unwrap()).to_request()).await;
+    let body = test::read_body(resp).await;
+    assert!(body.windows(13).any(|w| w == b"invalid token"), "an empty token must not match an empty api_key");
+}
+
+#[actix_web::test]
+async fn test_bulk_torrent_post_with_a_bad_entry_changes_nothing() {
+    use torrust_actix::api::api_torrents::api_service_torrents_post;
+    let tracker = common::create_test_tracker().await;
+    let service_data = Arc::new(ApiServiceData {
+        torrent_tracker: tracker.clone(),
+        api_trackers_config: common::create_test_api_config(),
+    });
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(service_data))
+            .route("/api/torrents", web::post().to(api_service_torrents_post)),
+    ).await;
+    let good = common::random_info_hash();
+    let body = format!(r#"{{"{good}": 5, "{}": 1}}"#, "z".repeat(40));
+    let uri = format!("/api/torrents?token={}", tracker.config.tracker_config.api_key);
+    let req = test::TestRequest::post().uri(&uri).peer_addr("127.0.0.1:0".parse().unwrap()).set_payload(body).to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 400);
+    assert!(tracker.get_torrent(good).is_none(), "a rejected batch must not be partly applied");
+}
+
+#[actix_web::test]
+async fn test_parse_hex_id_status_strings() {
+    use torrust_actix::api::api::parse_hex_id;
+    use torrust_actix::tracker::structs::info_hash::InfoHash;
+    let status = |r: Box<actix_web::HttpResponse>| async move {
+        let body = actix_web::body::to_bytes(r.into_body()).await.unwrap();
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap()["status"].as_str().unwrap().to_string()
+    };
+    let ok: InfoHash = parse_hex_id("AABBCCDDEEFF00112233445566778899aabbccdd", "info_hash").unwrap();
+    assert_eq!(ok.0[0], 0xAA);
+    assert_eq!(status(parse_hex_id::<InfoHash>("aabb", "info_hash").unwrap_err()).await, "bad info_hash");
+    assert_eq!(status(parse_hex_id::<InfoHash>(&"zz".repeat(20), "key_hash").unwrap_err()).await, "invalid key_hash");
+}

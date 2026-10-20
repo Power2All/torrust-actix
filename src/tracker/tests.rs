@@ -64,6 +64,7 @@ mod tracker_tests {
             no_peer_id: false,
             event,
             remote_addr: IpAddr::from_str("10.0.0.1").unwrap(),
+            key: None,
             numwant: 72,
             rtctorrent: None,
             rtcoffer: None,
@@ -82,6 +83,7 @@ mod tracker_tests {
             downloaded: NumberOfBytes(0),
             left: NumberOfBytes(left as i64),
             event: AnnounceEvent::Started,
+            key: None,
             rtc_data: None,
         }
     }
@@ -274,5 +276,63 @@ mod tracker_tests {
             tracker.get_stats().completed < before,
             "a decrease between two values past i64::MAX must still move the counter down"
         );
+    }
+
+    #[tokio::test]
+    async fn only_the_same_client_can_move_or_stop_a_peer() {
+        // Peer ids are no secret, so an announce under someone else's id must neither stop that
+        // peer nor repoint it; the same client may still move, proving itself with its key.
+        let tracker = tracker(0).await;
+        let info_hash = hash(1);
+        let peer_id = PeerId([1u8; 20]);
+        let from = |ip: &str, key: Option<u32>, event: AnnounceEvent| {
+            let mut request = announce(info_hash, peer_id, event, 100);
+            request.remote_addr = IpAddr::from_str(ip).unwrap();
+            request.key = key;
+            request
+        };
+        let stored_ip = |tracker: &TorrentTracker| tracker.get_torrent(info_hash)
+            .and_then(|entry| entry.peers.get(&peer_id).map(|peer| peer.peer_addr.ip().to_string()));
+
+        tracker.handle_announce(&from("10.0.0.1", None, AnnounceEvent::Started), None).await.unwrap();
+        tracker.handle_announce(&from("10.0.0.2", None, AnnounceEvent::Stopped), None).await.unwrap();
+        tracker.handle_announce(&from("10.0.0.2", None, AnnounceEvent::Started), None).await.unwrap();
+        assert_eq!(stored_ip(&tracker).as_deref(), Some("10.0.0.1"), "a keyless peer is tied to its IP");
+
+        tracker.handle_announce(&from("10.0.0.1", Some(7), AnnounceEvent::Started), None).await.unwrap();
+        tracker.handle_announce(&from("10.0.0.3", Some(7), AnnounceEvent::Started), None).await.unwrap();
+        assert_eq!(stored_ip(&tracker).as_deref(), Some("10.0.0.3"), "the same key may move the peer");
+        tracker.handle_announce(&from("10.0.0.9", Some(8), AnnounceEvent::Stopped), None).await.unwrap();
+        assert!(stored_ip(&tracker).is_some(), "another key must not stop the peer");
+        tracker.handle_announce(&from("10.0.0.9", Some(7), AnnounceEvent::Stopped), None).await.unwrap();
+        assert!(stored_ip(&tracker).is_none(), "the same key stops it from anywhere");
+
+        // A keyless peer that missed two announce intervals may be replaced from a new address.
+        tracker.handle_announce(&from("10.0.0.1", None, AnnounceEvent::Started), None).await.unwrap();
+        let interval = tracker.config.tracker_config.request_interval;
+        tracker.torrents_sharding.shard_for(info_hash).write().get_mut(&info_hash).unwrap()
+            .peers.get_mut(&peer_id).unwrap().updated = std::time::Instant::now() - std::time::Duration::from_secs(2 * interval + 1);
+        tracker.handle_announce(&from("10.0.0.4", None, AnnounceEvent::Started), None).await.unwrap();
+        assert_eq!(stored_ip(&tracker).as_deref(), Some("10.0.0.4"), "a stale keyless peer can move");
+    }
+
+    #[tokio::test]
+    async fn update_queue_keeps_one_entry_per_hash_and_retires_only_unchanged_ones() {
+        use crate::stats::enums::stats_event::StatsEvent;
+        use crate::tracker::enums::updates_action::UpdatesAction;
+        let tracker = tracker(0).await;
+        assert!(tracker.add_whitelist_update(hash(1), UpdatesAction::Add));
+        assert!(!tracker.add_whitelist_update(hash(1), UpdatesAction::Remove));
+        assert!(tracker.add_whitelist_update(hash(2), UpdatesAction::Add));
+        assert_eq!(tracker.get_stats().whitelist_updates, 2);
+        let flushed = tracker.torrents_whitelist_updates.read().clone();
+        assert_eq!(flushed[&hash(1)].1, UpdatesAction::Remove);
+        // hash(2) is replaced while the snapshot is being saved, so it must survive the retire.
+        tracker.add_whitelist_update(hash(2), UpdatesAction::Remove);
+        tracker.retire_flushed(&tracker.torrents_whitelist_updates, &flushed, |(seq, _)| *seq, StatsEvent::WhitelistUpdates);
+        let left = tracker.torrents_whitelist_updates.read().clone();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[&hash(2)].1, UpdatesAction::Remove);
+        assert_eq!(tracker.get_stats().whitelist_updates, 1);
     }
 }

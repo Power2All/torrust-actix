@@ -13,6 +13,7 @@ use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
 use log::{
     error,
+    info,
     warn
 };
 use sqlx::Error;
@@ -81,6 +82,46 @@ macro_rules! dispatch {
 }
 
 impl DatabaseConnector {
+    /// Widens the Unix-timestamp columns `--create-database` used to make 32-bit (the key `timeout`
+    /// and the user `updated`) to 64-bit, so they hold dates past 19 January 2038. Safe to run
+    /// again; a table that does not exist is skipped. SQLite needs nothing: its INTEGER is
+    /// already 64-bit.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first `ALTER TABLE` failure other than a missing table.
+    pub async fn migrate(&self, config: &Configuration) -> Result<(), Error>
+    {
+        let ks = &config.database_structure.keys;
+        let us = &config.database_structure.users;
+        let columns = [(&ks.table_name, &ks.column_timeout), (&us.table_name, &us.column_updated)];
+        for (table, column) in columns {
+            let result = match self {
+                DatabaseConnector::SQLite(_) => return Ok(()),
+                DatabaseConnector::MySQL(backend) => {
+                    let query = format!("ALTER TABLE `{table}` MODIFY `{column}` BIGINT NOT NULL DEFAULT 0");
+                    sqlx::query(sqlx::AssertSqlSafe(query)).execute(&backend.pool).await.map(|_| ())
+                }
+                DatabaseConnector::PgSQL(backend) => {
+                    let query = format!("ALTER TABLE public.{table} ALTER COLUMN {column} TYPE bigint");
+                    sqlx::query(sqlx::AssertSqlSafe(query)).execute(&backend.pool).await.map(|_| ())
+                }
+            };
+            match result {
+                Ok(()) => info!("[MIGRATE] {table}.{column} is now 64-bit"),
+                // 42S02 (MySQL) and 42P01 (PostgreSQL): no such table, e.g. keys were never enabled.
+                Err(Error::Database(e)) if matches!(e.code().as_deref(), Some("42S02" | "42P01")) => {
+                    warn!("[MIGRATE] Skipping {table}.{column}: the table does not exist");
+                }
+                Err(e) => {
+                    error!("[MIGRATE] Unable to widen {table}.{column}: {e}");
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Connects to the engine selected in the configuration (SQLite 3, MySQL or PostgreSQL),
     /// optionally creating the database schema first.
     pub async fn new(config: Arc<Configuration>, create_database: bool) -> DatabaseConnector

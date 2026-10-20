@@ -1,4 +1,7 @@
-use serde::Deserialize;
+use serde::{
+    Deserialize,
+    Serialize
+};
 
 /// The `event` field of a BitTorrent announce request ([BEP 3]).
 ///
@@ -7,7 +10,7 @@ use serde::Deserialize;
 /// announces omit the field (represented here as `None`).
 ///
 /// [BEP 3]: https://www.bittorrent.org/beps/bep_0003.html
-#[derive(Deserialize, PartialEq, Eq, Hash, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum AnnounceEvent {
     /// Regular re-announce — no special event.
     None = 0,

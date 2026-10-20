@@ -9,7 +9,7 @@ use crate::tracker::structs::response_peer::ResponsePeer;
 use crate::tracker::structs::torrent_counts::TorrentCounts;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
-use crate::tracker::types::ahash_map::AHashMap;
+use crate::tracker::types::peer_map::PeerMap;
 use std::time::Instant;
 
 impl AnnounceEntry {
@@ -28,8 +28,8 @@ impl AnnounceEntry {
             seeds_ipv6: if bt { bounded_response_peers(&entry.seeds_ipv6) } else { Vec::new() },
             peers: if bt { bounded_response_peers(&entry.peers) } else { Vec::new() },
             peers_ipv6: if bt { bounded_response_peers(&entry.peers_ipv6) } else { Vec::new() },
-            rtc_seeds: if rtc { bounded_clone(&entry.rtc_seeds) } else { AHashMap::default() },
-            rtc_peers: if rtc { bounded_clone(&entry.rtc_peers) } else { AHashMap::default() },
+            rtc_seeds: if rtc { bounded_clone(&entry.rtc_seeds) } else { PeerMap::default() },
+            rtc_peers: if rtc { bounded_clone(&entry.rtc_peers) } else { PeerMap::default() },
             completed: entry.completed,
             updated: entry.updated,
             counts: TorrentCounts::from_entry(entry),
@@ -44,19 +44,11 @@ impl Default for AnnounceEntry {
             seeds_ipv6: Vec::new(),
             peers: Vec::new(),
             peers_ipv6: Vec::new(),
-            rtc_seeds: AHashMap::default(),
-            rtc_peers: AHashMap::default(),
+            rtc_seeds: PeerMap::default(),
+            rtc_peers: PeerMap::default(),
             completed: 0,
             updated: Instant::now(),
-            counts: TorrentCounts {
-                seeds_ipv4: 0,
-                seeds_ipv6: 0,
-                peers_ipv4: 0,
-                peers_ipv6: 0,
-                rtc_seeds: 0,
-                rtc_peers: 0,
-                completed: 0,
-            },
+            counts: TorrentCounts::default(),
         }
     }
 }
@@ -64,25 +56,30 @@ impl Default for AnnounceEntry {
 /// Copies at most `SNAPSHOT_PEER_CAP` peers out of a BitTorrent peer map, keeping only the id and
 /// address a response reads. One exact-size allocation and no hashing, unlike cloning the map.
 #[inline]
-fn bounded_response_peers(map: &AHashMap<PeerId, TorrentPeer>) -> Vec<ResponsePeer> {
-    let mut out = Vec::with_capacity(map.len().min(SNAPSHOT_PEER_CAP));
-    for (peer_id, peer) in map.iter().take(SNAPSHOT_PEER_CAP) {
-        out.push(ResponsePeer { peer_id: *peer_id, peer_addr: peer.peer_addr });
-    }
-    out
+fn bounded_response_peers(map: &PeerMap) -> Vec<ResponsePeer> {
+    wrapped(map, SNAPSHOT_PEER_CAP)
+        .map(|(peer_id, peer)| ResponsePeer { peer_id: *peer_id, peer_addr: peer.peer_addr })
+        .collect()
 }
 
 /// Copies at most `SNAPSHOT_RTC_PEER_CAP` whole peers, for the RTC maps whose consumers need the
 /// signalling state. `CompressedBytes` is `Arc`-backed, so the SDP payloads are refcount bumps.
 #[inline]
-fn bounded_clone(map: &AHashMap<PeerId, TorrentPeer>) -> AHashMap<PeerId, TorrentPeer> {
+fn bounded_clone(map: &PeerMap) -> PeerMap {
     if map.len() <= SNAPSHOT_RTC_PEER_CAP {
         return map.clone();
     }
-    let mut out: AHashMap<PeerId, TorrentPeer> = AHashMap::default();
-    out.reserve(SNAPSHOT_RTC_PEER_CAP);
-    for (peer_id, peer) in map.iter().take(SNAPSHOT_RTC_PEER_CAP) {
-        out.insert(*peer_id, peer.clone());
-    }
-    out
+    wrapped(map, SNAPSHOT_RTC_PEER_CAP)
+        .map(|(peer_id, peer)| (*peer_id, peer.clone()))
+        .collect()
+}
+
+/// Up to `cap` entries of `map`, starting at a uniformly random one and wrapping around past the
+/// end. Always starting at the front handed every client of a big swarm the same `cap` peers (a
+/// map's order only changes as it changes), overloading those and leaving the rest unadvertised.
+/// `PeerMap`'s iterator is a slice iterator, so the skip is O(1), not a walk.
+#[inline]
+fn wrapped(map: &PeerMap, cap: usize) -> impl Iterator<Item = (&PeerId, &TorrentPeer)> {
+    let start = if map.len() > cap { rand::RngExt::random_range(&mut rand::rng(), 0..map.len()) } else { 0 };
+    map.iter().skip(start).chain(map.iter()).take(map.len().min(cap))
 }

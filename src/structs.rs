@@ -8,6 +8,9 @@ pub struct Cli {
 
     #[arg(long)]
     pub create_database: bool,
+    /// Widen the key `timeout` and user `updated` columns to 64-bit (needed before 2038), then exit.
+    #[arg(long)]
+    pub migrate_database: bool,
 
     #[arg(long)]
     pub create_selfsigned: bool,

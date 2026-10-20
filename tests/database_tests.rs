@@ -2,10 +2,13 @@ mod common;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use torrust_actix::common::common::hash_id;
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::database::enums::database_drivers::DatabaseDrivers;
 use torrust_actix::tracker::enums::updates_action::UpdatesAction;
 use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+use torrust_actix::tracker::structs::user_entry_item::UserEntryItem;
+use torrust_actix::tracker::structs::user_id::UserId;
 
 async fn create_sqlite_test_config() -> Arc<Configuration> {
     let mut config: Configuration = Configuration::init();
@@ -155,4 +158,36 @@ async fn test_concurrent_database_writes() {
         let result: Result<u64, _> = handle.await.expect("Task should complete");
         assert!(result.is_ok(), "Concurrent writes should succeed");
     }
+}
+
+#[tokio::test]
+async fn test_load_numeric_id_user_past_u32() {
+    // A numeric-id user used to abort the SQLite boot load: the INTEGER id was decoded as bytes,
+    // and uploaded/downloaded as u32, so the first user past 4 GiB took the tracker down for good.
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let mut config: Configuration = Configuration::init();
+    config.database.engine = DatabaseDrivers::sqlite3;
+    config.database.persistent = true;
+    config.database.path = temp_dir.path().join("users.db").to_str().expect("Invalid temp path").to_string();
+    config.database.insert_vacant = true;
+    config.database_structure.users.id_uuid = false;
+    let tracker: Arc<TorrentTracker> = Arc::new(TorrentTracker::new(Arc::new(config), true).await);
+    let user_hash = UserId(hash_id("7"));
+    let user = UserEntryItem {
+        key: UserId([1; 20]),
+        user_id: Some(7),
+        user_uuid: None,
+        uploaded: 5 << 30,
+        downloaded: 1,
+        completed: 2,
+        updated: 1_700_000_000,
+        active: 1,
+        torrents_active: BTreeMap::new(),
+    };
+    tracker.sqlx.save_users(tracker.clone(), BTreeMap::from([(user_hash, (user, UpdatesAction::Add))])).await.unwrap();
+    tracker.clear_users();
+    assert_eq!(tracker.sqlx.load_users(tracker.clone()).await.unwrap(), 1);
+    let loaded = tracker.get_user(user_hash).expect("user should load under the API's hash_id(\"7\") key");
+    assert_eq!(loaded.user_id, Some(7));
+    assert_eq!(loaded.uploaded, 5 << 30);
 }

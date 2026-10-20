@@ -438,3 +438,80 @@ async fn test_rtc_answers_consumed_after_poll() {
         "Second poll: leecher answer should be consumed and absent"
     );
 }
+
+#[actix_web::test]
+async fn test_announce_without_user_key_refused_when_users_enabled() {
+    // `/announce`, and `/{key}/announce` with keys enabled, carry no user key and used to be
+    // served anyway; UDP already refused them.
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+    for keys_enabled in [false, true] {
+        let config = Arc::new(common::build_test_config(|c| {
+            c.tracker_config.users_enabled = true;
+            c.tracker_config.keys_enabled = keys_enabled;
+        }));
+        let tracker = Arc::new(TorrentTracker::new(config, false).await);
+        let access_key = common::random_info_hash();
+        tracker.add_key_absolute(access_key, 0);
+        let app = test::init_service(App::new().configure(http_service_routes(Arc::new(HttpServiceData {
+            torrent_tracker: tracker,
+            http_trackers_config: common::create_test_http_config(),
+        })))).await;
+        let query = format!(
+            "announce?info_hash={}&peer_id={}&port=6881&uploaded=0&downloaded=0&left=1000&compact=1",
+            common::percent_encode(&common::random_info_hash().0),
+            common::percent_encode(&common::random_peer_id().0),
+        );
+        let paths = if keys_enabled { vec![format!("/{access_key}/{query}")] } else { vec![format!("/{query}")] };
+        for path in paths {
+            let req = test::TestRequest::get().uri(&path).peer_addr("127.0.0.1:0".parse().unwrap()).to_request();
+            let body = test::read_body(test::call_service(&app, req).await).await;
+            assert!(response_has_key(&body, b"unknown user key"), "{path} must be refused without a user key");
+        }
+    }
+}
+
+#[actix_web::test]
+async fn test_dictionary_peer_list_follows_bep3() {
+    // `peer id` is the raw 20 bytes (it went out as 40 hex characters), and `no_peer_id` drops it.
+    let (app, tracker) = make_app!(false);
+    let info_hash = common::random_info_hash();
+    let seed_id = common::random_peer_id();
+    let mut seed = common::create_test_peer(seed_id, "10.0.0.7".parse().unwrap(), 6881);
+    seed.left = torrust_actix::common::structs::number_of_bytes::NumberOfBytes(0);
+    tracker.add_torrent_peer(info_hash, seed_id, seed, false);
+    for (extra, expect_id) in [("", true), ("&no_peer_id=1", false)] {
+        let req = test::TestRequest::get()
+            .uri(&format!(
+                "/announce?info_hash={}&peer_id={}&port=6881&uploaded=0&downloaded=0&left=1000&compact=0{extra}",
+                common::percent_encode(&info_hash.0),
+                common::percent_encode(&common::random_peer_id().0),
+            ))
+            .peer_addr("127.0.0.1:0".parse().unwrap())
+            .to_request();
+        let body = test::read_body(test::call_service(&app, req).await).await;
+        let raw = [b"7:peer id20:".as_slice(), &seed_id.0].concat();
+        assert_eq!(response_has_key(&body, &raw), expect_id, "{extra}");
+        assert!(!response_has_key(&body, hex::encode(seed_id.0).as_bytes()), "never as hex");
+    }
+}
+
+#[actix_web::test]
+async fn test_rtc_offers_are_capped_by_numwant() {
+    let (app, tracker) = make_app!(true);
+    let info_hash = common::random_info_hash();
+    for i in 0..5u8 {
+        let seed_id = common::random_peer_id();
+        let seed = common::create_rtc_peer(seed_id, std::net::IpAddr::from([10, 0, 0, i]), 6881, Some(format!("v=0 offer {i}")), 0);
+        tracker.add_torrent_peer(info_hash, seed_id, seed, false);
+    }
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/announce?info_hash={}&peer_id={}&port=6881&uploaded=0&downloaded=0&left=100&compact=1&rtctorrent=1&rtcrequest=1&numwant=2",
+            common::percent_encode(&info_hash.0),
+            common::percent_encode(&common::random_peer_id().0),
+        ))
+        .peer_addr("127.0.0.1:0".parse().unwrap())
+        .to_request();
+    let body = test::read_body(test::call_service(&app, req).await).await;
+    assert_eq!(body.windows(9).filter(|w| w == b"sdp_offer").count(), 2);
+}

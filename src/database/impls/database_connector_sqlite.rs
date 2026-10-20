@@ -1,5 +1,7 @@
+use crate::common::common::hash_id;
 use crate::config::structs::configuration::Configuration;
 use crate::database::database::{
+    redact_dsn,
     build_delete_hash_query,
     build_insert_ignore_hash_query,
     build_select_hash_query,
@@ -11,7 +13,6 @@ use crate::database::database::{
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_sqlite::DatabaseConnectorSQLite;
-use crate::database::traits::database_backend::DatabaseBackend;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -20,21 +21,17 @@ use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
-use crate::tracker::types::ahash_map::AHashMap;
-use async_trait::async_trait;
+use crate::tracker::types::peer_map::PeerMap;
 use futures_util::TryStreamExt;
 use log::{
     error,
     info,
     warn
 };
-use sha1::{
-    Digest,
-    Sha1
-};
 use sqlx::sqlite::{
     SqliteConnectOptions,
-    SqlitePoolOptions
+    SqlitePoolOptions,
+    SqliteRow
 };
 use sqlx::{
     ConnectOptions,
@@ -52,6 +49,12 @@ use std::time::Duration;
 
 const ENGINE: DatabaseDrivers = DatabaseDrivers::sqlite3;
 const LOG_PREFIX: &str = "[SQLite]";
+
+/// Reads an INTEGER column as `u64`, with NULL and negative values read as 0. SQLite stores every
+/// integer as 64-bit, so decoding into anything narrower aborts the boot load once a value outgrows it.
+fn get_u64(row: &SqliteRow, column: &str) -> u64 {
+    u64::try_from(row.get::<Option<i64>, _>(column).unwrap_or(0)).unwrap_or(0)
+}
 
 impl DatabaseConnectorSQLite {
     /// Opens an SQLite 3 connection pool from the DSN, creating the database file when
@@ -83,9 +86,9 @@ impl DatabaseConnectorSQLite {
             DatabaseConnectorSQLite::create(config.database.clone().path.as_str()).await;
         if let Err(sqlite_connect) = sqlite_connect {
             error!(
-                "{} Unable to connect to SQLite on DSL {}",
+                "{} Unable to connect to SQLite on DSN {}",
                 LOG_PREFIX,
-                config.database.clone().path
+                redact_dsn(&config.database.path)
             );
             error!("{LOG_PREFIX} Message: {sqlite_connect}");
             exit(1);
@@ -206,22 +209,22 @@ impl DatabaseConnectorSQLite {
                 let info_hash: [u8; 20] =
                     <[u8; 20]>::try_from(&hex::decode(info_hash_data).unwrap()[0..20])
                         .unwrap();
-                let completed_count: u32 = result.get::<Option<u32>, _>(structure.column_completed.as_str()).unwrap_or(0);
+                let completed_count = get_u64(&result, structure.column_completed.as_str());
                 tracker.add_torrent(
                     InfoHash(info_hash),
                     TorrentEntry {
-                        seeds: AHashMap::default(),
-                        seeds_ipv6: AHashMap::default(),
-                        peers: AHashMap::default(),
-                        peers_ipv6: AHashMap::default(),
-                        rtc_seeds: AHashMap::default(),
-                        rtc_peers: AHashMap::default(),
-                        completed: u64::from(completed_count),
+                        seeds: PeerMap::default(),
+                        seeds_ipv6: PeerMap::default(),
+                        peers: PeerMap::default(),
+                        peers_ipv6: PeerMap::default(),
+                        rtc_seeds: PeerMap::default(),
+                        rtc_peers: PeerMap::default(),
+                        completed: completed_count,
                         updated: std::time::Instant::now(),
                     },
                 );
                 torrents += 1;
-                completed += u64::from(completed_count);
+                completed += completed_count;
             }
             start += length;
             if torrents < start {
@@ -691,16 +694,13 @@ impl DatabaseConnectorSQLite {
             let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
                 fetched += 1;
+                // The API's derivation, so a user loaded from the database and the same user
+                // posted over the API land on the same key.
                 let hash = if is_uuid {
                     let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
-                    let mut hasher = Sha1::new();
-                    hasher.update(uuid_data);
-                    <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
+                    hash_id(&String::from_utf8_lossy(uuid_data))
                 } else {
-                    let id_data: &[u8] = result.get(structure.column_id.as_str());
-                    let mut hasher = Sha1::new();
-                    hasher.update(id_data);
-                    <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
+                    hash_id(&get_u64(&result, structure.column_id.as_str()).to_string())
                 };
                 // A malformed key column would otherwise abort the process at boot; skip the row
                 // and let the operator see which user is broken.
@@ -715,17 +715,17 @@ impl DatabaseConnectorSQLite {
                         user_id: if is_uuid {
                             None
                         } else {
-                            Some(u64::from(result.get::<u32, &str>(structure.column_id.as_str())))
+                            Some(get_u64(&result, structure.column_id.as_str()))
                         },
                         user_uuid: if is_uuid {
                             Some(result.get(structure.column_uuid.as_str()))
                         } else {
                             None
                         },
-                        uploaded: u64::from(result.get::<u32, &str>(structure.column_uploaded.as_str())),
-                        downloaded: u64::from(result.get::<u32, &str>(structure.column_downloaded.as_str())),
-                        completed: u64::from(result.get::<u32, &str>(structure.column_completed.as_str())),
-                        updated: u64::from(result.get::<u32, &str>(structure.column_updated.as_str())),
+                        uploaded: get_u64(&result, structure.column_uploaded.as_str()),
+                        downloaded: get_u64(&result, structure.column_downloaded.as_str()),
+                        completed: get_u64(&result, structure.column_completed.as_str()),
+                        updated: get_u64(&result, structure.column_updated.as_str()),
                         active: result.get::<i8, &str>(structure.column_active.as_str()) as u8,
                         torrents_active: Default::default(),
                     },
@@ -938,72 +938,5 @@ impl DatabaseConnectorSQLite {
                 Err(e)
             }
         }
-    }
-}
-
-#[async_trait]
-impl DatabaseBackend for DatabaseConnectorSQLite {
-    async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error> {
-        DatabaseConnectorSQLite::load_torrents(self, tracker).await
-    }
-
-    async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
-        DatabaseConnectorSQLite::load_whitelist(self, tracker).await
-    }
-
-    async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
-        DatabaseConnectorSQLite::load_blacklist(self, tracker).await
-    }
-
-    async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
-        DatabaseConnectorSQLite::load_keys(self, tracker).await
-    }
-
-    async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
-        DatabaseConnectorSQLite::load_users(self, tracker).await
-    }
-
-    async fn save_torrents(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
-    ) -> Result<(), Error> {
-        DatabaseConnectorSQLite::save_torrents(self, tracker, torrents).await
-    }
-
-    async fn save_whitelist(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        whitelists: Vec<(InfoHash, UpdatesAction)>,
-    ) -> Result<u64, Error> {
-        DatabaseConnectorSQLite::save_whitelist(self, tracker, whitelists).await
-    }
-
-    async fn save_blacklist(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        blacklists: Vec<(InfoHash, UpdatesAction)>,
-    ) -> Result<u64, Error> {
-        DatabaseConnectorSQLite::save_blacklist(self, tracker, blacklists).await
-    }
-
-    async fn save_keys(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        keys: BTreeMap<InfoHash, (i64, UpdatesAction)>,
-    ) -> Result<u64, Error> {
-        DatabaseConnectorSQLite::save_keys(self, tracker, keys).await
-    }
-
-    async fn save_users(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>,
-    ) -> Result<(), Error> {
-        DatabaseConnectorSQLite::save_users(self, tracker, users).await
-    }
-
-    async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error> {
-        DatabaseConnectorSQLite::reset_seeds_peers(self, tracker).await
     }
 }

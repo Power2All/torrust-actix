@@ -5,11 +5,15 @@ on:
     branches:
       - master
 
+# Read-only by default: build steps run every dependency's build script, and none of them should
+# hold a token that can push. Only the release job gets write access.
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
+  # Pinned and checksum-verified below, since it rewrites the release binaries.
+  UPX_VERSION: "5.2.1"
 
 jobs:
   get_version:
@@ -17,28 +21,21 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
-      upx_version: ${{ steps.get_upx_version.outputs.upx_version }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Get version from Cargo.toml
         id: get_version
         shell: bash
         run: |
           VERSION="v$(grep "^version = " Cargo.toml | head -1 | awk '{print $3}' | tr -d '"')"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
-
-      - name: Get latest UPX version
-        id: get_upx_version
-        run: |
-          UPX_VERSION=$(curl -s https://api.github.com/repos/upx/upx/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "upx_version=$UPX_VERSION" >> $GITHUB_OUTPUT
-          echo "Latest UPX version: $UPX_VERSION"
 
   build:
     name: Build on ${{ matrix.os }}
@@ -55,6 +52,7 @@ jobs:
             strip_command: strip
             upx_base_url: https://github.com/upx/upx/releases/download
             upx_file: amd64_linux.tar.xz
+            upx_sha256: 402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657
           - os: macos-latest
             binary_ext: .bin
             binary_name: macos
@@ -65,13 +63,18 @@ jobs:
             strip_command: strip
             upx_base_url: https://github.com/upx/upx/releases/download
             upx_file: win64.zip
+            upx_sha256: eabc6792a347d45e945be7748423e7868fd01b0d2bcaa2f4b1031fd71ff69bda
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
       - name: Test project
         run: cargo test --all-features --verbose
@@ -91,27 +94,31 @@ jobs:
       - name: Download and install UPX (Linux/Windows)
         if: matrix.upx_base_url != ''
         shell: bash
+        env:
+          UPX_BASE_URL: ${{ matrix.upx_base_url }}
+          UPX_FILE: ${{ matrix.upx_file }}
+          UPX_SHA256: ${{ matrix.upx_sha256 }}
         run: |
-          UPX_VERSION="${{ needs.get_version.outputs.upx_version }}"
-          UPX_VERSION_NOV="${UPX_VERSION#v}"
-          UPX_URL="${{ matrix.upx_base_url }}/$UPX_VERSION/upx-$UPX_VERSION_NOV-${{ matrix.upx_file }}"
+          UPX_URL="$UPX_BASE_URL/v$UPX_VERSION/upx-$UPX_VERSION-$UPX_FILE"
           echo "Downloading UPX from: $UPX_URL"
-          if [ "${{ runner.os }}" = "Windows" ]; then
+          if [ "$RUNNER_OS" = "Windows" ]; then
             mkdir -p upx-temp
             cd upx-temp
-            curl -L "$UPX_URL" -o upx.zip
+            curl -fL "$UPX_URL" -o upx.zip
+            echo "$UPX_SHA256  upx.zip" | sha256sum -c -
             unzip upx.zip
             cp upx-*/upx.exe ../upx.exe
             cd ..
             rm -rf upx-temp
           else
             cd /tmp
-            curl -L "$UPX_URL" -o upx.tar.xz
+            curl -fL "$UPX_URL" -o upx.tar.xz
+            echo "$UPX_SHA256  upx.tar.xz" | sha256sum -c -
             tar xf upx.tar.xz
-            UPX_DIR=$(ls -d upx* | head -1)
+            UPX_DIR="upx-$UPX_VERSION-${UPX_FILE%%.*}"
             cd "$UPX_DIR"
             chmod +x upx
-            pwd >> $GITHUB_PATH
+            pwd >> "$GITHUB_PATH"
           fi
 
       - name: Build UPX from source (macOS)
@@ -120,11 +127,12 @@ jobs:
           cd /tmp
           git clone --recursive https://github.com/upx/upx.git
           cd upx
-          git checkout $(git describe --tags --abbrev=0)
+          # The commit behind tag v$UPX_VERSION: a tag can be moved, a commit cannot.
+          git -c advice.detachedHead=false checkout b4bdabf638ab6e3715a292182a9c613a4716d7c5
           git submodule update --init --recursive
           make all
           chmod +x build/release/upx
-          echo "/tmp/upx/build/release" >> $GITHUB_PATH
+          echo "/tmp/upx/build/release" >> "$GITHUB_PATH"
 
       - name: Compress binary with UPX
         shell: bash
@@ -148,7 +156,7 @@ jobs:
           fi
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: torrust-actix-${{ matrix.binary_name }}${{ matrix.binary_ext }}
           path: torrust-actix-*${{ matrix.binary_ext }}
@@ -157,15 +165,17 @@ jobs:
     name: Create Draft Release
     needs: [get_version, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: ./artifacts
 
       - name: Create Draft Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ needs.get_version.outputs.version }}
           name: Release ${{ needs.get_version.outputs.version }}

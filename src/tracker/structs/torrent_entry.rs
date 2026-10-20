@@ -1,6 +1,4 @@
-use crate::tracker::structs::peer_id::PeerId;
-use crate::tracker::structs::torrent_peer::TorrentPeer;
-use crate::tracker::types::ahash_map::AHashMap;
+use crate::tracker::types::peer_map::PeerMap;
 use serde::Serialize;
 use std::time::Instant;
 
@@ -20,22 +18,22 @@ use std::time::Instant;
 pub struct TorrentEntry {
     /// IPv4 seeders (peers with `left == 0`).
     #[serde(skip_serializing)]
-    pub seeds: AHashMap<PeerId, TorrentPeer>,
+    pub seeds: PeerMap,
     /// IPv6 seeders.
     #[serde(skip_serializing)]
-    pub seeds_ipv6: AHashMap<PeerId, TorrentPeer>,
+    pub seeds_ipv6: PeerMap,
     /// IPv4 leechers (peers still downloading).
     #[serde(skip_serializing)]
-    pub peers: AHashMap<PeerId, TorrentPeer>,
+    pub peers: PeerMap,
     /// IPv6 leechers.
     #[serde(skip_serializing)]
-    pub peers_ipv6: AHashMap<PeerId, TorrentPeer>,
+    pub peers_ipv6: PeerMap,
     /// WebRTC seeders.
     #[serde(skip_serializing)]
-    pub rtc_seeds: AHashMap<PeerId, TorrentPeer>,
+    pub rtc_seeds: PeerMap,
     /// WebRTC leechers.
     #[serde(skip_serializing)]
-    pub rtc_peers: AHashMap<PeerId, TorrentPeer>,
+    pub rtc_peers: PeerMap,
     /// Total number of times this torrent has been fully downloaded.
     pub completed: u64,
     /// Monotonic timestamp of the last announce that modified this entry.

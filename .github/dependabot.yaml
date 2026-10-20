@@ -4,7 +4,6 @@ updates:
     directory: /
     schedule:
       interval: daily
-    target-branch: "develop"
     labels:
       - "Continuous Integration"
       - "Dependencies"
@@ -13,7 +12,6 @@ updates:
     directory: /
     schedule:
       interval: daily
-    target-branch: "develop"
     labels:
       - "Build | Project System"
       - "Dependencies"

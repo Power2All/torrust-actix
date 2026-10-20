@@ -1,73 +1,21 @@
 use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector_memcache::CacheConnectorMemcache;
 use crate::cache::structs::torrent_peer_counts::TorrentPeerCounts;
-use crate::cache::traits::cache_backend::CacheBackend;
 use crate::tracker::structs::info_hash::InfoHash;
-use async_trait::async_trait;
 use log::debug;
 
-#[async_trait]
-impl CacheBackend for CacheConnectorMemcache {
-    async fn ping(&self) -> Result<(), CacheError> {
+impl CacheConnectorMemcache {
+    /// Deletes torrents' keys; memcache has no multi-key delete, so one at a time.
+    pub async fn delete_torrents(&self, info_hashes: &[InfoHash]) -> Result<(), CacheError> {
         let client = self.client.lock();
-        client.version()
-            .map_err(CacheError::MemcacheError)?;
-        Ok(())
-    }
-
-    async fn set_torrent_peers(
-        &self,
-        info_hash: &InfoHash,
-        counts: &TorrentPeerCounts,
-        ttl: Option<u64>,
-    ) -> Result<(), CacheError> {
-        let client = self.client.lock();
-        let key = self.torrent_key(info_hash);
-        let value = if self.split_peers {
-            Self::serialize_split(counts)
-        } else {
-            Self::serialize_aggregated(counts.total_seeds(), counts.total_peers(), counts.completed)
-        };
-        let expiration = ttl.unwrap_or(0) as u32;
-        client.set(&key, value.as_str(), expiration)
-            .map_err(CacheError::MemcacheError)?;
-        debug!("[Memcache] Set torrent {info_hash} counts={counts:?}");
-        Ok(())
-    }
-
-    async fn get_torrent_peers(
-        &self,
-        info_hash: &InfoHash,
-    ) -> Result<Option<TorrentPeerCounts>, CacheError> {
-        let client = self.client.lock();
-        let key = self.torrent_key(info_hash);
-        match client.get::<String>(&key) {
-            Ok(Some(value)) => {
-                if self.split_peers {
-                    Ok(Self::deserialize_split(&value))
-                } else {
-                    Ok(Self::deserialize_aggregated(&value).map(|(s, p, c)| TorrentPeerCounts {
-                        bt_seeds_ipv4: s,
-                        bt_peers_ipv4: p,
-                        completed: c,
-                        ..Default::default()
-                    }))
-                }
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(CacheError::MemcacheError(e)),
+        for info_hash in info_hashes {
+            let _ = client.delete(&self.torrent_key(info_hash));
         }
-    }
-
-    async fn delete_torrent(&self, info_hash: &InfoHash) -> Result<(), CacheError> {
-        let client = self.client.lock();
-        let key = self.torrent_key(info_hash);
-        let _ = client.delete(&key);
-        debug!("[Memcache] Deleted torrent {info_hash}");
+        debug!("[Memcache] Deleted {} torrents", info_hashes.len());
         Ok(())
     }
 
-    async fn set_torrent_peers_batch(
+    pub async fn set_torrent_peers_batch(
         &self,
         data: &[(InfoHash, TorrentPeerCounts)],
         ttl: Option<u64>,

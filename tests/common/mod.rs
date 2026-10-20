@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 use rand::RngExt;
 use std::sync::Arc;
-use tempfile::TempDir;
 use torrust_actix::config::structs::api_trackers_config::ApiTrackersConfig;
 use torrust_actix::config::structs::configuration::Configuration;
 use torrust_actix::config::structs::http_trackers_config::HttpTrackersConfig;
@@ -34,7 +33,6 @@ pub fn create_test_http_config_with_rtctorrent(rtctorrent: bool) -> Arc<HttpTrac
         real_ip: String::new(),
         trusted_proxies: false,
         trusted_proxy_ips: Vec::new(),
-        trusted_proxy_addrs: Vec::new(),
         keep_alive: 5,
         request_timeout: 10,
         disconnect_timeout: 5,
@@ -54,7 +52,6 @@ pub fn create_test_api_config() -> Arc<ApiTrackersConfig> {
         real_ip: String::new(),
         trusted_proxies: false,
         trusted_proxy_ips: Vec::new(),
-        trusted_proxy_addrs: Vec::new(),
         keep_alive: 5,
         request_timeout: 10,
         disconnect_timeout: 5,
@@ -69,10 +66,6 @@ pub fn create_test_api_config() -> Arc<ApiTrackersConfig> {
 pub async fn create_test_tracker() -> TestTracker {
     let config: TestConfig = create_test_config().await;
     Arc::new(TorrentTracker::new(config, false).await)
-}
-
-pub fn create_temp_dir() -> TempDir {
-    tempfile::tempdir().expect("Failed to create temp directory")
 }
 
 pub fn random_info_hash() -> torrust_actix::tracker::structs::info_hash::InfoHash {
@@ -103,6 +96,7 @@ pub fn create_test_peer(
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(1000),
         event: torrust_actix::tracker::enums::announce_event::AnnounceEvent::Started,
+        key: None,
         rtc_data: None,
     }
 }
@@ -126,6 +120,7 @@ pub fn create_rtc_peer(
         downloaded: NumberOfBytes(0),
         left: NumberOfBytes(left),
         event: torrust_actix::tracker::enums::announce_event::AnnounceEvent::Started,
+        key: None,
         rtc_data: Some(Box::new(RtcData {
             sdp_offer: sdp_offer.as_deref().map(CompressedBytes::compress),
             sdp_answer: None,

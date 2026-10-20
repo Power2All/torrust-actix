@@ -1,15 +1,7 @@
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use chrono::{
-    TimeZone,
-    Utc
-};
-use log::{
-    error,
-    info
-};
+use log::info;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -27,32 +19,30 @@ impl TorrentTracker {
         }
     }
 
-    /// Persists the given batch of announce keys (and their add/remove actions) to the database.
+    /// Converts a relative `timeout` in seconds into the absolute expiry stored for a key:
+    /// `0` stays `0` (never expires), anything else is that far from now, saturating rather
+    /// than wrapping.
     ///
-    /// # Errors
-    ///
-    /// Returns `Err(())` when the database write fails; the caller re-queues the batch.
-    pub async fn save_keys(&self, tracker: Arc<TorrentTracker>, keys: BTreeMap<InfoHash, (i64, UpdatesAction)>) -> Result<(), ()>
+    /// The in-memory entry and the queued database update must both carry this value: the
+    /// database load reads it back as absolute through [`TorrentTracker::add_key_absolute`].
+    pub fn key_expiry(timeout: u64) -> i64
     {
-        if let Ok(keys_count) = self.sqlx.save_keys(tracker, keys).await {
-            info!("[SYNC KEYS] Synced {keys_count} keys");
-            Ok(())
-        } else {
-            error!("[SYNC KEYS] Unable to sync keys");
-            Err(())
+        if timeout == 0 {
+            return 0;
         }
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        i64::try_from(now.saturating_add(timeout)).unwrap_or(i64::MAX)
     }
 
-    /// Adds an announce key expiring `timeout` seconds from now.
+    /// Adds an announce key expiring `timeout` seconds from now (`0` = never).
     ///
     /// Use [`TorrentTracker::add_key_absolute`] when the expiry is already an absolute
     /// timestamp, such as a value read back from the database.
     ///
     /// Returns `true` when the key was newly inserted, `false` when it was refreshed.
-    pub fn add_key(&self, hash: InfoHash, timeout: i64) -> bool
+    pub fn add_key(&self, hash: InfoHash, timeout: u64) -> bool
     {
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        self.add_key_absolute(hash, timestamp.as_secs() as i64 + timeout)
+        self.add_key_absolute(hash, Self::key_expiry(timeout))
     }
 
     /// Adds an announce key with an absolute expiry timestamp, stored verbatim.
@@ -108,15 +98,8 @@ impl TorrentTracker {
     pub fn check_key(&self, hash: InfoHash) -> bool
     {
         let lock = self.keys.read_recursive();
-        lock.get(&hash).is_some_and(|&key| {
-            if key == 0 {
-                return true;
-            }
-            let key_time = Utc.timestamp_opt(key, 0)
-                .single()
-                .map_or(UNIX_EPOCH, SystemTime::from);
-            key_time > SystemTime::now()
-        })
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        lock.get(&hash).is_some_and(|&key| key == 0 || u64::try_from(key).is_ok_and(|key| key > now))
     }
 
     /// Removes all announce keys and resets the key counter statistic.
@@ -134,7 +117,7 @@ impl TorrentTracker {
     /// Runs periodically from the key-cleanup task.
     pub fn clean_keys(&self)
     {
-        let now = SystemTime::now();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let mut keys_to_remove = Vec::new();
         {
             let lock = self.keys.read_recursive();
@@ -142,10 +125,7 @@ impl TorrentTracker {
                 if key_time == 0 {
                     continue;
                 }
-                let time = Utc.timestamp_opt(key_time, 0)
-                    .single()
-                    .map_or(UNIX_EPOCH, SystemTime::from);
-                if time <= now {
+                if !u64::try_from(key_time).is_ok_and(|key_time| key_time > now) {
                     keys_to_remove.push(hash);
                 }
             }

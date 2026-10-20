@@ -9,13 +9,16 @@ use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_peer::TorrentPeer;
 use crate::tracker::structs::torrent_peers::TorrentPeers;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use crate::tracker::types::ahash_map::AHashMap;
+use crate::tracker::types::peer_map::PeerMap;
 use log::{
     debug,
     info
 };
 use std::collections::hash_map::Entry;
-use std::net::SocketAddr;
+use std::net::{
+    IpAddr,
+    SocketAddr
+};
 
 /// How many entries to sample when choosing an eviction victim.
 const EVICTION_SAMPLE: usize = 8;
@@ -30,7 +33,7 @@ const EVICTION_SAMPLE: usize = 8;
 /// exactly the path a flood of made-up peer ids drives. Expiry is the cleanup task's job; this
 /// is only a safety valve. If eviction accuracy matters, add an updated-ordered index.
 #[inline]
-fn enforce_peer_cap(map: &mut AHashMap<PeerId, TorrentPeer>, peer_id: PeerId, cap: usize) -> i64 {
+fn enforce_peer_cap(map: &mut PeerMap, peer_id: PeerId, cap: usize) -> i64 {
     if cap == 0 || map.len() < cap || map.contains_key(&peer_id) {
         return 0;
     }
@@ -45,7 +48,7 @@ fn enforce_peer_cap(map: &mut AHashMap<PeerId, TorrentPeer>, peer_id: PeerId, ca
         let Some(victim) = victim else {
             break;
         };
-        map.remove(&victim);
+        map.swap_remove(&victim);
         evicted += 1;
     }
     evicted
@@ -91,10 +94,10 @@ impl TorrentTracker {
     {
         self.get_torrent(info_hash).map(|data| {
             let mut returned_data = TorrentPeers {
-                seeds_ipv4: AHashMap::default(),
-                seeds_ipv6: AHashMap::default(),
-                peers_ipv4: AHashMap::default(),
-                peers_ipv6: AHashMap::default()
+                seeds_ipv4: PeerMap::default(),
+                seeds_ipv6: PeerMap::default(),
+                peers_ipv4: PeerMap::default(),
+                peers_ipv6: PeerMap::default()
             };
             match ip_type {
                 TorrentPeersType::All => {
@@ -119,7 +122,7 @@ impl TorrentTracker {
     /// Copies up to `amount` peers out of a peer map, filtered by IP family and excluding
     /// `self_peer_id`. An `amount` of 0 means unlimited.
     #[inline]
-    pub fn get_peers(&self, peers: &AHashMap<PeerId, TorrentPeer>, type_ip: TorrentPeersType, self_peer_id: Option<PeerId>, amount: usize) -> AHashMap<PeerId, TorrentPeer>
+    pub fn get_peers(&self, peers: &PeerMap, type_ip: TorrentPeersType, self_peer_id: Option<PeerId>, amount: usize) -> PeerMap
     {
         let should_include = |peer_id: &PeerId, peer_addr: &SocketAddr| -> bool {
             let ip_type_match = match type_ip {
@@ -129,7 +132,7 @@ impl TorrentTracker {
             };
             ip_type_match && self_peer_id.is_none_or(|id| id != *peer_id)
         };
-        let mut result = AHashMap::default();
+        let mut result = PeerMap::default();
         result.reserve(amount.min(peers.len()));
         for (peer_id, torrent_peer) in peers {
             if amount != 0 && result.len() >= amount {
@@ -167,12 +170,12 @@ impl TorrentTracker {
                     return None;
                 }
                 let mut torrent_entry = TorrentEntry {
-                    seeds: AHashMap::default(),
-                    seeds_ipv6: AHashMap::default(),
-                    peers: AHashMap::default(),
-                    peers_ipv6: AHashMap::default(),
-                    rtc_seeds: AHashMap::default(),
-                    rtc_peers: AHashMap::default(),
+                    seeds: PeerMap::default(),
+                    seeds_ipv6: PeerMap::default(),
+                    peers: PeerMap::default(),
+                    peers_ipv6: PeerMap::default(),
+                    rtc_seeds: PeerMap::default(),
+                    rtc_peers: PeerMap::default(),
                     completed: 0,
                     updated: std::time::Instant::now()
                 };
@@ -209,22 +212,33 @@ impl TorrentTracker {
             }
             Entry::Occupied(mut o) => {
                 let entry = o.get_mut();
+                // Another client reusing this peer id leaves the stored peer alone, and still gets
+                // its peer list; see `TorrentPeer::is_same_client`. A stored peer that has missed two
+                // announce intervals is no longer defended: a live client re-announces every interval,
+                // so none can be taken over, while a client without a `key` that changed address gets
+                // through on its second announce from there instead of waiting out the peer timeout.
+                let stale_after = std::time::Duration::from_secs(self.config.tracker_config.request_interval.saturating_mul(2));
+                if find_peer(entry, &peer_id).is_some_and(|stored| {
+                    !stored.is_same_client(torrent_peer.peer_addr.ip(), torrent_peer.key) && stored.updated.elapsed() <= stale_after
+                }) {
+                    return Some(AnnounceEntry::from_entry(entry, SnapshotMaps::Bt));
+                }
                 // Both families are cleared regardless of the address this announce arrived on:
                 // a peer that switches between IPv4 and IPv6 would otherwise stay in the map it
                 // left, counted twice and served to clients at a stale address. `remove_torrent_peer`
                 // already sweeps both, and the completion check below reads `seeds_removed` to
                 // decide whether this peer was already seeding.
-                let seeds_removed = i64::from(entry.seeds.remove(&peer_id).is_some())
-                    + i64::from(entry.seeds_ipv6.remove(&peer_id).is_some());
-                let peers_removed = i64::from(entry.peers.remove(&peer_id).is_some())
-                    + i64::from(entry.peers_ipv6.remove(&peer_id).is_some());
+                let seeds_removed = i64::from(entry.seeds.swap_remove(&peer_id).is_some())
+                    + i64::from(entry.seeds_ipv6.swap_remove(&peer_id).is_some());
+                let peers_removed = i64::from(entry.peers.swap_remove(&peer_id).is_some())
+                    + i64::from(entry.peers_ipv6.swap_remove(&peer_id).is_some());
                 let old_rtc_pending_answers = entry.rtc_seeds.get(&peer_id)
                     .or_else(|| entry.rtc_peers.get(&peer_id))
                     .and_then(|p| p.rtc_data.as_ref())
                     .map(|rtc| rtc.pending_answers.clone())
                     .unwrap_or_default();
-                let was_rtc_seed = entry.rtc_seeds.remove(&peer_id).is_some();
-                let was_rtc_peer = entry.rtc_peers.remove(&peer_id).is_some();
+                let was_rtc_seed = entry.rtc_seeds.swap_remove(&peer_id).is_some();
+                let was_rtc_peer = entry.rtc_peers.swap_remove(&peer_id).is_some();
                 if seeds_removed > 0 {
                     self.update_stats(StatsEvent::Seeds, -seeds_removed);
                 }
@@ -283,7 +297,11 @@ impl TorrentTracker {
     /// when the torrent entry was found, and `remaining` is a snapshot of the torrent after
     /// removal (or `None` when the torrent itself was removed because it became empty and is
     /// not persistent).
-    pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool) -> (bool, Option<AnnounceEntry>)
+    ///
+    /// `requester` is the IP and announce key of a client's `stopped`; the peer is then only removed
+    /// when that client is the one stored (`TorrentPeer::is_same_client`). `None` removes it
+    /// unconditionally, for the tracker's own cleanup.
+    pub fn remove_torrent_peer(&self, info_hash: InfoHash, peer_id: PeerId, persistent: bool, cleanup: bool, requester: Option<(IpAddr, Option<u32>)>) -> (bool, Option<AnnounceEntry>)
     {
         if !self.torrents_sharding.contains_peer(info_hash, peer_id) {
             return (false, None);
@@ -297,12 +315,16 @@ impl TorrentTracker {
                     info!("[PEERS] Removing from torrent {info_hash} peer {peer_id}");
                 }
                 let entry = o.get_mut();
-                let seeds_removed = i64::from(entry.seeds.remove(&peer_id).is_some())
-                    + i64::from(entry.seeds_ipv6.remove(&peer_id).is_some());
-                let peers_removed = i64::from(entry.peers.remove(&peer_id).is_some())
-                    + i64::from(entry.peers_ipv6.remove(&peer_id).is_some());
-                let was_rtc_seed = entry.rtc_seeds.remove(&peer_id).is_some();
-                let was_rtc_peer = entry.rtc_peers.remove(&peer_id).is_some();
+                if let Some((ip, key)) = requester
+                    && find_peer(entry, &peer_id).is_some_and(|stored| !stored.is_same_client(ip, key)) {
+                    return (false, None);
+                }
+                let seeds_removed = i64::from(entry.seeds.swap_remove(&peer_id).is_some())
+                    + i64::from(entry.seeds_ipv6.swap_remove(&peer_id).is_some());
+                let peers_removed = i64::from(entry.peers.swap_remove(&peer_id).is_some())
+                    + i64::from(entry.peers_ipv6.swap_remove(&peer_id).is_some());
+                let was_rtc_seed = entry.rtc_seeds.swap_remove(&peer_id).is_some();
+                let was_rtc_peer = entry.rtc_peers.swap_remove(&peer_id).is_some();
                 if seeds_removed > 0 {
                     self.update_stats(StatsEvent::Seeds, -seeds_removed);
                 }
@@ -325,4 +347,11 @@ impl TorrentTracker {
             }
         }
     }
+}
+
+/// The stored entry for `peer_id`, in whichever of the six maps holds it.
+fn find_peer<'a>(entry: &'a TorrentEntry, peer_id: &PeerId) -> Option<&'a TorrentPeer> {
+    [&entry.seeds, &entry.seeds_ipv6, &entry.peers, &entry.peers_ipv6, &entry.rtc_seeds, &entry.rtc_peers]
+        .into_iter()
+        .find_map(|map| map.get(peer_id))
 }

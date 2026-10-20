@@ -14,16 +14,17 @@ impl CacheConnector {
     /// Returns a [`CacheError`] when the backend cannot be initialised.
     pub async fn new(config: &CacheConfig) -> Result<CacheConnector, CacheError> {
         let transaction = crate::utils::sentry_tracing::start_trace_transaction("cache_init", "cache");
-        let connection_url = format!("{}{}", config.engine.url_scheme(), config.address);
+        let connection_url = config.engine.connection_url(&config.address);
+        let logged_url = crate::database::database::redact_dsn(&connection_url);
         let result: Result<CacheConnector, CacheError> = match config.engine {
             CacheEngine::redis => {
                 let redis_connector = CacheConnectorRedis::connect(&connection_url, &config.prefix, config.split_peers).await?;
-                info!("[Cache] Connected to Redis at {} (split_peers={})", config.address, config.split_peers);
+                info!("[Cache] Connected to Redis at {logged_url} (split_peers={})", config.split_peers);
                 Ok(CacheConnector::Redis(redis_connector))
             }
             CacheEngine::memcache => {
                 let memcache_connector = CacheConnectorMemcache::connect(&connection_url, &config.prefix, config.split_peers)?;
-                info!("[Cache] Connected to Memcache at {} (split_peers={})", config.address, config.split_peers);
+                info!("[Cache] Connected to Memcache at {logged_url} (split_peers={})", config.split_peers);
                 Ok(CacheConnector::Memcache(memcache_connector))
             }
         };
@@ -33,7 +34,7 @@ impl CacheConnector {
                 Err(e) => txn.set_tag("result", format!("error: {e:?}")),
             }
             txn.set_tag("engine", format!("{:?}", config.engine));
-            txn.set_tag("address", config.address.clone());
+            txn.set_tag("address", logged_url);
             txn.finish();
         }
         result

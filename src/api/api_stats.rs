@@ -1,7 +1,4 @@
-use crate::api::api::{
-    api_service_token,
-    api_validation
-};
+use crate::api::api::api_guard;
 use crate::api::structs::api_service_data::ApiServiceData;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
@@ -14,16 +11,14 @@ use std::sync::Arc;
 /// `GET /stats` — returns all tracker statistics as JSON.
 pub async fn api_service_stats_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     HttpResponse::Ok().content_type(ContentType::json()).json(data.torrent_tracker.get_stats())
 }
 
 /// `GET /metrics` — returns tracker statistics in Prometheus text exposition format.
 pub async fn api_service_prom_get(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     let stats = data.torrent_tracker.get_stats();
     let prometheus_id = &data.torrent_tracker.config.tracker_config.prometheus_id;
     let mut string_output = String::with_capacity(4096);

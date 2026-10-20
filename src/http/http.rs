@@ -1,21 +1,15 @@
 use crate::common::common::parse_query;
-use crate::common::structs::custom_error::CustomError;
 use crate::config::enums::cluster_mode::ClusterMode;
 use crate::config::structs::http_trackers_config::HttpTrackersConfig;
 use crate::http::structs::http_service_data::HttpServiceData;
-use crate::http::types::{
-    HttpServiceQueryHashingMapErr,
-    HttpServiceQueryHashingMapOk
-};
-use crate::security::security::{
-    validate_info_hash_hex,
-    validate_peer_id_hex,
-    validate_remote_ip
-};
+use crate::security::security::validate_remote_ip;
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::info_hash::InfoHash;
+use crate::tracker::structs::announce_entry::AnnounceEntry;
+use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
+use crate::tracker::structs::response_peer::ResponsePeer;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 use crate::websocket::enums::protocol_type::ProtocolType;
@@ -33,6 +27,7 @@ use actix_web::web::{
 };
 use actix_web::{
     middleware::Compress,
+    middleware::Condition,
     web,
     App,
     HttpRequest,
@@ -44,7 +39,8 @@ use bip_bencode::{
     ben_int,
     ben_list,
     ben_map,
-    BMutAccess
+    BMutAccess,
+    BencodeMut
 };
 use log::{
     debug,
@@ -69,7 +65,6 @@ static ERR_MISSING_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure 
 static ERR_UNKNOWN_INFO_HASH: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown info_hash") }.encode());
 static ERR_FORBIDDEN_INFO_HASH: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("forbidden info_hash") }.encode());
 static ERR_UNKNOWN_REQUEST: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown request") }.encode());
-static ERR_UNABLE_DECODE_HEX: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unable to decode hex string") }.encode());
 static ERR_UNKNOWN_ORIGIN_IP: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown origin ip") }.encode());
 static ERR_INVALID_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("invalid key") }.encode());
 static ERR_UNKNOWN_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| ben_map!{ "failure reason" => ben_bytes!("unknown key") }.encode());
@@ -130,196 +125,94 @@ pub async fn http_service(
     http_server_object: HttpTrackersConfig,
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
-    let keep_alive = http_server_object.keep_alive;
-    let request_timeout = http_server_object.request_timeout;
-    let disconnect_timeout = http_server_object.disconnect_timeout;
-    let worker_threads = http_server_object.threads as usize;
-    let tls_connection_rate = data.config.tracker_config.tls_connection_rate as usize;
-    if http_server_object.ssl {
+    let tls_config = http_server_object.ssl.then(|| {
         info!("[HTTPS] Starting server listener with SSL on {addr}");
         if http_server_object.ssl_key.is_empty() || http_server_object.ssl_cert.is_empty() {
             error!("[HTTPS] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
         let server_id = ServerIdentifier::HttpTracker(addr.to_string());
-        if let Err(e) = data.certificate_store.load_certificate(
-            server_id.clone(),
-            &http_server_object.ssl_cert,
-            &http_server_object.ssl_key,
-        ) {
-            panic!("[HTTPS] Failed to load SSL certificate: {e}");
-        }
-        let resolver = match DynamicCertificateResolver::new(
-            Arc::clone(&data.certificate_store),
-            server_id,
-        ) {
-            Ok(resolver) => Arc::new(resolver),
-            Err(e) => panic!("[HTTPS] Failed to create certificate resolver: {e}"),
-        };
-        let tls_config = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_cert_resolver(resolver);
-        let service_data = Arc::new(HttpServiceData {
-            torrent_tracker: data.clone(),
-            http_trackers_config: Arc::new(http_server_object.clone())
-        });
-        let sentry_enabled = data.config.sentry_config.enabled;
-        let server = if sentry_enabled {
-            HttpServer::new(move || {
-                App::new()
-                    .wrap(Compress::default())
-                    .wrap(sentry_actix::Sentry::new())
-                    .wrap(http_service_cors())
-                    .configure(http_service_routes(service_data.clone()))
-            })
-                .keep_alive(Duration::from_secs(keep_alive))
-                .client_request_timeout(Duration::from_secs(request_timeout))
-                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                .workers(worker_threads)
-                .max_connection_rate(tls_connection_rate)
-                .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                .unwrap_or_else(|e| {
-                    error!("[HTTPS] Unable to bind to {addr}: {e}");
-                    exit(1);
-                })
-                .disable_signals()
-                .run()
-        } else {
-            HttpServer::new(move || {
-                App::new()
-                    .wrap(Compress::default())
-                    .wrap(http_service_cors())
-                    .configure(http_service_routes(service_data.clone()))
-            })
-                .keep_alive(Duration::from_secs(keep_alive))
-                .client_request_timeout(Duration::from_secs(request_timeout))
-                .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-                .workers(worker_threads)
-                .max_connection_rate(tls_connection_rate)
-                .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-                .unwrap_or_else(|e| {
-                    error!("[HTTPS] Unable to bind to {addr}: {e}");
-                    exit(1);
-                })
-                .disable_signals()
-                .run()
-        };
-        return (server.handle(), server);
+        DynamicCertificateResolver::server_config(&data.certificate_store, server_id, &http_server_object.ssl_cert, &http_server_object.ssl_key)
+            .unwrap_or_else(|e| panic!("[HTTPS] Failed to load SSL certificate: {e}"))
+    });
+    let tag = if tls_config.is_some() { "HTTPS" } else { "HTTP" };
+    if tls_config.is_none() {
+        info!("[HTTP] Starting server listener on {addr}");
     }
-    info!("[HTTP] Starting server listener on {addr}");
     let service_data = Arc::new(HttpServiceData {
         torrent_tracker: data.clone(),
         http_trackers_config: Arc::new(http_server_object.clone())
     });
     let sentry_enabled = data.config.sentry_config.enabled;
-    let server = if sentry_enabled {
-        HttpServer::new(move || {
-            App::new()
-                .wrap(Compress::default())
-                .wrap(sentry_actix::Sentry::new())
-                .wrap(http_service_cors())
-                .configure(http_service_routes(service_data.clone()))
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(Compress::default())
+            .wrap(Condition::new(sentry_enabled, sentry_actix::Sentry::new()))
+            .wrap(http_service_cors())
+            .configure(http_service_routes(service_data.clone()))
+    })
+        .keep_alive(Duration::from_secs(http_server_object.keep_alive))
+        .client_request_timeout(Duration::from_secs(http_server_object.request_timeout))
+        .client_disconnect_timeout(Duration::from_secs(http_server_object.disconnect_timeout))
+        .workers(http_server_object.threads as usize)
+        .max_connections(http_server_object.max_connections as usize);
+    let server = match tls_config {
+        Some(tls_config) => server
+            .max_connection_rate(data.config.tracker_config.tls_connection_rate as usize)
+            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config),
+        None => server.bind((addr.ip(), addr.port())),
+    }
+        .unwrap_or_else(|e| {
+            error!("[{tag}] Unable to bind to {addr}: {e}");
+            exit(1);
         })
-            .keep_alive(Duration::from_secs(keep_alive))
-            .client_request_timeout(Duration::from_secs(request_timeout))
-            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-            .workers(worker_threads)
-            .bind((addr.ip(), addr.port()))
-            .unwrap_or_else(|e| {
-                error!("[HTTP] Unable to bind to {addr}: {e}");
-                exit(1);
-            })
-            .disable_signals()
-            .run()
-    } else {
-        HttpServer::new(move || {
-            App::new()
-                .wrap(Compress::default())
-                .wrap(http_service_cors())
-                .configure(http_service_routes(service_data.clone()))
-        })
-            .keep_alive(Duration::from_secs(keep_alive))
-            .client_request_timeout(Duration::from_secs(request_timeout))
-            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-            .workers(worker_threads)
-            .bind((addr.ip(), addr.port()))
-            .unwrap_or_else(|e| {
-                error!("[HTTP] Unable to bind to {addr}: {e}");
-                exit(1);
-            })
-            .disable_signals()
-            .run()
-    };
+        .disable_signals()
+        .run();
     (server.handle(), server)
 }
 
 /// `GET /{key}/announce` — announce with an access key (and, when keys are disabled but
 /// users are enabled, a user key) in the path.
-///
-/// Validates the key before delegating to [`http_service_announce_handler`].
 pub async fn http_service_announce_key(request: HttpRequest, path: web::Path<String>, data: Data<Arc<HttpServiceData>>) -> HttpResponse
 {
-    let ip = match http_validate_ip(request.clone(), data.clone()).await {
-        Ok(ip) => {
-            http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
-            ip
-        },
-        Err(result) => { return result; }
-    };
-    let tracker_config = &data.torrent_tracker.config.tracker_config;
-    if tracker_config.keys_enabled {
-        let key = path.clone();
-        let key_check = http_service_check_key_validation(data.torrent_tracker.clone(), key).await;
-        if let Some(value) = key_check {
-            http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            return value;
-        }
-    }
-    if tracker_config.users_enabled && !tracker_config.keys_enabled {
-        let user_key = path.clone();
-        match http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key).await {
-            Ok(user_id) => {
-                return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(user_id), data.http_trackers_config.rtctorrent).await;
-            }
-            Err(response) => {
-                http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-                return response;
-            }
-        }
-    }
-    http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None, data.http_trackers_config.rtctorrent).await
+    let segment = path.into_inner();
+    // One path segment: the access key when keys are on, otherwise the user key.
+    let user_key = (!data.torrent_tracker.config.tracker_config.keys_enabled).then(|| segment.clone());
+    http_service_announce_with_keys(request, data, segment, user_key).await
 }
 
 /// `GET /{key}/{userkey}announce` — announce carrying both an access key and a user key.
-///
-/// Validates both before delegating to [`http_service_announce_handler`].
 pub async fn http_service_announce_userkey(request: HttpRequest, path: web::Path<(String, String)>, data: Data<Arc<HttpServiceData>>) -> HttpResponse
+{
+    let (key, user_key) = path.into_inner();
+    http_service_announce_with_keys(request, data, key, Some(user_key)).await
+}
+
+/// The keyed announce routes: checks `key` when keys are enabled and `user_key` when users are,
+/// then delegates to [`http_service_announce_handler`].
+async fn http_service_announce_with_keys(request: HttpRequest, data: Data<Arc<HttpServiceData>>, key: String, user_key: Option<String>) -> HttpResponse
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
-            http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
+            data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
             ip
         },
-        Err(result) => { return result; }
+        Err(result) => { return *result; }
     };
     let tracker_config = &data.torrent_tracker.config.tracker_config;
-    if tracker_config.keys_enabled {
-        let key = path.clone().0;
-        let key_check = http_service_check_key_validation(data.torrent_tracker.clone(), key).await;
-        if let Some(value) = key_check {
-            http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            return value;
-        }
+    if tracker_config.keys_enabled
+        && let Some(value) = http_service_check_key_validation(data.torrent_tracker.clone(), key).await {
+        data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+        return value;
     }
-    if tracker_config.users_enabled {
-        let user_key = path.clone().1;
+    if tracker_config.users_enabled && let Some(user_key) = user_key {
         match http_service_check_user_key_validation(data.torrent_tracker.clone(), user_key).await {
             Ok(user_id) => {
                 return http_service_announce_handler(request, ip, data.torrent_tracker.clone(), Some(user_id), data.http_trackers_config.rtctorrent).await;
             }
             Err(response) => {
-                http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-                return response;
+                data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                return *response;
             }
         }
     }
@@ -333,18 +226,67 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<HttpServ
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
-            http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
+            data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4AnnouncesHandled, StatsEvent::Tcp6AnnouncesHandled, 1);
             ip
         },
         Err(result) => {
-            return result;
+            return *result;
         }
     };
     if data.torrent_tracker.config.tracker_config.keys_enabled {
-        http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+        data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_MISSING_KEY.clone());
     }
     http_service_announce_handler(request, ip, data.torrent_tracker.clone(), None, data.http_trackers_config.rtctorrent).await
+}
+
+/// The peer list of a BitTorrent announce response for a client at `client_ip`: up to `numwant`
+/// peers of the client's address family, seeds first unless the client is a seed itself, never the
+/// client, as compact bytes or BEP 3 dictionaries. Returns the key to file it under (`peers` or
+/// `peers6`). Shared by direct announces and ones a cluster master answers for a slave.
+pub fn http_announce_peers(entry: &AnnounceEntry, announce: &AnnounceQueryRequest, client_ip: IpAddr) -> (&'static str, BencodeMut<'static>) {
+    let (seeds, peers, key) = if client_ip.is_ipv4() {
+        (&entry.seeds, &entry.peers, "peers")
+    } else {
+        (&entry.seeds_ipv6, &entry.peers_ipv6, "peers6")
+    };
+    let seeds: &[ResponsePeer] = if announce.left != 0 { seeds } else { &[] };
+    // Already clamped to 1..=72 by `validate_announce`, so it is safe to size buffers with.
+    let want = announce.numwant as usize;
+    let chosen = seeds.iter().chain(peers).filter(|peer| peer.peer_id != announce.peer_id).take(want);
+    if announce.compact {
+        let mut bytes = Vec::with_capacity(want * if client_ip.is_ipv4() { 6 } else { 18 });
+        for peer in chosen {
+            match peer.peer_addr.ip() {
+                IpAddr::V4(ip) => bytes.extend_from_slice(&ip.octets()),
+                IpAddr::V6(ip) => bytes.extend_from_slice(&ip.octets()),
+            }
+            bytes.extend_from_slice(&peer.peer_addr.port().to_be_bytes());
+        }
+        (key, ben_bytes!(bytes))
+    } else {
+        let mut list = ben_list!();
+        if let Some(entries) = list.list_mut() {
+            for peer in chosen {
+                entries.push(http_peer_dict(peer, announce.no_peer_id));
+            }
+        }
+        (key, list)
+    }
+}
+
+/// One entry of a dictionary (non-compact, BEP 3) peer list. `peer id` is the raw 20 bytes BEP 3
+/// specifies (it used to go out as 40 hex characters), and is left out when the client sent
+/// `no_peer_id`.
+pub fn http_peer_dict(peer: &ResponsePeer, no_peer_id: bool) -> BencodeMut<'static> {
+    let mut dict = ben_map! {
+        "ip" => ben_bytes!(peer.peer_addr.ip().to_string()),
+        "port" => ben_int!(i64::from(peer.peer_addr.port()))
+    };
+    if !no_peer_id && let Some(entries) = dict.dict_mut() {
+        entries.insert(std::borrow::Cow::Borrowed(b"peer id"), ben_bytes!(peer.peer_id.0.to_vec()));
+    }
+    dict
 }
 
 /// Core announce logic shared by all announce routes.
@@ -355,6 +297,40 @@ pub async fn http_service_announce(request: HttpRequest, data: Data<Arc<HttpServ
 /// strings, a dictionary peer list, or an RtcTorrent offer/answer exchange.
 pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>, user_key: Option<UserId>, rtctorrent_enabled: bool) -> HttpResponse
 {
+    // Every announce route ends up here. `/announce`, and `/{key}/announce` with keys enabled,
+    // arrive without a user key; with users enabled they must be refused, as UDP already does.
+    if data.config.tracker_config.users_enabled && user_key.is_none() {
+        data.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_USER_KEY.clone());
+    }
+    let query_map = match parse_query(Some(request.query_string())) {
+        Ok(result) => result,
+        Err(e) => {
+            data.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                "failure reason" => ben_bytes!(e.to_string())
+            }.encode());
+        }
+    };
+    let announce = data.validate_announce(ip, query_map).await;
+    let announce_unwrapped = match announce {
+        Ok(result) => { result }
+        Err(e) => {
+            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                "failure reason" => ben_bytes!(e.to_string())
+            }.encode());
+        }
+    };
+    let is_rtc_request = announce_unwrapped.rtctorrent.unwrap_or(false);
+    // Must precede `handle_announce`, which stores the client's SDP offer/answer, and forwarding.
+    if is_rtc_request && !rtctorrent_enabled {
+        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+            "failure reason" => ben_bytes!(b"rtctorrent not enabled" as &[u8])
+        }.encode());
+    }
+    // A slave forwards only after the checks above: the master never sees the listener's
+    // `rtctorrent` setting, and its websocket drops the whole cluster link on an oversized frame,
+    // which `parse_query`'s length cap now rules out.
     if data.config.tracker_config.cluster == ClusterMode::slave {
         let query_string = request.query_string().to_string();
         let protocol = if request.connection_info().scheme() == "https" {
@@ -377,36 +353,12 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
                     .body(response.payload);
             }
             Err(e) => {
-                http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                data.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
                 return HttpResponse::Ok()
                     .content_type(ContentType::plaintext())
                     .body(create_cluster_error_response(&e));
             }
         }
-    }
-    let query_map_result = parse_query(Some(request.query_string()));
-    let query_map = match http_service_query_hashing(query_map_result) {
-        Ok(result) => { result }
-        Err(err) => {
-            http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            return err;
-        }
-    };
-    let announce = data.validate_announce(ip, query_map).await;
-    let announce_unwrapped = match announce {
-        Ok(result) => { result }
-        Err(e) => {
-            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                "failure reason" => ben_bytes!(e.to_string())
-            }.encode());
-        }
-    };
-    let is_rtc_request = announce_unwrapped.rtctorrent.unwrap_or(false);
-    // Must precede `handle_announce`, which stores the client's SDP offer/answer.
-    if is_rtc_request && !rtctorrent_enabled {
-        return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-            "failure reason" => ben_bytes!(b"rtctorrent not enabled" as &[u8])
-        }.encode());
     }
     let tracker_config = &data.config.tracker_config;
     if tracker_config.whitelist_enabled && !data.check_whitelist(announce_unwrapped.info_hash) {
@@ -418,7 +370,7 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
     let torrent_entry = match data.handle_announce(&announce_unwrapped, user_key).await {
         Ok(result) => { result }
         Err(e) => {
-            http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            data.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
             return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "failure reason" => ben_bytes!(e.to_string())
             }.encode());
@@ -443,7 +395,10 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         let mut rtc_peers_list = ben_list!();
         {
             let rtc_peers_list_mut = rtc_peers_list.list_mut().unwrap();
+            // Capped by `numwant` (1..=72) like a BitTorrent peer list: up to 128 offers of up to
+            // 8 KiB each went out to every leecher, while the client dials at most 8 per round.
             for (peer_id, peer) in &torrent_entry.rtc_seeds {
+                if rtc_peers_list_mut.len() >= announce_unwrapped.numwant as usize { break; }
                 if *peer_id == announce_unwrapped.peer_id { continue; }
                 if let Some(offer) = peer.rtc_sdp_offer()
                     && !offer.is_empty() {
@@ -475,167 +430,16 @@ pub async fn http_service_announce_handler(request: HttpRequest, ip: IpAddr, dat
         }.encode());
     }
 
-    // Already clamped to 1..=72 by `validate_announce`, so it is safe to size buffers with.
-    let want = announce_unwrapped.numwant as usize;
-    if announce_unwrapped.compact {
-        let mut peers_list: Vec<u8> = Vec::with_capacity(if ip.is_ipv4() { want * 6 } else { want * 18 });
-        return match ip {
-            IpAddr::V4(_) => {
-                if announce_unwrapped.left != 0 {
-                    let seeds = torrent_entry.seeds.iter()
-                        .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
-                        .take(want);
-                    for torrent_peer in seeds {
-
-                        if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
-                            peers_list.extend_from_slice(&ipv4.octets());
-                            peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
-                        }
-                    }
-                }
-                if peers_list.len() < want * 6 {
-                    let peers = torrent_entry.peers.iter()
-                        .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
-                        .take(want);
-                    for torrent_peer in peers {
-                        if peers_list.len() >= want * 6 {
-                            break;
-                        }
-
-                        if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
-                            peers_list.extend_from_slice(&ipv4.octets());
-                            peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
-                        }
-                    }
-                }
-                HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                    "interval" => ben_int!(request_interval),
-                    "min interval" => ben_int!(request_interval_minimum),
-                    "rtc interval" => ben_int!(rtc_interval),
-                    "complete" => ben_int!(seeds_count),
-                    "incomplete" => ben_int!(peers_count),
-                    "downloaded" => ben_int!(completed_count),
-                    "peers" => ben_bytes!(peers_list)
-                }.encode())
-            }
-            IpAddr::V6(_) => {
-                if announce_unwrapped.left != 0 {
-                    let seeds = torrent_entry.seeds_ipv6.iter()
-                        .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
-                        .take(want);
-                    for torrent_peer in seeds {
-                        if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
-                            peers_list.extend_from_slice(&ipv6.octets());
-                            peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
-                        }
-                    }
-                }
-                if peers_list.len() < want * 18 {
-                    let peers = torrent_entry.peers_ipv6.iter()
-                        .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
-                        .take(want);
-                    for torrent_peer in peers {
-                        if peers_list.len() >= want * 18 {
-                            break;
-                        }
-                        if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
-                            peers_list.extend_from_slice(&ipv6.octets());
-                            peers_list.extend_from_slice(&torrent_peer.peer_addr.port().to_be_bytes());
-                        }
-                    }
-                }
-                HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                    "interval" => ben_int!(request_interval),
-                    "min interval" => ben_int!(request_interval_minimum),
-                    "rtc interval" => ben_int!(rtc_interval),
-                    "complete" => ben_int!(seeds_count),
-                    "incomplete" => ben_int!(peers_count),
-                    "downloaded" => ben_int!(completed_count),
-                    "peers6" => ben_bytes!(peers_list)
-                }.encode())
-            }
-        }
-    }
-    let mut peers_list = ben_list!();
-    let peers_list_mut = peers_list.list_mut().unwrap();
-    match ip {
-        IpAddr::V4(_) => {
-            if announce_unwrapped.left != 0 {
-                let seeds = torrent_entry.seeds.iter()
-                    .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
-                    .take(want);
-                for torrent_peer in seeds {
-                    peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
-                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
-                    });
-                }
-            }
-            if peers_list_mut.len() < want {
-                let peers = torrent_entry.peers.iter()
-                    .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
-                    .take(want);
-                for torrent_peer in peers {
-                    if peers_list_mut.len() >= want {
-                        break;
-                    }
-                    peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
-                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
-                    });
-                }
-            }
-            HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                "interval" => ben_int!(request_interval),
-                "min interval" => ben_int!(request_interval_minimum),
-                "rtc interval" => ben_int!(rtc_interval),
-                "complete" => ben_int!(seeds_count),
-                "incomplete" => ben_int!(peers_count),
-                "downloaded" => ben_int!(completed_count),
-                "peers" => peers_list
-            }.encode())
-        }
-        IpAddr::V6(_) => {
-            if announce_unwrapped.left != 0 {
-                let seeds = torrent_entry.seeds_ipv6.iter()
-                    .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
-                    .take(want);
-                for torrent_peer in seeds {
-                    peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
-                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
-                    });
-                }
-            }
-            if peers_list_mut.len() < want {
-                let peers = torrent_entry.peers_ipv6.iter()
-                    .filter(|peer| peer.peer_id != announce_unwrapped.peer_id)
-                    .take(want);
-                for torrent_peer in peers {
-                    if peers_list_mut.len() >= want {
-                        break;
-                    }
-                    peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
-                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
-                    });
-                }
-            }
-            HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                "interval" => ben_int!(request_interval),
-                "min interval" => ben_int!(request_interval_minimum),
-                "rtc interval" => ben_int!(rtc_interval),
-                "complete" => ben_int!(seeds_count),
-                "incomplete" => ben_int!(peers_count),
-                "downloaded" => ben_int!(completed_count),
-                "peers6" => peers_list
-            }.encode())
-        }
-    }
+    let (peers_key, peers) = http_announce_peers(&torrent_entry, &announce_unwrapped, ip);
+    HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+        "interval" => ben_int!(request_interval),
+        "min interval" => ben_int!(request_interval_minimum),
+        "rtc interval" => ben_int!(rtc_interval),
+        "complete" => ben_int!(seeds_count),
+        "incomplete" => ben_int!(peers_count),
+        "downloaded" => ben_int!(completed_count),
+        peers_key => peers
+    }.encode())
 }
 
 /// `GET /{key}/scrape` — scrape with an access key in the path.
@@ -645,15 +449,11 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
-            if ip.is_ipv4() {
-                data.torrent_tracker.update_stats(StatsEvent::Tcp4ScrapesHandled, 1);
-            } else {
-                data.torrent_tracker.update_stats(StatsEvent::Tcp6ScrapesHandled, 1);
-            }
+            data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4ScrapesHandled, StatsEvent::Tcp6ScrapesHandled, 1);
             ip
         },
         Err(result) => {
-            return result;
+            return *result;
         }
     };
     debug!("[DEBUG] Request from {ip}: Scrape with Key");
@@ -671,6 +471,17 @@ pub async fn http_service_scrape_key(request: HttpRequest, path: web::Path<Strin
 /// bencoded `files` dictionary with seed/completed/leech counts per requested info-hash.
 pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data: Arc<TorrentTracker>) -> HttpResponse
 {
+    let query_map = match parse_query(Some(request.query_string())) {
+        Ok(result) => result,
+        Err(e) => {
+            data.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
+                "failure reason" => ben_bytes!(e.to_string())
+            }.encode());
+        }
+    };
+    // Parsed first so the length cap applies before forwarding too: the master's websocket drops
+    // the whole cluster link on an oversized frame.
     if data.config.tracker_config.cluster == ClusterMode::slave {
         let query_string = request.query_string().to_string();
         let protocol = if request.connection_info().scheme() == "https" {
@@ -693,24 +504,16 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
                     .body(response.payload);
             }
             Err(e) => {
-                http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+                data.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
                 return HttpResponse::Ok()
                     .content_type(ContentType::plaintext())
                     .body(create_cluster_error_response(&e));
             }
         }
     }
-    let query_map_result = parse_query(Some(request.query_string()));
-    let query_map = match http_service_query_hashing(query_map_result) {
-        Ok(result) => { result }
-        Err(err) => {
-            http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
-            return err;
-        }
-    };
     let scrape = data.validate_scrape(query_map).await;
     if let Err(scrape) = scrape {
-        http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+        data.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
             "failure reason" => ben_bytes!(scrape.to_string())
         }.encode());
@@ -737,7 +540,7 @@ pub async fn http_service_scrape_handler(request: HttpRequest, ip: IpAddr, data:
             }.encode())
         }
         Err(e) => {
-            http_stat_update(ip, &data, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+            data.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
             HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
                 "failure reason" => ben_bytes!(e.to_string())
             }.encode())
@@ -750,15 +553,11 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<HttpServic
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
-            if ip.is_ipv4() {
-                data.torrent_tracker.update_stats(StatsEvent::Tcp4ScrapesHandled, 1);
-            } else {
-                data.torrent_tracker.update_stats(StatsEvent::Tcp6ScrapesHandled, 1);
-            }
+            data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4ScrapesHandled, StatsEvent::Tcp6ScrapesHandled, 1);
             ip
         },
         Err(result) => {
-            return result;
+            return *result;
         }
     };
     debug!("[DEBUG] Request from {ip}: Scrape");
@@ -766,7 +565,7 @@ pub async fn http_service_scrape(request: HttpRequest, data: Data<Arc<HttpServic
     // route that still reports swarm sizes for arbitrary info-hashes to anyone who asks.
     // Keyed clients have `/{key}/scrape`.
     if data.torrent_tracker.config.tracker_config.keys_enabled {
-        http_stat_update(ip, &data.torrent_tracker, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
+        data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4Failure, StatsEvent::Tcp6Failure, 1);
         return HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_MISSING_KEY.clone());
     }
     http_service_scrape_handler(request, ip, data.torrent_tracker.clone()).await
@@ -777,62 +576,15 @@ pub async fn http_service_not_found(request: HttpRequest, data: Data<Arc<HttpSer
 {
     let ip = match http_validate_ip(request.clone(), data.clone()).await {
         Ok(ip) => {
-            if ip.is_ipv4() {
-                data.torrent_tracker.update_stats(StatsEvent::Tcp4NotFound, 1);
-            } else {
-                data.torrent_tracker.update_stats(StatsEvent::Tcp6NotFound, 1);
-            }
+            data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4NotFound, StatsEvent::Tcp6NotFound, 1);
             ip
         },
         Err(result) => {
-            return result;
+            return *result;
         }
     };
     debug!("[DEBUG] Request from {ip}: 404 Not Found");
     HttpResponse::NotFound().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_REQUEST.clone())
-}
-
-/// Increments the TCP connections-handled statistic for the request's IP family.
-#[inline]
-pub fn http_service_stats_log(ip: IpAddr, tracker: &TorrentTracker)
-{
-    if ip.is_ipv4() {
-        tracker.update_stats(StatsEvent::Tcp4ConnectionsHandled, 1);
-    } else {
-        tracker.update_stats(StatsEvent::Tcp6ConnectionsHandled, 1);
-    }
-}
-
-/// Decodes a 40-character hex string into an [`InfoHash`].
-///
-/// # Errors
-///
-/// Returns a ready-made bencoded error response when the string is not valid hex.
-#[inline]
-pub async fn http_service_decode_hex_hash(hash: String) -> Result<InfoHash, HttpResponse>
-{
-    hex::decode(&hash)
-        .ok()
-        // Exactly 20 bytes, not "the first 20": a longer key would otherwise be accepted as
-        // its own prefix. Callers validate the length first, so this only closes the hazard.
-        .and_then(|bytes| <[u8; 20]>::try_from(bytes.as_slice()).ok())
-        .map(InfoHash)
-        .ok_or_else(|| HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
-}
-
-/// Decodes a 40-character hex string into a [`UserId`].
-///
-/// # Errors
-///
-/// Returns a ready-made bencoded error response when the string is not valid hex.
-#[inline]
-pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, HttpResponse>
-{
-    hex::decode(&hash)
-        .ok()
-        .and_then(|bytes| <[u8; 20]>::try_from(bytes.as_slice()).ok())
-        .map(UserId)
-        .ok_or_else(|| HttpResponse::InternalServerError().content_type(ContentType::plaintext()).body(ERR_UNABLE_DECODE_HEX.clone()))
 }
 
 /// Determines the client IP, honouring the configured `real_ip` header when trusted
@@ -841,19 +593,19 @@ pub async fn http_service_decode_hex_user_id(hash: String) -> Result<UserId, Htt
 ///
 /// # Errors
 ///
-/// Returns `Err(())` when no peer address is available.
-pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<HttpTrackersConfig>) -> Result<IpAddr, ()>
+/// Returns `None` when no peer address is available.
+pub fn retrieve_remote_ip(request: &HttpRequest, trusted_proxies: bool, trusted_proxy_addrs: &[IpAddr], real_ip: &str) -> Option<IpAddr>
 {
-    let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
-    if !data.trusted_proxies {
-        return Ok(origin_ip);
+    let origin_ip = request.peer_addr().map(|addr| addr.ip())?;
+    if !trusted_proxies {
+        return Some(origin_ip);
     }
-    let explicit_proxies = !data.trusted_proxy_addrs.is_empty();
-    if explicit_proxies && !data.trusted_proxy_addrs.contains(&origin_ip) {
-        return Ok(origin_ip);
+    let explicit_proxies = !trusted_proxy_addrs.is_empty();
+    if explicit_proxies && !trusted_proxy_addrs.contains(&origin_ip) {
+        return Some(origin_ip);
     }
     request.headers()
-        .get(&data.real_ip)
+        .get(real_ip)
         .and_then(|header| header.to_str().ok())
         .and_then(|ip_str| {
             // Without an allowlist a proxy is indistinguishable from a client, so private
@@ -861,7 +613,7 @@ pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<Htt
             validate_remote_ip(ip_str, explicit_proxies).ok()?;
             IpAddr::from_str(ip_str).ok()
         })
-        .map_or(Ok(origin_ip), Ok)
+        .or(Some(origin_ip))
 }
 
 /// Resolves and validates the client IP and logs the connection statistic.
@@ -869,28 +621,16 @@ pub async fn http_service_retrieve_remote_ip(request: HttpRequest, data: Arc<Htt
 /// # Errors
 ///
 /// Returns a bencoded `unknown origin ip` response when the IP cannot be determined.
-pub async fn http_validate_ip(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> Result<IpAddr, HttpResponse>
+pub async fn http_validate_ip(request: HttpRequest, data: Data<Arc<HttpServiceData>>) -> Result<IpAddr, Box<HttpResponse>>
 {
-    match http_service_retrieve_remote_ip(request.clone(), data.http_trackers_config.clone()).await {
-        Ok(ip) => {
-            http_service_stats_log(ip, &data.torrent_tracker);
+    let config = &data.http_trackers_config;
+    match retrieve_remote_ip(&request, config.trusted_proxies, &config.trusted_proxy_ips, &config.real_ip) {
+        Some(ip) => {
+            data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4ConnectionsHandled, StatsEvent::Tcp6ConnectionsHandled, 1);
             Ok(ip)
         }
-        Err(()) => {
-            Err(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_ORIGIN_IP.clone()))
-        }
-    }
-}
-
-/// Maps a query-string parse error into a bencoded `failure reason` response.
-pub fn http_service_query_hashing(query_map_result: Result<HttpServiceQueryHashingMapOk, CustomError>) -> Result<HttpServiceQueryHashingMapOk, HttpServiceQueryHashingMapErr>
-{
-    match query_map_result {
-        Ok(e) => { Ok(e) }
-        Err(e) => {
-            Err(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ben_map! {
-                "failure reason" => ben_bytes!(e.to_string())
-            }.encode()))
+        None => {
+            Err(Box::new(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_ORIGIN_IP.clone())))
         }
     }
 }
@@ -900,14 +640,10 @@ pub fn http_service_query_hashing(query_map_result: Result<HttpServiceQueryHashi
 /// Returns `None` when the key is valid, or `Some(response)` with the bencoded error to send.
 pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: String) -> Option<HttpResponse>
 {
-    if validate_info_hash_hex(&key).is_err() {
+    let Ok(key) = key.parse::<InfoHash>() else {
         return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_INVALID_KEY.clone()));
-    }
-    let key_decoded: InfoHash = match http_service_decode_hex_hash(key).await {
-        Ok(result) => { result }
-        Err(error) => { return Some(error) }
     };
-    if !data.check_key(key_decoded) {
+    if !data.check_key(key) {
         return Some(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_KEY.clone()));
     }
     None
@@ -918,16 +654,15 @@ pub async fn http_service_check_key_validation(data: Arc<TorrentTracker>, key: S
 /// # Errors
 ///
 /// Returns the bencoded error response when the key is malformed or unknown.
-pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, user_key: String) -> Result<UserId, HttpResponse>
+pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, user_key: String) -> Result<UserId, Box<HttpResponse>>
 {
-    if validate_peer_id_hex(&user_key).is_err() {
-        return Err(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_INVALID_USER_KEY.clone()));
+    let Ok(user_key) = user_key.parse::<UserId>() else {
+        return Err(Box::new(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_INVALID_USER_KEY.clone())));
+    };
+    if data.check_user_key(user_key).is_none() {
+        return Err(Box::new(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_USER_KEY.clone())));
     }
-    let user_key_decoded: UserId = http_service_decode_hex_user_id(user_key).await?;
-    if data.check_user_key(user_key_decoded).is_none() {
-        return Err(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_USER_KEY.clone()));
-    }
-    Ok(user_key_decoded)
+    Ok(user_key)
 }
 
 /// Windows-only sanity check that a TCP bind address is available before spawning the server.
@@ -943,18 +678,4 @@ pub fn http_check_host_and_port_used(bind_address: &str) -> std::io::Result<()> 
         return Err(e);
     }
     Ok(())
-}
-
-/// Increments the IPv4 or IPv6 variant of a statistics event depending on the client IP.
-#[inline]
-pub fn http_stat_update(ip: IpAddr, data: &TorrentTracker, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
-{
-    match ip {
-        IpAddr::V4(_) => {
-            data.update_stats(stats_ipv4, count);
-        }
-        IpAddr::V6(_) => {
-            data.update_stats(stat_ipv6, count);
-        }
-    }
 }
