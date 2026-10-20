@@ -7,9 +7,5 @@ use serde::{
 pub enum RequestType {
     Announce,
     Scrape,
-    ApiCall {
-        endpoint: String,
-        method: String,
-    },
     UdpPacket,
 }

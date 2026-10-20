@@ -37,11 +37,11 @@ pub struct TorrentTracker {
     /// Set of info-hashes allowed when whitelist mode is active.
     pub torrents_whitelist: Arc<RwLock<HashSet<InfoHash>>>,
     /// Pending whitelist additions/removals awaiting the next database flush.
-    pub torrents_whitelist_updates: Arc<RwLock<HashMap<u128, (InfoHash, UpdatesAction)>>>,
+    pub torrents_whitelist_updates: Arc<RwLock<HashMap<InfoHash, (u128, UpdatesAction)>>>,
     /// Set of info-hashes blocked when blacklist mode is active.
     pub torrents_blacklist: Arc<RwLock<HashSet<InfoHash>>>,
     /// Pending blacklist additions/removals awaiting the next database flush.
-    pub torrents_blacklist_updates: Arc<RwLock<HashMap<u128, (InfoHash, UpdatesAction)>>>,
+    pub torrents_blacklist_updates: Arc<RwLock<HashMap<InfoHash, (u128, UpdatesAction)>>>,
     /// Active announce keys mapped to their expiry timestamp (`0` = permanent).
     pub keys: Arc<RwLock<BTreeMap<InfoHash, i64>>>,
     /// Pending key additions/removals awaiting the next database flush.

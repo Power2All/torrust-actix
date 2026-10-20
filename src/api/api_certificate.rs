@@ -1,7 +1,4 @@
-use crate::api::api::{
-    api_service_token,
-    api_validation
-};
+use crate::api::api::api_guard;
 use crate::api::structs::certificate_reload_error::CertificateReloadError;
 use crate::api::structs::certificate_reload_request::CertificateReloadRequest;
 use crate::api::structs::certificate_reload_result::CertificateReloadResult;
@@ -26,12 +23,7 @@ pub async fn api_service_certificate_reload(
     data: Data<Arc<ApiServiceData>>,
     body: Option<web::Json<CertificateReloadRequest>>,
 ) -> HttpResponse {
-    if let Some(error_return) = api_validation(&request, &data).await {
-        return error_return;
-    }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await {
-        return response;
-    }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     let certificate_store = &data.torrent_tracker.certificate_store;
     let (server_type_filter, bind_address_filter) = match body {
         Some(req) => (req.server_type.clone(), req.bind_address.clone()),
@@ -105,12 +97,7 @@ pub async fn api_service_certificate_status(
     request: HttpRequest,
     data: Data<Arc<ApiServiceData>>,
 ) -> HttpResponse {
-    if let Some(error_return) = api_validation(&request, &data).await {
-        return error_return;
-    }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await {
-        return response;
-    }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     let certificate_store = &data.torrent_tracker.certificate_store;
     let certificates = certificate_store.get_all_certificates();
     let status_items: Vec<CertificateStatusItem> = certificates

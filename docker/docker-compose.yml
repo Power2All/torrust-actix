@@ -1,10 +1,13 @@
 services:
   torrust_actix:
     image: power2all/torrust-actix:latest
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     environment:
       LOG_LEVEL: "debug"
-      TRACKER__API_KEY: "MyVerySecureAPIKey"
+      # Required: `TRACKER__API_KEY=$(head -c 32 /dev/urandom | base64) docker compose up`
+      TRACKER__API_KEY: "${TRACKER__API_KEY:?set TRACKER__API_KEY to a long random string}"
       TRACKER__SWAGGER: "true"
       DATABASE__PERSISTENT: "false"
       DATABASE__ENGINE: "sqlite3"
@@ -12,6 +15,6 @@ services:
     container_name: "torrust_actix"
     hostname: "torrust_actix"
     ports:
-      - "8080:8080/tcp" # API
+      - "127.0.0.1:8080:8080/tcp" # API: loopback only; publish it wider only behind TLS or a firewall
       - "6969:6969/tcp" # TCP Tracker
       - "6969:6969/udp" # UDP Tracker

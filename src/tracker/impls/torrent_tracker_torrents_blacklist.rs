@@ -1,5 +1,4 @@
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use log::{
@@ -21,23 +20,6 @@ impl TorrentTracker {
             Err(e) => {
                 error!("Unable to load the blacklist from the database: {e}");
             }
-        }
-    }
-
-    /// Persists blacklist additions/removals to the database.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(())` when the database write fails; the caller re-queues the batch.
-    pub async fn save_blacklist(&self, tracker: Arc<TorrentTracker>, hashes: Vec<(InfoHash, UpdatesAction)>) -> Result<(), ()>
-    {
-        let hashes_len = hashes.len();
-        if self.sqlx.save_blacklist(tracker, hashes).await.is_ok() {
-            info!("[SYNC BLACKLIST] Synced {hashes_len} blacklists");
-            Ok(())
-        } else {
-            error!("[SYNC BLACKLIST] Unable to sync {hashes_len} blacklists");
-            Err(())
         }
     }
 

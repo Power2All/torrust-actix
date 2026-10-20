@@ -1,0 +1,16 @@
+# Advisories checked and found not to apply to how this project uses the crate. Re-check each one
+# when the dependency that pulls the crate in changes.
+[advisories]
+ignore = [
+    # rsa (Marvin attack): recovers a private key from the timing of RSA *decryption*. sqlx-mysql
+    # only *encrypts* the password with the server's public key (`caching_sha2_password` over a
+    # connection without TLS). Dropping sqlx's `mysql-rsa` feature would break that login instead.
+    "RUSTSEC-2023-0071",
+    # zip 8.x: these concern `ZipArchive::extract` / `ZipStreamReader::extract`. zip is only a build
+    # dependency of utoipa-swagger-ui, whose build script extracts the pinned Swagger UI release
+    # with its own loop over `enclosed_name()` and never calls either function. utoipa-swagger-ui
+    # requires `zip ^8.6`, so the fixed 9.x cannot be selected yet.
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
+]

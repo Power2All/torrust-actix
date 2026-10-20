@@ -13,9 +13,10 @@ use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Builder;
-use tokio_shutdown::Shutdown;
+use torrust_actix::common::structs::shutdown::Shutdown;
 use torrust_actix::api::api::api_service;
 use torrust_actix::common::common::{
+    current_time,
     init_compression,
     setup_logging,
     udp_check_host_and_port_used
@@ -83,6 +84,10 @@ fn main() -> std::io::Result<()>
                 exit(0);
             }
 
+            if args.migrate_database {
+                exit(i32::from(tracker.sqlx.migrate(&config).await.is_err()));
+            }
+
             let tracker_config = tracker.config.tracker_config.clone();
             let db_config = tracker.config.database.clone();
             let db_structure = tracker.config.database_structure.clone();
@@ -93,20 +98,23 @@ fn main() -> std::io::Result<()>
             let users_persistent = db_structure.users.persistent.unwrap_or(db_config.persistent);
             let any_persistent = torrents_persistent || whitelist_persistent || blacklist_persistent || keys_persistent || users_persistent;
 
+            // Lists are loaded (and flushed, see `save_all_updates`) whenever their table is
+            // persistent: `*_enabled` only decides whether announces are checked against them, and
+            // the API manages them either way.
+            if whitelist_persistent {
+                tracker.load_whitelist(tracker.clone()).await;
+            }
+            if blacklist_persistent {
+                tracker.load_blacklist(tracker.clone()).await;
+            }
+            if keys_persistent {
+                tracker.load_keys(tracker.clone()).await;
+            }
+            if users_persistent {
+                tracker.load_users(tracker.clone()).await;
+            }
             if db_config.persistent {
                 tracker.load_torrents(tracker.clone()).await;
-                if tracker_config.whitelist_enabled {
-                    tracker.load_whitelist(tracker.clone()).await;
-                }
-                if tracker_config.blacklist_enabled {
-                    tracker.load_blacklist(tracker.clone()).await;
-                }
-                if tracker_config.keys_enabled {
-                    tracker.load_keys(tracker.clone()).await;
-                }
-                if tracker_config.users_enabled {
-                    tracker.load_users(tracker.clone()).await;
-                }
                 if db_config.update_peers && !tracker.reset_seeds_peers(tracker.clone()).await {
                     panic!("[RESET SEEDS PEERS] Unable to continue loading");
                 }
@@ -119,7 +127,7 @@ fn main() -> std::io::Result<()>
             if args.import { tracker.import(&args, tracker.clone()).await; }
 
             let tokio_core = Builder::new_multi_thread().thread_name("core").worker_threads(9).enable_all().build()?;
-            let tokio_shutdown = Shutdown::new().expect("shutdown creation works on first call");
+            let tokio_shutdown = Shutdown::listen();
 
             let deadlocks_handler = tokio_shutdown.clone();
             tokio_core.spawn(async move {
@@ -230,10 +238,7 @@ fn main() -> std::io::Result<()>
             for udp_server_object in &config.udp_server {
                 if udp_server_object.enabled {
                     udp_check_host_and_port_used(&udp_server_object.bind_address)?;
-                    let address: SocketAddr = udp_server_object.bind_address.parse().unwrap();
-
                     let udp_threads: usize = udp_server_object.udp_threads;
-                    let worker_threads: usize = udp_server_object.worker_threads;
 
                     let tokio_udp = Arc::new(Builder::new_multi_thread()
                         .thread_name("udp")
@@ -241,22 +246,7 @@ fn main() -> std::io::Result<()>
                         .enable_all()
                         .build()?);
 
-                    let udp_future = udp_service(
-                        address,
-                        udp_threads,
-                        worker_threads,
-                        udp_server_object.receive_buffer_size,
-                        udp_server_object.send_buffer_size,
-                        udp_server_object.reuse_address,
-                        udp_server_object.use_payload_ip,
-                        udp_server_object.simple_proxy_protocol,
-                        Arc::new(udp_server_object.proxy_addrs.clone()),
-                        udp_server_object.receive_method,
-                        udp_server_object.parse_queue_size,
-                        tracker.clone(),
-                        udp_rx.clone(),
-                        tokio_udp.clone()
-                    ).await;
+                    let udp_future = udp_service(udp_server_object, tracker.clone(), udp_rx.clone(), tokio_udp.clone()).await;
 
                     udp_futures.push(udp_future);
                     udp_tokio_threads.push(tokio_udp);
@@ -337,7 +327,7 @@ fn main() -> std::io::Result<()>
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
-                            tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, chrono::Utc::now().timestamp() + 60);
+                            tracker_spawn_stats.set_stats(StatsEvent::TimestampSave, current_time().cast_signed() + 60);
                             let stats = tracker_spawn_stats.get_stats();
 
                             info!(
@@ -357,7 +347,7 @@ fn main() -> std::io::Result<()>
                             );
 
 
-                            let now = chrono::Utc::now().timestamp();
+                            let now = current_time().cast_signed();
                             let (udp_c4_ps, udp_a4_ps, udp_s4_ps, udp_c6_ps, udp_a6_ps, udp_s6_ps) = if let Some((t,c4,a4,s4,c6,a6,s6)) = last_udp {
                                 let dt = (now - t).max(1);
                                 (
@@ -432,7 +422,7 @@ fn main() -> std::io::Result<()>
                         tokio::select! {
                             _ = interval.tick() => {
                                 tracker_spawn_cleanup_keys.set_stats(StatsEvent::TimestampKeysTimeout,
-                                    chrono::Utc::now().timestamp() + keys_interval.cast_signed());
+                                    current_time().cast_signed() + keys_interval.cast_signed());
                                 info!("[KEYS] Checking now for outdated keys.");
                                 tracker_spawn_cleanup_keys.clean_keys();
                                 info!("[KEYS] Keys cleaned up.");
@@ -459,59 +449,10 @@ fn main() -> std::io::Result<()>
                         tokio::select! {
                             _ = interval.tick() => {
                                 tracker_spawn_updates.set_stats(StatsEvent::TimestampSave,
-                                    chrono::Utc::now().timestamp() + update_interval.cast_signed());
+                                    current_time().cast_signed() + update_interval.cast_signed());
 
                                 info!("[DATABASE UPDATES] Starting batch updates...");
-
-
-                                let mut tasks = vec![
-                                    tokio::spawn({
-                                        let tracker = tracker_spawn_updates.clone();
-                                        async move {
-                                            let _ = tracker.save_torrent_updates(tracker.clone()).await;
-                                        }
-                                    })
-                                ];
-
-                                if whitelist_persistent && tracker_spawn_updates.config.tracker_config.whitelist_enabled {
-                                    tasks.push(tokio::spawn({
-                                        let tracker = tracker_spawn_updates.clone();
-                                        async move {
-                                            let _ = tracker.save_whitelist_updates(tracker.clone()).await;
-                                        }
-                                    }));
-                                }
-
-                                if blacklist_persistent && tracker_spawn_updates.config.tracker_config.blacklist_enabled {
-                                    tasks.push(tokio::spawn({
-                                        let tracker = tracker_spawn_updates.clone();
-                                        async move {
-                                            let _ = tracker.save_blacklist_updates(tracker.clone()).await;
-                                        }
-                                    }));
-                                }
-
-                                if keys_persistent && tracker_spawn_updates.config.tracker_config.keys_enabled {
-                                    tasks.push(tokio::spawn({
-                                        let tracker = tracker_spawn_updates.clone();
-                                        async move {
-                                            let _ = tracker.save_key_updates(tracker.clone()).await;
-                                        }
-                                    }));
-                                }
-
-                                if users_persistent && tracker_spawn_updates.config.tracker_config.users_enabled {
-                                    tasks.push(tokio::spawn({
-                                        let tracker = tracker_spawn_updates.clone();
-                                        async move {
-                                            let _ = tracker.save_user_updates(tracker.clone()).await;
-                                        }
-                                    }));
-                                }
-
-                                for task in tasks {
-                                    let _ = task.await;
-                                }
+                                TorrentTracker::save_all_updates(&tracker_spawn_updates).await;
 
                                 info!("[DATABASE UPDATES] Batch updates completed");
                             }
@@ -525,7 +466,9 @@ fn main() -> std::io::Result<()>
             }
 
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
+                // Ctrl-C or SIGTERM: the handle is the one every background task already stops on,
+                // registered at startup, so a `docker stop` / `systemctl stop` also gets the final save.
+                () = tokio_shutdown.handle() => {
                     info!("Shutdown request received, shutting down...");
 
                     let _ = udp_tx.send(true);
@@ -538,65 +481,12 @@ fn main() -> std::io::Result<()>
                         }
                     }
 
-                    tokio_shutdown.handle().await;
                     tokio::time::sleep(Duration::from_secs(1)).await;
-
-                    tracker.set_stats(StatsEvent::Completed, config.tracker_config.total_downloads.cast_signed());
-                    Configuration::save_from_config(tracker.config.clone(), "config.toml");
 
                     if any_persistent {
                         info!("Saving final data to database...");
 
-                        let mut tasks = vec![
-                            tokio::spawn({
-                                let tracker_clone = tracker.clone();
-                                async move {
-                                    let _ = tracker_clone.save_torrent_updates(tracker_clone.clone()).await;
-                                }
-                            })
-                        ];
-
-                        if whitelist_persistent && tracker_config.whitelist_enabled {
-                            tasks.push(tokio::spawn({
-                                let tracker_clone = tracker.clone();
-                                async move {
-                                    let _ = tracker_clone.save_whitelist_updates(tracker_clone.clone()).await;
-                                }
-                            }));
-                        }
-
-                        if blacklist_persistent && tracker_config.blacklist_enabled {
-                            tasks.push(tokio::spawn({
-                                let tracker_clone = tracker.clone();
-                                async move {
-                                    let _ = tracker_clone.save_blacklist_updates(tracker_clone.clone()).await;
-                                }
-                            }));
-                        }
-
-                        if keys_persistent && tracker_config.keys_enabled {
-                            tasks.push(tokio::spawn({
-                                let tracker_clone = tracker.clone();
-                                async move {
-                                    let _ = tracker_clone.save_key_updates(tracker_clone.clone()).await;
-                                }
-                            }));
-                        }
-
-                        if users_persistent && tracker_config.users_enabled {
-                            tasks.push(tokio::spawn({
-                                let tracker_clone = tracker.clone();
-                                async move {
-                                    let _ = tracker_clone.save_user_updates(tracker_clone.clone()).await;
-                                }
-                            }));
-                        }
-
-                        for task in tasks {
-                            let _ = task.await;
-                        }
-                    } else {
-                        info!("Saving completed data to config...");
+                        TorrentTracker::save_all_updates(&tracker).await;
                     }
 
                     tokio::time::sleep(Duration::from_secs(1)).await;

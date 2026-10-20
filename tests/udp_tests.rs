@@ -220,12 +220,12 @@ async fn test_udp_announce_requires_valid_connection_id() {
 
     // An id the tracker never issued must be refused, or it acts as a UDP reflector.
     let forged = build_announce_packet(0x0123_4567_89ab_cdef, None);
-    let response = UdpServer::handle_packet(addr, &forged, tracker.clone(), false).await;
+    let response = UdpServer::handle_packet(addr, &forged, tracker.clone(), false).await.unwrap();
     assert!(matches!(response, Response::Error(_)), "forged connection id must be rejected");
 
     let issued = UdpServer::get_connection_id(&addr).await;
     let valid = build_announce_packet(issued.0, None);
-    let response = UdpServer::handle_packet(addr, &valid, tracker.clone(), false).await;
+    let response = UdpServer::handle_packet(addr, &valid, tracker.clone(), false).await.unwrap();
     assert!(matches!(response, Response::AnnounceIpv4(_)), "issued connection id must be accepted, got {response:?}");
 }
 
@@ -263,5 +263,37 @@ async fn test_udp_announce_path_slicing_does_not_panic() {
         let packet = build_announce_packet(issued.0, Some(&path));
         // Any outcome is fine as long as it is a response and not a panic.
         let _ = UdpServer::handle_packet(addr, &packet, tracker.clone(), false).await;
+    }
+}
+
+#[tokio::test]
+async fn test_udp_replies_only_where_a_reply_belongs() {
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+    use torrust_actix::udp::structs::udp_server::UdpServer;
+
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
+    let tracker = common::create_test_tracker().await;
+    // Too short to carry a transaction id: no reply, rather than 19 bytes to a forged source.
+    assert!(UdpServer::handle_packet(addr, &[0u8], tracker.clone(), false).await.is_none());
+    // An unknown action still names its transaction, so the client gets its error.
+    let mut unknown = 0i64.to_be_bytes().to_vec();
+    unknown.extend_from_slice(&99i32.to_be_bytes());
+    unknown.extend_from_slice(&4242i32.to_be_bytes());
+    match UdpServer::handle_packet(addr, &unknown, tracker.clone(), false).await {
+        Some(Response::Error(error)) => assert_eq!(error.transaction_id, TransactionId(4242)),
+        other => panic!("expected an error reply, got {other:?}"),
+    }
+
+    // With keys on, a UDP scrape (which cannot carry one) is refused like an unkeyed HTTP scrape.
+    let config = Arc::new(common::build_test_config(|config| config.tracker_config.keys_enabled = true));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let issued = UdpServer::get_connection_id(&addr).await;
+    let mut scrape = issued.0.to_be_bytes().to_vec();
+    scrape.extend_from_slice(&2i32.to_be_bytes());
+    scrape.extend_from_slice(&7i32.to_be_bytes());
+    scrape.extend_from_slice(&[0xAAu8; 20]);
+    match UdpServer::handle_packet(addr, &scrape, tracker, false).await {
+        Some(Response::Error(error)) => assert_eq!(error.message, "unknown key", "the refusal keeps its reason"),
+        other => panic!("expected an error reply, got {other:?}"),
     }
 }

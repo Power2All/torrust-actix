@@ -31,6 +31,18 @@ impl Default for ParsePool {
     }
 }
 
+impl Drop for ParsePool {
+    // The last `Arc<ParsePool>` goes away at the end of an async receive loop, and dropping a
+    // runtime inside an async context panics; under the release profile's `panic = 'abort'` that
+    // killed the process on every shutdown before the final save to the database ran.
+    // `shutdown_background` is the one way to dispose of a runtime that async code allows.
+    fn drop(&mut self) {
+        if let Some(runtime) = self.udp_runtime.take() {
+            runtime.shutdown_background();
+        }
+    }
+}
+
 impl ParsePool {
     /// Creates the bounded packet queue shared between receive backends and parse workers.
     pub fn new(capacity: usize, threads: usize) -> ParsePool {
@@ -42,7 +54,7 @@ impl ParsePool {
             .unwrap();
         ParsePool {
             payload: Arc::new(ArrayQueue::new(capacity)),
-            udp_runtime: Arc::new(tokio_udp),
+            udp_runtime: Some(tokio_udp),
         }
     }
 
@@ -50,11 +62,11 @@ impl ParsePool {
     /// and send replies, until the shutdown watch channel fires.
     pub async fn start_thread(&self, threads: usize, tracker: Arc<TorrentTracker>, shutdown_handler: tokio::sync::watch::Receiver<bool>, use_payload_ip: bool, simple_proxy_protocol: bool, proxy_addrs: Arc<Vec<std::net::IpAddr>>) {
         let is_slave_mode = tracker.config.tracker_config.cluster == ClusterMode::slave;
+        let runtime = self.udp_runtime.as_ref().expect("parse pool runtime is only taken on drop");
         for i in 0..threads {
             let payload = self.payload.clone();
             let tracker_cloned = tracker.clone();
             let mut shutdown_handler = shutdown_handler.clone();
-            let runtime = self.udp_runtime.clone();
             let proxy_addrs = proxy_addrs.clone();
             runtime.spawn(async move {
                 info!("[UDP] Start Parse Pool thread {i}...");
@@ -95,18 +107,19 @@ impl ParsePool {
                                 // about at startup.
                                 let payload_ip_allowed = use_payload_ip
                                     && (proxy_addrs.is_empty() || proxy_addrs.contains(&packet.remote_addr.ip()));
-                                let response = UdpServer::handle_packet(
+                                if let Some(response) = UdpServer::handle_packet(
                                     effective_addr,
                                     payload_slice,
                                     tracker_cloned.clone(),
                                     payload_ip_allowed
-                                ).await;
-                                UdpServer::send_response(
-                                    tracker_cloned.clone(),
-                                    packet.reply.clone(),
-                                    packet.remote_addr,
-                                    response
-                                ).await;
+                                ).await {
+                                    UdpServer::send_response(
+                                        tracker_cloned.clone(),
+                                        packet.reply.clone(),
+                                        packet.remote_addr,
+                                        response
+                                    ).await;
+                                }
                             }
                         }
                         if shutdown_handler.has_changed().unwrap_or(true) {

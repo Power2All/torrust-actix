@@ -1,13 +1,10 @@
 use crate::api::api::{
-    api_parse_body,
-    api_service_token,
-    api_validation
+    api_guard,
+    api_json_body,
+    parse_hex_id
 };
 use crate::api::structs::api_service_data::ApiServiceData;
-use crate::common::common::{
-    hash_id,
-    hex2bin
-};
+use crate::common::common::hash_id;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
@@ -75,8 +72,7 @@ fn user_removal_entry(id: &str, id_uuid: bool) -> Option<UserEntryItem>
 /// `GET /api/user/{id}` — returns a user entry as JSON; `{id}` is the user id or UUID.
 pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     let id = path.into_inner();
     let (status_code, data) = api_service_users_return_json(id, data);
     match status_code {
@@ -88,15 +84,10 @@ pub async fn api_service_user_get(request: HttpRequest, path: web::Path<String>,
 /// `GET /api/users` — returns user entries for a JSON array of ids/UUIDs in the body.
 pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
-    let body = match api_parse_body(payload).await {
-        Ok(data) => data,
-        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
-    };
-    let ids = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(id) => id,
-        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
+    if let Some(response) = api_guard(&request, &data).await { return response; }
+    let ids: Vec<String> = match api_json_body(payload).await {
+        Ok(body) => body,
+        Err(response) => return *response,
     };
     let mut users_output = HashMap::with_capacity(ids.len());
     for id in ids {
@@ -113,15 +104,11 @@ pub async fn api_service_users_get(request: HttpRequest, payload: web::Payload, 
 /// creates or replaces a user with the given announce key and statistics.
 pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String, String, u64, u64, u64, u64, u8)>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     let (id, key, uploaded, downloaded, completed, updated, active) = path.into_inner();
-    if key.len() != 40 {
-        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad key_hash"}));
-    }
-    let key_hash = match hex2bin(key) {
-        Ok(hash) => UserId(hash),
-        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key_hash"})),
+    let key_hash: UserId = match parse_hex_id(&key, "key_hash") {
+        Ok(id) => id,
+        Err(response) => return *response,
     };
     let mut user_entry = UserEntryItem {
         key: key_hash,
@@ -163,21 +150,18 @@ pub async fn api_service_user_post(request: HttpRequest, path: web::Path<(String
 /// (arrays), each shaped `[id, key_hash, uploaded, downloaded, completed, updated, active]`.
 pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
-    let body = match api_parse_body(payload).await {
-        Ok(data) => data,
-        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
+    if let Some(response) = api_guard(&request, &data).await { return response; }
+    let hashes: Vec<(String, String, u64, u64, u64, u64, u8)> = match api_json_body(payload).await {
+        Ok(body) => body,
+        Err(response) => return *response,
     };
-    let hashes = match serde_json::from_slice::<Vec<(String, String, u64, u64, u64, u64, u8)>>(&body) {
-        Ok(data) => data,
-        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
-    };
-    let mut users_output = HashMap::with_capacity(hashes.len());
+    // Everything is parsed before anything is applied, so a bad entry is answered with 400 and no
+    // changes, rather than after the entries before it had already been stored.
+    let mut validated = Vec::with_capacity(hashes.len());
     for (id, key, uploaded, downloaded, completed, updated, active) in hashes {
         if key.len() == 40 {
-            let key_hash = match hex2bin(key) {
-                Ok(hash) => UserId(hash),
+            let key_hash = match key.parse::<UserId>() {
+                Ok(id) => id,
                 Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid key_hash"})),
             };
             let mut user_entry = UserEntryItem {
@@ -206,16 +190,20 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
                     Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "invalid id"})),
                 }
             };
-            if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
-                let _ = data.torrent_tracker.add_user_update(UserId(id_hash), user_entry.clone(), UpdatesAction::Add);
-            }
-            let status = if data.torrent_tracker.add_user(UserId(id_hash), user_entry) {
-                json!({"status": "user_hash added"})
-            } else {
-                json!({"status": "user_hash updated"})
-            };
-            users_output.insert(id, status);
+            validated.push((id, UserId(id_hash), user_entry));
         }
+    }
+    let mut users_output = HashMap::with_capacity(validated.len());
+    for (id, id_hash, user_entry) in validated {
+        if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
+            let _ = data.torrent_tracker.add_user_update(id_hash, user_entry.clone(), UpdatesAction::Add);
+        }
+        let status = if data.torrent_tracker.add_user(id_hash, user_entry) {
+            json!({"status": "user_hash added"})
+        } else {
+            json!({"status": "user_hash updated"})
+        };
+        users_output.insert(id, status);
     }
     HttpResponse::Ok().content_type(ContentType::json()).json(json!({
         "status": "ok",
@@ -227,8 +215,7 @@ pub async fn api_service_users_post(request: HttpRequest, payload: web::Payload,
 /// identifier contract (and internal SHA-1 hashing) as the GET/POST routes.
 pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<String>, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     let id = path.into_inner();
     let id_hash = UserId(hash_id(&id));
     if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
@@ -247,15 +234,10 @@ pub async fn api_service_user_delete(request: HttpRequest, path: web::Path<Strin
 /// contract (and internal SHA-1 hashing) as the GET/POST routes.
 pub async fn api_service_users_delete(request: HttpRequest, payload: web::Payload, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
-    let body = match api_parse_body(payload).await {
-        Ok(data) => data,
-        Err(error) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": error.to_string()})),
-    };
-    let ids = match serde_json::from_slice::<Vec<String>>(&body) {
-        Ok(data) => data,
-        Err(_) => return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "bad json body"})),
+    if let Some(response) = api_guard(&request, &data).await { return response; }
+    let ids: Vec<String> = match api_json_body(payload).await {
+        Ok(body) => body,
+        Err(response) => return *response,
     };
     let users_persistent = data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent);
     let id_uuid = data.torrent_tracker.config.database_structure.users.id_uuid;
@@ -323,11 +305,7 @@ pub fn api_service_users_return_json(id: String, data: Data<Arc<ApiServiceData>>
 /// `DELETE /api/users/clear` — removes all users.
 pub async fn api_service_users_clear(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await { return error_return; }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await { return response; }
-    if !data.torrent_tracker.config.tracker_config.users_enabled {
-        return HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": "users not enabled"}));
-    }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     if data.torrent_tracker.config.database_structure.users.persistent.unwrap_or(data.torrent_tracker.config.database.persistent) {
         let table = data.torrent_tracker.config.database_structure.users.table_name.clone();
         if data.torrent_tracker.sqlx.clear_table(&table).await.is_err() {

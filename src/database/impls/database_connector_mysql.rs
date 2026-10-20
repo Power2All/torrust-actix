@@ -1,5 +1,7 @@
+use crate::common::common::hash_id;
 use crate::config::structs::configuration::Configuration;
 use crate::database::database::{
+    redact_dsn,
     build_delete_hash_query,
     build_insert_ignore_hash_query,
     build_select_hash_query,
@@ -11,7 +13,6 @@ use crate::database::database::{
 use crate::database::enums::database_drivers::DatabaseDrivers;
 use crate::database::structs::database_connector::DatabaseConnector;
 use crate::database::structs::database_connector_mysql::DatabaseConnectorMySQL;
-use crate::database::traits::database_backend::DatabaseBackend;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -20,21 +21,17 @@ use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_entry_item::UserEntryItem;
 use crate::tracker::structs::user_id::UserId;
-use crate::tracker::types::ahash_map::AHashMap;
-use async_trait::async_trait;
+use crate::tracker::types::peer_map::PeerMap;
 use futures_util::TryStreamExt;
 use log::{
     error,
     info,
     warn
 };
-use sha1::{
-    Digest,
-    Sha1
-};
 use sqlx::mysql::{
     MySqlConnectOptions,
-    MySqlPoolOptions
+    MySqlPoolOptions,
+    MySqlRow
 };
 use sqlx::{
     ConnectOptions,
@@ -52,6 +49,17 @@ use std::time::Duration;
 
 const ENGINE: DatabaseDrivers = DatabaseDrivers::mysql;
 const LOG_PREFIX: &str = "[MySQL]";
+
+/// Reads an integer column as `u64` whether it is declared signed or `UNSIGNED`, with NULL and
+/// negative values read as 0. `--create-database` makes these columns `BIGINT UNSIGNED`, but tables
+/// created elsewhere (the website's `torrust_actix_torrents` migration uses plain `BIGINT`) are
+/// signed, and sqlx refuses to decode across the two — which aborts the boot load.
+fn get_u64(row: &MySqlRow, column: &str) -> u64 {
+    match row.try_get::<Option<u64>, _>(column) {
+        Ok(value) => value.unwrap_or(0),
+        Err(_) => u64::try_from(row.get::<Option<i64>, _>(column).unwrap_or(0)).unwrap_or(0),
+    }
+}
 
 impl DatabaseConnectorMySQL {
     /// Opens a MySQL connection pool from the DSN with statement logging enabled
@@ -84,9 +92,9 @@ impl DatabaseConnectorMySQL {
             DatabaseConnectorMySQL::create(config.database.clone().path.as_str()).await;
         if let Err(mysql_connect) = mysql_connect {
             error!(
-                "{} Unable to connect to MySQL on DSL {}",
+                "{} Unable to connect to MySQL on DSN {}",
                 LOG_PREFIX,
-                config.database.clone().path
+                redact_dsn(&config.database.path)
             );
             error!("{LOG_PREFIX} Message: {mysql_connect}");
             exit(1);
@@ -134,7 +142,7 @@ impl DatabaseConnectorMySQL {
             let hash_type = if ks.bin_type_hash { "BINARY(20)" } else { "VARCHAR(40)" };
             info!("[BOOT MySQL] Creating table {}", ks.table_name);
             let query = format!(
-                "CREATE TABLE IF NOT EXISTS `{}` (`{}` {} NOT NULL, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                "CREATE TABLE IF NOT EXISTS `{}` (`{}` {} NOT NULL, `{}` BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                 ks.table_name, ks.column_hash, hash_type, ks.column_timeout, ks.column_hash
             );
             if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(query)).execute(pool).await {
@@ -146,12 +154,12 @@ impl DatabaseConnectorMySQL {
             info!("[BOOT MySQL] Creating table {}", us.table_name);
             let query = if us.id_uuid {
                 format!(
-                    "CREATE TABLE IF NOT EXISTS `{}` (`{}` VARCHAR(36) NOT NULL, `{}` {} NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                    "CREATE TABLE IF NOT EXISTS `{}` (`{}` VARCHAR(36) NOT NULL, `{}` {} NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                     us.table_name, us.column_uuid, us.column_key, key_type, us.column_uploaded, us.column_downloaded, us.column_completed, us.column_active, us.column_updated, us.column_uuid
                 )
             } else {
                 format!(
-                    "CREATE TABLE IF NOT EXISTS `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` {} NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` INT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
+                    "CREATE TABLE IF NOT EXISTS `{}` (`{}` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `{}` {} NOT NULL, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` BIGINT UNSIGNED NOT NULL DEFAULT 0, `{}` TINYINT NOT NULL DEFAULT 0, `{}` BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (`{}`)) COLLATE='utf8mb4_general_ci'",
                     us.table_name, us.column_id, us.column_key, key_type, us.column_uploaded, us.column_downloaded, us.column_completed, us.column_active, us.column_updated, us.column_id
                 )
             };
@@ -192,16 +200,16 @@ impl DatabaseConnectorMySQL {
                 let info_hash: [u8; 20] =
                     <[u8; 20]>::try_from(&hex::decode(info_hash_data).unwrap()[0..20])
                         .unwrap();
-                let completed_count: u64 = result.get::<Option<i64>, _>(structure.column_completed.as_str()).unwrap_or(0) as u64;
+                let completed_count = get_u64(&result, structure.column_completed.as_str());
                 tracker.add_torrent(
                     InfoHash(info_hash),
                     TorrentEntry {
-                        seeds: AHashMap::default(),
-                        seeds_ipv6: AHashMap::default(),
-                        peers: AHashMap::default(),
-                        peers_ipv6: AHashMap::default(),
-                        rtc_seeds: AHashMap::default(),
-                        rtc_peers: AHashMap::default(),
+                        seeds: PeerMap::default(),
+                        seeds_ipv6: PeerMap::default(),
+                        peers: PeerMap::default(),
+                        peers_ipv6: PeerMap::default(),
+                        rtc_seeds: PeerMap::default(),
+                        rtc_peers: PeerMap::default(),
                         completed: completed_count,
                         updated: std::time::Instant::now(),
                     },
@@ -665,16 +673,13 @@ impl DatabaseConnectorMySQL {
             let mut rows = sqlx::query(sqlx::AssertSqlSafe(query)).fetch(&self.pool);
             while let Some(result) = rows.try_next().await? {
                 fetched += 1;
+                // The API's derivation, so a user loaded from the database and the same user
+                // posted over the API land on the same key.
                 let hash = if is_uuid {
                     let uuid_data: &[u8] = result.get(structure.column_uuid.as_str());
-                    let mut hasher = Sha1::new();
-                    hasher.update(uuid_data);
-                    <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
+                    hash_id(&String::from_utf8_lossy(uuid_data))
                 } else {
-                    let id_data: &[u8] = result.get(structure.column_id.as_str());
-                    let mut hasher = Sha1::new();
-                    hasher.update(id_data);
-                    <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
+                    hash_id(&get_u64(&result, structure.column_id.as_str()).to_string())
                 };
                 // A malformed key column would otherwise abort the process at boot; skip the row
                 // and let the operator see which user is broken.
@@ -689,19 +694,17 @@ impl DatabaseConnectorMySQL {
                         user_id: if is_uuid {
                             None
                         } else {
-                            Some(result.get(structure.column_id.as_str()))
+                            Some(get_u64(&result, structure.column_id.as_str()))
                         },
                         user_uuid: if is_uuid {
                             Some(result.get(structure.column_uuid.as_str()))
                         } else {
                             None
                         },
-                        uploaded: result.get::<i64, &str>(structure.column_uploaded.as_str()) as u64,
-                        downloaded: result.get::<i64, &str>(structure.column_downloaded.as_str())
-                            as u64,
-                        completed: result.get::<i64, &str>(structure.column_completed.as_str())
-                            as u64,
-                        updated: result.get::<i32, &str>(structure.column_updated.as_str()) as u64,
+                        uploaded: get_u64(&result, structure.column_uploaded.as_str()),
+                        downloaded: get_u64(&result, structure.column_downloaded.as_str()),
+                        completed: get_u64(&result, structure.column_completed.as_str()),
+                        updated: get_u64(&result, structure.column_updated.as_str()),
                         active: result.get::<i8, &str>(structure.column_active.as_str()) as u8,
                         torrents_active: Default::default(),
                     },
@@ -913,72 +916,5 @@ impl DatabaseConnectorMySQL {
                 Err(e)
             }
         }
-    }
-}
-
-#[async_trait]
-impl DatabaseBackend for DatabaseConnectorMySQL {
-    async fn load_torrents(&self, tracker: Arc<TorrentTracker>) -> Result<(u64, u64), Error> {
-        DatabaseConnectorMySQL::load_torrents(self, tracker).await
-    }
-
-    async fn load_whitelist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
-        DatabaseConnectorMySQL::load_whitelist(self, tracker).await
-    }
-
-    async fn load_blacklist(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
-        DatabaseConnectorMySQL::load_blacklist(self, tracker).await
-    }
-
-    async fn load_keys(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
-        DatabaseConnectorMySQL::load_keys(self, tracker).await
-    }
-
-    async fn load_users(&self, tracker: Arc<TorrentTracker>) -> Result<u64, Error> {
-        DatabaseConnectorMySQL::load_users(self, tracker).await
-    }
-
-    async fn save_torrents(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        torrents: &BTreeMap<InfoHash, (TorrentUpdateData, UpdatesAction)>,
-    ) -> Result<(), Error> {
-        DatabaseConnectorMySQL::save_torrents(self, tracker, torrents).await
-    }
-
-    async fn save_whitelist(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        whitelists: Vec<(InfoHash, UpdatesAction)>,
-    ) -> Result<u64, Error> {
-        DatabaseConnectorMySQL::save_whitelist(self, tracker, whitelists).await
-    }
-
-    async fn save_blacklist(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        blacklists: Vec<(InfoHash, UpdatesAction)>,
-    ) -> Result<u64, Error> {
-        DatabaseConnectorMySQL::save_blacklist(self, tracker, blacklists).await
-    }
-
-    async fn save_keys(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        keys: BTreeMap<InfoHash, (i64, UpdatesAction)>,
-    ) -> Result<u64, Error> {
-        DatabaseConnectorMySQL::save_keys(self, tracker, keys).await
-    }
-
-    async fn save_users(
-        &self,
-        tracker: Arc<TorrentTracker>,
-        users: BTreeMap<UserId, (UserEntryItem, UpdatesAction)>,
-    ) -> Result<(), Error> {
-        DatabaseConnectorMySQL::save_users(self, tracker, users).await
-    }
-
-    async fn reset_seeds_peers(&self, tracker: Arc<TorrentTracker>) -> Result<(), Error> {
-        DatabaseConnectorMySQL::reset_seeds_peers(self, tracker).await
     }
 }

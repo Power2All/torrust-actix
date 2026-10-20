@@ -4,9 +4,6 @@ use rand::RngExt;
 pub const MAX_PERCENT_DECODED_SIZE: usize = 1_048_576;
 pub const MAX_PEER_MESSAGE_SIZE: usize = 262_144;
 pub const MIN_API_KEY_LENGTH: usize = 32;
-pub const DEFAULT_API_KEY_ENTROPY_BYTES: usize = 32;
-pub const MAX_INFO_HASH_HEX_LENGTH: usize = 40;
-pub const MAX_PEER_ID_HEX_LENGTH: usize = 40;
 pub const MAX_SCRAPE_TORRENTS: usize = 100;
 pub const MAX_OFFER_ID_LENGTH: usize = 128;
 pub const MAX_QUERY_STRING_LENGTH: usize = 8192;
@@ -84,30 +81,6 @@ pub fn validate_peer_message(message: &str) -> Result<(), CustomError> {
         )));
     }
     Ok(())
-}
-
-/// Validates that a string is a 40-character hex info-hash.
-///
-/// # Errors
-///
-/// Returns a [`CustomError`] when the format is invalid.
-pub fn validate_info_hash_hex(info_hash: &str) -> Result<(), CustomError> {
-    if info_hash.len() == MAX_INFO_HASH_HEX_LENGTH && info_hash.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Ok(());
-    }
-    Err(CustomError::new("info_hash has invalid format"))
-}
-
-/// Validates that a string is a 40-character hex peer id.
-///
-/// # Errors
-///
-/// Returns a [`CustomError`] when the format is invalid.
-pub fn validate_peer_id_hex(peer_id: &str) -> Result<(), CustomError> {
-    if peer_id.len() == MAX_PEER_ID_HEX_LENGTH && peer_id.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Ok(());
-    }
-    Err(CustomError::new("peer_id has invalid format"))
 }
 
 /// Bounds a raw query string to `MAX_QUERY_STRING_LENGTH`.

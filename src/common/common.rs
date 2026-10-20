@@ -13,14 +13,13 @@ use fern::colors::{
     ColoredLevelConfig
 };
 use log::info;
-use sha1::Digest;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::{
     Duration,
     SystemTime
 };
-use tokio_shutdown::Shutdown;
+use crate::common::structs::shutdown::Shutdown;
 
 /// Parses a URL query string into a map of lower-cased keys to raw (percent-decoded) values.
 ///
@@ -164,44 +163,14 @@ pub fn bin20_to_hex(data: &[u8; 20]) -> Hex20 {
     Hex20(buffer)
 }
 
-/// Decodes a 40-character hex string into a 20-byte binary hash.
-///
-/// Anything longer is rejected rather than truncated: taking the first 20 bytes made
-/// `<40 hex chars>` and `<those same 40 chars plus more>` name the same torrent, so two
-/// different API inputs silently addressed one record.
-///
-/// A malformed value is a client mistake, not an application fault, so it is not reported to
-/// Sentry — a bulk endpoint fed bad hashes would otherwise emit one event per entry.
-///
-/// # Errors
-///
-/// Returns a [`CustomError`] when the input is not valid hex or is not exactly 40 characters.
-pub fn hex2bin(data: String) -> Result<[u8; 20], CustomError> {
-    hex::decode(data)
-        .map_err(|_| CustomError::new("error converting hex to bin"))
-        .and_then(|hash_result| {
-            <[u8; 20]>::try_from(hash_result.as_slice())
-                .map_err(|_| CustomError::new("invalid hex length"))
-        })
-}
-
 /// Initialises the global `fern` logger with coloured output at the configured log level.
 ///
 /// # Panics
 ///
 /// Panics on an unknown `log_level` value or when a logger is already installed.
 pub fn setup_logging(config: &Configuration) {
-    let level = match config.log_level.as_str() {
-        "off" => log::LevelFilter::Off,
-        "trace" => log::LevelFilter::Trace,
-        "debug" => log::LevelFilter::Debug,
-        "info" => log::LevelFilter::Info,
-        "warn" => log::LevelFilter::Warn,
-        "error" => log::LevelFilter::Error,
-        _ => {
-            panic!("Unknown log level encountered: '{}'", config.log_level.as_str());
-        }
-    };
+    let level: log::LevelFilter = config.log_level.parse()
+        .unwrap_or_else(|_| panic!("Unknown log level encountered: '{}'", config.log_level));
     let colors = ColoredLevelConfig::new()
         .trace(Color::Cyan)
         .debug(Color::Magenta)
@@ -246,23 +215,6 @@ pub fn current_time() -> u64 {
         .as_secs()
 }
 
-/// Encodes an integer as big-endian bytes with leading zero bytes stripped.
-#[inline]
-pub fn convert_int_to_bytes(number: &u64) -> Vec<u8> {
-    let bytes = number.to_be_bytes();
-    let leading_zeros = number.leading_zeros() as usize / 8;
-    bytes[leading_zeros..].to_vec()
-}
-
-/// Decodes up to 8 big-endian bytes (as produced by [`convert_int_to_bytes`]) into a `u64`.
-#[inline]
-pub fn convert_bytes_to_int(array: &[u8]) -> u64 {
-    let mut array_fixed = [0u8; 8];
-    let len = array.len().min(8);
-    array_fixed[8 - len..].copy_from_slice(&array[..len]);
-    u64::from_be_bytes(array_fixed)
-}
-
 /// Waits up to `timeout` for the shutdown signal.
 ///
 /// Returns `true` when shutdown was signalled, `false` when the timeout elapsed.
@@ -273,21 +225,13 @@ pub async fn shutdown_waiting(timeout: Duration, shutdown_handler: Shutdown) -> 
 }
 
 /// Returns the SHA-1 digest of the given string, used to derive stable 20-byte identifiers.
+///
+/// ASCII case is folded first: a UUID is the same user however it is cased, and the API stores it
+/// lowercased, so hashing it as sent gave an uppercase UUID a different user after a restart.
+/// Numeric ids are unaffected.
 pub fn hash_id(id: &str) -> [u8; 20] {
-    let mut hasher = sha1::Sha1::new();
-    hasher.update(id.as_bytes());
-    <[u8; 20]>::try_from(hasher.finalize().as_slice()).unwrap()
-}
-
-/// Converts one ASCII hex character to its 4-bit value, or `0xFF` for invalid input.
-#[inline(always)]
-pub fn hex_to_nibble(c: u8) -> u8 {
-    match c {
-        b'0'..=b'9' => c - b'0',
-        b'a'..=b'f' => c - b'a' + 10,
-        b'A'..=b'F' => c - b'A' + 10,
-        _ => 0xFF,
-    }
+    let digest = ring::digest::digest(&ring::digest::SHA1_FOR_LEGACY_USE_ONLY, id.to_ascii_lowercase().as_bytes());
+    digest.as_ref().try_into().expect("SHA-1 digests are 20 bytes")
 }
 
 /// Sets the global in-memory compression settings (algorithm and level) used for SDP storage.
@@ -298,18 +242,7 @@ pub fn init_compression(enabled: bool, algorithm: CompressionAlgorithm, level: u
 }
 #[cfg(test)]
 mod tests {
-    use super::{hex2bin, hex_to_id, HexParseError};
-
-    #[test]
-    fn hex2bin_requires_exactly_twenty_bytes() {
-        let valid = "aabbccddeeff00112233445566778899aabbccdd";
-        assert_eq!(hex2bin(valid.to_string()).unwrap()[0], 0xAA);
-        // A longer value used to decode and then silently keep its first 20 bytes, so this
-        // string and `valid` addressed the same torrent through the API.
-        assert!(hex2bin(format!("{valid}aabbccdd")).is_err());
-        assert!(hex2bin("aabbccdd".to_string()).is_err());
-        assert!(hex2bin("zz".repeat(20)).is_err());
-    }
+    use super::{hex_to_id, HexParseError};
 
     #[test]
     fn hex_to_id_accepts_mixed_case_and_rejects_bad_input() {

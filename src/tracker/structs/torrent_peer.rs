@@ -1,7 +1,5 @@
 use crate::common::structs::number_of_bytes::NumberOfBytes;
-use crate::common::structs::number_of_bytes_def::NumberOfBytesDef;
 use crate::tracker::enums::announce_event::AnnounceEvent;
-use crate::tracker::enums::announce_event_def::AnnounceEventDef;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::rtc_data::RtcData;
 use serde::{
@@ -31,17 +29,17 @@ pub struct TorrentPeer {
     #[serde(with = "serde_millis")]
     pub updated: std::time::Instant,
     /// Total bytes uploaded by the peer for this torrent.
-    #[serde(with = "NumberOfBytesDef")]
     pub uploaded: NumberOfBytes,
     /// Total bytes downloaded by the peer for this torrent.
-    #[serde(with = "NumberOfBytesDef")]
     pub downloaded: NumberOfBytes,
     /// Bytes remaining until the download is complete (`0` for seeders).
-    #[serde(with = "NumberOfBytesDef")]
     pub left: NumberOfBytes,
     /// The announce event reported by the client.
-    #[serde(with = "AnnounceEventDef")]
     pub event: AnnounceEvent,
+    /// The announce `key`, which a client never shares with other peers: it lets a client whose IP
+    /// changed prove it is the same client. `None` when the client sent none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<u32>,
     /// WebRTC signalling state.  `None` for regular UDP/HTTP peers.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rtc_data: Option<Box<RtcData>>,

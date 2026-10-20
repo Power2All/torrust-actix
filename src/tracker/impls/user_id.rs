@@ -1,5 +1,4 @@
 use crate::common::common::bin2hex;
-use crate::common::common::hex_to_nibble;
 use crate::tracker::structs::user_id::UserId;
 use std::fmt;
 use std::fmt::Formatter;
@@ -40,42 +39,8 @@ impl serde::ser::Serialize for UserId {
 }
 
 impl<'de> serde::de::Deserialize<'de> for UserId {
+    /// Parses the 40-character hex form [`Serialize`](serde::Serialize) writes, through `FromStr`.
     fn deserialize<D: serde::de::Deserializer<'de>>(des: D) -> Result<Self, D::Error> {
-        struct UserIdVisitor;
-
-        impl serde::de::Visitor<'_> for UserIdVisitor {
-            type Value = UserId;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a 40 character hex string")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                if v.len() != 40 {
-                    return Err(serde::de::Error::invalid_value(
-                        serde::de::Unexpected::Str(v),
-                        &"expected a 40 character long string",
-                    ));
-                }
-                let mut result = UserId([0u8; 20]);
-                let bytes = v.as_bytes();
-                for i in 0..20 {
-                    let high = hex_to_nibble(bytes[i * 2]);
-                    let low = hex_to_nibble(bytes[i * 2 + 1]);
-                    if high == 0xFF || low == 0xFF {
-                        return Err(serde::de::Error::invalid_value(
-                            serde::de::Unexpected::Str(v),
-                            &"expected a hexadecimal string",
-                        ));
-                    }
-                    result.0[i] = (high << 4) | low;
-                }
-                Ok(result)
-            }
-        }
-        des.deserialize_str(UserIdVisitor)
+        <std::borrow::Cow<'de, str>>::deserialize(des)?.parse().map_err(serde::de::Error::custom)
     }
 }

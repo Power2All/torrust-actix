@@ -52,19 +52,15 @@ use crate::api::api_whitelists::{
 };
 use crate::api::structs::api_service_data::ApiServiceData;
 use crate::api::structs::query_token::QueryToken;
-use crate::common::common::hex2bin;
-use crate::common::structs::custom_error::CustomError;
+use crate::common::common::HexParseError;
+use serde::de::DeserializeOwned;
+use std::str::FromStr;
 use crate::config::structs::api_trackers_config::ApiTrackersConfig;
 use crate::config::structs::configuration::Configuration;
-use crate::security::security::{
-    constant_time_eq,
-    validate_info_hash_hex,
-    validate_remote_ip
-};
+use crate::security::security::constant_time_eq;
 use crate::ssl::enums::server_identifier::ServerIdentifier;
 use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use crate::stats::enums::stats_event::StatsEvent;
-use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use actix_cors::Cors;
 use actix_web::dev::ServerHandle;
@@ -89,12 +85,8 @@ use log::{
 };
 use serde_json::json;
 use std::future::Future;
-use std::net::{
-    IpAddr,
-    SocketAddr
-};
+use std::net::SocketAddr;
 use std::process::exit;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use utoipa_swagger_ui::{
@@ -223,89 +215,50 @@ pub async fn api_service(
     api_server_object: ApiTrackersConfig
 ) -> (ServerHandle, impl Future<Output=Result<(), std::io::Error>>)
 {
-    let keep_alive = api_server_object.keep_alive;
-    let request_timeout = api_server_object.request_timeout;
-    let disconnect_timeout = api_server_object.disconnect_timeout;
-    let worker_threads = api_server_object.threads as usize;
-    let tls_connection_rate = data.config.tracker_config.tls_connection_rate as usize;
-    let api_service_data = Arc::new(ApiServiceData {
-        torrent_tracker: Arc::clone(&data),
-        api_trackers_config: Arc::new(api_server_object.clone()),
-    });
-    let app_factory = move || {
-        let cors = api_service_cors();
-        let sentry_wrap = sentry_actix::Sentry::new();
-        App::new()
-            .wrap(cors)
-            .wrap(sentry_wrap)
-            .configure(api_service_routes(Arc::clone(&api_service_data)))
-    };
-    if api_server_object.ssl {
+    let tls_config = api_server_object.ssl.then(|| {
         info!("[APIS] Starting server listener with SSL on {addr}");
         if api_server_object.ssl_key.is_empty() || api_server_object.ssl_cert.is_empty() {
             error!("[APIS] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
         let server_id = ServerIdentifier::ApiServer(addr.to_string());
-        if let Err(e) = data.certificate_store.load_certificate(
-            server_id.clone(),
-            &api_server_object.ssl_cert,
-            &api_server_object.ssl_key,
-        ) {
-            panic!("[APIS] Failed to load SSL certificate: {e}");
-        }
-        let resolver = match DynamicCertificateResolver::new(
-            Arc::clone(&data.certificate_store),
-            server_id,
-        ) {
-            Ok(resolver) => Arc::new(resolver),
-            Err(e) => panic!("[APIS] Failed to create certificate resolver: {e}"),
-        };
-        let tls_config = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_cert_resolver(resolver);
-        let server = HttpServer::new(app_factory)
-            .keep_alive(Duration::from_secs(keep_alive))
-            .client_request_timeout(Duration::from_secs(request_timeout))
-            .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-            .workers(worker_threads)
-            // Caps in-flight TLS handshakes per worker. Writes one process-global in
-            // `actix-tls`, which is why every TLS listener here passes the same value.
-            .max_connection_rate(tls_connection_rate)
-            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-            .unwrap_or_else(|e| {
-                error!("[APIS] Unable to bind to {addr}: {e}");
-                exit(1);
-            })
-            .disable_signals()
-            .run();
-        return (server.handle(), server);
+        DynamicCertificateResolver::server_config(&data.certificate_store, server_id, &api_server_object.ssl_cert, &api_server_object.ssl_key)
+            .unwrap_or_else(|e| panic!("[APIS] Failed to load SSL certificate: {e}"))
+    });
+    let tag = if tls_config.is_some() { "APIS" } else { "API" };
+    if tls_config.is_none() {
+        info!("[API] Starting server listener on {addr}");
     }
-    info!("[API] Starting server listener on {addr}");
-    let server = HttpServer::new(app_factory)
-        .keep_alive(Duration::from_secs(keep_alive))
-        .client_request_timeout(Duration::from_secs(request_timeout))
-        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-        .workers(worker_threads)
-        .bind((addr.ip(), addr.port()))
+    let api_service_data = Arc::new(ApiServiceData {
+        torrent_tracker: Arc::clone(&data),
+        api_trackers_config: Arc::new(api_server_object.clone()),
+    });
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(api_service_cors())
+            .wrap(sentry_actix::Sentry::new())
+            .configure(api_service_routes(Arc::clone(&api_service_data)))
+    })
+        .keep_alive(Duration::from_secs(api_server_object.keep_alive))
+        .client_request_timeout(Duration::from_secs(api_server_object.request_timeout))
+        .client_disconnect_timeout(Duration::from_secs(api_server_object.disconnect_timeout))
+        .workers(api_server_object.threads as usize)
+        .max_connections(api_server_object.max_connections as usize);
+    let server = match tls_config {
+        // Caps in-flight TLS handshakes per worker. Writes one process-global in `actix-tls`,
+        // which is why every TLS listener here passes the same value.
+        Some(tls_config) => server
+            .max_connection_rate(data.config.tracker_config.tls_connection_rate as usize)
+            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config),
+        None => server.bind((addr.ip(), addr.port())),
+    }
         .unwrap_or_else(|e| {
-            error!("[API] Unable to bind to {addr}: {e}");
+            error!("[{tag}] Unable to bind to {addr}: {e}");
             exit(1);
         })
         .disable_signals()
         .run();
     (server.handle(), server)
-}
-
-/// Increments the API connections-handled statistic for the request's IP family.
-pub async fn api_service_stats_log(ip: IpAddr, tracker: Arc<TorrentTracker>)
-{
-    let event = if ip.is_ipv4() {
-        StatsEvent::Tcp4ConnectionsHandled
-    } else {
-        StatsEvent::Tcp6ConnectionsHandled
-    };
-    tracker.update_stats(event, 1);
 }
 
 /// Extracts the API token from the `Authorization` header (with or without a `Bearer` prefix),
@@ -340,59 +293,14 @@ pub async fn api_service_token(request: &HttpRequest, config: Arc<Configuration>
             })));
         }
     };
-    if !constant_time_eq(&token_code, &config.tracker_config.api_key) {
+    // An empty token never authenticates: with `api_key = ""` configured, `?token=` would
+    // otherwise match it and open every endpoint.
+    if token_code.is_empty() || !constant_time_eq(&token_code, &config.tracker_config.api_key) {
         return Some(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({
             "status": "invalid token"
         })));
     }
     None
-}
-
-/// Determines the client IP, honouring the configured `real_ip` header when trusted proxies
-/// are enabled and the request came from a configured proxy; falls back to the socket peer
-/// address.
-///
-/// # Errors
-///
-/// Returns `Err(())` when no peer address is available.
-pub async fn api_service_retrieve_remote_ip(request: &HttpRequest, data: Arc<ApiTrackersConfig>) -> Result<IpAddr, ()>
-{
-    let origin_ip = request.peer_addr().map(|addr| addr.ip()).ok_or(())?;
-    if !data.trusted_proxies {
-        return Ok(origin_ip);
-    }
-    let explicit_proxies = !data.trusted_proxy_addrs.is_empty();
-    if explicit_proxies && !data.trusted_proxy_addrs.contains(&origin_ip) {
-        return Ok(origin_ip);
-    }
-    request.headers()
-        .get(&data.real_ip)
-        .and_then(|header| header.to_str().ok())
-        .and_then(|ip_str| {
-            validate_remote_ip(ip_str, explicit_proxies).ok()?;
-            IpAddr::from_str(ip_str).ok()
-        })
-        .map_or(Ok(origin_ip), Ok)
-}
-
-/// Resolves and validates the client IP and logs the connection statistic.
-///
-/// # Errors
-///
-/// Returns a JSON `invalid ip` response when the IP cannot be determined.
-pub async fn api_validate_ip(request: &HttpRequest, data: Data<Arc<ApiServiceData>>) -> Result<IpAddr, HttpResponse>
-{
-    match api_service_retrieve_remote_ip(request, Arc::clone(&data.api_trackers_config)).await {
-        Ok(ip) => {
-            api_service_stats_log(ip, Arc::clone(&data.torrent_tracker)).await;
-            Ok(ip)
-        }
-        Err(()) => {
-            Err(HttpResponse::Ok().content_type(ContentType::json()).json(json!({
-                "status": "invalid ip"
-            })))
-        }
-    }
 }
 
 /// Catch-all handler returning a JSON `unknown request` error with HTTP 404.
@@ -406,36 +314,31 @@ pub async fn api_service_not_found(request: HttpRequest, data: Data<Arc<ApiServi
     }))
 }
 
-/// Increments the IPv4 or IPv6 variant of a statistics event depending on the client IP.
-pub fn api_stat_update(ip: IpAddr, data: Arc<TorrentTracker>, stats_ipv4: StatsEvent, stat_ipv6: StatsEvent, count: i64)
+/// The IP check and the token check every authenticated endpoint starts with, in that order;
+/// `Some` is the response to send instead of handling the request.
+pub async fn api_guard(request: &HttpRequest, data: &Data<Arc<ApiServiceData>>) -> Option<HttpResponse>
 {
-    let event = if ip.is_ipv4() {
-        stats_ipv4
-    } else {
-        stat_ipv6
-    };
-    data.update_stats(event, count);
+    if let Some(response) = api_validation(request, data).await {
+        return Some(response);
+    }
+    api_service_token(request, Arc::clone(&data.torrent_tracker.config)).await
 }
 
-/// Per-request guard: resolves and validates the client IP and records the API-handled
-/// statistic. Token validation is done separately by [`api_service_token`].
+/// Per-request guard: resolves the client IP and records the connection and API-handled
+/// statistics. Token validation is done separately by [`api_service_token`].
 ///
 /// Returns `Some(response)` with the error to send, or `None` when the request may proceed.
 pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceData>>) -> Option<HttpResponse>
 {
-    match api_validate_ip(request, data.clone()).await {
-        Ok(ip) => {
-            api_stat_update(
-                ip,
-                Arc::clone(&data.torrent_tracker),
-                StatsEvent::Tcp4ApiHandled,
-                StatsEvent::Tcp6ApiHandled,
-                1
-            );
-            None
-        }
-        Err(result) => Some(result),
-    }
+    let config = &data.api_trackers_config;
+    let Some(ip) = crate::http::http::retrieve_remote_ip(request, config.trusted_proxies, &config.trusted_proxy_ips, &config.real_ip) else {
+        return Some(HttpResponse::Ok().content_type(ContentType::json()).json(json!({
+            "status": "invalid ip"
+        })));
+    };
+    data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4ConnectionsHandled, StatsEvent::Tcp6ConnectionsHandled, 1);
+    data.torrent_tracker.update_stats_by_family(ip, StatsEvent::Tcp4ApiHandled, StatsEvent::Tcp6ApiHandled, 1);
+    None
 }
 
 /// `GET /api/openapi.json` — serves the generated OpenAPI specification for Swagger UI.
@@ -444,51 +347,45 @@ pub async fn api_validation(request: &HttpRequest, data: &Data<Arc<ApiServiceDat
 /// endpoint, and there is no reason for it to be the one route that answers anonymously.
 pub async fn api_service_openapi_json(request: HttpRequest, data: Data<Arc<ApiServiceData>>) -> HttpResponse
 {
-    if let Some(error_return) = api_validation(&request, &data).await {
-        return error_return;
-    }
-    if let Some(response) = api_service_token(&request, Arc::clone(&data.torrent_tracker.config)).await {
-        return response;
-    }
+    if let Some(response) = api_guard(&request, &data).await { return response; }
     let openapi_file = include_str!("../openapi.json");
     HttpResponse::Ok().content_type(ContentType::json()).body(openapi_file)
 }
 
-/// Collects a request body into memory, capped at 1 MiB.
+/// Reads a request body into memory, capped at 1 MiB, and parses it as JSON. Runs inside the
+/// handler, after [`api_guard`], so an unauthenticated request is refused before its body is read.
 ///
 /// # Errors
 ///
-/// Returns a [`CustomError`] when the body overflows the cap or a chunk cannot be read.
-pub async fn api_parse_body(mut payload: web::Payload) -> Result<BytesMut, CustomError>
+/// Returns `400 {"status": ...}` with `chunk error`, `chunk size exceeded` or `bad json body`.
+pub async fn api_json_body<T: DeserializeOwned>(mut payload: web::Payload) -> Result<T, Box<HttpResponse>>
 {
+    let bad = |status: &str| Box::new(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": status})));
     let mut body = BytesMut::new();
     while let Some(chunk) = payload.next().await {
-        let chunk = chunk.map_err(|_| CustomError::new("chunk error"))?;
-
+        let chunk = chunk.map_err(|_| bad("chunk error"))?;
         if body.len() + chunk.len() > 1_048_576 {
-            return Err(CustomError::new("chunk size exceeded"));
+            return Err(bad("chunk size exceeded"));
         }
         body.extend_from_slice(&chunk);
     }
-    Ok(body)
+    serde_json::from_slice(&body).map_err(|_| bad("bad json body"))
 }
 
-/// Parses a 40-character hex string into an [`InfoHash`].
+/// Parses a 40-character hex id ([`InfoHash`] or [`UserId`](crate::tracker::structs::user_id::UserId))
+/// from a path or body value.
 ///
 /// # Errors
 ///
-/// Returns a JSON error response describing the malformed value.
-pub fn parse_info_hash(info: &str) -> Result<InfoHash, HttpResponse>
+/// Returns `400 {"status": "bad <what>"}` for a wrong length and `400 {"status": "invalid <what>"}`
+/// for a non-hex character.
+pub fn parse_hex_id<T: FromStr<Err = HexParseError>>(value: &str, what: &str) -> Result<T, Box<HttpResponse>>
 {
-    if validate_info_hash_hex(info).is_err() {
-        return Err(HttpResponse::BadRequest()
-            .content_type(ContentType::json())
-            .json(json!({"status": "bad info_hash"})));
-    }
-    match hex2bin(info.to_string()) {
-        Ok(hash) => Ok(InfoHash(hash)),
-        Err(_) => Err(HttpResponse::BadRequest()
-            .content_type(ContentType::json())
-            .json(json!({"status": "invalid info_hash"}))),
-    }
+    value.parse().map_err(|e| {
+        let status = match e {
+            HexParseError::InvalidLength => format!("bad {what}"),
+            HexParseError::InvalidCharacter => format!("invalid {what}"),
+        };
+        Box::new(HttpResponse::BadRequest().content_type(ContentType::json()).json(json!({"status": status})))
+    })
 }

@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct TorrentCounts {
     pub seeds_ipv4: usize,
     pub seeds_ipv6: usize,

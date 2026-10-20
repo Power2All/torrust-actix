@@ -1,10 +1,12 @@
 use crate::common::common::shutdown_waiting;
+use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::cleanup_stats::CleanupStats;
 use crate::tracker::structs::info_hash::InfoHash;
 use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_entry::TorrentEntry;
 use crate::tracker::structs::torrent_sharding::TorrentSharding;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
+use crate::tracker::structs::torrent_update_data::TorrentUpdateData;
 use crate::tracker::types::ahash_map::AHashMap;
 use log::info;
 use parking_lot::RwLock;
@@ -14,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Builder;
 use tokio::task::JoinHandle;
-use tokio_shutdown::Shutdown;
+use crate::common::structs::shutdown::Shutdown;
 
 impl Default for TorrentSharding {
     fn default() -> Self {
@@ -85,6 +87,7 @@ impl TorrentSharding {
                         let _ = handle.await;
                     }
                     stats.apply_to_tracker(&torrent_tracker_clone);
+                    torrent_tracker_clone.clean_user_active_torrents(peer_timeout);
                 }
             }
         });
@@ -101,6 +104,7 @@ impl TorrentSharding {
             Self::cleanup_shard_optimized(torrent_tracker.clone(), shard, peer_timeout, rtc_peer_timeout, persistent, stats.clone()).await;
         }
         stats.apply_to_tracker(&torrent_tracker);
+        torrent_tracker.clean_user_active_torrents(peer_timeout);
     }
 
     async fn cleanup_shard_optimized(
@@ -112,6 +116,10 @@ impl TorrentSharding {
         stats: Arc<CleanupStats>
     ) {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
+        // Every torrent this pass changes, queued after the shard lock is released. Expiry never went
+        // through the update queue, so the cache (which the website reads peer counts from) kept
+        // showing peers that had left until its TTL ran out.
+        let mut changed: Vec<(InfoHash, TorrentUpdateData, UpdatesAction)> = Vec::new();
         if let Some(shard_arc) = torrent_tracker.torrents_sharding.shards.get(shard as usize) {
             let now = std::time::Instant::now();
             // `Instant`'s origin is boot time on Linux, so a cutoff underflows while uptime is
@@ -189,32 +197,32 @@ impl TorrentSharding {
                     if let Entry::Occupied(mut entry) = shard_write.entry(*info_hash) {
                         let torrent_entry = entry.get_mut();
                         for peer_id in expired_seeds {
-                            if torrent_entry.seeds.remove(peer_id).is_some() {
+                            if torrent_entry.seeds.swap_remove(peer_id).is_some() {
                                 seeds_removed += 1;
                             }
                         }
                         for peer_id in expired_seeds_ipv6 {
-                            if torrent_entry.seeds_ipv6.remove(peer_id).is_some() {
+                            if torrent_entry.seeds_ipv6.swap_remove(peer_id).is_some() {
                                 seeds_removed += 1;
                             }
                         }
                         for peer_id in expired_peers {
-                            if torrent_entry.peers.remove(peer_id).is_some() {
+                            if torrent_entry.peers.swap_remove(peer_id).is_some() {
                                 peers_removed += 1;
                             }
                         }
                         for peer_id in expired_peers_ipv6 {
-                            if torrent_entry.peers_ipv6.remove(peer_id).is_some() {
+                            if torrent_entry.peers_ipv6.swap_remove(peer_id).is_some() {
                                 peers_removed += 1;
                             }
                         }
                         for peer_id in expired_rtc_seeds {
-                            if torrent_entry.rtc_seeds.remove(peer_id).is_some() {
+                            if torrent_entry.rtc_seeds.swap_remove(peer_id).is_some() {
                                 seeds_removed += 1;
                             }
                         }
                         for peer_id in expired_rtc_peers {
-                            if torrent_entry.rtc_peers.remove(peer_id).is_some() {
+                            if torrent_entry.rtc_peers.swap_remove(peer_id).is_some() {
                                 peers_removed += 1;
                             }
                         }
@@ -228,6 +236,9 @@ impl TorrentSharding {
                         {
                             entry.remove();
                             torrents_removed += 1;
+                            changed.push((*info_hash, TorrentUpdateData::default(), UpdatesAction::Remove));
+                        } else {
+                            changed.push((*info_hash, TorrentUpdateData::from(&*torrent_entry), UpdatesAction::Add));
                         }
                     }
                 }
@@ -267,14 +278,22 @@ impl TorrentSharding {
                                 torrent_entry.rtc_peers.clear();
                                 peers_removed += rtc_peers_len;
                             }
+                            changed.push((*info_hash, TorrentUpdateData::from(&*torrent_entry), UpdatesAction::Add));
                         } else {
                             entry.remove();
                             torrents_removed += 1;
                             seeds_removed += seeds_len + seeds_ipv6_len + rtc_seeds_len;
                             peers_removed += peers_len + peers_ipv6_len + rtc_peers_len;
+                            changed.push((*info_hash, TorrentUpdateData::default(), UpdatesAction::Remove));
                         }
                     }
                 }
+            }
+        }
+        let cache_enabled = torrent_tracker.config.cache.as_ref().is_some_and(|c| c.enabled);
+        if persistent || cache_enabled {
+            for (info_hash, data, action) in changed {
+                torrent_tracker.add_torrent_update(info_hash, data, action);
             }
         }
         if torrents_removed > 0 {
@@ -340,13 +359,6 @@ impl TorrentSharding {
             }
         }
         torrents_return
-    }
-
-    /// Returns the total number of tracked torrents across all shards.
-    pub fn get_torrents_amount(&self) -> u64 {
-        self.shards.iter()
-            .map(|shard| shard.read().len() as u64)
-            .sum()
     }
 
 }

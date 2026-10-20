@@ -1,6 +1,5 @@
 use crate::ssl::enums::certificate_error::CertificateError;
 use crate::ssl::enums::server_identifier::ServerIdentifier;
-use crate::ssl::structs::certificate_bundle::CertificateBundle;
 use crate::ssl::structs::certificate_store::CertificateStore;
 use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
 use rustls::server::ResolvesServerCert;
@@ -10,7 +9,6 @@ impl std::fmt::Debug for DynamicCertificateResolver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DynamicCertificateResolver")
             .field("server_id", &self.server_id)
-            .field("has_cached_key", &self.cached_key.read().is_some())
             .finish()
     }
 }
@@ -20,55 +18,46 @@ impl DynamicCertificateResolver {
     ///
     /// # Errors
     ///
-    /// Returns a [`CertificateError`] when no certificate is loaded for the server, or when
-    /// the bundle cannot be converted into a usable rustls signing key (`CertifiedKeyError`).
+    /// Returns [`CertificateError::ServerNotFound`] when no certificate is loaded for the server.
     pub fn new(
         store: Arc<CertificateStore>,
         server_id: ServerIdentifier,
     ) -> Result<Self, CertificateError> {
-        let resolver = Self {
-            store,
-            server_id,
-            cached_key: parking_lot::RwLock::new(None),
-        };
-        resolver.refresh_cache()?;
-        Ok(resolver)
+        if store.get_certificate(&server_id).is_none() {
+            return Err(CertificateError::ServerNotFound(server_id.to_string()));
+        }
+        Ok(Self { store, server_id })
     }
 
-    /// Returns the server identity this resolver serves certificates for.
-    pub fn server_id(&self) -> &ServerIdentifier {
-        &self.server_id
-    }
-
-    /// Refreshes the resolver's cached certified key from the store (after a hot reload).
+    /// Loads `cert_path`/`key_path` into `store` for `server_id` and returns a rustls config that
+    /// serves them through a resolver, so `POST /api/certificate/reload` reaches new handshakes.
     ///
     /// # Errors
     ///
-    /// Returns a [`CertificateError`] when the store no longer holds a certificate, or when
-    /// the bundle cannot be converted into a usable rustls signing key (`CertifiedKeyError`).
-    pub fn refresh_cache(&self) -> Result<(), CertificateError> {
-        let bundle = self
-            .store
-            .get_certificate(&self.server_id)
-            .ok_or_else(|| CertificateError::ServerNotFound(self.server_id.to_string()))?;
-        let certified_key = Self::bundle_to_certified_key(&bundle)?;
-        *self.cached_key.write() = Some(Arc::new(certified_key));
-        log::info!(
-            "[CERTIFICATE] Refreshed certificate cache for {}",
-            self.server_id
-        );
-        Ok(())
+    /// Returns the [`CertificateError`] from loading the certificate.
+    pub fn server_config(
+        store: &Arc<CertificateStore>,
+        server_id: ServerIdentifier,
+        cert_path: &str,
+        key_path: &str,
+    ) -> Result<rustls::ServerConfig, CertificateError> {
+        store.load_certificate(server_id.clone(), cert_path, key_path)?;
+        let resolver = Self::new(Arc::clone(store), server_id)?;
+        Ok(rustls::ServerConfig::builder().with_no_client_auth().with_cert_resolver(Arc::new(resolver)))
     }
 
-    fn bundle_to_certified_key(bundle: &Arc<CertificateBundle>) -> Result<rustls::sign::CertifiedKey, CertificateError> {
-        let signing_key = rustls::crypto::ring::sign::any_supported_type(&bundle.key)
-            .map_err(|e| CertificateError::CertifiedKeyError(format!("{e}")))?;
-        Ok(rustls::sign::CertifiedKey::new(bundle.certs.clone(), signing_key))
+    /// Returns the key the next TLS handshake will be served. It is read from the store every
+    /// time, so a hot reload takes effect on the next connection; a copy cached at startup kept
+    /// serving the old certificate until a restart.
+    pub fn current_key(&self) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        self.store
+            .get_certificate(&self.server_id)
+            .map(|bundle| Arc::clone(&bundle.certified_key))
     }
 }
 
 impl ResolvesServerCert for DynamicCertificateResolver {
     fn resolve(&self, _client_hello: rustls::server::ClientHello<'_>) -> Option<Arc<rustls::sign::CertifiedKey>> {
-        self.cached_key.read().clone()
+        self.current_key()
     }
 }

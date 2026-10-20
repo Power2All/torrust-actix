@@ -4,4 +4,6 @@ use parking_lot::RwLock;
 use crate::tracker::enums::updates_action::UpdatesAction;
 use crate::tracker::structs::info_hash::InfoHash;
 
-pub type KeysUpdates = Arc<RwLock<HashMap<u128, (InfoHash, i64, UpdatesAction)>>>;
+/// Pending announce-key writes, one per key; see [`UsersUpdates`](super::users_updates::UsersUpdates)
+/// for the role of the `u128` sequence number.
+pub type KeysUpdates = Arc<RwLock<HashMap<InfoHash, (u128, i64, UpdatesAction)>>>;

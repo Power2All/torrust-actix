@@ -55,7 +55,7 @@ async fn test_remove_peer_from_torrent() {
     let peer_id = common::random_peer_id();
     let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
     tracker.add_torrent_peer(info_hash, peer_id, peer, false);
-    let (existed, current) = tracker.remove_torrent_peer(info_hash, peer_id, false, false);
+    let (existed, current) = tracker.remove_torrent_peer(info_hash, peer_id, false, false, None);
     assert!(existed, "Should have previous entry");
     assert!(current.is_none(), "Torrent should be removed when empty (non-persistent)");
 }
@@ -101,7 +101,7 @@ async fn test_torrent_sharding_distribution() {
         let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }
-    let total_torrents = tracker.torrents_sharding.get_torrents_amount();
+    let total_torrents = tracker.get_stats().torrents;
     assert_eq!(total_torrents, 256, "Should have 256 torrents across shards");
 }
 
@@ -334,6 +334,25 @@ async fn test_reaper_removes_expired_ipv4_peer() {
     TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, false).await;
     let entry = tracker.get_torrent(info_hash);
     assert!(entry.is_none(), "Torrent should be gone after all IPv4 peers expire (non-persistent)");
+}
+
+#[tokio::test]
+async fn test_reaper_queues_the_new_counts() {
+    // Expired peers used to leave the queue untouched, so the cache the website reads kept
+    // showing them until its TTL ran out.
+    use torrust_actix::tracker::enums::updates_action::UpdatesAction;
+    let tracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    let (gone, stays) = (common::random_peer_id(), common::random_peer_id());
+    tracker.add_torrent_peer(info_hash, gone, common::create_aged_peer(gone, IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 6881, AGED), false);
+    tracker.add_torrent_peer(info_hash, stays, common::create_test_peer(stays, IpAddr::V4(Ipv4Addr::new(1, 2, 3, 5)), 6881), false);
+    tracker.clear_torrent_updates();
+    TorrentSharding::cleanup_once(tracker.clone(), TIMEOUT, TIMEOUT, true).await;
+    let (data, action) = tracker.get_torrent_updates().remove(&info_hash).expect("cleanup must queue the torrent");
+    assert_eq!((data.peers_ipv4, action), (1, UpdatesAction::Add));
+
+    TorrentSharding::cleanup_once(tracker.clone(), Duration::ZERO, Duration::ZERO, true).await;
+    assert_eq!(tracker.get_torrent_updates().remove(&info_hash).map(|(data, _)| data.peers_ipv4), Some(0));
 }
 
 #[tokio::test]
@@ -667,6 +686,24 @@ async fn test_keys_loaded_from_database_keep_absolute_expiry() {
 }
 
 #[tokio::test]
+async fn test_key_expiry_permanent_and_saturating() {
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+    // `POST /api/key/{hash}/0` is documented as permanent but stored "now", so the key was dead
+    // on arrival; a huge timeout wrapped, or overflowed chrono and read back as 1970.
+    let tracker: common::TestTracker = common::create_test_tracker().await;
+    assert_eq!(TorrentTracker::key_expiry(0), 0);
+    let permanent = common::random_info_hash();
+    tracker.add_key(permanent, 0);
+    assert!(tracker.check_key(permanent), "timeout 0 must mean permanent");
+    let far = common::random_info_hash();
+    tracker.add_key(far, u64::MAX);
+    assert_eq!(tracker.get_key(far).unwrap().1, i64::MAX);
+    assert!(tracker.check_key(far));
+    tracker.clean_keys();
+    assert!(tracker.get_key(far).is_some(), "a far-future key must survive cleanup");
+}
+
+#[tokio::test]
 async fn test_permanent_keys_survive_cleanup() {
     let tracker: common::TestTracker = common::create_test_tracker().await;
     let permanent = common::random_info_hash();
@@ -747,4 +784,56 @@ async fn test_rtc_snapshot_cap_is_independent_of_the_bittorrent_cap() {
         entry.rtc_seeds.len() <= SNAPSHOT_RTC_PEER_CAP,
         "RTC snapshot exceeded its own cap"
     );
+}
+
+#[tokio::test]
+async fn test_user_queue_holds_one_update_per_user_and_stale_activity_expires() {
+    use std::collections::BTreeMap;
+    use torrust_actix::tracker::enums::updates_action::UpdatesAction;
+    use torrust_actix::tracker::structs::user_entry_item::UserEntryItem;
+    use torrust_actix::tracker::structs::user_id::UserId;
+
+    let tracker: common::TestTracker = common::create_test_tracker().await;
+    let now = torrust_actix::common::common::current_time();
+    let (fresh, stale) = (common::random_info_hash(), common::random_info_hash());
+    let user = UserEntryItem {
+        key: UserId([2; 20]), user_id: Some(1), user_uuid: None, uploaded: 0, downloaded: 0, completed: 0,
+        updated: now, active: 1, torrents_active: BTreeMap::from([(fresh, now), (stale, now - 10_000)]),
+    };
+    let user_id = UserId([1; 20]);
+    tracker.add_user(user_id, user.clone());
+
+    // One queued write per user, however often they announce; the newest wins.
+    for uploaded in 1..=100 {
+        tracker.add_user_update(user_id, UserEntryItem { uploaded, ..user.clone() }, UpdatesAction::Add);
+    }
+    let queued = tracker.get_user_updates();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[&user_id].1.uploaded, 100);
+
+    // A torrent left without `event=stopped` drops out after the peer timeout.
+    tracker.clean_user_active_torrents(Duration::from_secs(2700));
+    let active = tracker.get_user(user_id).unwrap().torrents_active;
+    assert!(active.contains_key(&fresh) && !active.contains_key(&stale));
+}
+
+#[tokio::test]
+async fn test_snapshots_spread_over_the_whole_swarm() {
+    // A snapshot used to start at the front of the map, so every client of a big swarm got the
+    // same 73 peers. 100 snapshots of 73 from 1000 peers now cover nearly all of them.
+    use std::collections::HashSet;
+    use torrust_actix::tracker::enums::snapshot_maps::SnapshotMaps;
+    use torrust_actix::tracker::structs::announce_entry::AnnounceEntry;
+    let tracker: common::TestTracker = common::create_test_tracker().await;
+    let info_hash = common::random_info_hash();
+    for i in 0..1000u32 {
+        let peer_id = common::random_peer_id();
+        tracker.add_torrent_peer(info_hash, peer_id, common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::from(0x0a00_0000 + i)), 6881), false);
+    }
+    let entry = tracker.get_torrent(info_hash).unwrap();
+    let seen: HashSet<_> = (0..100)
+        .flat_map(|_| AnnounceEntry::from_entry(&entry, SnapshotMaps::Bt).peers)
+        .map(|peer| peer.peer_id)
+        .collect();
+    assert!(seen.len() > 900, "only {} of 1000 peers were ever advertised", seen.len());
 }

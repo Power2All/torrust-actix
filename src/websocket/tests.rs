@@ -14,7 +14,6 @@ mod websocket_tests {
     use crate::websocket::structs::handshake_response::HandshakeResponse;
     use crate::websocket::websocket::{
         create_cluster_error_response,
-        create_cluster_error_response_json,
         decode,
         encode
     };
@@ -58,11 +57,8 @@ mod websocket_tests {
     fn test_encode_decode_binary() {
         let request = ClusterRequest::new(
             1,
-            ProtocolType::Api,
-            RequestType::ApiCall {
-                endpoint: "/api/stats".to_string(),
-                method: "GET".to_string(),
-            },
+            ProtocolType::Http,
+            RequestType::Announce,
             "192.168.1.1".parse::<IpAddr>().unwrap(),
             8080,
             vec![],
@@ -231,11 +227,8 @@ mod websocket_tests {
     fn test_msgpack_is_more_compact_than_json() {
         let request = ClusterRequest::new(
             999999,
-            ProtocolType::Api,
-            RequestType::ApiCall {
-                endpoint: "/api/v1/very/long/endpoint/path".to_string(),
-                method: "POST".to_string(),
-            },
+            ProtocolType::Http,
+            RequestType::Announce,
             "192.168.100.200".parse::<IpAddr>().unwrap(),
             12345,
             vec![0; 100],
@@ -336,35 +329,6 @@ mod websocket_tests {
     }
 
     #[test]
-    fn test_create_cluster_error_response_json_not_connected() {
-        let error = ForwardError::NotConnected;
-        let response = create_cluster_error_response_json(&error);
-        assert!(response.contains("Cluster connection lost"));
-        assert!(response.contains("failure_reason"));
-    }
-
-    #[test]
-    fn test_create_cluster_error_response_json_timeout() {
-        let error = ForwardError::Timeout;
-        let response = create_cluster_error_response_json(&error);
-        assert!(response.contains("Cluster timeout"));
-    }
-
-    #[test]
-    fn test_create_cluster_error_response_json_master_error() {
-        let error = ForwardError::MasterError("Server error".to_string());
-        let response = create_cluster_error_response_json(&error);
-        assert!(response.contains("Server error"));
-    }
-
-    #[test]
-    fn test_create_cluster_error_response_json_encoding_error() {
-        let error = ForwardError::EncodingError("bad encoding".to_string());
-        let response = create_cluster_error_response_json(&error);
-        assert!(response.contains("Cluster encoding error"));
-    }
-
-    #[test]
     fn test_cluster_request_new() {
         let ip: IpAddr = "192.168.1.1".parse().unwrap();
         let request = ClusterRequest::new(
@@ -397,30 +361,6 @@ mod websocket_tests {
         );
         assert_eq!(request.client_ip, ip);
         assert!(request.client_ip.is_ipv6());
-    }
-
-    #[test]
-    fn test_cluster_request_with_api_call() {
-        let ip: IpAddr = "10.0.0.1".parse().unwrap();
-        let request = ClusterRequest::new(
-            100,
-            ProtocolType::Api,
-            RequestType::ApiCall {
-                endpoint: "/api/v1/stats".to_string(),
-                method: "GET".to_string(),
-            },
-            ip,
-            443,
-            vec![],
-        );
-        assert_eq!(request.protocol, ProtocolType::Api);
-        match &request.request_type {
-            RequestType::ApiCall { endpoint, method } => {
-                assert_eq!(endpoint, "/api/v1/stats");
-                assert_eq!(method, "GET");
-            }
-            _ => panic!("Expected ApiCall request type"),
-        }
     }
 
     #[test]
@@ -660,9 +600,6 @@ mod websocket_tests {
         let udp = ProtocolType::Udp;
         let serialized = serde_json::to_string(&udp).unwrap();
         assert_eq!(serialized, "\"Udp\"");
-        let api = ProtocolType::Api;
-        let serialized = serde_json::to_string(&api).unwrap();
-        assert_eq!(serialized, "\"Api\"");
     }
 
     #[test]
@@ -673,15 +610,13 @@ mod websocket_tests {
         assert_eq!(https, ProtocolType::Https);
         let udp: ProtocolType = serde_json::from_str("\"Udp\"").unwrap();
         assert_eq!(udp, ProtocolType::Udp);
-        let api: ProtocolType = serde_json::from_str("\"Api\"").unwrap();
-        assert_eq!(api, ProtocolType::Api);
     }
 
     #[test]
     fn test_protocol_type_equality() {
         assert_eq!(ProtocolType::Http, ProtocolType::Http);
         assert_ne!(ProtocolType::Http, ProtocolType::Https);
-        assert_ne!(ProtocolType::Udp, ProtocolType::Api);
+        assert_ne!(ProtocolType::Udp, ProtocolType::Http);
     }
 
     #[test]
@@ -717,23 +652,6 @@ mod websocket_tests {
     }
 
     #[test]
-    fn test_request_type_api_call() {
-        let api_call = RequestType::ApiCall {
-            endpoint: "/api/v1/stats".to_string(),
-            method: "GET".to_string(),
-        };
-        let serialized = serde_json::to_string(&api_call).unwrap();
-        let deserialized: RequestType = serde_json::from_str(&serialized).unwrap();
-        match deserialized {
-            RequestType::ApiCall { endpoint, method } => {
-                assert_eq!(endpoint, "/api/v1/stats");
-                assert_eq!(method, "GET");
-            }
-            _ => panic!("Expected ApiCall variant"),
-        }
-    }
-
-    #[test]
     fn test_request_type_udp_packet() {
         let udp = RequestType::UdpPacket;
         let serialized = serde_json::to_string(&udp).unwrap();
@@ -746,30 +664,12 @@ mod websocket_tests {
     fn test_request_type_equality() {
         assert_eq!(RequestType::Announce, RequestType::Announce);
         assert_ne!(RequestType::Announce, RequestType::Scrape);
-        let api1 = RequestType::ApiCall {
-            endpoint: "/test".to_string(),
-            method: "GET".to_string(),
-        };
-        let api2 = RequestType::ApiCall {
-            endpoint: "/test".to_string(),
-            method: "GET".to_string(),
-        };
-        let api3 = RequestType::ApiCall {
-            endpoint: "/other".to_string(),
-            method: "POST".to_string(),
-        };
-        assert_eq!(api1, api2);
-        assert_ne!(api1, api3);
     }
 
     #[test]
     fn test_request_type_clone() {
-        let api_call = RequestType::ApiCall {
-            endpoint: "/clone/test".to_string(),
-            method: "DELETE".to_string(),
-        };
-        let cloned = api_call.clone();
-        assert_eq!(api_call, cloned);
+        let request_type = RequestType::UdpPacket;
+        assert_eq!(request_type.clone(), request_type);
     }
 
     #[test]
@@ -777,13 +677,5 @@ mod websocket_tests {
         let announce = RequestType::Announce;
         let debug_str = format!("{:?}", announce);
         assert_eq!(debug_str, "Announce");
-        let api_call = RequestType::ApiCall {
-            endpoint: "/test".to_string(),
-            method: "GET".to_string(),
-        };
-        let debug_str = format!("{:?}", api_call);
-        assert!(debug_str.contains("ApiCall"));
-        assert!(debug_str.contains("/test"));
-        assert!(debug_str.contains("GET"));
     }
 }

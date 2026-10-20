@@ -93,6 +93,12 @@ impl TorrentTracker {
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .and_then(|s| s.parse::<u64>().ok())
             .map_or(72, |v| if v == 0 || v > 72 { 72 } else { v });
+        // HTTP keys are free-form text; fold them to the UDP width with a fixed-seed hash so the
+        // comparison in `TorrentPeer::is_same_client` is the same for both protocols.
+        let key = query.get("key")
+            .and_then(|v| v.first())
+            .filter(|bytes| !bytes.is_empty())
+            .map(|bytes| ahash::RandomState::with_seeds(1, 2, 3, 4).hash_one(bytes) as u32);
         let rtctorrent_bool = query.get("rtctorrent")
             .and_then(|v| v.first())
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
@@ -144,6 +150,7 @@ impl TorrentTracker {
             no_peer_id: no_peer_id_bool,
             event: event_integer,
             remote_addr,
+            key,
             numwant: numwant_integer,
             rtctorrent: rtctorrent_bool,
             rtcoffer: rtcoffer_string,
@@ -177,6 +184,7 @@ impl TorrentTracker {
             downloaded: NumberOfBytes(announce_query.downloaded as i64),
             left: NumberOfBytes(announce_query.left as i64),
             event: AnnounceEvent::None,
+            key: announce_query.key,
             rtc_data: if announce_query.rtctorrent.unwrap_or(false) {
                 Some(Box::new(RtcData::new(announce_query.rtcoffer.as_deref())))
             } else {
@@ -266,7 +274,8 @@ impl TorrentTracker {
                     announce_query.info_hash,
                     announce_query.peer_id,
                     is_persistent,
-                    false
+                    false,
+                    Some((announce_query.remote_addr, announce_query.key))
                 ) {
                     (true, Some(new_torrent)) => {
                         if users_enabled && let Some(user_id) = user_key {
@@ -293,7 +302,15 @@ impl TorrentTracker {
                         }
                         new_torrent
                     }
-                    _ => AnnounceEntry::default()
+                    // The swarm emptied and the torrent was dropped: without this its last counts
+                    // stayed in the cache until the TTL ran out.
+                    (true, None) => {
+                        if needs_update {
+                            data.add_torrent_update(announce_query.info_hash, TorrentUpdateData::default(), UpdatesAction::Remove);
+                        }
+                        AnnounceEntry::default()
+                    }
+                    (false, _) => AnnounceEntry::default()
                 };
                 let elapsed = now.elapsed();
                 debug!("[PERF] Announce Stopped handling took: {elapsed:?}");

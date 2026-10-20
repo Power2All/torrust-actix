@@ -24,19 +24,11 @@ impl std::fmt::Debug for CertificateStore {
     }
 }
 
-impl Default for CertificateStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl CertificateStore {
     /// Creates an empty certificate store.
     pub fn new() -> Self {
-        Self {
-            bundles: parking_lot::RwLock::new(std::collections::HashMap::new()),
-            paths: parking_lot::RwLock::new(std::collections::HashMap::new()),
-        }
+        Self::default()
     }
 
     /// Loads a certificate chain and private key from the given PEM files and registers them
@@ -71,11 +63,6 @@ impl CertificateStore {
         self.bundles.read().get(server_id).cloned()
     }
 
-    /// Returns the PEM file paths a server's certificate was loaded from, if registered.
-    pub fn get_paths(&self, server_id: &ServerIdentifier) -> Option<CertificatePaths> {
-        self.paths.read().get(server_id).cloned()
-    }
-
     /// Re-reads a server's certificate from its registered file paths (hot reload).
     ///
     /// # Errors
@@ -98,40 +85,6 @@ impl CertificateStore {
         Ok(())
     }
 
-    /// Reloads a server's certificate from explicit file paths, updating the registered paths.
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`CertificateError`](crate::ssl::enums::certificate_error::CertificateError) when the files cannot be read or parsed.
-    pub fn reload_certificate_with_paths(
-        &self,
-        server_id: &ServerIdentifier,
-        cert_path: &str,
-        key_path: &str,
-    ) -> Result<(), crate::ssl::enums::certificate_error::CertificateError> {
-        let bundle = Self::load_bundle_from_files(cert_path, key_path)?;
-        self.paths.write().insert(
-            server_id.clone(),
-            CertificatePaths {
-                cert_path: cert_path.to_string(),
-                key_path: key_path.to_string(),
-            },
-        );
-        self.bundles
-            .write()
-            .insert(server_id.clone(), std::sync::Arc::new(bundle));
-        Ok(())
-    }
-
-    /// Lists every registered server together with its certificate file paths.
-    pub fn all_servers(&self) -> Vec<(ServerIdentifier, CertificatePaths)> {
-        self.paths
-            .read()
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
-    }
-
     /// Returns the loaded certificate bundles of all registered servers.
     pub fn get_all_certificates(
         &self,
@@ -140,18 +93,6 @@ impl CertificateStore {
             .read()
             .iter()
             .map(|(k, v)| (k.clone(), std::sync::Arc::clone(v)))
-            .collect()
-    }
-
-    /// Reloads every registered certificate, returning the per-server outcome.
-    pub fn reload_all(&self) -> Vec<(ServerIdentifier, Result<(), crate::ssl::enums::certificate_error::CertificateError>)> {
-        let servers: Vec<_> = self.paths.read().keys().cloned().collect();
-        servers
-            .into_iter()
-            .map(|server_id| {
-                let result = self.reload_certificate(&server_id);
-                (server_id, result)
-            })
             .collect()
     }
 
@@ -180,9 +121,13 @@ impl CertificateStore {
             PemError::NoItemsFound => crate::ssl::enums::certificate_error::CertificateError::NoKeyFound,
             other => crate::ssl::enums::certificate_error::CertificateError::KeyParseError(other.to_string()),
         })?;
+        let signing_key = rustls::crypto::ring::sign::any_supported_type(&tls_key)
+            .map_err(|e| crate::ssl::enums::certificate_error::CertificateError::CertifiedKeyError(format!("{e}")))?;
+        let certified_key = std::sync::Arc::new(rustls::sign::CertifiedKey::new(tls_certs.clone(), signing_key));
         Ok(CertificateBundle {
             certs: tls_certs,
             key: tls_key,
+            certified_key,
             loaded_at: chrono::Utc::now(),
             cert_path: cert_path.to_string(),
             key_path: key_path.to_string(),

@@ -1,4 +1,5 @@
 use crate::common::common::parse_query;
+use crate::http::http::http_announce_peers;
 use crate::config::enums::cluster_encoding::ClusterEncoding;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
@@ -6,7 +7,6 @@ use crate::udp::structs::udp_server::UdpServer;
 use crate::websocket::enums::encoding_error::EncodingError;
 use crate::websocket::enums::forward_error::ForwardError;
 use crate::websocket::enums::request_type::RequestType;
-use crate::websocket::structs::announce_response_stats::AnnounceResponseStats;
 use crate::websocket::structs::cluster_request::ClusterRequest;
 use crate::websocket::structs::cluster_response::ClusterResponse;
 use crate::websocket::structs::slave_client_state::SlaveClientState;
@@ -30,7 +30,6 @@ use serde::{
     Serialize
 };
 use std::borrow::Cow;
-use std::io::Write;
 use std::net::{
     IpAddr,
     SocketAddr
@@ -44,9 +43,10 @@ use std::sync::Arc;
 /// Returns an [`EncodingError`] when serialisation fails.
 pub fn encode<T: Serialize>(encoding: &ClusterEncoding, value: &T) -> Result<Vec<u8>, EncodingError> {
     match encoding {
-        ClusterEncoding::binary => encode_binary(value),
-        ClusterEncoding::json => encode_json(value),
-        ClusterEncoding::msgpack => encode_msgpack(value),
+        ClusterEncoding::binary | ClusterEncoding::msgpack => rmp_serde::to_vec(value)
+            .map_err(|e| EncodingError::SerializationError(e.to_string())),
+        ClusterEncoding::json => serde_json::to_vec(value)
+            .map_err(|e| EncodingError::SerializationError(e.to_string())),
     }
 }
 
@@ -57,47 +57,17 @@ pub fn encode<T: Serialize>(encoding: &ClusterEncoding, value: &T) -> Result<Vec
 /// Returns an [`EncodingError`] when the payload is malformed.
 pub fn decode<T: DeserializeOwned>(encoding: &ClusterEncoding, data: &[u8]) -> Result<T, EncodingError> {
     match encoding {
-        ClusterEncoding::binary => decode_binary(data),
-        ClusterEncoding::json => decode_json(data),
-        ClusterEncoding::msgpack => decode_msgpack(data),
+        ClusterEncoding::binary | ClusterEncoding::msgpack => rmp_serde::from_slice(data)
+            .map_err(|e| EncodingError::DeserializationError(e.to_string())),
+        ClusterEncoding::json => serde_json::from_slice(data)
+            .map_err(|e| EncodingError::DeserializationError(e.to_string())),
     }
 }
 
-fn encode_binary<T: Serialize>(value: &T) -> Result<Vec<u8>, EncodingError> {
-    rmp_serde::to_vec(value)
-        .map_err(|e| EncodingError::SerializationError(e.to_string()))
-}
-
-fn decode_binary<T: DeserializeOwned>(data: &[u8]) -> Result<T, EncodingError> {
-    rmp_serde::from_slice(data)
-        .map_err(|e| EncodingError::DeserializationError(e.to_string()))
-}
-
-fn encode_json<T: Serialize>(value: &T) -> Result<Vec<u8>, EncodingError> {
-    serde_json::to_vec(value)
-        .map_err(|e| EncodingError::SerializationError(e.to_string()))
-}
-
-fn decode_json<T: DeserializeOwned>(data: &[u8]) -> Result<T, EncodingError> {
-    serde_json::from_slice(data)
-        .map_err(|e| EncodingError::DeserializationError(e.to_string()))
-}
-
-fn encode_msgpack<T: Serialize>(value: &T) -> Result<Vec<u8>, EncodingError> {
-    rmp_serde::to_vec(value)
-        .map_err(|e| EncodingError::SerializationError(e.to_string()))
-}
-
-fn decode_msgpack<T: DeserializeOwned>(data: &[u8]) -> Result<T, EncodingError> {
-    rmp_serde::from_slice(data)
-        .map_err(|e| EncodingError::DeserializationError(e.to_string()))
-}
-
 /// Master-side dispatcher: routes a decoded [`ClusterRequest`] from a slave to the announce,
-/// scrape, API or raw-UDP processor and returns the response to send back.
+/// scrape or raw-UDP processor and returns the response to send back.
 pub async fn process_cluster_request(
     tracker: Arc<TorrentTracker>,
-    _encoding: &ClusterEncoding,
     request: ClusterRequest,
 ) -> ClusterResponse {
     debug!(
@@ -110,9 +80,6 @@ pub async fn process_cluster_request(
         }
         RequestType::Scrape => {
             process_scrape(&tracker, &request).await
-        }
-        RequestType::ApiCall { ref endpoint, ref method } => {
-            process_api_call(&tracker, &request, endpoint, method).await
         }
         RequestType::UdpPacket => {
             process_udp_packet(&tracker, &request).await
@@ -183,7 +150,10 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
         let mut rtc_peers_list = ben_list!();
         {
             let rtc_peers_list_mut = rtc_peers_list.list_mut().unwrap();
+            // Capped by `numwant` (1..=72) like a BitTorrent peer list: up to 128 offers of up to
+            // 8 KiB each went out to every leecher, while the client dials at most 8 per round.
             for (peer_id, peer) in &torrent_entry.rtc_seeds {
+                if rtc_peers_list_mut.len() >= announce.numwant as usize { break; }
                 if *peer_id == announce.peer_id { continue; }
                 if let Some(offer) = peer.rtc_sdp_offer()
                     && !offer.is_empty() {
@@ -218,204 +188,16 @@ pub async fn process_announce(tracker: &Arc<TorrentTracker>, request: &ClusterRe
         }.encode();
         return ClusterResponse::success(request.request_id, response_bytes);
     }
-    let stats = AnnounceResponseStats {
-        interval: tracker_config.request_interval as i64,
-        min_interval: tracker_config.request_interval_minimum as i64,
-        complete: torrent_entry.counts.total_seeds() as i64,
-        incomplete: torrent_entry.counts.total_peers() as i64,
-        downloaded: torrent_entry.completed as i64,
-    };
-    let response_bytes = if announce.compact {
-        build_compact_announce_response(
-            &request.client_ip,
-            &torrent_entry,
-            &announce,
-            &stats,
-        )
-    } else {
-        build_extended_announce_response(
-            &request.client_ip,
-            &torrent_entry,
-            &announce,
-            &stats,
-        )
-    };
+    let (peers_key, peers) = http_announce_peers(&torrent_entry, &announce, request.client_ip);
+    let response_bytes = ben_map! {
+        "interval" => ben_int!(tracker_config.request_interval as i64),
+        "min interval" => ben_int!(tracker_config.request_interval_minimum as i64),
+        "complete" => ben_int!(torrent_entry.counts.total_seeds() as i64),
+        "incomplete" => ben_int!(torrent_entry.counts.total_peers() as i64),
+        "downloaded" => ben_int!(torrent_entry.completed as i64),
+        peers_key => peers
+    }.encode();
     ClusterResponse::success(request.request_id, response_bytes)
-}
-
-/// Builds the bencoded compact announce response (packed 6/18-byte peer strings) for a
-/// cluster-forwarded announce.
-pub fn build_compact_announce_response(
-    client_ip: &IpAddr,
-    torrent_entry: &crate::tracker::structs::announce_entry::AnnounceEntry,
-    announce: &crate::tracker::structs::announce_query_request::AnnounceQueryRequest,
-    stats: &AnnounceResponseStats,
-) -> Vec<u8> {
-    // Already clamped to 1..=72 by `validate_announce`, so it is safe to size buffers with.
-    let want = announce.numwant as usize;
-    let mut peers_list: Vec<u8> = Vec::with_capacity(want * 6);
-    match client_ip {
-        IpAddr::V4(_) => {
-            if announce.left != 0 {
-                let seeds = torrent_entry.seeds.iter()
-                    .filter(|peer| peer.peer_id != announce.peer_id)
-                    .take(want);
-                for torrent_peer in seeds {
-                    if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
-                        let _ = peers_list.write(&ipv4.octets());
-                        let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
-                    }
-                }
-            }
-            if peers_list.len() < want * 6 {
-                let peers = torrent_entry.peers.iter()
-                    .filter(|peer| peer.peer_id != announce.peer_id)
-                    .take(want);
-                for torrent_peer in peers {
-                    if peers_list.len() >= want * 6 {
-                        break;
-                    }
-                    if let IpAddr::V4(ipv4) = torrent_peer.peer_addr.ip() {
-                        let _ = peers_list.write(&ipv4.octets());
-                        let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
-                    }
-                }
-            }
-            ben_map! {
-                "interval" => ben_int!(stats.interval),
-                "min interval" => ben_int!(stats.min_interval),
-                "complete" => ben_int!(stats.complete),
-                "incomplete" => ben_int!(stats.incomplete),
-                "downloaded" => ben_int!(stats.downloaded),
-                "peers" => ben_bytes!(peers_list)
-            }.encode()
-        }
-        IpAddr::V6(_) => {
-            if announce.left != 0 {
-                let seeds = torrent_entry.seeds_ipv6.iter()
-                    .filter(|peer| peer.peer_id != announce.peer_id)
-                    .take(want);
-                for torrent_peer in seeds {
-                    if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
-                        let _ = peers_list.write(&ipv6.octets());
-                        let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
-                    }
-                }
-            }
-            if peers_list.len() < want * 18 {
-                let peers = torrent_entry.peers_ipv6.iter()
-                    .filter(|peer| peer.peer_id != announce.peer_id)
-                    .take(want);
-                for torrent_peer in peers {
-                    if peers_list.len() >= want * 18 {
-                        break;
-                    }
-                    if let IpAddr::V6(ipv6) = torrent_peer.peer_addr.ip() {
-                        let _ = peers_list.write(&ipv6.octets());
-                        let _ = peers_list.write(&torrent_peer.peer_addr.port().to_be_bytes());
-                    }
-                }
-            }
-            ben_map! {
-                "interval" => ben_int!(stats.interval),
-                "min interval" => ben_int!(stats.min_interval),
-                "complete" => ben_int!(stats.complete),
-                "incomplete" => ben_int!(stats.incomplete),
-                "downloaded" => ben_int!(stats.downloaded),
-                "peers6" => ben_bytes!(peers_list)
-            }.encode()
-        }
-    }
-}
-
-/// Builds the bencoded dictionary-style announce response (peer id/ip/port entries) for a
-/// cluster-forwarded announce.
-pub fn build_extended_announce_response(
-    client_ip: &IpAddr,
-    torrent_entry: &crate::tracker::structs::announce_entry::AnnounceEntry,
-    announce: &crate::tracker::structs::announce_query_request::AnnounceQueryRequest,
-    stats: &AnnounceResponseStats,
-) -> Vec<u8> {
-    // Already clamped to 1..=72 by `validate_announce`.
-    let want = announce.numwant as usize;
-    let mut peers_list = ben_list!();
-    let peers_list_mut = peers_list.list_mut().unwrap();
-    match client_ip {
-        IpAddr::V4(_) => {
-            if announce.left != 0 {
-                let seeds = torrent_entry.seeds.iter()
-                    .filter(|peer| peer.peer_id != announce.peer_id)
-                    .take(want);
-                for torrent_peer in seeds {
-                    peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
-                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
-                    });
-                }
-            }
-            if peers_list_mut.len() < want {
-                let peers = torrent_entry.peers.iter()
-                    .filter(|peer| peer.peer_id != announce.peer_id)
-                    .take(want);
-                for torrent_peer in peers {
-                    if peers_list_mut.len() >= want {
-                        break;
-                    }
-                    peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
-                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
-                    });
-                }
-            }
-            ben_map! {
-                "interval" => ben_int!(stats.interval),
-                "min interval" => ben_int!(stats.min_interval),
-                "complete" => ben_int!(stats.complete),
-                "incomplete" => ben_int!(stats.incomplete),
-                "downloaded" => ben_int!(stats.downloaded),
-                "peers" => peers_list
-            }.encode()
-        }
-        IpAddr::V6(_) => {
-            if announce.left != 0 {
-                let seeds = torrent_entry.seeds_ipv6.iter()
-                    .filter(|peer| peer.peer_id != announce.peer_id)
-                    .take(want);
-                for torrent_peer in seeds {
-                    peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
-                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
-                    });
-                }
-            }
-            if peers_list_mut.len() < want {
-                let peers = torrent_entry.peers_ipv6.iter()
-                    .filter(|peer| peer.peer_id != announce.peer_id)
-                    .take(want);
-                for torrent_peer in peers {
-                    if peers_list_mut.len() >= want {
-                        break;
-                    }
-                    peers_list_mut.push(ben_map! {
-                        "peer id" => ben_bytes!(torrent_peer.peer_id.to_string()),
-                        "ip" => ben_bytes!(torrent_peer.peer_addr.ip().to_string()),
-                        "port" => ben_int!(i64::from(torrent_peer.peer_addr.port()))
-                    });
-                }
-            }
-            ben_map! {
-                "interval" => ben_int!(stats.interval),
-                "min interval" => ben_int!(stats.min_interval),
-                "complete" => ben_int!(stats.complete),
-                "incomplete" => ben_int!(stats.incomplete),
-                "downloaded" => ben_int!(stats.downloaded),
-                "peers6" => peers_list
-            }.encode()
-        }
-    }
 }
 
 /// Master-side scrape processing for a request forwarded by a slave; returns the bencoded
@@ -474,36 +256,21 @@ pub async fn process_scrape(tracker: &Arc<TorrentTracker>, request: &ClusterRequ
     ClusterResponse::success(request.request_id, response_bytes)
 }
 
-/// Rejects API calls forwarded through the cluster (not supported); always returns a JSON error.
-pub async fn process_api_call(
-    _tracker: &Arc<TorrentTracker>,
-    request: &ClusterRequest,
-    endpoint: &str,
-    method: &str,
-) -> ClusterResponse {
-    error!(
-        "[WEBSOCKET MASTER] API calls through cluster not supported: {method} {endpoint}"
-    );
-    let error_response = serde_json::json!({
-        "error": "API calls through cluster not supported"
-    }).to_string().into_bytes();
-    ClusterResponse::success(request.request_id, error_response)
-}
-
 /// Master-side handling of a raw UDP tracker packet forwarded by a slave; runs the normal
 /// UDP request pipeline and returns the encoded UDP response bytes.
 pub async fn process_udp_packet(tracker: &Arc<TorrentTracker>, request: &ClusterRequest) -> ClusterResponse {
     let remote_addr = SocketAddr::new(request.client_ip, request.client_port);
-    let response = UdpServer::handle_packet(
+    let Some(response) = UdpServer::handle_packet(
         remote_addr,
         &request.payload,
         tracker.clone(),
         false,
-    ).await;
-    let estimated_size = response.estimated_size();
-    let mut buffer = Vec::with_capacity(estimated_size);
-    match response.write(&mut buffer) {
-        Ok(()) => ClusterResponse::success(request.request_id, buffer),
+    ).await else {
+        // Nothing to send back: the slave then sends no datagram either.
+        return ClusterResponse::error(request.request_id, "Unparseable UDP packet".to_string());
+    };
+    match response.write_to_vec() {
+        Ok(buffer) => ClusterResponse::success(request.request_id, buffer),
         Err(e) => {
             error!("[WEBSOCKET MASTER] Failed to encode UDP response: {e}");
             ClusterResponse::error(request.request_id, format!("Failed to encode UDP response: {e}"))
@@ -523,95 +290,56 @@ pub async fn websocket_master_service(
         App,
         HttpServer
     };
+    use crate::ssl::enums::server_identifier::ServerIdentifier;
+    use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
     use log::error;
-    use rustls::pki_types::pem::PemObject;
-    use rustls::pki_types::{
-        CertificateDer,
-        PrivateKeyDer
-    };
-    use std::fs::File;
     use std::process::exit;
     use std::time::Duration;
 
     let config = tracker.config.clone();
-    let keep_alive = config.tracker_config.cluster_keep_alive;
-    let request_timeout = config.tracker_config.cluster_request_timeout;
-    let disconnect_timeout = config.tracker_config.cluster_disconnect_timeout;
-    let worker_threads = config.tracker_config.cluster_threads as usize;
-    let max_connections = config.tracker_config.cluster_max_connections as usize;
-    let tls_connection_rate = config.tracker_config.tls_connection_rate as usize;
-    let master_id = uuid::Uuid::new_v4().to_string();
+    let master_id = format!("{:032x}", rand::random::<u128>());
     info!("[WEBSOCKET MASTER] Master UUID: {master_id}");
     let service_data = Arc::new(WebSocketServiceData {
         tracker: tracker.clone(),
         config: config.clone(),
         master_id,
     });
-    if config.tracker_config.cluster_ssl {
+    let cluster = &config.tracker_config;
+    let tls_config = cluster.cluster_ssl.then(|| {
         info!("[WEBSOCKET MASTER] Starting WSS server on {addr}");
-        let ssl_key = &config.tracker_config.cluster_ssl_key;
-        let ssl_cert = &config.tracker_config.cluster_ssl_cert;
-        if ssl_key.is_empty() || ssl_cert.is_empty() {
+        if cluster.cluster_ssl_key.is_empty() || cluster.cluster_ssl_cert.is_empty() {
             error!("[WEBSOCKET MASTER] No SSL key or SSL certificate given, exiting...");
             exit(1);
         }
-        let key_file = match File::open(ssl_key) {
-            Ok(data) => data,
-            Err(e) => {
-                sentry::capture_error(&e);
-                panic!("[WEBSOCKET MASTER] SSL key unreadable: {e}");
-            }
-        };
-        let certs_file = match File::open(ssl_cert) {
-            Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL cert unreadable: {e}"),
-        };
-        let tls_certs = match CertificateDer::pem_reader_iter(certs_file).collect::<Result<Vec<_>, _>>() {
-            Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL cert couldn't be extracted: {e}"),
-        };
-        // Accepts PKCS#8, PKCS#1 and SEC1 keys; the section kind decides which.
-        let tls_key = match PrivateKeyDer::from_pem_reader(key_file) {
-            Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL key couldn't be extracted from {ssl_key}: {e}"),
-        };
-        let tls_config = match rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(tls_certs, tls_key)
-        {
-            Ok(data) => data,
-            Err(e) => panic!("[WEBSOCKET MASTER] SSL config couldn't be created: {e}"),
-        };
-        let server = HttpServer::new(move || {
-            App::new()
-                .app_data(web::Data::new(service_data.clone()))
-                .route("/cluster", web::get().to(websocket_handler))
-        })
-        .keep_alive(Duration::from_secs(keep_alive))
-        .client_request_timeout(Duration::from_secs(request_timeout))
-        .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-        .workers(worker_threads)
-        .max_connections(max_connections)
-        .max_connection_rate(tls_connection_rate)
-        .bind_rustls_0_23((addr.ip(), addr.port()), tls_config)
-        .unwrap()
-        .disable_signals()
-        .run();
-        return (server.handle(), server);
+        // Served through the certificate store like the HTTP and API listeners, so
+        // `POST /api/certificate/reload` also renews the cluster certificate without a restart.
+        let server_id = ServerIdentifier::WebSocketMaster(addr.to_string());
+        DynamicCertificateResolver::server_config(&tracker.certificate_store, server_id, &cluster.cluster_ssl_cert, &cluster.cluster_ssl_key)
+            .unwrap_or_else(|e| panic!("[WEBSOCKET MASTER] Failed to load SSL certificate: {e}"))
+    });
+    if tls_config.is_none() {
+        info!("[WEBSOCKET MASTER] Starting WS server on {addr}");
     }
-    info!("[WEBSOCKET MASTER] Starting WS server on {addr}");
     let server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(service_data.clone()))
             .route("/cluster", web::get().to(websocket_handler))
     })
-    .keep_alive(Duration::from_secs(keep_alive))
-    .client_request_timeout(Duration::from_secs(request_timeout))
-    .client_disconnect_timeout(Duration::from_secs(disconnect_timeout))
-    .workers(worker_threads)
-    .max_connections(max_connections)
-    .bind((addr.ip(), addr.port()))
-    .unwrap()
+    .keep_alive(Duration::from_secs(cluster.cluster_keep_alive))
+    .client_request_timeout(Duration::from_secs(cluster.cluster_request_timeout))
+    .client_disconnect_timeout(Duration::from_secs(cluster.cluster_disconnect_timeout))
+    .workers(cluster.cluster_threads as usize)
+    .max_connections(cluster.cluster_max_connections as usize);
+    let server = match tls_config {
+        Some(tls_config) => server
+            .max_connection_rate(cluster.tls_connection_rate as usize)
+            .bind_rustls_0_23((addr.ip(), addr.port()), tls_config),
+        None => server.bind((addr.ip(), addr.port())),
+    }
+    .unwrap_or_else(|e| {
+        error!("[WEBSOCKET MASTER] Unable to bind to {addr}: {e}");
+        exit(1);
+    })
     .disable_signals()
     .run();
     (server.handle(), server)
@@ -628,11 +356,18 @@ pub async fn websocket_handler(
     stream: actix_web::web::Payload,
     data: actix_web::web::Data<Arc<WebSocketServiceData>>,
 ) -> Result<actix_web::HttpResponse, actix_web::Error> {
-    use actix_web_actors::ws;
     use crate::websocket::structs::cluster_connection::ClusterConnection;
 
-    let connection = ClusterConnection::new(data.get_ref().clone());
-    ws::start(connection, &req, stream)
+    let (response, session, messages) = actix_ws::handle(&req, stream)?;
+    // Slaves cap what they forward at 8 KiB of query string, but an encoded request is several times
+    // that and the 64 KiB default closes the whole cluster link on overflow; 1 MiB leaves room,
+    // including for slaves still on an older version during a rolling upgrade.
+    let messages = messages
+        .max_frame_size(1 << 20)
+        .aggregate_continuations()
+        .max_continuation_size(1 << 20);
+    actix_web::rt::spawn(ClusterConnection::new(data.get_ref().clone()).run(session, messages));
+    Ok(response)
 }
 
 pub static SLAVE_CLIENT: std::sync::LazyLock<parking_lot::RwLock<SlaveClientState>> =
@@ -640,16 +375,6 @@ pub static SLAVE_CLIENT: std::sync::LazyLock<parking_lot::RwLock<SlaveClientStat
 
 pub static SLAVE_SENDER: std::sync::LazyLock<SlaveSenderChannel> =
     std::sync::LazyLock::new(|| parking_lot::RwLock::new(None));
-
-/// Returns `true` when this slave currently holds an authenticated connection to the master.
-pub fn is_connected() -> bool {
-    SLAVE_CLIENT.read().connected
-}
-
-/// Returns the wire encoding negotiated with the master, when connected.
-pub fn get_encoding() -> Option<ClusterEncoding> {
-    SLAVE_CLIENT.read().encoding.clone()
-}
 
 /// Sends a [`ClusterRequest`] to the master and awaits the matching response.
 ///
@@ -704,7 +429,13 @@ pub async fn send_request(
     match tokio::time::timeout(timeout_duration, rx).await {
         Ok(Ok(response)) => {
             tracker.update_stats(StatsEvent::WsResponsesReceived, 1);
-            Ok(response)
+            // A failure on the master arrives as an ordinary response; returned as `Ok`, its empty
+            // payload went out as an empty 200 (HTTP) or an empty datagram (UDP).
+            if response.success {
+                Ok(response)
+            } else {
+                Err(ForwardError::MasterError(response.error_message.unwrap_or_else(|| "Cluster master error".to_string())))
+            }
         }
         Ok(Err(_)) => {
             tracker.update_stats(StatsEvent::WsTimeouts, 1);
@@ -731,7 +462,7 @@ pub async fn start_slave_client(tracker: Arc<TorrentTracker>) {
     let reconnect_interval = config.tracker_config.cluster_reconnect_interval;
     let protocol = if use_ssl { "wss" } else { "ws" };
     let websocket_url = format!("{protocol}://{master_address}/cluster");
-    let slave_id = uuid::Uuid::new_v4().to_string();
+    let slave_id = format!("{:032x}", rand::random::<u128>());
     info!("[WEBSOCKET SLAVE] Starting slave client, connecting to {websocket_url}");
     info!("[WEBSOCKET SLAVE] Slave UUID: {slave_id}");
     loop {
@@ -927,27 +658,4 @@ pub fn create_cluster_error_response(error: &ForwardError) -> Vec<u8> {
         ForwardError::EncodingError(_) => "Cluster encoding error",
     };
     format!("d14:failure reason{}:{}e", message.len(), message).into_bytes()
-}
-
-/// Builds the JSON `failure_reason` body sent to API-style clients when cluster forwarding fails.
-pub fn create_cluster_error_response_json(error: &ForwardError) -> String {
-    let message = match error {
-        ForwardError::NotConnected => "Cluster connection lost",
-        ForwardError::Timeout => "Cluster timeout",
-        ForwardError::MasterError(msg) => msg.as_str(),
-        ForwardError::ConnectionLost => "Cluster connection lost",
-        ForwardError::EncodingError(_) => "Cluster encoding error",
-    };
-    serde_json::json!({
-        "failure_reason": message
-    }).to_string()
-}
-
-/// Compares two strings in constant time (for token checks), returning `true` on equality.
-///
-/// Kept as a re-export of [`constant_time_eq`] so the cluster handshake and the API token
-/// check share one implementation: this one used to return early on a length mismatch, which
-/// leaks the length of `cluster_token` to anyone who can attempt a handshake.
-pub fn constant_time_compare(a: &str, b: &str) -> bool {
-    crate::security::security::constant_time_eq(a, b)
 }

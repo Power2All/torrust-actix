@@ -22,9 +22,30 @@ mod ssl_tests {
     }
 
     #[test]
+    fn resolver_serves_the_reloaded_certificate() {
+        use crate::ssl::structs::dynamic_certificate_resolver::DynamicCertificateResolver;
+        use std::sync::Arc;
+
+        let dir = tempfile::tempdir().unwrap();
+        let (cert_path, key_path) = write_self_signed(&dir);
+        let store = Arc::new(CertificateStore::new());
+        let server_id = ServerIdentifier::HttpTracker("127.0.0.1:6969".to_string());
+        store.load_certificate(server_id.clone(), cert_path.to_str().unwrap(), key_path.to_str().unwrap()).unwrap();
+        let resolver = DynamicCertificateResolver::new(Arc::clone(&store), server_id.clone()).unwrap();
+        let before = resolver.current_key().unwrap().cert[0].clone();
+
+        // A renewal overwrites the files in place, then the API asks for a reload.
+        write_self_signed(&dir);
+        store.reload_certificate(&server_id).unwrap();
+
+        let after = resolver.current_key().unwrap().cert[0].clone();
+        assert_ne!(before, after, "the live resolver must serve the reloaded certificate");
+    }
+
+    #[test]
     fn test_certificate_store_new() {
         let store = CertificateStore::new();
-        assert!(store.all_servers().is_empty());
+        assert!(store.get_all_certificates().is_empty());
     }
 
     #[test]
@@ -92,17 +113,15 @@ mod ssl_tests {
         //
         // This goes through `load_certificate` on purpose: asserting on `PrivateKeyDer` directly
         // would only re-test rustls' parser and would still pass if the loader regressed to
-        // PKCS#8-only. The DER body is never decoded here (no key/certificate check happens until
-        // rustls builds a `ServerConfig`), so one shared body is enough to prove the dispatch.
+        // PKCS#8-only. The body is an Ed25519 PKCS#8 key, so it loads under its own label. The
+        // loader builds the signing key, so under the RSA and EC labels it fails as an unusable
+        // key (`CertifiedKeyError`), not as a missing or unparsable PEM section, which is what a
+        // PKCS#8-only loader would report.
         let dir = tempfile::tempdir().unwrap();
         let (cert_path, _) = write_self_signed(&dir);
         let body = "MC4CAQAwBQYDK2VwBCIEIL9lYlNMIL6NBnLcnLXRJmYqHJqNMoLpBnGkKcJ0y7Ei\n";
         let store = CertificateStore::new();
-        for (port, label, expect_pkcs8, expect_pkcs1, expect_sec1) in [
-            (8081, "PRIVATE KEY", true, false, false),
-            (8082, "RSA PRIVATE KEY", false, true, false),
-            (8083, "EC PRIVATE KEY", false, false, true),
-        ] {
+        for (port, label) in [(8081, "PRIVATE KEY"), (8082, "RSA PRIVATE KEY"), (8083, "EC PRIVATE KEY")] {
             let key_path = dir.path().join(format!("{}.pem", label.replace(' ', "-")));
             std::fs::write(
                 &key_path,
@@ -111,18 +130,18 @@ mod ssl_tests {
             .unwrap();
 
             let server_id = ServerIdentifier::ApiServer(format!("127.0.0.1:{port}"));
-            store
-                .load_certificate(
-                    server_id.clone(),
-                    cert_path.to_str().unwrap(),
-                    key_path.to_str().unwrap(),
-                )
-                .unwrap_or_else(|e| panic!("{label} should load: {e:?}"));
-
-            let bundle = store.get_certificate(&server_id).expect("bundle registered");
-            assert_eq!(matches!(bundle.key, PrivateKeyDer::Pkcs8(_)), expect_pkcs8, "{label}");
-            assert_eq!(matches!(bundle.key, PrivateKeyDer::Pkcs1(_)), expect_pkcs1, "{label}");
-            assert_eq!(matches!(bundle.key, PrivateKeyDer::Sec1(_)), expect_sec1, "{label}");
+            let result = store.load_certificate(
+                server_id.clone(),
+                cert_path.to_str().unwrap(),
+                key_path.to_str().unwrap(),
+            );
+            if label == "PRIVATE KEY" {
+                result.unwrap_or_else(|e| panic!("{label} should load: {e:?}"));
+                let bundle = store.get_certificate(&server_id).expect("bundle registered");
+                assert!(matches!(bundle.key, PrivateKeyDer::Pkcs8(_)), "{label}");
+            } else {
+                assert!(matches!(result, Err(CertificateError::CertifiedKeyError(_))), "{label}: got {result:?}");
+            }
         }
     }
 }

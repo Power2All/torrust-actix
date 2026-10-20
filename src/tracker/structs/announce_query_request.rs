@@ -17,6 +17,7 @@ pub struct AnnounceQueryRequest {
     pub(crate) no_peer_id: bool,
     pub(crate) event: AnnounceEvent,
     pub(crate) remote_addr: IpAddr,
+    pub(crate) key: Option<u32>,
     pub(crate) numwant: u64,
     pub(crate) rtctorrent: Option<bool>,
     pub(crate) rtcoffer: Option<String>,

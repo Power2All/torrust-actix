@@ -14,10 +14,7 @@ pub struct ApiTrackersConfig {
     /// Source addresses allowed to set the `real_ip` header. An empty list honours the header
     /// from any source, which lets a client reaching this listener directly spoof its own IP.
     #[serde(default)]
-    pub trusted_proxy_ips: Vec<String>,
-    /// Parsed form of [`Self::trusted_proxy_ips`], filled in once at startup.
-    #[serde(skip)]
-    pub trusted_proxy_addrs: Vec<IpAddr>,
+    pub trusted_proxy_ips: Vec<IpAddr>,
     pub keep_alive: u64,
     pub request_timeout: u64,
     pub disconnect_timeout: u64,

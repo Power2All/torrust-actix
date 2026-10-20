@@ -7,4 +7,4 @@ then
   ./torrust-actix --create-config
 fi
 
-./torrust-actix
+exec ./torrust-actix

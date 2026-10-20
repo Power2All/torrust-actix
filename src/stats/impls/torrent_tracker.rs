@@ -1,7 +1,11 @@
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::stats::structs::stats::Stats;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{
+    AtomicBool,
+    AtomicI64,
+    Ordering
+};
 
 impl TorrentTracker {
     /// Returns a point-in-time copy of all statistics counters.
@@ -64,6 +68,13 @@ impl TorrentTracker {
         }
     }
 
+    /// Adjusts the IPv4 or the IPv6 variant of a counter, by the family of `ip`.
+    #[inline]
+    pub fn update_stats_by_family(&self, ip: std::net::IpAddr, ipv4: StatsEvent, ipv6: StatsEvent, value: i64)
+    {
+        self.update_stats(if ip.is_ipv4() { ipv4 } else { ipv6 }, value);
+    }
+
     /// Adjusts a statistics counter by `value` (negative values decrement).
     ///
     /// Boolean-style events (`WhitelistEnabled`, `BlacklistEnabled`) and gauges (`UdpQueueLen`)
@@ -71,326 +82,84 @@ impl TorrentTracker {
     #[inline]
     pub fn update_stats(&self, event: StatsEvent, value: i64)
     {
-        match event {
-            StatsEvent::Torrents => {
-                self.update_counter(&self.stats.torrents, value);
-            }
-            StatsEvent::TorrentsUpdates => {
-                self.update_counter(&self.stats.torrents_updates, value);
-            }
-            StatsEvent::Users => {
-                self.update_counter(&self.stats.users, value);
-            }
-            StatsEvent::UsersUpdates => {
-                self.update_counter(&self.stats.users_updates, value);
-            }
-            StatsEvent::TimestampSave => {
-                self.update_counter(&self.stats.timestamp_run_save, value);
-            }
-            StatsEvent::TimestampTimeout => {
-                self.update_counter(&self.stats.timestamp_run_timeout, value);
-            }
-            StatsEvent::TimestampConsole => {
-                self.update_counter(&self.stats.timestamp_run_console, value);
-            }
-            StatsEvent::TimestampKeysTimeout => {
-                self.update_counter(&self.stats.timestamp_run_keys_timeout, value);
-            }
-            StatsEvent::Seeds => {
-                self.update_counter(&self.stats.seeds, value);
-            }
-            StatsEvent::Peers => {
-                self.update_counter(&self.stats.peers, value);
-            }
-            StatsEvent::Completed => {
-                self.update_counter(&self.stats.completed, value);
-            }
-            StatsEvent::WhitelistEnabled => {
-                self.stats.whitelist_enabled.store(value > 0, Ordering::Release);
-            }
-            StatsEvent::Whitelist => {
-                self.update_counter(&self.stats.whitelist, value);
-            }
-            StatsEvent::WhitelistUpdates => {
-                self.update_counter(&self.stats.whitelist_updates, value);
-            }
-            StatsEvent::BlacklistEnabled => {
-                self.stats.blacklist_enabled.store(value > 0, Ordering::Release);
-            }
-            StatsEvent::Blacklist => {
-                self.update_counter(&self.stats.blacklist, value);
-            }
-            StatsEvent::BlacklistUpdates => {
-                self.update_counter(&self.stats.blacklist_updates, value);
-            }
-            StatsEvent::Key => {
-                self.update_counter(&self.stats.keys, value);
-            }
-            StatsEvent::KeyUpdates => {
-                self.update_counter(&self.stats.keys_updates, value);
-            }
-            StatsEvent::Tcp4NotFound => {
-                self.update_counter(&self.stats.tcp4_not_found, value);
-            }
-            StatsEvent::Tcp4Failure => {
-                self.update_counter(&self.stats.tcp4_failure, value);
-            }
-            StatsEvent::Tcp4ConnectionsHandled => {
-                self.update_counter(&self.stats.tcp4_connections_handled, value);
-            }
-            StatsEvent::Tcp4ApiHandled => {
-                self.update_counter(&self.stats.tcp4_api_handled, value);
-            }
-            StatsEvent::Tcp4AnnouncesHandled => {
-                self.update_counter(&self.stats.tcp4_announces_handled, value);
-            }
-            StatsEvent::Tcp4ScrapesHandled => {
-                self.update_counter(&self.stats.tcp4_scrapes_handled, value);
-            }
-            StatsEvent::Tcp6NotFound => {
-                self.update_counter(&self.stats.tcp6_not_found, value);
-            }
-            StatsEvent::Tcp6Failure => {
-                self.update_counter(&self.stats.tcp6_failure, value);
-            }
-            StatsEvent::Tcp6ConnectionsHandled => {
-                self.update_counter(&self.stats.tcp6_connections_handled, value);
-            }
-            StatsEvent::Tcp6ApiHandled => {
-                self.update_counter(&self.stats.tcp6_api_handled, value);
-            }
-            StatsEvent::Tcp6AnnouncesHandled => {
-                self.update_counter(&self.stats.tcp6_announces_handled, value);
-            }
-            StatsEvent::Tcp6ScrapesHandled => {
-                self.update_counter(&self.stats.tcp6_scrapes_handled, value);
-            }
-            StatsEvent::Udp4BadRequest => {
-                self.update_counter(&self.stats.udp4_bad_request, value);
-            }
-            StatsEvent::Udp4InvalidRequest => {
-                self.update_counter(&self.stats.udp4_invalid_request, value);
-            }
-            StatsEvent::Udp4ConnectionsHandled => {
-                self.update_counter(&self.stats.udp4_connections_handled, value);
-            }
-            StatsEvent::Udp4AnnouncesHandled => {
-                self.update_counter(&self.stats.udp4_announces_handled, value);
-            }
-            StatsEvent::Udp4ScrapesHandled => {
-                self.update_counter(&self.stats.udp4_scrapes_handled, value);
-            }
-            StatsEvent::Udp6BadRequest => {
-                self.update_counter(&self.stats.udp6_bad_request, value);
-            }
-            StatsEvent::Udp6InvalidRequest => {
-                self.update_counter(&self.stats.udp6_invalid_request, value);
-            }
-            StatsEvent::Udp6ConnectionsHandled => {
-                self.update_counter(&self.stats.udp6_connections_handled, value);
-            }
-            StatsEvent::Udp6AnnouncesHandled => {
-                self.update_counter(&self.stats.udp6_announces_handled, value);
-            }
-            StatsEvent::Udp6ScrapesHandled => {
-                self.update_counter(&self.stats.udp6_scrapes_handled, value);
-            }
-            StatsEvent::UdpQueueLen => {
-                self.stats.udp_queue_len.store(value, Ordering::Release);
-            }
-
-            StatsEvent::WsConnectionsActive => {
-                self.update_counter(&self.stats.ws_connections_active, value);
-            }
-            StatsEvent::WsRequestsSent => {
-                self.update_counter(&self.stats.ws_requests_sent, value);
-            }
-            StatsEvent::WsRequestsReceived => {
-                self.update_counter(&self.stats.ws_requests_received, value);
-            }
-            StatsEvent::WsResponsesSent => {
-                self.update_counter(&self.stats.ws_responses_sent, value);
-            }
-            StatsEvent::WsResponsesReceived => {
-                self.update_counter(&self.stats.ws_responses_received, value);
-            }
-            StatsEvent::WsTimeouts => {
-                self.update_counter(&self.stats.ws_timeouts, value);
-            }
-            StatsEvent::WsReconnects => {
-                self.update_counter(&self.stats.ws_reconnects, value);
-            }
-            StatsEvent::WsAuthSuccess => {
-                self.update_counter(&self.stats.ws_auth_success, value);
-            }
-            StatsEvent::WsAuthFailed => {
-                self.update_counter(&self.stats.ws_auth_failed, value);
-            }
+        match self.counter(event) {
+            Ok(counter) if matches!(event, StatsEvent::UdpQueueLen) => counter.store(value, Ordering::Release),
+            Ok(counter) => Self::update_counter(counter, value),
+            Err(flag) => flag.store(value > 0, Ordering::Release),
         }
     }
 
     /// Overwrites a statistics counter with an absolute value.
     pub fn set_stats(&self, event: StatsEvent, value: i64)
     {
-        match event {
-            StatsEvent::Torrents => {
-                self.stats.torrents.store(value, Ordering::Release);
-            }
-            StatsEvent::TorrentsUpdates => {
-                self.stats.torrents_updates.store(value, Ordering::Release);
-            }
-            StatsEvent::Users => {
-                self.stats.users.store(value, Ordering::Release);
-            }
-            StatsEvent::UsersUpdates => {
-                self.stats.users_updates.store(value, Ordering::Release);
-            }
-            StatsEvent::TimestampSave => {
-                self.stats.timestamp_run_save.store(value, Ordering::Release);
-            }
-            StatsEvent::TimestampTimeout => {
-                self.stats.timestamp_run_timeout.store(value, Ordering::Release);
-            }
-            StatsEvent::TimestampConsole => {
-                self.stats.timestamp_run_console.store(value, Ordering::Release);
-            }
-            StatsEvent::TimestampKeysTimeout => {
-                self.stats.timestamp_run_keys_timeout.store(value, Ordering::Release);
-            }
-            StatsEvent::Seeds => {
-                self.stats.seeds.store(value, Ordering::Release);
-            }
-            StatsEvent::Peers => {
-                self.stats.peers.store(value, Ordering::Release);
-            }
-            StatsEvent::Completed => {
-                self.stats.completed.store(value, Ordering::Release);
-            }
-            StatsEvent::WhitelistEnabled => {
-                self.stats.whitelist_enabled.store(value > 0, Ordering::Release);
-            }
-            StatsEvent::Whitelist => {
-                self.stats.whitelist.store(value, Ordering::Release);
-            }
-            StatsEvent::WhitelistUpdates => {
-                self.stats.whitelist_updates.store(value, Ordering::Release);
-            }
-            StatsEvent::BlacklistEnabled => {
-                self.stats.blacklist_enabled.store(value > 0, Ordering::Release);
-            }
-            StatsEvent::Blacklist => {
-                self.stats.blacklist.store(value, Ordering::Release);
-            }
-            StatsEvent::BlacklistUpdates => {
-                self.stats.blacklist_updates.store(value, Ordering::Release);
-            }
-            StatsEvent::Key => {
-                self.stats.keys.store(value, Ordering::Release);
-            }
-            StatsEvent::KeyUpdates => {
-                self.stats.keys_updates.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp4NotFound => {
-                self.stats.tcp4_not_found.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp4Failure => {
-                self.stats.tcp4_failure.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp4ConnectionsHandled => {
-                self.stats.tcp4_connections_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp4ApiHandled => {
-                self.stats.tcp4_api_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp4AnnouncesHandled => {
-                self.stats.tcp4_announces_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp4ScrapesHandled => {
-                self.stats.tcp4_scrapes_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp6NotFound => {
-                self.stats.tcp6_not_found.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp6Failure => {
-                self.stats.tcp6_failure.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp6ConnectionsHandled => {
-                self.stats.tcp6_connections_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp6ApiHandled => {
-                self.stats.tcp6_api_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp6AnnouncesHandled => {
-                self.stats.tcp6_announces_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Tcp6ScrapesHandled => {
-                self.stats.tcp6_scrapes_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp4BadRequest => {
-                self.stats.udp4_bad_request.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp4InvalidRequest => {
-                self.stats.udp4_invalid_request.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp4ConnectionsHandled => {
-                self.stats.udp4_connections_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp4AnnouncesHandled => {
-                self.stats.udp4_announces_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp4ScrapesHandled => {
-                self.stats.udp4_scrapes_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp6BadRequest => {
-                self.stats.udp6_bad_request.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp6InvalidRequest => {
-                self.stats.udp6_invalid_request.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp6ConnectionsHandled => {
-                self.stats.udp6_connections_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp6AnnouncesHandled => {
-                self.stats.udp6_announces_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::Udp6ScrapesHandled => {
-                self.stats.udp6_scrapes_handled.store(value, Ordering::Release);
-            }
-            StatsEvent::UdpQueueLen => {
-                self.stats.udp_queue_len.store(value, Ordering::Release);
-            }
-            StatsEvent::WsConnectionsActive => {
-                self.stats.ws_connections_active.store(value, Ordering::Release);
-            }
-            StatsEvent::WsRequestsSent => {
-                self.stats.ws_requests_sent.store(value, Ordering::Release);
-            }
-            StatsEvent::WsRequestsReceived => {
-                self.stats.ws_requests_received.store(value, Ordering::Release);
-            }
-            StatsEvent::WsResponsesSent => {
-                self.stats.ws_responses_sent.store(value, Ordering::Release);
-            }
-            StatsEvent::WsResponsesReceived => {
-                self.stats.ws_responses_received.store(value, Ordering::Release);
-            }
-            StatsEvent::WsTimeouts => {
-                self.stats.ws_timeouts.store(value, Ordering::Release);
-            }
-            StatsEvent::WsReconnects => {
-                self.stats.ws_reconnects.store(value, Ordering::Release);
-            }
-            StatsEvent::WsAuthSuccess => {
-                self.stats.ws_auth_success.store(value, Ordering::Release);
-            }
-            StatsEvent::WsAuthFailed => {
-                self.stats.ws_auth_failed.store(value, Ordering::Release);
-            }
+        match self.counter(event) {
+            Ok(counter) => counter.store(value, Ordering::Release),
+            Err(flag) => flag.store(value > 0, Ordering::Release),
         }
     }
 
+    /// The atomic behind `event`: its counter, or `Err` with the flag for the two boolean events.
+    #[inline]
+    fn counter(&self, event: StatsEvent) -> Result<&AtomicI64, &AtomicBool>
+    {
+        let s = &self.stats;
+        Ok(match event {
+            StatsEvent::Torrents => &s.torrents,
+            StatsEvent::TorrentsUpdates => &s.torrents_updates,
+            StatsEvent::Users => &s.users,
+            StatsEvent::UsersUpdates => &s.users_updates,
+            StatsEvent::TimestampSave => &s.timestamp_run_save,
+            StatsEvent::TimestampTimeout => &s.timestamp_run_timeout,
+            StatsEvent::TimestampConsole => &s.timestamp_run_console,
+            StatsEvent::TimestampKeysTimeout => &s.timestamp_run_keys_timeout,
+            StatsEvent::Seeds => &s.seeds,
+            StatsEvent::Peers => &s.peers,
+            StatsEvent::Completed => &s.completed,
+            StatsEvent::Whitelist => &s.whitelist,
+            StatsEvent::WhitelistUpdates => &s.whitelist_updates,
+            StatsEvent::Blacklist => &s.blacklist,
+            StatsEvent::BlacklistUpdates => &s.blacklist_updates,
+            StatsEvent::Key => &s.keys,
+            StatsEvent::KeyUpdates => &s.keys_updates,
+            StatsEvent::Tcp4NotFound => &s.tcp4_not_found,
+            StatsEvent::Tcp4Failure => &s.tcp4_failure,
+            StatsEvent::Tcp4ConnectionsHandled => &s.tcp4_connections_handled,
+            StatsEvent::Tcp4ApiHandled => &s.tcp4_api_handled,
+            StatsEvent::Tcp4AnnouncesHandled => &s.tcp4_announces_handled,
+            StatsEvent::Tcp4ScrapesHandled => &s.tcp4_scrapes_handled,
+            StatsEvent::Tcp6NotFound => &s.tcp6_not_found,
+            StatsEvent::Tcp6Failure => &s.tcp6_failure,
+            StatsEvent::Tcp6ConnectionsHandled => &s.tcp6_connections_handled,
+            StatsEvent::Tcp6ApiHandled => &s.tcp6_api_handled,
+            StatsEvent::Tcp6AnnouncesHandled => &s.tcp6_announces_handled,
+            StatsEvent::Tcp6ScrapesHandled => &s.tcp6_scrapes_handled,
+            StatsEvent::Udp4BadRequest => &s.udp4_bad_request,
+            StatsEvent::Udp4InvalidRequest => &s.udp4_invalid_request,
+            StatsEvent::Udp4ConnectionsHandled => &s.udp4_connections_handled,
+            StatsEvent::Udp4AnnouncesHandled => &s.udp4_announces_handled,
+            StatsEvent::Udp4ScrapesHandled => &s.udp4_scrapes_handled,
+            StatsEvent::Udp6BadRequest => &s.udp6_bad_request,
+            StatsEvent::Udp6InvalidRequest => &s.udp6_invalid_request,
+            StatsEvent::Udp6ConnectionsHandled => &s.udp6_connections_handled,
+            StatsEvent::Udp6AnnouncesHandled => &s.udp6_announces_handled,
+            StatsEvent::Udp6ScrapesHandled => &s.udp6_scrapes_handled,
+            StatsEvent::UdpQueueLen => &s.udp_queue_len,
+            StatsEvent::WsConnectionsActive => &s.ws_connections_active,
+            StatsEvent::WsRequestsSent => &s.ws_requests_sent,
+            StatsEvent::WsRequestsReceived => &s.ws_requests_received,
+            StatsEvent::WsResponsesSent => &s.ws_responses_sent,
+            StatsEvent::WsResponsesReceived => &s.ws_responses_received,
+            StatsEvent::WsTimeouts => &s.ws_timeouts,
+            StatsEvent::WsReconnects => &s.ws_reconnects,
+            StatsEvent::WsAuthSuccess => &s.ws_auth_success,
+            StatsEvent::WsAuthFailed => &s.ws_auth_failed,
+            StatsEvent::WhitelistEnabled => return Err(&s.whitelist_enabled),
+            StatsEvent::BlacklistEnabled => return Err(&s.blacklist_enabled),
+        })
+    }
+
     #[inline(always)]
-    fn update_counter(&self, counter: &std::sync::atomic::AtomicI64, value: i64) {
+    fn update_counter(counter: &AtomicI64, value: i64) {
         if value != 0 {
             // Saturating, not `fetch_add`/`fetch_sub`: some deltas carry client-supplied magnitudes
             // (`completed` off the API path, a user's uploaded/downloaded bytes off an announce), so

@@ -19,4 +19,14 @@ impl CacheEngine {
             CacheEngine::memcache => "memcache://",
         }
     }
+
+    /// The URL to connect to for a `cache.address`: a whole URL (`redis://:secret@redis:6379/2`) is
+    /// used as given, anything else (`host:port`, `user:pass@host:port`) gets this engine's scheme.
+    pub fn connection_url(&self, address: &str) -> String {
+        if address.contains("://") {
+            address.to_string()
+        } else {
+            format!("{}{}", self.url_scheme(), address)
+        }
+    }
 }

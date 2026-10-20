@@ -4,6 +4,7 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[derive(Default)]
 pub struct CertificateStore {
     pub(crate) bundles: RwLock<HashMap<ServerIdentifier, Arc<crate::ssl::structs::certificate_bundle::CertificateBundle>>>,
     pub(crate) paths: RwLock<HashMap<ServerIdentifier, CertificatePaths>>,

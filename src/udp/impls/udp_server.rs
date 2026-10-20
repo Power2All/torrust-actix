@@ -1,4 +1,5 @@
 use crate::config::enums::udp_receive_method::UdpReceiveMethod;
+use crate::config::structs::udp_trackers_config::UdpTrackersConfig;
 use crate::stats::enums::stats_event::StatsEvent;
 use crate::tracker::structs::announce_query_request::AnnounceQueryRequest;
 use crate::tracker::structs::info_hash::InfoHash;
@@ -6,6 +7,7 @@ use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::torrent_tracker::TorrentTracker;
 use crate::tracker::structs::user_id::UserId;
 use crate::udp::enums::request::Request;
+use crate::udp::enums::request_parse_error::RequestParseError;
 use crate::udp::enums::response::Response;
 use crate::udp::enums::server_error::ServerError;
 use crate::udp::enums::udp_reply::UdpReply;
@@ -80,8 +82,11 @@ impl UdpServer {
     ///
     /// Returns the I/O error when the socket cannot be bound or configured.
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: SocketAddr, udp_threads: usize, worker_threads: usize, recv_buffer_size: usize, send_buffer_size: usize, reuse_address: bool, use_payload_ip: bool, simple_proxy_protocol: bool, proxy_addrs: Arc<Vec<std::net::IpAddr>>, receive_method: UdpReceiveMethod, parse_queue_size: usize) -> tokio::io::Result<UdpServer>
+    pub async fn new(tracker: Arc<TorrentTracker>, config: &UdpTrackersConfig) -> tokio::io::Result<UdpServer>
     {
+        let bind_address: SocketAddr = config.bind_address.parse()
+            .map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::InvalidInput, e))?;
+        let receive_method = config.receive_method;
         #[cfg(windows)]
         let use_rio = receive_method == UdpReceiveMethod::rio && {
             let available = crate::udp::impls::rio_recv::is_available();
@@ -96,22 +101,22 @@ impl UdpServer {
         let sockets = if use_rio {
             Vec::new()
         } else {
-            Self::build_sockets(bind_address, udp_threads, recv_buffer_size, send_buffer_size, reuse_address)?
+            Self::build_sockets(bind_address, config.udp_threads, config.receive_buffer_size, config.send_buffer_size, config.reuse_address)?
         };
         Ok(UdpServer {
             sockets,
             bind_address,
-            recv_buffer_size,
-            send_buffer_size,
-            reuse_address,
-            udp_threads,
-            worker_threads,
+            recv_buffer_size: config.receive_buffer_size,
+            send_buffer_size: config.send_buffer_size,
+            reuse_address: config.reuse_address,
+            udp_threads: config.udp_threads,
+            worker_threads: config.worker_threads,
             tracker,
-            use_payload_ip,
-            simple_proxy_protocol,
-            proxy_addrs,
+            use_payload_ip: config.use_payload_ip,
+            simple_proxy_protocol: config.simple_proxy_protocol,
+            proxy_addrs: Arc::new(config.proxy_addresses.clone()),
             receive_method,
-            parse_queue_size,
+            parse_queue_size: config.parse_queue_size,
         })
     }
 
@@ -335,17 +340,12 @@ impl UdpServer {
     /// Encodes a tracker [`Response`] and sends it to the client, logging failures.
     pub async fn send_response(tracker: Arc<TorrentTracker>, reply: UdpReply, remote_addr: SocketAddr, response: Response) {
         debug!("sending response to: {remote_addr:?}");
-        let estimated_size = response.estimated_size();
-        let mut buffer = Vec::with_capacity(estimated_size);
-        match response.write(&mut buffer) {
-            Ok(()) => {
+        match response.write_to_vec() {
+            Ok(buffer) => {
                 UdpServer::send_packet(reply, &remote_addr, &buffer).await;
             }
             Err(error) => {
-                match remote_addr {
-                    SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4InvalidRequest, 1); }
-                    SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6InvalidRequest, 1); }
-                }
+                tracker.update_stats_by_family(remote_addr.ip(), StatsEvent::Udp4InvalidRequest, StatsEvent::Udp6InvalidRequest, 1);
                 debug!("could not write response to bytes: {error}");
             }
         }
@@ -407,37 +407,37 @@ impl UdpServer {
 
     /// Parses one datagram and produces the tracker response, mapping malformed input and
     /// handler failures to BEP 15 error responses.
-    pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Response {
-        if payload.len() == 16 && let [_, _, _, _, action1, action2, action3, action4, ..] = payload && *action1 == 0 && *action2 == 0 && *action3 == 0 && *action4 == 0 && let Ok(Request::Connect(connect_request)) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
-            return match UdpServer::handle_udp_connect(remote_addr, &connect_request, tracker).await {
-                Ok(response) => response,
-                Err(e) => UdpServer::handle_udp_error(e, connect_request.transaction_id).await,
-            }
-        }
-        let transaction_id = if let Ok(request) = Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
-            let tid = match &request {
-                Request::Connect(connect_request) => connect_request.transaction_id,
-                Request::Announce(announce_request) => announce_request.transaction_id,
-                Request::Scrape(scrape_request) => scrape_request.transaction_id,
-            };
-            match UdpServer::handle_request(request, remote_addr, tracker.clone(), use_payload_ip).await {
-                Ok(response) => return response,
-                Err(_e) => {
-                    match remote_addr {
-                        SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4InvalidRequest, 1); }
-                        SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6InvalidRequest, 1); }
+    ///
+    /// `None` means send nothing: a datagram too short to carry a transaction id is no request at
+    /// all, and answering it from an unverified source address only turned the tracker into a
+    /// (small) reflector, 19 bytes back for 1 in.
+    pub async fn handle_packet(remote_addr: SocketAddr, payload: &[u8], tracker: Arc<TorrentTracker>, use_payload_ip: bool) -> Option<Response> {
+        // A refused request keeps its reason ("unknown key", "torrent not on whitelist", ...), which
+        // all used to go back as "bad request"; only an unparseable one is a bad request.
+        let (transaction_id, error) = match Request::from_bytes(payload, MAX_SCRAPE_TORRENTS) {
+            Ok(request) => {
+                let tid = match &request {
+                    Request::Connect(connect_request) => connect_request.transaction_id,
+                    Request::Announce(announce_request) => announce_request.transaction_id,
+                    Request::Scrape(scrape_request) => scrape_request.transaction_id,
+                };
+                match UdpServer::handle_request(request, remote_addr, tracker.clone(), use_payload_ip).await {
+                    Ok(response) => return Some(response),
+                    Err(e) => {
+                        tracker.update_stats_by_family(remote_addr.ip(), StatsEvent::Udp4InvalidRequest, StatsEvent::Udp6InvalidRequest, 1);
+                        (tid, e)
                     }
-                    tid
                 }
             }
-        } else {
-            match remote_addr {
-                SocketAddr::V4(_) => { tracker.update_stats(StatsEvent::Udp4BadRequest, 1); }
-                SocketAddr::V6(_) => { tracker.update_stats(StatsEvent::Udp6BadRequest, 1); }
+            Err(error) => {
+                tracker.update_stats_by_family(remote_addr.ip(), StatsEvent::Udp4BadRequest, StatsEvent::Udp6BadRequest, 1);
+                match error {
+                    RequestParseError::Sendable { transaction_id, .. } => (transaction_id, ServerError::BadRequest),
+                    RequestParseError::Unsendable { .. } => return None,
+                }
             }
-            TransactionId(0)
         };
-        UdpServer::handle_udp_error(ServerError::BadRequest, transaction_id).await
+        Some(UdpServer::handle_udp_error(error, transaction_id).await)
     }
 
     /// Dispatches a parsed request to the connect, announce or scrape handler after updating
@@ -498,12 +498,7 @@ impl UdpServer {
             transaction_id: request.transaction_id,
             connection_id
         });
-        let stats_event = if remote_addr.is_ipv4() {
-            StatsEvent::Udp4ConnectionsHandled
-        } else {
-            StatsEvent::Udp6ConnectionsHandled
-        };
-        tracker.update_stats(stats_event, 1);
+        tracker.update_stats_by_family(remote_addr.ip(), StatsEvent::Udp4ConnectionsHandled, StatsEvent::Udp6ConnectionsHandled, 1);
         Ok(response)
     }
 
@@ -597,6 +592,9 @@ impl UdpServer {
             no_peer_id: false,
             event: request.event,
             remote_addr: effective_remote_addr.ip(),
+            // 0 is what a client without a key sends; matching on it would let anyone else
+            // sending 0 pass as that client.
+            key: (request.key.0 != 0).then_some(request.key.0),
             numwant: want as u64,
             rtctorrent: None,
             rtcoffer: None,
@@ -670,12 +668,7 @@ impl UdpServer {
                 peers,
             })
         };
-        let stats_event = if remote_addr.is_ipv4() {
-            StatsEvent::Udp4AnnouncesHandled
-        } else {
-            StatsEvent::Udp6AnnouncesHandled
-        };
-        tracker.update_stats(stats_event, 1);
+        tracker.update_stats_by_family(remote_addr.ip(), StatsEvent::Udp4AnnouncesHandled, StatsEvent::Udp6AnnouncesHandled, 1);
         Ok(response)
     }
 
@@ -689,6 +682,11 @@ impl UdpServer {
         if !Self::connection_id_valid(&remote_addr, request.connection_id) {
             debug!("[UDP ERROR] Invalid connection id from {remote_addr}");
             return Err(ServerError::InvalidConnectionId);
+        }
+        // A UDP scrape has no room for a key, so with keys on it is refused, as an unkeyed HTTP
+        // `/scrape` is: otherwise it reported swarm sizes for any info-hash to anyone.
+        if tracker.config.tracker_config.keys_enabled {
+            return Err(ServerError::UnknownKey);
         }
         let mut torrent_stats = Vec::with_capacity(request.info_hashes.len());
         for info_hash in &request.info_hashes {
@@ -706,12 +704,7 @@ impl UdpServer {
             };
             torrent_stats.push(scrape_entry);
         }
-        let stats_event = if remote_addr.is_ipv4() {
-            StatsEvent::Udp4ScrapesHandled
-        } else {
-            StatsEvent::Udp6ScrapesHandled
-        };
-        tracker.update_stats(stats_event, 1);
+        tracker.update_stats_by_family(remote_addr.ip(), StatsEvent::Udp4ScrapesHandled, StatsEvent::Udp6ScrapesHandled, 1);
         Ok(Response::from(ScrapeResponse {
             transaction_id: request.transaction_id,
             torrent_stats,

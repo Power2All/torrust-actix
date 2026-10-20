@@ -1,8 +1,6 @@
-use crate::tracker::structs::peer_id::PeerId;
 use crate::tracker::structs::response_peer::ResponsePeer;
 use crate::tracker::structs::torrent_counts::TorrentCounts;
-use crate::tracker::structs::torrent_peer::TorrentPeer;
-use crate::tracker::types::ahash_map::AHashMap;
+use crate::tracker::types::peer_map::PeerMap;
 use std::time::Instant;
 
 /// Upper bound on peers copied out of any one *BitTorrent* map when building a snapshot.
@@ -15,11 +13,9 @@ pub const SNAPSHOT_PEER_CAP: usize = 73;
 
 /// Upper bound on peers copied out of an *RtcTorrent* map.
 ///
-/// Deliberately not [`SNAPSHOT_PEER_CAP`]: the signalling response in `http.rs` never looks at
-/// `numwant`, it emits every RTC seeder holding a non-empty SDP offer, so the reasoning that
-/// bounds the BitTorrent maps at 73 does not apply here. This is the value both caps shared
-/// before they were split, kept so the number of signalling partners an RtcTorrent peer can see
-/// is unchanged. The shipped client asks for 50.
+/// Larger than [`SNAPSHOT_PEER_CAP`] although the signalling response is also capped by
+/// `numwant` (1..=72): it skips seeders holding no SDP offer, so copying a margin beyond 72 lets
+/// a response still fill up when some have none. The shipped client asks for 50.
 pub const SNAPSHOT_RTC_PEER_CAP: usize = 128;
 
 /// A bounded, response-shaped view of a torrent, captured under the shard lock.
@@ -42,9 +38,9 @@ pub struct AnnounceEntry {
     /// IPv6 leechers.
     pub peers_ipv6: Vec<ResponsePeer>,
     /// WebRTC seeders, with their signalling state.
-    pub rtc_seeds: AHashMap<PeerId, TorrentPeer>,
+    pub rtc_seeds: PeerMap,
     /// WebRTC leechers, with their signalling state.
-    pub rtc_peers: AHashMap<PeerId, TorrentPeer>,
+    pub rtc_peers: PeerMap,
     /// Times this torrent has been completed.
     pub completed: u64,
     /// When the underlying entry was last modified.

@@ -450,15 +450,12 @@ rtctorrent = true
 }
 #[tokio::test]
 async fn test_generated_config_round_trips() {
-    // Every field the defaults emit has to parse back, and `#[serde(skip)]` fields must not
-    // appear at all.
+    // Every field the defaults emit has to parse back.
     let defaults = Configuration::init();
     let annotated = Configuration::generate_annotated_config(&defaults);
     assert!(annotated.contains("max_peers_per_torrent"), "new tracker limits must be written out");
     assert!(annotated.contains("trusted_proxy_ips"), "proxy allowlist must be written out");
     assert!(annotated.contains("proxy_addresses"), "UDP proxy allowlist must be written out");
-    assert!(!annotated.contains("trusted_proxy_addrs"), "the parsed-only field must not be serialised");
-    assert!(!annotated.contains("proxy_addrs ="), "the parsed-only field must not be serialised");
 
     let reparsed: Configuration = toml::from_str(&annotated).expect("generated config must parse");
     assert_eq!(reparsed.tracker_config.max_peers_per_torrent, defaults.tracker_config.max_peers_per_torrent);
@@ -626,4 +623,10 @@ tls_connection_rate = 256
         256,
         "the old key must not silently appear to work under its new name"
     );
+}
+
+#[test]
+fn receive_method_auto_still_parses_as_recvmmsg() {
+    use torrust_actix::config::enums::udp_receive_method::UdpReceiveMethod;
+    assert_eq!(serde_json::from_str::<UdpReceiveMethod>("\"auto\"").unwrap(), UdpReceiveMethod::recvmmsg);
 }
