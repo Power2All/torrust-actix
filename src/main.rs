@@ -98,22 +98,7 @@ fn main() -> std::io::Result<()>
             let users_persistent = db_structure.users.persistent.unwrap_or(db_config.persistent);
             let any_persistent = torrents_persistent || whitelist_persistent || blacklist_persistent || keys_persistent || users_persistent;
 
-            // A list is loaded when its mode is on, or when its table is persistent (written back by
-            // `save_all_updates`) so it can be filled before the mode is switched on. `persistent =
-            // false` only stops write-back: a read-only whitelist pointed at the torrents table must
-            // still be loaded while whitelist mode is on.
-            if (db_config.persistent && tracker_config.whitelist_enabled) || whitelist_persistent {
-                tracker.load_whitelist(tracker.clone()).await;
-            }
-            if (db_config.persistent && tracker_config.blacklist_enabled) || blacklist_persistent {
-                tracker.load_blacklist(tracker.clone()).await;
-            }
-            if (db_config.persistent && tracker_config.keys_enabled) || keys_persistent {
-                tracker.load_keys(tracker.clone()).await;
-            }
-            if (db_config.persistent && tracker_config.users_enabled) || users_persistent {
-                tracker.load_users(tracker.clone()).await;
-            }
+            TorrentTracker::load_lists(&tracker).await;
             if db_config.persistent {
                 tracker.load_torrents(tracker.clone()).await;
                 if db_config.update_peers && !tracker.reset_seeds_peers(tracker.clone()).await {

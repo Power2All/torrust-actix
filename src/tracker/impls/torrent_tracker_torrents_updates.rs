@@ -33,6 +33,31 @@ pub(crate) fn next_seq() -> u128 {
 }
 
 impl TorrentTracker {
+    /// Loads the whitelist, blacklist, keys and users at startup. A list is loaded when its mode is
+    /// on (with `[database] persistent`), or when its table is persistent (written back by
+    /// [`Self::save_all_updates`]) so it can be filled before the mode is switched on.
+    /// `persistent = false` only stops write-back: a read-only whitelist pointed at the torrents
+    /// table must still be loaded while whitelist mode is on.
+    pub async fn load_lists(tracker: &Arc<TorrentTracker>)
+    {
+        let modes = &tracker.config.tracker_config;
+        let structure = &tracker.config.database_structure;
+        let persistent = tracker.config.database.persistent;
+        let wanted = |enabled: bool, table: Option<bool>| (persistent && enabled) || table.unwrap_or(persistent);
+        if wanted(modes.whitelist_enabled, structure.whitelist.persistent) {
+            tracker.load_whitelist(Arc::clone(tracker)).await;
+        }
+        if wanted(modes.blacklist_enabled, structure.blacklist.persistent) {
+            tracker.load_blacklist(Arc::clone(tracker)).await;
+        }
+        if wanted(modes.keys_enabled, structure.keys.persistent) {
+            tracker.load_keys(Arc::clone(tracker)).await;
+        }
+        if wanted(modes.users_enabled, structure.users.persistent) {
+            tracker.load_users(Arc::clone(tracker)).await;
+        }
+    }
+
     /// Flushes every update queue, each in its own task: torrents always (they also feed the
     /// cache), and the whitelist, blacklist, keys and users when their table is persistent. That
     /// is independent of whether their mode is on, which only decides whether announces are checked
