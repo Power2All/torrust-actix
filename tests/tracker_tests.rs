@@ -353,6 +353,12 @@ async fn test_reaper_queues_the_new_counts() {
 
     TorrentSharding::cleanup_once(tracker.clone(), Duration::ZERO, Duration::ZERO, true).await;
     assert_eq!(tracker.get_torrent_updates().remove(&info_hash).map(|(data, _)| data.peers_ipv4), Some(0));
+
+    // Now empty and still expired: later passes must not queue it again, or every idle torrent is
+    // rewritten to the database and the cache on every pass.
+    tracker.clear_torrent_updates();
+    TorrentSharding::cleanup_once(tracker.clone(), Duration::ZERO, Duration::ZERO, true).await;
+    assert!(tracker.get_torrent_updates().is_empty());
 }
 
 #[tokio::test]

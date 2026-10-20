@@ -1,0 +1,150 @@
+log_level = "info"
+log_console_interval = 10
+
+[tracker_config]
+api_key = "MyV3ryImportantSuperDuperApiKey1234"
+whitelist_enabled = true
+blacklist_enabled = false
+keys_enabled = false
+keys_cleanup_interval = 60
+users_enabled = false
+request_interval = 1800
+request_interval_minimum = 1800
+peers_timeout = 2700
+peers_cleanup_interval = 900
+peers_cleanup_threads = 256
+total_downloads = 0
+swagger = true
+prometheus_id = "torrust_actix"
+cluster = "standalone"
+cluster_encoding = "binary"
+cluster_token = "1234"
+cluster_bind_address = "0.0.0.0:8888"
+cluster_master_address = ""
+cluster_keep_alive = 60
+cluster_request_timeout = 15
+cluster_disconnect_timeout = 15
+cluster_reconnect_interval = 5
+cluster_max_connections = 10
+cluster_threads = 16
+cluster_ssl = false
+cluster_ssl_key = ""
+cluster_ssl_cert = ""
+cluster_tls_connection_rate = 256
+rtc_interval = 10
+rtc_peers_timeout = 60
+rtc_compression_enabled = true
+rtc_compression_algorithm = "lz4"
+rtc_compression_level = 1
+
+[sentry_config]
+enabled = false
+dsn = ""
+debug = false
+sample_rate = 1.0
+max_breadcrumbs = 100
+attach_stacktrace = true
+send_default_pii = false
+traces_sample_rate = 1.0
+
+[database]
+engine = "mysql"
+path = "mysql://anirena_poc:anirena_poc@localhost:3306/anirena_poc"
+persistent = true
+persistent_interval = 60
+insert_vacant = false
+remove_action = false
+update_completed = true
+update_peers = false
+chunk_size = 1000
+
+[database_structure.torrents]
+table_name = "torrust_actix_torrents"
+column_infohash = "info_hash"
+bin_type_infohash = true
+column_seeds = "seeds"
+column_peers = "peers"
+column_completed = "completed"
+
+[database_structure.whitelist]
+table_name = "torrust_actix_torrents"
+column_infohash = "info_hash"
+bin_type_infohash = true
+persistent = false
+
+[database_structure.blacklist]
+table_name = "blacklist"
+column_infohash = "infohash"
+bin_type_infohash = true
+persistent = false
+
+[database_structure.keys]
+table_name = "keys"
+column_hash = "hash"
+bin_type_hash = true
+column_timeout = "timeout"
+persistent = false
+
+[database_structure.users]
+table_name = "users"
+id_uuid = true
+column_uuid = "uuid"
+column_id = "id"
+column_key = "key"
+bin_type_key = true
+column_uploaded = "uploaded"
+column_downloaded = "downloaded"
+column_completed = "completed"
+column_updated = "updated"
+column_active = "active"
+persistent = false
+
+[cache]
+enabled = true
+engine = "redis"
+address = "127.0.0.1:6379"
+prefix = ""
+ttl = 86400
+split_peers = true
+
+[[http_server]]
+enabled = true
+bind_address = "0.0.0.0:6969"
+real_ip = "X-Real-IP"
+trusted_proxies = false
+keep_alive = 60
+request_timeout = 15
+disconnect_timeout = 15
+max_connections = 25000
+threads = 16
+ssl = false
+ssl_key = ""
+ssl_cert = ""
+tls_connection_rate = 256
+rtctorrent = true
+
+[[udp_server]]
+enabled = true
+bind_address = "0.0.0.0:6969"
+udp_threads = 2
+worker_threads = 16
+receive_buffer_size = 134217728
+send_buffer_size = 67108864
+reuse_address = true
+use_payload_ip = false
+simple_proxy_protocol = false
+
+[[api_server]]
+enabled = true
+bind_address = "0.0.0.0:8081"
+real_ip = "X-Real-IP"
+trusted_proxies = false
+keep_alive = 60
+request_timeout = 30
+disconnect_timeout = 30
+max_connections = 25000
+threads = 16
+ssl = false
+ssl_key = ""
+ssl_cert = ""
+tls_connection_rate = 256

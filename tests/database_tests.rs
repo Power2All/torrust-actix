@@ -53,6 +53,31 @@ async fn test_save_and_load_whitelist() {
 }
 
 #[tokio::test]
+async fn test_load_lists_reads_a_read_only_whitelist() {
+    // v4.2.24 loaded a list only when its table was persistent, so the usual read-only whitelist (the
+    // torrents table, `persistent = false`) came up empty and every announce was refused.
+    use torrust_actix::tracker::structs::torrent_update_data::TorrentUpdateData;
+    // (whitelist_enabled, whitelist table persistent, expected to load)
+    for (enabled, table_persistent, loads) in [(true, Some(false), true), (false, Some(true), true), (false, Some(false), false)] {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let mut config: Configuration = Configuration::init();
+        config.database.engine = DatabaseDrivers::sqlite3;
+        config.database.persistent = true;
+        config.database.insert_vacant = true;
+        config.database.path = temp_dir.path().join("lists.db").to_str().expect("Invalid temp path").to_string();
+        config.tracker_config.whitelist_enabled = enabled;
+        config.database_structure.whitelist.table_name = config.database_structure.torrents.table_name.clone();
+        config.database_structure.whitelist.column_infohash = config.database_structure.torrents.column_infohash.clone();
+        config.database_structure.whitelist.persistent = table_persistent;
+        let tracker: Arc<TorrentTracker> = Arc::new(TorrentTracker::new(Arc::new(config), true).await);
+        let info_hash = common::random_info_hash();
+        tracker.sqlx.save_torrents(tracker.clone(), &BTreeMap::from([(info_hash, (TorrentUpdateData::default(), UpdatesAction::Add))])).await.unwrap();
+        TorrentTracker::load_lists(&tracker).await;
+        assert_eq!(tracker.check_whitelist(info_hash), loads, "whitelist_enabled = {enabled}, persistent = {table_persistent:?}");
+    }
+}
+
+#[tokio::test]
 async fn test_save_and_load_blacklist() {
     let config: Arc<Configuration> = create_sqlite_test_config().await;
     let tracker: Arc<TorrentTracker> = Arc::new(TorrentTracker::new(config, true).await);

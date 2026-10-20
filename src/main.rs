@@ -98,21 +98,7 @@ fn main() -> std::io::Result<()>
             let users_persistent = db_structure.users.persistent.unwrap_or(db_config.persistent);
             let any_persistent = torrents_persistent || whitelist_persistent || blacklist_persistent || keys_persistent || users_persistent;
 
-            // Lists are loaded (and flushed, see `save_all_updates`) whenever their table is
-            // persistent: `*_enabled` only decides whether announces are checked against them, and
-            // the API manages them either way.
-            if whitelist_persistent {
-                tracker.load_whitelist(tracker.clone()).await;
-            }
-            if blacklist_persistent {
-                tracker.load_blacklist(tracker.clone()).await;
-            }
-            if keys_persistent {
-                tracker.load_keys(tracker.clone()).await;
-            }
-            if users_persistent {
-                tracker.load_users(tracker.clone()).await;
-            }
+            TorrentTracker::load_lists(&tracker).await;
             if db_config.persistent {
                 tracker.load_torrents(tracker.clone()).await;
                 if db_config.update_peers && !tracker.reset_seeds_peers(tracker.clone()).await {

@@ -1,65 +1,31 @@
+#[path = "../tests/common/mod.rs"]
+mod common;
+
 use criterion::{
     criterion_group,
     criterion_main,
     BenchmarkId,
     Criterion
 };
-use rand::RngExt;
 use std::net::{
     IpAddr,
     Ipv4Addr
 };
 use std::sync::Arc;
 use torrust_actix::common::structs::number_of_bytes::NumberOfBytes;
-use torrust_actix::config::structs::configuration::Configuration;
-use torrust_actix::tracker::enums::announce_event::AnnounceEvent;
 use torrust_actix::tracker::enums::torrent_peers_type::TorrentPeersType;
 use torrust_actix::tracker::structs::info_hash::InfoHash;
 use torrust_actix::tracker::structs::peer_id::PeerId;
-use torrust_actix::tracker::structs::torrent_peer::TorrentPeer;
-use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
-
-fn random_info_hash() -> InfoHash {
-    let mut rng = rand::rng();
-    let bytes: [u8; 20] = rng.random();
-    InfoHash(bytes)
-}
-
-fn random_peer_id() -> PeerId {
-    let mut rng = rand::rng();
-    let bytes: [u8; 20] = rng.random();
-    PeerId(bytes)
-}
-
-fn create_test_peer(ip: IpAddr, port: u16, peer_id: PeerId) -> TorrentPeer {
-    TorrentPeer {
-        peer_id,
-        peer_addr: std::net::SocketAddr::new(ip, port),
-        updated: std::time::Instant::now(),
-        uploaded: NumberOfBytes(0),
-        downloaded: NumberOfBytes(0),
-        left: NumberOfBytes(1000),
-        event: AnnounceEvent::Started,
-        key: None,
-        rtc_data: None,
-    }
-}
-
-async fn create_tracker() -> Arc<TorrentTracker> {
-    let mut config = Configuration::init();
-    config.database.persistent = false;
-    Arc::new(TorrentTracker::new(Arc::new(config), false).await)
-}
 
 fn bench_add_peer(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let tracker = rt.block_on(create_tracker());
+    let tracker = rt.block_on(common::create_test_tracker());
 
     c.bench_function("add_peer", |b| {
         b.iter(|| {
-            let info_hash = random_info_hash();
-            let peer_id = random_peer_id();
-            let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881, peer_id);
+            let info_hash = common::random_info_hash();
+            let peer_id = common::random_peer_id();
+            let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
             std::hint::black_box(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
         });
     });
@@ -73,18 +39,18 @@ fn bench_add_peer(c: &mut Criterion) {
 /// which is the cost that actually scales.
 fn bench_announce_into_populated_swarm(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let tracker = rt.block_on(create_tracker());
+    let tracker = rt.block_on(common::create_test_tracker());
 
     let mut group = c.benchmark_group("announce_into_populated_swarm");
     for swarm_size in [10usize, 200, 1000].iter() {
-        let info_hash = random_info_hash();
+        let info_hash = common::random_info_hash();
         // Half seeds, half leechers, so both maps the response reads are populated.
         for i in 0..*swarm_size {
-            let peer_id = random_peer_id();
-            let mut peer = create_test_peer(
+            let peer_id = common::random_peer_id();
+            let mut peer = common::create_test_peer(
+                peer_id,
                 IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)),
-                6881,
-                peer_id
+                6881
             );
             if i % 2 == 0 {
                 peer.left = NumberOfBytes(0);
@@ -92,13 +58,13 @@ fn bench_announce_into_populated_swarm(c: &mut Criterion) {
             tracker.add_torrent_peer(info_hash, peer_id, peer, false);
         }
         // One peer id, re-announced: the steady-state case for a client on its announce timer.
-        let returning_peer_id = random_peer_id();
+        let returning_peer_id = common::random_peer_id();
         group.bench_with_input(BenchmarkId::from_parameter(swarm_size), swarm_size, |b, _| {
             b.iter(|| {
-                let peer = create_test_peer(
+                let peer = common::create_test_peer(
+                    returning_peer_id,
                     IpAddr::V4(Ipv4Addr::new(10, 1, 1, 1)),
-                    6881,
-                    returning_peer_id
+                    6881
                 );
                 std::hint::black_box(tracker.add_torrent_peer(info_hash, returning_peer_id, peer, false));
             });
@@ -109,11 +75,11 @@ fn bench_announce_into_populated_swarm(c: &mut Criterion) {
 
 fn bench_get_peers_with_limit(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let tracker = rt.block_on(create_tracker());
-    let info_hash = random_info_hash();
+    let tracker = rt.block_on(common::create_test_tracker());
+    let info_hash = common::random_info_hash();
     for i in 0..1000 {
-        let peer_id = random_peer_id();
-        let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881, peer_id);
+        let peer_id = common::random_peer_id();
+        let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881);
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }
     let mut group = c.benchmark_group("get_peers_with_early_exit");
@@ -137,14 +103,14 @@ fn bench_concurrent_peer_additions(c: &mut Criterion) {
     c.bench_function("concurrent_100_peers", |b| {
         b.iter(|| {
             rt.block_on(async {
-                let tracker = create_tracker().await;
-                let info_hash = random_info_hash();
+                let tracker = common::create_test_tracker().await;
+                let info_hash = common::random_info_hash();
                 let mut handles = vec![];
                 for i in 0..100 {
                     let tracker_clone = tracker.clone();
                     let handle = tokio::spawn(async move {
-                        let peer_id = random_peer_id();
-                        let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(192, 168, 1, i)), 6881, peer_id);
+                        let peer_id = common::random_peer_id();
+                        let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(192, 168, 1, i)), 6881);
                         tracker_clone.add_torrent_peer(info_hash, peer_id, peer, false);
                     });
                     handles.push(handle);
@@ -166,7 +132,7 @@ fn bench_concurrent_peer_additions(c: &mut Criterion) {
 /// writes invalidates the line on every other core.
 fn bench_contended_stats(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let tracker = rt.block_on(create_tracker());
+    let tracker = rt.block_on(common::create_test_tracker());
     // Pre-create the torrents so the measured loop takes the occupied branch and never allocates
     // a new swarm, leaving the counters as the dominant shared write.
     const THREADS: usize = 8;
@@ -178,7 +144,7 @@ fn bench_contended_stats(c: &mut Criterion) {
             raw[1] = 0x5a;
             let info_hash = InfoHash(raw);
             let peer_id = PeerId(raw);
-            let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 2, 0, i)), 6881, peer_id);
+            let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(10, 2, 0, i)), 6881);
             tracker.add_torrent_peer(info_hash, peer_id, peer, false);
             (info_hash, peer_id)
         })
@@ -201,10 +167,10 @@ fn bench_contended_stats(c: &mut Criterion) {
                         let owned = &hashes[thread * per_thread..(thread + 1) * per_thread];
                         for step in 0..250usize {
                             let (info_hash, peer_id) = owned[step % owned.len()];
-                            let peer = create_test_peer(
+                            let peer = common::create_test_peer(
+                                peer_id,
                                 IpAddr::V4(Ipv4Addr::new(10, 2, 1, thread as u8)),
-                                6881,
-                                peer_id
+                                6881
                             );
                             tracker.add_torrent_peer(info_hash, peer_id, peer, false);
                         }
@@ -220,13 +186,13 @@ fn bench_contended_stats(c: &mut Criterion) {
 
 fn bench_sharding_distribution(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let tracker = rt.block_on(create_tracker());
+    let tracker = rt.block_on(common::create_test_tracker());
     c.bench_function("shard_access_256_torrents", |b| {
         b.iter(|| {
             for _ in 0..256 {
-                let info_hash = random_info_hash();
-                let peer_id = random_peer_id();
-                let peer = create_test_peer(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881, peer_id);
+                let info_hash = common::random_info_hash();
+                let peer_id = common::random_peer_id();
+                let peer = common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6881);
                 std::hint::black_box(tracker.add_torrent_peer(info_hash, peer_id, peer, false));
             }
         });
@@ -269,14 +235,14 @@ fn bench_udp_packet_parsing(c: &mut Criterion) {
 
 fn bench_peer_filtering_ipv4_vs_ipv6(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let tracker = rt.block_on(create_tracker());
-    let info_hash = random_info_hash();
+    let tracker = rt.block_on(common::create_test_tracker());
+    let info_hash = common::random_info_hash();
     for i in 0..500 {
-        let peer_id = random_peer_id();
+        let peer_id = common::random_peer_id();
         let peer = if i % 2 == 0 {
-            create_test_peer(IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881, peer_id)
+            common::create_test_peer(peer_id, IpAddr::V4(Ipv4Addr::new(10, 0, (i / 256) as u8, (i % 256) as u8)), 6881)
         } else {
-            create_test_peer(IpAddr::V6(format!("2001:db8::{:x}:{:x}", i / 256, i % 256).parse().unwrap()), 6881, peer_id)
+            common::create_test_peer(peer_id, IpAddr::V6(format!("2001:db8::{:x}:{:x}", i / 256, i % 256).parse().unwrap()), 6881)
         };
         tracker.add_torrent_peer(info_hash, peer_id, peer, false);
     }
