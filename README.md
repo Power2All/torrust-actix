@@ -612,6 +612,10 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 
 ### ChangeLog
 
+#### v4.2.25
+* **Fixed a whitelist with `persistent = false` not being loaded at startup (regression in v4.2.24).** v4.2.24 loaded a list only when its table was persistent, so a read-only whitelist, such as one pointed at the website's torrents table with `persistent = false`, came up empty. With `whitelist_enabled` on, every announce for a torrent not added over the API since the restart got `unknown info_hash`, and since those refusals are not counted as failures, the only sign was the seed and peer counts dropping. A list is loaded again whenever its mode is on, as before v4.2.24, and also when its table is persistent; `persistent = false` only stops it being written back.
+* **Peer expiry no longer rewrites every idle torrent on every pass (regression in v4.2.24).** With `persistent` on, a torrent without announces for longer than the peer timeout stays expired, and each cleanup pass queued it again even when it had no peers left to remove. Every torrent loaded from the database was written to the database and to the cache every `peers_cleanup_interval`, and Redis kept a zero-count key for each one. A torrent is now queued only when the pass actually removed peers from it.
+
 #### v4.2.24
 * Bumped versions, including two breaking ones that needed no code changes: `utoipa-swagger-ui` 9 → 10 (and `utoipa` 5 → 6 with it) and `zstd` 0.13 → 0.14.
 * Minimum Rust version is now 1.94.0. `sqlx` 0.9 already required it, so the declared 1.88.0 was wrong; `uuid` 1.28 and `actix-server` 2.10 need 1.89.
@@ -660,7 +664,25 @@ echo "WebRTC seeds:  {$data['rtc_seeds']}";
 * Non-compact announce responses send `peer id` as the raw 20 bytes BEP 3 specifies (it went out as 40 hex characters) and leave it out for `no_peer_id`.
 * io_uring: kernels without `IORING_FEAT_EXT_ARG` (before 5.11) now fall back to recvmmsg instead of every receive thread exiting at its first wait, and the receive buffers are no longer freed while the kernel may still be writing into them.
 * `max_connections` under `[[http_server]]` and `[[api_server]]` is now applied; it was read, documented and ignored.
+* **Whitelist, blacklist, key and user changes made over the API are saved even while that mode is off.** The API accepted them and queued them for the database, but the queue was only written, and the table only loaded at startup, while `whitelist_enabled` (or `blacklist_enabled`, `keys_enabled`, `users_enabled`) was on. With the mode off the queue grew without limit and the changes were lost at the next restart. Each table is now loaded and saved whenever it is persistent (`[database] persistent`, or the table's own `persistent`); the `*_enabled` switches only decide whether announces are checked against it, as before. A list can be filled first and its mode switched on later, and `DELETE /api/{whitelist,blacklist,keys,users}/clear` no longer answers `400 ... not enabled` while the mode is off. A whitelist that fails to load still stops the tracker while whitelist mode is on, and is logged otherwise.
+* **Warnings about invalid environment overrides are shown.** They were logged before the logger was set up, so they never appeared; they now go to stderr, with the rest of the configuration checks.
 * `cargo clippy --all-targets` is clean. The flush functions (`save_torrents`, `save_keys`, `save_users`, ... and their `_updates` variants) return the `sqlx::Error` they hit instead of `()`, and log it; the remote-IP lookups return `Option`; request helpers box their ready-made error response. **Library API change.** The UDP scrape parser loses an error branch that could not be reached.
+
+##### Simplification (v4.2.24)
+About 3,000 lines of Rust (14%) and four direct dependencies (`uuid`, `sha1`, `async-trait`, `tokio-shutdown`) are gone, with the API status codes, the Redis keys and the cluster wire format unchanged. What you can notice:
+* **An unparsable number or boolean in an environment override now keeps the configured value** (with a warning on stderr) instead of resetting it to a built-in default, as `TRACKER__MAX_TORRENTS` already did. `DATABASE_STRUCTURE__*__PERSISTENT` still falls back to unset.
+* Pending whitelist, blacklist and key updates hold one entry per hash, as user updates already did, so adding and removing the same hash before a flush writes only the last action. The `whitelist_updates`, `blacklist_updates` and `keys_updates` statistics count pending hashes, not API calls.
+* The 400 bodies for a malformed hash are consistent across the API: `bad <field>` for a wrong length and `invalid <field>` for a non-hex character. `GET`/`POST`/`DELETE /api/torrent/{info_hash}` used to answer `bad info_hash` for both, and `DELETE /api/key/{key_hash}` said `invalid key`.
+* `receive_method = "auto"` is now an alias of `recvmmsg` (which it always behaved as) rather than a separate value.
+* A flush logs one `[SYNC ... UPDATES]` line instead of two, and a cluster master that cannot bind its address logs the reason and exits instead of panicking.
+
+Removed or changed in the library API (**Library API change**):
+* Dead code: the UDP response parsers (`Response::from_bytes`, `parse_ipv4_peers`, `parse_ipv6_peers`, `parse_scrape_stats`) and `Request::write`; the cluster `RequestType::ApiCall`/`ProtocolType::Api`, `process_api_call` and the per-encoding encode/decode helpers (`process_cluster_request` no longer takes an encoding); `src/ssl/ssl.rs`, `reload_all`, `reload_certificate_with_paths`; `hex2bin` (use `hex_to_id` or `str::parse::<InfoHash>()`), `validate_info_hash_hex`, `validate_peer_id_hex`, `convert_int_to_bytes`/`convert_bytes_to_int`, and about twenty unused tracker methods and constants.
+* The `DatabaseBackend` and `CacheBackend` traits, each with one implementation, are gone; the connectors keep the same methods as inherent ones.
+* The `TorrentTracker::save_torrents`/`save_keys`/`save_users`/`save_whitelist`/`save_blacklist` wrappers are removed; the `_updates` flushes call `DatabaseConnector` directly, and `TorrentTracker::save_all_updates` runs all of them (the periodic flush and the final save on shutdown use it). `get_key_updates` and `remove_key_update` are removed.
+* `udp_service` and `UdpServer::new` take the `UdpTrackersConfig` instead of twelve arguments. `trusted_proxy_ips` and `proxy_addresses` are parsed straight into `Vec<IpAddr>`, so the shadow `trusted_proxy_addrs`/`proxy_addrs` fields are gone.
+* `api_parse_body` became `api_json_body::<T>()` and `parse_info_hash` became `parse_hex_id::<T>()`; `DynamicCertificateResolver::server_config` builds a listener's rustls config.
+* `InfoHash`, `PeerId` and `UserId` implement `Deserialize` from their hex form, and `CustomError` derives `thiserror::Error`.
 
 ##### Docker and CI (v4.2.24)
 * **The image is built from the checkout it sits in** (`docker build -f docker/Dockerfile .` from the repository root) instead of cloning a git tag from GitHub, in two stages on pinned `rust:1.98-alpine3.24` / `alpine:3.24`: 108 MB instead of an image carrying the Rust toolchain and the whole build tree. A `.dockerignore` keeps `target/`, `config.toml` and databases out of the build context.

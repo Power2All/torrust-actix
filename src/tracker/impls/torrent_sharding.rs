@@ -116,7 +116,7 @@ impl TorrentSharding {
         stats: Arc<CleanupStats>
     ) {
         let (mut torrents_removed, mut seeds_removed, mut peers_removed) = (0u64, 0u64, 0u64);
-        // Every torrent this pass changes, queued after the shard lock is released. Expiry never went
+        // Every torrent this pass changes, queued once the pass is done. Expiry never went
         // through the update queue, so the cache (which the website reads peer counts from) kept
         // showing peers that had left until its TTL ran out.
         let mut changed: Vec<(InfoHash, TorrentUpdateData, UpdatesAction)> = Vec::new();
@@ -278,7 +278,11 @@ impl TorrentSharding {
                                 torrent_entry.rtc_peers.clear();
                                 peers_removed += rtc_peers_len;
                             }
-                            changed.push((*info_hash, TorrentUpdateData::from(&*torrent_entry), UpdatesAction::Add));
+                            // `updated` is left as it is, so an idle torrent stays expired and comes
+                            // back every pass: only queue it when this pass actually emptied it.
+                            if seeds_len + seeds_ipv6_len + peers_len + peers_ipv6_len + rtc_seeds_len + rtc_peers_len > 0 {
+                                changed.push((*info_hash, TorrentUpdateData::from(&*torrent_entry), UpdatesAction::Add));
+                            }
                         } else {
                             entry.remove();
                             torrents_removed += 1;
@@ -288,12 +292,15 @@ impl TorrentSharding {
                         }
                     }
                 }
-            }
-        }
-        let cache_enabled = torrent_tracker.config.cache.as_ref().is_some_and(|c| c.enabled);
-        if persistent || cache_enabled {
-            for (info_hash, data, action) in changed {
-                torrent_tracker.add_torrent_update(info_hash, data, action);
+                // Queued under the shard lock: the sequence number is taken at queue time, so an
+                // announce slipping in after the lock was released would be overwritten by these
+                // older snapshots. The queue has its own locks and never takes a shard lock.
+                let cache_enabled = torrent_tracker.config.cache.as_ref().is_some_and(|c| c.enabled);
+                if persistent || cache_enabled {
+                    for (info_hash, data, action) in changed {
+                        torrent_tracker.add_torrent_update(info_hash, data, action);
+                    }
+                }
             }
         }
         if torrents_removed > 0 {

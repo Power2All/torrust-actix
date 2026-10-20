@@ -434,17 +434,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-trait"
-version = "0.1.92"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.9",
-]
-
-[[package]]
 name = "atoi"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3769,16 +3758,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-shutdown"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d12a69e6b9c26d07555489cae0e9015a218899bae97db50a6837fbc67cf54dc7"
-dependencies = [
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "tokio-stream"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3876,7 +3855,6 @@ dependencies = [
  "actix-web",
  "actix-ws",
  "ahash",
- "async-trait",
  "base64 0.23.1",
  "bip_bencode",
  "chrono",
@@ -3906,18 +3884,15 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_millis",
- "sha1",
  "smallvec",
  "socket2",
  "sqlx",
  "tempfile",
  "thiserror",
  "tokio",
- "tokio-shutdown",
  "tokio-tungstenite",
  "toml 1.1.8+spec-1.1.0",
  "utoipa-swagger-ui",
- "uuid",
  "windows-sys 0.61.2",
  "winres",
  "zstd",
@@ -4211,7 +4186,6 @@ version = "1.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
 dependencies = [
- "getrandom 0.4.3",
  "js-sys",
  "serde_core",
  "wasm-bindgen",
