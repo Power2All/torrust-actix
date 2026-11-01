@@ -70,14 +70,14 @@ impl TorrentTracker {
     /// Returns the key and its expiry timestamp when the key exists.
     pub fn get_key(&self, hash: InfoHash) -> Option<(InfoHash, i64)>
     {
-        let lock = self.keys.read_recursive();
+        let lock = self.keys.read();
         lock.get(&hash).map(|&data| (hash, data))
     }
 
     /// Returns a clone of the complete key table.
     pub fn get_keys(&self) -> BTreeMap<InfoHash, i64>
     {
-        let lock = self.keys.read_recursive();
+        let lock = self.keys.read();
         lock.clone()
     }
 
@@ -97,7 +97,7 @@ impl TorrentTracker {
     /// announce/scrape). An expiry of `0` means the key never expires.
     pub fn check_key(&self, hash: InfoHash) -> bool
     {
-        let lock = self.keys.read_recursive();
+        let lock = self.keys.read();
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         lock.get(&hash).is_some_and(|&key| key == 0 || u64::try_from(key).is_ok_and(|key| key > now))
     }
@@ -120,7 +120,7 @@ impl TorrentTracker {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let mut keys_to_remove = Vec::new();
         {
-            let lock = self.keys.read_recursive();
+            let lock = self.keys.read();
             for (&hash, &key_time) in lock.iter() {
                 if key_time == 0 {
                     continue;

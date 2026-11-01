@@ -40,7 +40,7 @@ impl TorrentTracker {
     /// Returns the database error when the flush fails; the queued updates remain intact.
     pub async fn save_key_updates(&self, torrent_tracker: Arc<TorrentTracker>) -> Result<(), sqlx::Error>
     {
-        let updates = self.keys_updates.read_recursive().clone();
+        let updates = self.keys_updates.read().clone();
         if updates.is_empty() {
             return Ok(());
         }

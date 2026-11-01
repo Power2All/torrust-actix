@@ -19,4 +19,9 @@ impl CacheConnectorRedis {
     pub(crate) fn torrent_key(&self, info_hash: &InfoHash) -> String {
         format!("{}t:{}", self.prefix, info_hash)
     }
+
+    /// Builds the cache key for a user's totals (`<prefix>u:<id>`, `id` being the uuid or numeric id).
+    pub(crate) fn user_key(&self, id: &str) -> String {
+        format!("{}u:{}", self.prefix, id)
+    }
 }

@@ -158,7 +158,7 @@ impl TorrentTracker {
     pub fn get_torrent(&self, info_hash: InfoHash) -> Option<TorrentEntry>
     {
         let shard = self.torrents_sharding.shard_for(info_hash);
-        let lock = shard.read_recursive();
+        let lock = shard.read();
         lock.get(&info_hash).cloned()
     }
 
@@ -169,7 +169,7 @@ impl TorrentTracker {
     pub fn get_torrent_counts(&self, info_hash: InfoHash) -> Option<crate::tracker::structs::torrent_counts::TorrentCounts>
     {
         let shard = self.torrents_sharding.shard_for(info_hash);
-        let lock = shard.read_recursive();
+        let lock = shard.read();
         lock.get(&info_hash).map(crate::tracker::structs::torrent_counts::TorrentCounts::from_entry)
     }
 

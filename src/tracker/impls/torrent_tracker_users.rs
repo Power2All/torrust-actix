@@ -45,7 +45,7 @@ impl TorrentTracker {
     /// Returns a clone of the user entry for the given [`UserId`], if present.
     pub fn get_user(&self, id: UserId) -> Option<UserEntryItem>
     {
-        let lock = self.users.read_recursive();
+        let lock = self.users.read();
         lock.get(&id).cloned()
     }
 
@@ -54,7 +54,7 @@ impl TorrentTracker {
     /// This copies every entry; intended for the API and persistence tasks, not per-request use.
     pub fn get_users(&self) -> BTreeMap<UserId, UserEntryItem>
     {
-        let lock = self.users.read_recursive();
+        let lock = self.users.read();
         lock.clone()
     }
 
@@ -91,10 +91,10 @@ impl TorrentTracker {
     pub fn check_user_key(&self, key: UserId) -> Option<UserId>
     {
         let user_id = {
-            let lock = self.users_key_index.read_recursive();
+            let lock = self.users_key_index.read();
             lock.get(&key).copied()?
         };
-        let users = self.users.read_recursive();
+        let users = self.users.read();
         users.get(&user_id).filter(|user| user.active != 0).map(|_| user_id)
     }
 

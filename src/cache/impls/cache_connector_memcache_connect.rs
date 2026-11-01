@@ -25,6 +25,20 @@ impl CacheConnectorMemcache {
         format!("{}t:{}", self.prefix, info_hash)
     }
 
+    /// Builds the cache key for a user's totals (`<prefix>u:<id>`, `id` being the uuid or numeric id).
+    pub(crate) fn user_key(&self, id: &str) -> String {
+        format!("{}u:{}", self.prefix, id)
+    }
+
+    /// User format: `"uploaded:downloaded:completed:active:updated:torrents"`
+    pub(crate) fn serialize_user(counts: &crate::cache::structs::user_stat_counts::UserStatCounts) -> String {
+        format!(
+            "{}:{}:{}:{}:{}:{}",
+            counts.uploaded, counts.downloaded, counts.completed,
+            counts.active, counts.updated, counts.torrents_active,
+        )
+    }
+
     /// Aggregated format: `"seeds:peers:completed"`
     pub(crate) fn serialize_aggregated(seeds: u64, peers: u64, completed: u64) -> String {
         format!("{seeds}:{peers}:{completed}")

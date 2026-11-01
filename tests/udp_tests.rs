@@ -267,6 +267,43 @@ async fn test_udp_announce_path_slicing_does_not_panic() {
 }
 
 #[tokio::test]
+async fn test_udp_user_key_path_with_keys_off() {
+    use std::collections::BTreeMap;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+    use torrust_actix::tracker::structs::user_entry_item::UserEntryItem;
+    use torrust_actix::tracker::structs::user_id::UserId;
+    use torrust_actix::udp::structs::udp_server::UdpServer;
+
+    let config = Arc::new(common::build_test_config(|config| config.tracker_config.users_enabled = true));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let user_key = UserId([0x12; 20]);
+    tracker.add_user(UserId([1; 20]), UserEntryItem {
+        key: user_key,
+        user_id: Some(1),
+        user_uuid: None,
+        uploaded: 0,
+        downloaded: 0,
+        completed: 0,
+        updated: 0,
+        active: 1,
+        torrents_active: BTreeMap::new(),
+    });
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 12)), 6881);
+    let issued = UdpServer::get_connection_id(&addr).await;
+    let key_hex = hex::encode(user_key.0);
+    // (path, accepted): `/announce/<user key>` as on HTTP, the old placeholder form, and an unknown key.
+    for (path, accepted) in [
+        (format!("/announce/{key_hex}"), true),
+        (format!("/announce/{}/{key_hex}", "0".repeat(40)), true),
+        (format!("/announce/{}", "3".repeat(40)), false),
+    ] {
+        let packet = build_announce_packet(issued.0, Some(path.as_bytes()));
+        let response = UdpServer::handle_packet(addr, &packet, tracker.clone(), false).await.unwrap();
+        assert_eq!(matches!(response, Response::AnnounceIpv4(_)), accepted, "{path}: {response:?}");
+    }
+}
+
+#[tokio::test]
 async fn test_udp_replies_only_where_a_reply_belongs() {
     use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
     use torrust_actix::udp::structs::udp_server::UdpServer;

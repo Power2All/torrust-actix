@@ -58,8 +58,9 @@ impl TorrentTracker {
         }
     }
 
-    /// Flushes every update queue, each in its own task: torrents always (they also feed the
-    /// cache), and the whitelist, blacklist, keys and users when their table is persistent. That
+    /// Flushes every update queue, each in its own task: torrents always and users with a cache
+    /// (both also feed the cache), and the whitelist, blacklist, keys and users when their table
+    /// is persistent. That
     /// is independent of whether their mode is on, which only decides whether announces are checked
     /// against them. Each flush logs its own failure and keeps its queue for the next run.
     pub async fn save_all_updates(tracker: &Arc<TorrentTracker>)
@@ -84,7 +85,8 @@ impl TorrentTracker {
         if structure.keys.persistent.unwrap_or(persistent) {
             tasks.push(flush!(save_key_updates));
         }
-        if structure.users.persistent.unwrap_or(persistent) {
+        // Users also feed the cache (`<prefix>u:<id>`), so they flush without a persistent table too.
+        if structure.users.persistent.unwrap_or(persistent) || tracker.cache.is_some() {
             tasks.push(flush!(save_user_updates));
         }
         for task in tasks {

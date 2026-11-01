@@ -2,7 +2,7 @@
 #   docker build -f docker/Dockerfile -t power2all/torrust-actix .
 # (docker/build.bat and docker-compose.yml already do.)
 
-FROM rust:1.98-alpine3.24 AS builder
+FROM rust:1.99-alpine3.24 AS builder
 # curl: utoipa-swagger-ui downloads the Swagger UI bundle at build time. No OpenSSL: TLS is rustls.
 RUN apk add --no-cache musl-dev curl
 WORKDIR /src

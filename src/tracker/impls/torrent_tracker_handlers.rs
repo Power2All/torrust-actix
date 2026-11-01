@@ -217,7 +217,8 @@ impl TorrentTracker {
             );
         }
         let is_torrents_persistent = data.config.database_structure.torrents.persistent.unwrap_or(data.config.database.persistent);
-        let is_users_persistent = data.config.database_structure.users.persistent.unwrap_or(data.config.database.persistent);
+        // A user change is queued when something reads it: the database, or the cache (`<prefix>u:<id>`).
+        let users_need_update = data.config.database_structure.users.persistent.unwrap_or(data.config.database.persistent) || data.cache.is_some();
         let is_persistent = is_torrents_persistent;
         let cache_enabled = data.config.cache.as_ref().is_some_and(|c| c.enabled);
         let needs_update = is_torrents_persistent || cache_enabled;
@@ -257,7 +258,7 @@ impl TorrentTracker {
                 }
                 if users_enabled && let Some(user_id) = user_key {
                     let timestamp = crate::common::common::current_time();
-                    if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
+                    if let Some(user) = data.update_user_on_announce(user_id, users_need_update, |user| {
                         user.updated = timestamp;
                         user.torrents_active.insert(announce_query.info_hash, timestamp);
                     }) {
@@ -270,29 +271,32 @@ impl TorrentTracker {
             }
             AnnounceEvent::Stopped => {
                 debug!("[HANDLE ANNOUNCE] Removing from infohash {} peerid {}", announce_query.info_hash, announce_query.peer_id);
-                let torrent_entry = match data.remove_torrent_peer(
+                let (removed, remaining) = data.remove_torrent_peer(
                     announce_query.info_hash,
                     announce_query.peer_id,
                     is_persistent,
                     false,
                     Some((announce_query.remote_addr, announce_query.key))
-                ) {
+                );
+                // Credited whether or not the swarm survived: the last peer's `stopped` used to
+                // drop its session totals along with the torrent.
+                if removed && users_enabled && let Some(user_id) = user_key {
+                    let timestamp = crate::common::common::current_time();
+                    if let Some(user) = data.update_user_on_announce(user_id, users_need_update, |user| {
+                        // Both values are whatever the client claims, so they saturate
+                        // rather than wrap: the release profile turns overflow checks
+                        // off, and a peer reporting u64::MAX would otherwise roll the
+                        // running total back over zero.
+                        user.uploaded = user.uploaded.saturating_add(announce_query.uploaded);
+                        user.downloaded = user.downloaded.saturating_add(announce_query.downloaded);
+                        user.updated = timestamp;
+                        user.torrents_active.remove(&announce_query.info_hash);
+                    }) {
+                        data.add_user_update(user_id, user, UpdatesAction::Add);
+                    }
+                }
+                let torrent_entry = match (removed, remaining) {
                     (true, Some(new_torrent)) => {
-                        if users_enabled && let Some(user_id) = user_key {
-                            let timestamp = crate::common::common::current_time();
-                            if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
-                                // Both values are whatever the client claims, so they saturate
-                                // rather than wrap: the release profile turns overflow checks
-                                // off, and a peer reporting u64::MAX would otherwise roll the
-                                // running total back over zero.
-                                user.uploaded = user.uploaded.saturating_add(announce_query.uploaded);
-                                user.downloaded = user.downloaded.saturating_add(announce_query.downloaded);
-                                user.updated = timestamp;
-                                user.torrents_active.remove(&announce_query.info_hash);
-                            }) {
-                                data.add_user_update(user_id, user, UpdatesAction::Add);
-                            }
-                        }
                         if needs_update {
                             let _ = data.add_torrent_update(
                                 announce_query.info_hash,
@@ -348,7 +352,7 @@ impl TorrentTracker {
                 }
                 if users_enabled && let Some(user_id) = user_key {
                     let timestamp = crate::common::common::current_time();
-                    if let Some(user) = data.update_user_on_announce(user_id, is_users_persistent, |user| {
+                    if let Some(user) = data.update_user_on_announce(user_id, users_need_update, |user| {
                         user.completed = user.completed.saturating_add(1);
                         user.updated = timestamp;
                     }) {

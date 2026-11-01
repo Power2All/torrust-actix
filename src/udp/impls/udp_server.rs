@@ -69,7 +69,8 @@ static CONNECTION_ID_KEY: LazyLock<ring::hmac::Key> = LazyLock::new(|| {
         .expect("failed to generate the UDP connection-id key from the system RNG")
 });
 
-/// Byte range of the 40-character hex announce key inside `/announce/<key>/<user key>`.
+/// Byte range of the 40-character hex announce key inside `/announce/<key>/<user key>`, and of
+/// the user key inside `/announce/<user key>` when keys are off.
 const KEY_PATH_RANGE: std::ops::Range<usize> = 10..50;
 /// Byte range of the 40-character hex user key inside `/announce/<key>/<user key>`.
 const USER_KEY_PATH_RANGE: std::ops::Range<usize> = 51..91;
@@ -553,19 +554,17 @@ impl UdpServer {
             }
         }
         let user_key = if config.users_enabled {
-            let Some(user_key_hex) = request.path.as_bytes().get(USER_KEY_PATH_RANGE) else {
-                debug!("[UDP ERROR] Peer Key Not Valid - path too short");
-                return Err(ServerError::PeerKeyNotValid);
-            };
-            match hex::decode(user_key_hex) {
-                Ok(result) if result.len() >= 20 => {
-                    let key: [u8; 20] = result[..20].try_into().expect("length checked above");
-                    tracker.check_user_key(UserId::from(key))
-                }
-                _ => {
-                    debug!("[UDP ERROR] Peer Key Not Valid");
-                    return Err(ServerError::PeerKeyNotValid);
-                }
+            let path = request.path.as_bytes();
+            let user_at = |range: std::ops::Range<usize>| path.get(range)
+                .and_then(|hex| hex::decode(hex).ok())
+                .and_then(|bytes| <[u8; 20]>::try_from(bytes).ok())
+                .and_then(|key| tracker.check_user_key(UserId::from(key)));
+            if config.keys_enabled {
+                user_at(USER_KEY_PATH_RANGE)
+            } else {
+                // `/announce/<user key>`, like HTTP's `/<user key>/announce`. The long form with a
+                // placeholder in the key field was the only one accepted before, so it still works.
+                user_at(KEY_PATH_RANGE).or_else(|| user_at(USER_KEY_PATH_RANGE))
             }
         } else {
             None

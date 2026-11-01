@@ -1,6 +1,7 @@
 use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector::CacheConnector;
 use crate::cache::structs::torrent_peer_counts::TorrentPeerCounts;
+use crate::cache::structs::user_stat_counts::UserStatCounts;
 use crate::tracker::structs::info_hash::InfoHash;
 
 /// Forwards each call to the connected engine.
@@ -28,5 +29,13 @@ impl CacheConnector {
         ttl: Option<u64>,
     ) -> Result<(), CacheError> {
         dispatch!(self, set_torrent_peers_batch, data, ttl)
+    }
+
+    pub async fn delete_users(&self, ids: &[String]) -> Result<(), CacheError> {
+        dispatch!(self, delete_users, ids)
+    }
+
+    pub async fn set_users_batch(&self, data: &[(String, UserStatCounts)]) -> Result<(), CacheError> {
+        dispatch!(self, set_users_batch, data)
     }
 }

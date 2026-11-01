@@ -471,6 +471,47 @@ async fn test_announce_without_user_key_refused_when_users_enabled() {
 }
 
 #[actix_web::test]
+async fn test_user_stats_are_credited_over_http() {
+    // The HTTP route resolved the key but handed the key itself on as the user id, so the user
+    // was never found and nothing was credited. The only peer stopping also drops the torrent,
+    // which used to skip the credit as well.
+    use std::collections::BTreeMap;
+    use torrust_actix::tracker::structs::torrent_tracker::TorrentTracker;
+    use torrust_actix::tracker::structs::user_entry_item::UserEntryItem;
+    use torrust_actix::tracker::structs::user_id::UserId;
+    let config = Arc::new(common::build_test_config(|c| c.tracker_config.users_enabled = true));
+    let tracker = Arc::new(TorrentTracker::new(config, false).await);
+    let (user_id, user_key) = (UserId([1; 20]), UserId([0x12; 20]));
+    tracker.add_user(user_id, UserEntryItem {
+        key: user_key,
+        user_id: Some(1),
+        user_uuid: None,
+        uploaded: 0,
+        downloaded: 0,
+        completed: 0,
+        updated: 0,
+        active: 1,
+        torrents_active: BTreeMap::new(),
+    });
+    let app = test::init_service(App::new().configure(http_service_routes(Arc::new(HttpServiceData {
+        torrent_tracker: tracker.clone(),
+        http_trackers_config: common::create_test_http_config(),
+    })))).await;
+    let info_hash = common::percent_encode(&common::random_info_hash().0);
+    let peer_id = common::percent_encode(&common::random_peer_id().0);
+    for (event, uploaded, downloaded) in [("started", 0, 0), ("stopped", 500, 300)] {
+        let req = test::TestRequest::get()
+            .uri(&format!("/{}/announce?info_hash={info_hash}&peer_id={peer_id}&port=6881&uploaded={uploaded}&downloaded={downloaded}&left=1000&compact=1&event={event}", hex::encode(user_key.0)))
+            .peer_addr("127.0.0.1:0".parse().unwrap())
+            .to_request();
+        let body = test::read_body(test::call_service(&app, req).await).await;
+        assert!(!is_failure_response(&body), "{event}: {}", String::from_utf8_lossy(&body));
+    }
+    let user = tracker.get_user(user_id).unwrap();
+    assert_eq!((user.uploaded, user.downloaded), (500, 300));
+}
+
+#[actix_web::test]
 async fn test_dictionary_peer_list_follows_bep3() {
     // `peer id` is the raw 20 bytes (it went out as 40 hex characters), and `no_peer_id` drops it.
     let (app, tracker) = make_app!(false);

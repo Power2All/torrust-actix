@@ -13,7 +13,7 @@ impl TorrentTracker {
     pub fn get_rtctorrent_peers(&self, info_hash: InfoHash, requester_is_seed: bool, requester_peer_id: PeerId) -> AnnounceEntry {
         let snapshot = {
             let shard = self.torrents_sharding.shard_for(info_hash);
-            let lock = shard.read_recursive();
+            let lock = shard.read();
             lock.get(&info_hash).map(|entry| AnnounceEntry::from_entry(entry, SnapshotMaps::Rtc))
         };
         if let Some(mut filtered_entry) = snapshot {

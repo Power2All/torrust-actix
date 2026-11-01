@@ -1,6 +1,7 @@
 use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector_redis::CacheConnectorRedis;
 use crate::cache::structs::torrent_peer_counts::TorrentPeerCounts;
+use crate::cache::structs::user_stat_counts::UserStatCounts;
 use crate::tracker::structs::info_hash::InfoHash;
 use log::debug;
 use redis::AsyncCommands;
@@ -64,6 +65,44 @@ impl CacheConnectorRedis {
             .await
             .map_err(CacheError::RedisError)?;
         debug!("[Redis] Batch set {} torrents", data.len());
+        Ok(())
+    }
+
+    pub async fn delete_users(&self, ids: &[String]) -> Result<(), CacheError> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.conn().await?;
+        let keys: Vec<String> = ids.iter().map(|id| self.user_key(id)).collect();
+        conn.del::<_, ()>(keys)
+            .await
+            .map_err(CacheError::RedisError)?;
+        debug!("[Redis] Deleted {} users", ids.len());
+        Ok(())
+    }
+
+    /// Writes each user's totals as a hash. User keys get no TTL: a user's totals stay valid
+    /// while they are not announcing, and the key is deleted when the user is.
+    pub async fn set_users_batch(&self, data: &[(String, UserStatCounts)]) -> Result<(), CacheError> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.conn().await?;
+        let mut pipe = redis::pipe();
+        for (id, counts) in data {
+            pipe.hset_multiple(self.user_key(id), &[
+                ("uploaded",   counts.uploaded),
+                ("downloaded", counts.downloaded),
+                ("completed",  counts.completed),
+                ("active",     u64::from(counts.active)),
+                ("updated",    counts.updated),
+                ("torrents",   counts.torrents_active),
+            ]);
+        }
+        pipe.query_async::<()>(&mut conn)
+            .await
+            .map_err(CacheError::RedisError)?;
+        debug!("[Redis] Batch set {} users", data.len());
         Ok(())
     }
 }
