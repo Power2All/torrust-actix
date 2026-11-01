@@ -301,6 +301,26 @@ async fn test_udp_user_key_path_with_keys_off() {
         let response = UdpServer::handle_packet(addr, &packet, tracker.clone(), false).await.unwrap();
         assert_eq!(matches!(response, Response::AnnounceIpv4(_)), accepted, "{path}: {response:?}");
     }
+
+    // A second segment is the user key even when the first is another user's: the announce is
+    // credited to the second user only.
+    let other_id = UserId([2; 20]);
+    let other_key = UserId([0x34; 20]);
+    tracker.add_user(other_id, UserEntryItem {
+        key: other_key,
+        user_id: Some(2),
+        user_uuid: None,
+        uploaded: 0,
+        downloaded: 0,
+        completed: 0,
+        updated: 0,
+        active: 1,
+        torrents_active: BTreeMap::new(),
+    });
+    let packet = build_announce_packet(issued.0, Some(format!("/announce/{}/{key_hex}", hex::encode(other_key.0)).as_bytes()));
+    let response = UdpServer::handle_packet(addr, &packet, tracker.clone(), false).await.unwrap();
+    assert!(matches!(response, Response::AnnounceIpv4(_)), "{response:?}");
+    assert!(tracker.get_user(other_id).unwrap().torrents_active.is_empty(), "the placeholder's user must not be credited");
 }
 
 #[tokio::test]

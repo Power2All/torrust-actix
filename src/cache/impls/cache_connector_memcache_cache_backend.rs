@@ -6,11 +6,13 @@ use crate::tracker::structs::info_hash::InfoHash;
 use log::debug;
 
 impl CacheConnectorMemcache {
-    /// Deletes torrents' keys; memcache has no multi-key delete, so one at a time.
+    /// Deletes torrents' keys; memcache has no multi-key delete, so one at a time. A key that is
+    /// already gone is not an error (`Ok(false)`); a failed delete is, so the caller can log it.
     pub async fn delete_torrents(&self, info_hashes: &[InfoHash]) -> Result<(), CacheError> {
         let client = self.client.lock();
         for info_hash in info_hashes {
-            let _ = client.delete(&self.torrent_key(info_hash));
+            client.delete(&self.torrent_key(info_hash))
+                .map_err(CacheError::MemcacheError)?;
         }
         debug!("[Memcache] Deleted {} torrents", info_hashes.len());
         Ok(())
@@ -41,10 +43,13 @@ impl CacheConnectorMemcache {
     }
 
     /// Deletes users' keys; memcache has no multi-key delete, so one at a time.
+    /// A key that is already gone is not an error (`Ok(false)`); a failed delete is, so the caller
+    /// can log it.
     pub async fn delete_users(&self, ids: &[String]) -> Result<(), CacheError> {
         let client = self.client.lock();
         for id in ids {
-            let _ = client.delete(&self.user_key(id));
+            client.delete(&self.user_key(id))
+                .map_err(CacheError::MemcacheError)?;
         }
         debug!("[Memcache] Deleted {} users", ids.len());
         Ok(())

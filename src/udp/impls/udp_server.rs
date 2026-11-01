@@ -559,12 +559,15 @@ impl UdpServer {
                 .and_then(|hex| hex::decode(hex).ok())
                 .and_then(|bytes| <[u8; 20]>::try_from(bytes).ok())
                 .and_then(|key| tracker.check_user_key(UserId::from(key)));
-            if config.keys_enabled {
+            // With keys off, `/announce/<user key>` like HTTP's `/<user key>/announce`, or the long
+            // form with a placeholder in the key field, the only one accepted before. A second
+            // segment decides which: falling back from the first would credit whichever user's key
+            // was put in the placeholder.
+            let has_second_segment = path.get(KEY_PATH_RANGE.end) == Some(&b'/') && path.len() >= USER_KEY_PATH_RANGE.end;
+            if config.keys_enabled || has_second_segment {
                 user_at(USER_KEY_PATH_RANGE)
             } else {
-                // `/announce/<user key>`, like HTTP's `/<user key>/announce`. The long form with a
-                // placeholder in the key field was the only one accepted before, so it still works.
-                user_at(KEY_PATH_RANGE).or_else(|| user_at(USER_KEY_PATH_RANGE))
+                user_at(KEY_PATH_RANGE)
             }
         } else {
             None
