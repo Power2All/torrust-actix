@@ -27,3 +27,4 @@ pub mod cleanup_stats;
 pub mod announce_entry;
 pub mod torrent_update_data;
 pub mod torrent_counts;
+pub mod user_entry_item;

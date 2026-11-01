@@ -1,15 +1,18 @@
 use crate::cache::enums::cache_error::CacheError;
 use crate::cache::structs::cache_connector_memcache::CacheConnectorMemcache;
 use crate::cache::structs::torrent_peer_counts::TorrentPeerCounts;
+use crate::cache::structs::user_stat_counts::UserStatCounts;
 use crate::tracker::structs::info_hash::InfoHash;
 use log::debug;
 
 impl CacheConnectorMemcache {
-    /// Deletes torrents' keys; memcache has no multi-key delete, so one at a time.
+    /// Deletes torrents' keys; memcache has no multi-key delete, so one at a time. A key that is
+    /// already gone is not an error (`Ok(false)`); a failed delete is, so the caller can log it.
     pub async fn delete_torrents(&self, info_hashes: &[InfoHash]) -> Result<(), CacheError> {
         let client = self.client.lock();
         for info_hash in info_hashes {
-            let _ = client.delete(&self.torrent_key(info_hash));
+            client.delete(&self.torrent_key(info_hash))
+                .map_err(CacheError::MemcacheError)?;
         }
         debug!("[Memcache] Deleted {} torrents", info_hashes.len());
         Ok(())
@@ -36,6 +39,33 @@ impl CacheConnectorMemcache {
                 .map_err(CacheError::MemcacheError)?;
         }
         debug!("[Memcache] Batch set {} torrents", data.len());
+        Ok(())
+    }
+
+    /// Deletes users' keys; memcache has no multi-key delete, so one at a time.
+    /// A key that is already gone is not an error (`Ok(false)`); a failed delete is, so the caller
+    /// can log it.
+    pub async fn delete_users(&self, ids: &[String]) -> Result<(), CacheError> {
+        let client = self.client.lock();
+        for id in ids {
+            client.delete(&self.user_key(id))
+                .map_err(CacheError::MemcacheError)?;
+        }
+        debug!("[Memcache] Deleted {} users", ids.len());
+        Ok(())
+    }
+
+    /// Writes each user's totals. User keys never expire, see the Redis backend.
+    pub async fn set_users_batch(&self, data: &[(String, UserStatCounts)]) -> Result<(), CacheError> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        let client = self.client.lock();
+        for (id, counts) in data {
+            client.set(&self.user_key(id), Self::serialize_user(counts).as_str(), 0)
+                .map_err(CacheError::MemcacheError)?;
+        }
+        debug!("[Memcache] Batch set {} users", data.len());
         Ok(())
     }
 }

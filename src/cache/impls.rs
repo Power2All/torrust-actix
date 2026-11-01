@@ -7,3 +7,4 @@ pub mod cache_connector_memcache_debug;
 pub mod cache_connector_redis_cache_backend;
 pub mod cache_connector_redis_connect;
 pub mod cache_engine;
+pub mod user_stat_counts;

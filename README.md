@@ -46,7 +46,7 @@ git clone https://github.com/Power2All/torrust-actix.git
 cd torrust-actix
 ```
 
-2. Build the source code using Rust 1.94.0 or newer (make sure you have installed rustup with stable branch)
+2. Build the source code using Rust 1.95.0 or newer (make sure you have installed rustup with stable branch)
 #### Using build script
 ```bash
 cargo build --release
@@ -488,7 +488,7 @@ npm run serve    # serves demo at http://localhost:8080/demo/
 
 ## Caching — Redis & Memcache
 
-The tracker can optionally push live torrent peer statistics to a Redis or Memcache instance after every database sync cycle.  This lets websites and dashboards read seeder/leecher counts at high speed without querying the SQL database directly.
+The tracker can optionally push live torrent peer statistics, and with `users_enabled` the users' totals, to a Redis or Memcache instance after every database sync cycle.  This lets websites and dashboards read seeder/leecher counts and user stats at high speed without querying the SQL database directly.
 
 ### Configuration
 
@@ -500,7 +500,7 @@ enabled     = true
 engine      = "redis"       # "redis" or "memcache"
 address     = "127.0.0.1:6379" # or "user:pass@redis:6379", or "redis://:pass@redis:6379/0"
 prefix      = "tracker:"    # key namespace prefix
-ttl         = 300           # seconds until a key expires (0 = no expiry)
+ttl         = 300           # seconds until a torrent key expires (0 = no expiry); user keys never expire
 split_peers = false         # see "Key format" below
 ```
 
@@ -608,9 +608,56 @@ echo "BT IPv6 seeds: {$data['bt_seeds_ipv6']}";
 echo "WebRTC seeds:  {$data['rtc_seeds']}";
 ```
 
+### User stats
+
+Each user's totals are stored under the key:
+
+```
+<prefix>u:<id>
+```
+
+`<id>` is the user's row identifier in the users table: the uuid with `id_uuid = true`, otherwise the numeric id. For example `tracker:u:7`.
+
+A user is written whenever it changes, by an announce or through the API, in the same sync cycle as torrents. This does not need a persistent users table: with `persistent = false` the cache is the only place the totals are written. A user deleted through the API is deleted from the cache. Unlike torrent keys, user keys **do not expire** (`ttl` does not apply), because the totals stay valid while the user is not announcing. A user that has not changed since the cache was emptied has no key yet; read it from the users table or the API.
+
+| Field        | Type | Description |
+|--------------|------|-------------|
+| `uploaded`   | u64  | Total bytes uploaded |
+| `downloaded` | u64  | Total bytes downloaded |
+| `completed`  | u64  | Total completed downloads |
+| `active`     | u64  | `1` when the user may announce, `0` when disabled |
+| `updated`    | u64  | Unix time of the user's last announce |
+| `torrents`   | u64  | Torrents the user is seeding or leeching |
+
+`uploaded` and `downloaded` are credited when a client sends `stopped`, with that session's totals; `completed` when it sends `completed`.
+
+**Redis:**
+```bash
+HMGET tracker:u:7 uploaded downloaded completed
+```
+
+**Memcache:**
+```
+GET tracker:u:7
+# returns: "uploaded:downloaded:completed:active:updated:torrents"  e.g. "5368709120:300:2:1:1700000000:2"
+```
+
+**PHP (Redis):**
+```php
+[$uploaded, $downloaded] = $redis->hMGet('tracker:u:' . $userId, ['uploaded', 'downloaded']);
+```
+
 ---
 
 ### ChangeLog
+
+#### v4.2.26
+* Bumped versions: `actix-web` 4.18.1, `log` 0.4.35, `redis` 1.8.1, `sentry`/`sentry-actix` 0.49.5, `tokio` 1.54.1, `utoipa-swagger-ui` 10.0.2, `smallvec` 1.16.4, and the rest of `Cargo.lock`. `parking_lot` 0.12 → 0.13 is the breaking one: it removes `read_recursive()`, which every call site replaced with `read()` (none of them takes the same lock twice), and the `hardware-lock-elision` feature, and needs Rust 1.95, so the minimum Rust version is now 1.95.0. The Docker image builds on `rust:1.99-alpine3.24`.
+* **UDP accepts `udp://host:port/announce/<user key>` when `users_enabled` is on and `keys_enabled` is off**, matching HTTP's `/<user key>/announce`. UDP used to read the user key only from the third path segment, so the URL needed a 40-character placeholder for an announce key that was not used (`/announce/<placeholder>/<user key>`); that form keeps working, and whenever there is a second segment the user key is read from it. With keys on, the format is unchanged: `/announce/<key>/<user key>`.
+* **Fixed user stats never being recorded over HTTP.** The HTTP announce checked the user key, then passed the key itself on as the user id. Users are stored under their id, so the lookup found nobody, and `uploaded`, `downloaded`, `completed` and `torrents_active` were never updated for HTTP announces. UDP was not affected.
+* **Users' totals are written to the cache** (Redis or Memcache) under `<prefix>u:<id>`, next to the torrent keys, so a website can read user stats without the SQL database. `<id>` is the user's uuid or numeric id; the fields are `uploaded`, `downloaded`, `completed`, `active`, `updated` and `torrents`. User keys do not expire and are deleted with the user. With a cache, user changes are queued and flushed even without a persistent users table. See "User stats" under Caching. The torrent keys are unchanged.
+* **`--import` writes users to the database only when the users table is persistent**, as it already did for torrents. Imported users also reach the cache.
+* **The last peer's `stopped` now credits the user.** When that `stopped` emptied a non-persistent torrent and the torrent was dropped, the session's `uploaded` and `downloaded` were dropped with it.
 
 #### v4.2.25
 * **Fixed a whitelist with `persistent = false` not being loaded at startup (regression in v4.2.24).** v4.2.24 loaded a list only when its table was persistent, so a read-only whitelist, such as one pointed at the website's torrents table with `persistent = false`, came up empty. With `whitelist_enabled` on, every announce for a torrent not added over the API since the restart got `unknown info_hash`, and since those refusals are not counted as failures, the only sign was the seed and peer counts dropping. A list is loaded again whenever its mode is on, as before v4.2.24, and also when its table is persistent; `persistent = false` only stops it being written back.

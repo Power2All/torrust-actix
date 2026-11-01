@@ -659,10 +659,10 @@ pub async fn http_service_check_user_key_validation(data: Arc<TorrentTracker>, u
     let Ok(user_key) = user_key.parse::<UserId>() else {
         return Err(Box::new(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_INVALID_USER_KEY.clone())));
     };
-    if data.check_user_key(user_key).is_none() {
-        return Err(Box::new(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_USER_KEY.clone())));
-    }
-    Ok(user_key)
+    // Users are stored under their id hash, not their announce key: returning the key itself made
+    // every HTTP announce credit a user that does not exist, so HTTP never recorded user stats.
+    data.check_user_key(user_key)
+        .ok_or_else(|| Box::new(HttpResponse::Ok().content_type(ContentType::plaintext()).body(ERR_UNKNOWN_USER_KEY.clone())))
 }
 
 /// Windows-only sanity check that a TCP bind address is available before spawning the server.
